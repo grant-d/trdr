@@ -37,7 +37,7 @@ export class RealTimeSource implements TimeSource {
  */
 export class SimulatedTimeSource implements TimeSource {
   private currentTime: Date
-  private startTime: Date
+  private readonly startTime: Date
   private speed: number = 1 // Speed multiplier
 
   constructor(startTime: Date = new Date()) {

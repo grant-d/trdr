@@ -36,12 +36,12 @@ export class BacktestDataFeed extends EnhancedMarketDataFeed {
   private replayTimer: NodeJS.Timeout | null = null
   private isReplaying = false
   private speed: number
-  private networkDelay: number
-  private failureRate: number
+  private readonly networkDelay: number
+  private readonly failureRate: number
   private currentTime: Date
-  private startDate: Date
-  private endDate: Date
-  private dataSource: string
+  private readonly startDate: Date
+  private readonly endDate: Date
+  private readonly dataSource: string
 
   constructor(config: BacktestConfig) {
     super(config)

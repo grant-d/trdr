@@ -34,7 +34,8 @@
       "mcp__taskmaster-ai__update_subtask",
       "Bash(npm search:*)",
       "Bash(npm run typecheck:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(sed:*)"
     ],
     "deny": []
   }

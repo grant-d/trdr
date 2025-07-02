@@ -213,3 +213,211 @@ export type OrderEvent =
   | { type: 'cancelled'; order: Order; reason?: string }
   | { type: 'rejected'; order: Order; reason: string }
   | { type: 'expired'; order: Order }
+
+/**
+ * Enhanced order states for state machine management
+ */
+export enum EnhancedOrderState {
+  CREATED = 'CREATED',
+  PENDING = 'PENDING',
+  SUBMITTED = 'SUBMITTED',
+  PARTIALLY_FILLED = 'PARTIALLY_FILLED',
+  FILLED = 'FILLED',
+  CANCELLED = 'CANCELLED',
+  REJECTED = 'REJECTED',
+  EXPIRED = 'EXPIRED'
+}
+
+/**
+ * Time constraints for order execution
+ */
+export interface TimeConstraints {
+  /** Maximum time to keep order open (milliseconds) */
+  readonly maxDuration?: number
+  /** Close before market close */
+  readonly closeBeforeEOD?: boolean
+  /** Don't trade during these periods */
+  readonly blackoutPeriods?: readonly Period[]
+  /** Absolute expiration time */
+  readonly expiresAt?: Date
+}
+
+/**
+ * Time period definition
+ */
+export interface Period {
+  readonly start: Date
+  readonly end: Date
+}
+
+/**
+ * Order-specific agent consensus data for order decisions
+ */
+export interface OrderAgentConsensus {
+  readonly action: OrderSide
+  readonly confidence: number
+  readonly expectedWinRate: number
+  readonly expectedRiskReward: number
+  readonly trailDistance: number
+  readonly leadAgentId: string
+  readonly agentSignals: readonly OrderAgentSignal[]
+  readonly timeConstraints?: TimeConstraints
+  readonly symbol?: string
+}
+
+/**
+ * Order-specific agent signal
+ */
+export interface OrderAgentSignal {
+  readonly agentId: string
+  readonly signal: OrderSide | 'hold'
+  readonly confidence: number
+  readonly weight: number
+  readonly reason: string
+  readonly timestamp: Date
+}
+
+/**
+ * Enhanced order metadata for lifecycle management
+ */
+export interface EnhancedOrderMetadata {
+  readonly consensus?: OrderAgentConsensus
+  readonly agentVotes?: readonly OrderAgentSignal[]
+  readonly createdBy?: string
+  readonly timeConstraints?: TimeConstraints
+  readonly strategy?: string
+  readonly gridLevel?: number
+  readonly parentOrderId?: string
+}
+
+/**
+ * Execution metrics for order performance tracking
+ */
+export interface OrderExecutionMetrics {
+  /** Time from submission to first fill (milliseconds) */
+  timeToFirstFill?: number
+  /** Time from submission to complete fill (milliseconds) */
+  timeToComplete?: number
+  /** Slippage as percentage (negative = better price) */
+  slippagePercent?: number
+  /** Slippage in currency units */
+  slippageAmount?: number
+  /** Fill rate (filled size / total size) */
+  fillRate: number
+  /** Number of partial fills */
+  fillCount: number
+  /** Timestamp when order was submitted */
+  submittedAt?: Date
+  /** Timestamp when order was completed */
+  completedAt?: Date
+}
+
+/**
+ * Managed order with enhanced state tracking
+ */
+export interface ManagedOrder extends OrderBase {
+  state: EnhancedOrderState
+  filledSize: number
+  averageFillPrice: number
+  fees: number
+  lastModified: Date
+  exchangeOrderId?: string
+  fills: OrderFill[]
+  rejectionReason?: string
+  cancellationReason?: string
+  metadata?: EnhancedOrderMetadata
+  executionMetrics?: OrderExecutionMetrics
+  // Specific order type properties
+  price?: number
+  trailPercent?: number
+  trailAmount?: number
+  stopPrice?: number
+  limitPrice?: number
+  activationPrice?: number
+  highWaterMark?: number
+  lowWaterMark?: number
+}
+
+/**
+ * Position sizing parameters for dynamic calculations
+ */
+export interface PositionSizingParams {
+  readonly availableCapital: number
+  readonly riskLimit: number
+  readonly baseSizePercent: number
+  readonly confidence: number
+  readonly volatility?: number
+  readonly currentExposure?: number
+}
+
+/**
+ * Order modification parameters
+ */
+export interface OrderModification {
+  readonly price?: number
+  readonly size?: number
+  readonly trailPercent?: number
+  readonly stopPrice?: number
+  readonly timeInForce?: 'GTC' | 'IOC' | 'FOK' | 'GTD'
+}
+
+/**
+ * Order validation result
+ */
+export interface OrderValidationResult {
+  readonly valid: boolean
+  readonly errors: readonly string[]
+  readonly warnings: readonly string[]
+}
+
+/**
+ * Circuit breaker configuration for risk management
+ */
+export interface CircuitBreakerConfig {
+  /** Max consecutive failed orders before tripping */
+  readonly maxConsecutiveFailures: number
+  /** Max loss in USD before tripping */
+  readonly maxLossThreshold: number
+  /** Time window for loss calculation (milliseconds) */
+  readonly lossWindowMs: number
+  /** Cool-down period after trip (milliseconds) */
+  readonly cooldownPeriodMs: number
+  /** Max slippage percentage before tripping */
+  readonly maxSlippagePercent: number
+  /** Min fill rate before considering order failed */
+  readonly minFillRate: number
+}
+
+/**
+ * Order splitting configuration
+ */
+export interface OrderSplittingConfig {
+  /** Enable order splitting for large orders */
+  readonly enabled: boolean
+  /** Max single order size (split if larger) */
+  readonly maxSingleOrderSize: number
+  /** Min order size after splitting */
+  readonly minSplitSize: number
+  /** Time delay between split orders (milliseconds) */
+  readonly splitDelayMs: number
+  /** Max number of splits allowed */
+  readonly maxSplits: number
+}
+
+/**
+ * Configuration for order lifecycle management
+ */
+export interface OrderLifecycleConfig {
+  readonly minOrderSize: number
+  readonly maxOrderSize: number
+  readonly baseSizePercent: number
+  readonly maxPositionSize: number
+  readonly defaultTimeInForce: 'GTC' | 'IOC' | 'FOK' | 'GTD'
+  readonly enableOrderImprovement: boolean
+  readonly improvementThreshold: number
+  readonly maxOrderDuration: number
+  readonly minConfidenceThreshold: number
+  readonly circuitBreaker?: CircuitBreakerConfig
+  readonly orderSplitting?: OrderSplittingConfig
+  readonly symbol?: string
+}

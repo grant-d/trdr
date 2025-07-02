@@ -157,7 +157,7 @@ export abstract class EnhancedMarketDataFeed extends BaseMarketDataFeed {
   protected rateLimitMap: Map<string, number[]> = new Map()
   protected filterLastPrices: Map<string, number> = new Map() // Separate price tracking for filters
 
-  constructor(config: EnhancedDataFeedConfig) {
+  protected constructor(config: EnhancedDataFeedConfig) {
     super(config)
     this.enhancedConfig = config
     this.enhancedStats = this.initializeStats()

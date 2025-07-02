@@ -87,13 +87,13 @@ export interface SimulatedExecution {
  */
 export class PaperTradingFeed extends EnhancedMarketDataFeed {
   private baseFeed: CoinbaseDataFeed
-  private slippage: number
-  private executionDelay: number
-  private maxPriceImpact: number
-  private liquidityMultiplier: number
-  private acceleratedTime: boolean
+  private readonly slippage: number
+  private readonly executionDelay: number
+  private readonly maxPriceImpact: number
+  private readonly liquidityMultiplier: number
+  private readonly acceleratedTime: boolean
+  private readonly enableCustomScenarios: boolean
   private timeAcceleration: number
-  private enableCustomScenarios: boolean
   private activeScenarios: Map<string, MarketScenario> = new Map()
   private currentPrices: Map<string, number> = new Map()
   protected priceHistory: Map<string, Array<{ price: number; time: Date }>> = new Map()

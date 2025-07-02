@@ -9,7 +9,7 @@ import { CoinbaseAdvTradeClient, ProductsService, CoinbaseAdvTradeCredentials } 
  * Includes advanced event filtering, priority handling, and market statistics
  */
 export class CoinbaseDataFeed extends EnhancedMarketDataFeed {
-  private client: CoinbaseAdvTradeClient
+  private readonly client: CoinbaseAdvTradeClient
   private productsService: ProductsService
   private wsConnected = false
   private reconnectTimer: NodeJS.Timeout | null = null

@@ -144,10 +144,21 @@ export const EventTypes = {
   ORDER_CREATED: 'order.created',
   ORDER_SUBMITTED: 'order.submitted',
   ORDER_FILLED: 'order.filled',
-  ORDER_PARTIAL_FILL: 'order.partial_fill',
+  ORDER_PARTIAL_FILL: 'order.partial.fill',
   ORDER_CANCELLED: 'order.cancelled',
   ORDER_REJECTED: 'order.rejected',
   ORDER_EXPIRED: 'order.expired',
+  ORDER_STATE_CHANGED: 'order.state.changed',
+  ORDER_CONSENSUS_REJECTED: 'order.consensus.rejected',
+  ORDER_SIZE_TOO_SMALL: 'order.size.too.small',
+  ORDER_VALIDATION_FAILED: 'order.validation.failed',
+  ORDER_CANCEL_FAILED: 'order.cancel.failed',
+  ORDER_MODIFIED: 'order.modified',
+  ORDER_MODIFICATION_FAILED: 'order.modification.failed',
+  ORDER_IMPROVED: 'order.improved',
+  ORDER_IMPROVEMENT_FAILED: 'order.improvement.failed',
+  ORDER_TIME_CONSTRAINT_ERROR: 'order.time.constraint.error',
+  ORDER_FILL: 'order.fill',
 
   // Trades
   TRADE_EXECUTED: 'trade.executed',
@@ -169,6 +180,20 @@ export const EventTypes = {
   GRID_LEVEL_ACTIVATED: 'grid.level_activated',
   GRID_LEVEL_FILLED: 'grid.level_filled',
   GRID_REBALANCE: 'grid.rebalance',
+
+  // Monitoring
+  ORDER_EXECUTION_METRICS: 'order.execution.metrics',
+  CIRCUIT_BREAKER_TRIPPED: 'circuit.breaker.tripped',
+  CIRCUIT_BREAKER_RESET: 'circuit.breaker.reset',
+  ORDER_EXECUTION_POOR: 'order.execution.poor',
+
+  // Consensus
+  CONSENSUS_STARTED: 'consensus.started',
+  CONSENSUS_SIGNAL_RECEIVED: 'consensus.signal.received',
+  CONSENSUS_TIMEOUT: 'consensus.timeout',
+  CONSENSUS_COMPLETED: 'consensus.completed',
+  CONSENSUS_FAILED: 'consensus.failed',
+  SIGNAL_REQUEST: 'signal.request',
 } as const
 
 export type EventTypeKeys = keyof typeof EventTypes

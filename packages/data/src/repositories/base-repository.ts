@@ -7,7 +7,7 @@ import type Database from 'better-sqlite3'
 export abstract class BaseRepository<T> {
   protected abstract readonly tableName: string
 
-  constructor(protected readonly connectionManager: ConnectionManager) {
+  protected constructor(protected readonly connectionManager: ConnectionManager) {
   }
 
   /**
