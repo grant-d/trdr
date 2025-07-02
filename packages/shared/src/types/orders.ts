@@ -25,11 +25,11 @@ export interface OrderBase {
   /** Order size/quantity */
   readonly size: number
   /** Unix timestamp when order was created */
-  readonly createdAt: number
+  readonly createdAt: EpochDate
   /** Unix timestamp of last update */
-  readonly updatedAt: number
+  updatedAt: EpochDate
   /** Current order status */
-  readonly status: OrderStatus
+  status: OrderStatus
 }
 
 /**
