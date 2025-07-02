@@ -66,9 +66,9 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
       close: candle.close,
       volume: candle.volume,
       quote_volume: candle.quoteVolume,
-      trades_count: candle.tradesCount
+      trades_count: candle.tradesCount,
     }
-    
+
     await this.insert(model)
   }
 
@@ -88,9 +88,9 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
       close: candle.close,
       volume: candle.volume,
       quote_volume: candle.quoteVolume,
-      trades_count: candle.tradesCount
+      trades_count: candle.tradesCount,
     }))
-    
+
     await this.insertBatch(models)
   }
 
@@ -102,7 +102,7 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
     interval: string,
     startTime: Date,
     endTime: Date,
-    limit?: number
+    limit?: number,
   ): Promise<Candle[]> {
     let sql = `
       SELECT * FROM ${this.tableName}
@@ -112,14 +112,14 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
         AND open_time <= ?
       ORDER BY open_time ASC
     `
-    
+
     if (limit) {
       sql += ` LIMIT ${limit}`
     }
-    
+
     const params = [symbol, interval, startTime.toISOString(), endTime.toISOString()]
     const models = await this.query<CandleDto>(sql, params)
-    
+
     return models.map(this.dtoToCandle)
   }
 
@@ -133,7 +133,7 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
       ORDER BY open_time DESC
       LIMIT 1
     `
-    
+
     const models = await this.query<CandleDto>(sql, [symbol, interval])
     return models.length > 0 && models[0] ? this.dtoToCandle(models[0]) : null
   }
@@ -151,13 +151,13 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
       bid: tick.bid,
       ask: tick.ask,
       bid_size: tick.bidSize,
-      ask_size: tick.askSize
+      ask_size: tick.askSize,
     }
-    
+
     const fields = Object.keys(model)
     const values = Object.values(model)
     const placeholders = fields.map(() => '?').join(', ')
-    
+
     const sql = `INSERT INTO ${this.ticksTableName} (${fields.join(', ')}) VALUES (${placeholders})`
     await this.connectionManager.execute(sql, values)
   }
@@ -167,7 +167,7 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
    */
   async saveTicksBatch(ticks: PriceTick[]): Promise<void> {
     if (ticks.length === 0) return
-    
+
     // SQLite doesn't support multi-row inserts with a single statement efficiently
     // Use a transaction for batch insert instead
     const models: Partial<PriceTickDto>[] = ticks.map(tick => ({
@@ -179,17 +179,17 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
       bid: tick.bid,
       ask: tick.ask,
       bid_size: tick.bidSize,
-      ask_size: tick.askSize
+      ask_size: tick.askSize,
     }))
-    
+
     await this.connectionManager.transaction((db) => {
       const firstModel = models[0]
       if (!firstModel) return 0
-      
+
       const fields = Object.keys(firstModel)
       const placeholders = fields.map(() => '?').join(', ')
       const sql = `INSERT INTO ${this.ticksTableName} (${fields.join(', ')}) VALUES (${placeholders})`
-      
+
       const stmt = db.prepare(sql)
       let count = 0
       for (const model of models) {
@@ -208,7 +208,7 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
     symbol: string,
     startTime: Date,
     endTime: Date,
-    limit?: number
+    limit?: number,
   ): Promise<PriceTick[]> {
     let sql = `
       SELECT * FROM ${this.ticksTableName}
@@ -217,14 +217,14 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
         AND timestamp <= ?
       ORDER BY timestamp ASC
     `
-    
+
     if (limit) {
       sql += ` LIMIT ${limit}`
     }
-    
+
     const params = [symbol, toIsoDate(startTime), toIsoDate(endTime)]
     const models = await this.query<PriceTickDto>(sql, params)
-    
+
     return models.map(this.dtoToTick)
   }
 
@@ -238,7 +238,7 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
       ORDER BY timestamp DESC
       LIMIT 1
     `
-    
+
     const models = await this.query<PriceTickDto>(sql, [symbol])
     return models.length > 0 && models[0] ? this.dtoToTick(models[0]) : null
   }
@@ -249,7 +249,7 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
   async getMarketStats(
     symbol: string,
     interval: string,
-    days: number = 30
+    days: number = 30,
   ): Promise<{
     avgVolume: number
     avgPrice: number
@@ -258,7 +258,7 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
   }> {
     const startTime = new Date()
     startTime.setDate(startTime.getDate() - days)
-    
+
     // SQLite doesn't have STDDEV, calculate volatility using variance
     const sql = `
       SELECT 
@@ -273,7 +273,7 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
         AND interval = ?
         AND open_time >= ?
     `
-    
+
     const results = await this.query<{
       avg_volume: number
       avg_price: number
@@ -282,20 +282,20 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
       mean_price: number
       mean_price_squared: number
     }>(sql, [symbol, interval, toIsoDate(startTime)])
-    
+
     const stats = results[0]
     // Calculate standard deviation manually: sqrt(E[X^2] - E[X]^2)
     const variance = (stats?.mean_price_squared || 0) - Math.pow(stats?.mean_price || 0, 2)
     const volatility = Math.sqrt(Math.max(0, variance))
-    
+
     return {
       avgVolume: stats?.avg_volume || 0,
       avgPrice: stats?.avg_price || 0,
       priceRange: {
         min: stats?.min_price || 0,
-        max: stats?.max_price || 0
+        max: stats?.max_price || 0,
       },
-      volatility
+      volatility,
     }
   }
 
@@ -305,29 +305,29 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
   async cleanup(daysToKeep: number = 90): Promise<{ candlesDeleted: number; ticksDeleted: number }> {
     const cutoffDate = new Date()
     cutoffDate.setDate(cutoffDate.getDate() - daysToKeep)
-    
+
     // Count before deletion
     const candlesBefore = await this.count()
     const ticksBefore = await this.query<{ count: number }>(
-      `SELECT COUNT(*) as count FROM ${this.ticksTableName}`
+      `SELECT COUNT(*) as count FROM ${this.ticksTableName}`,
     ).then(r => r[0]?.count || 0)
-    
+
     // Delete old data
     await this.delete('open_time < ?', [toIsoDate(cutoffDate)])
     await this.connectionManager.execute(
       `DELETE FROM ${this.ticksTableName} WHERE timestamp < ?`,
-      [toIsoDate(cutoffDate)]
+      [toIsoDate(cutoffDate)],
     )
-    
+
     // Count after deletion
     const candlesAfter = await this.count()
     const ticksAfter = await this.query<{ count: number }>(
-      `SELECT COUNT(*) as count FROM ${this.ticksTableName}`
+      `SELECT COUNT(*) as count FROM ${this.ticksTableName}`,
     ).then(r => r[0]?.count || 0)
-    
+
     return {
       candlesDeleted: candlesBefore - candlesAfter,
-      ticksDeleted: ticksBefore - ticksAfter
+      ticksDeleted: ticksBefore - ticksAfter,
     }
   }
 
@@ -347,7 +347,7 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
       close: model.close,
       volume: model.volume,
       quoteVolume: model.quote_volume,
-      tradesCount: model.trades_count
+      tradesCount: model.trades_count,
     }
   }
 
@@ -363,7 +363,7 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
       bid: model.bid,
       ask: model.ask,
       bidSize: model.bid_size,
-      askSize: model.ask_size
+      askSize: model.ask_size,
     }
   }
 }

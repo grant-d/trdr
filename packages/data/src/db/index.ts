@@ -23,7 +23,7 @@ export class Database {
   constructor(config: Partial<SQLiteConfig> = {}) {
     this.connectionManager = createConnectionManager(config)
     this.migrationRunner = new MigrationRunner(this.connectionManager)
-    
+
     // Initialize repositories
     this.marketData = new MarketDataRepository(this.connectionManager)
     this.orders = new OrderRepository(this.connectionManager)
@@ -38,20 +38,20 @@ export class Database {
     try {
       // Initialize connection
       await this.connectionManager.initialize()
-      
+
       // Run migrations
       await this.migrationRunner.migrate()
-      
+
       eventBus.emit('system.info', {
         message: 'Database initialized successfully',
-        timestamp: new Date()
+        timestamp: new Date(),
       })
     } catch (error) {
       eventBus.emit('system.error', {
         error: error instanceof Error ? error : new Error(String(error)),
         context: 'Database initialization',
         severity: 'critical',
-        timestamp: new Date()
+        timestamp: new Date(),
       })
       throw error
     }
@@ -85,13 +85,13 @@ export class Database {
   }> {
     const connectionStats = await this.connectionManager.getStats()
     const migrationStatus = await this.migrationRunner.getStatus()
-    
+
     return {
       connection: connectionStats,
       migration: {
         currentVersion: migrationStatus.currentVersion,
         targetVersion: migrationStatus.targetVersion,
-        needsMigration: migrationStatus.pendingMigrations.length > 0
+        needsMigration: migrationStatus.pendingMigrations.length > 0,
       },
       repositories: {
         candles: connectionStats.rowCounts?.candles || 0,
@@ -99,8 +99,8 @@ export class Database {
         orders: connectionStats.rowCounts?.orders || 0,
         trades: connectionStats.rowCounts?.trades || 0,
         decisions: connectionStats.rowCounts?.agent_decisions || 0,
-        checkpoints: connectionStats.rowCounts?.checkpoints || 0
-      }
+        checkpoints: connectionStats.rowCounts?.checkpoints || 0,
+      },
     }
   }
 
@@ -121,18 +121,18 @@ export class Database {
     // Trades must be deleted before orders
     const tradesDeleted = await this.trades.cleanup(daysToKeep)
     const ordersDeleted = await this.orders.cleanup(daysToKeep)
-    
+
     // Market data and agent data can be cleaned up in parallel
     const [marketDataCleanup, agentCleanup] = await Promise.all([
       this.marketData.cleanup(daysToKeep),
-      this.agents.cleanup(daysToKeep)
+      this.agents.cleanup(daysToKeep),
     ])
-    
+
     return {
       marketData: marketDataCleanup,
       ordersDeleted,
       tradesDeleted,
-      agentData: agentCleanup
+      agentData: agentCleanup,
     }
   }
 }

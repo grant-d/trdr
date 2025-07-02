@@ -21,7 +21,8 @@ export class EventBus {
   private subscriptionId = 0
   private pendingAsyncHandlers: Set<Promise<void>> = new Set()
 
-  private constructor() {}
+  private constructor() {
+  }
 
   /**
    * Get singleton instance of EventBus
@@ -53,7 +54,7 @@ export class EventBus {
   subscribe<T extends EventData>(
     eventType: EventType,
     handler: EventHandler<T>,
-    options: { priority?: number; isAsync?: boolean } = {}
+    options: { priority?: number; isAsync?: boolean } = {},
   ): EventSubscription {
     if (!this.eventTypes.has(eventType)) {
       throw new Error(`Event type '${eventType}' is not registered`)
@@ -69,7 +70,7 @@ export class EventBus {
     const wrapper: HandlerWrapper<T> = {
       handler,
       priority,
-      isAsync
+      isAsync,
     }
 
     // Insert handler in priority order (higher priority first)
@@ -94,7 +95,7 @@ export class EventBus {
             this.handlers.delete(eventType)
           }
         }
-      }
+      },
     }
   }
 
@@ -114,7 +115,7 @@ export class EventBus {
     // Add timestamp if not present
     const eventData = {
       ...data,
-      timestamp: data.timestamp || timeSourceManager.now()
+      timestamp: data.timestamp || timeSourceManager.now(),
     }
 
     // Execute all handlers
@@ -143,7 +144,7 @@ export class EventBus {
   private async executeAsyncHandler<T extends EventData>(
     handler: EventHandler<T>,
     data: T,
-    eventType: EventType
+    eventType: EventType,
   ): Promise<void> {
     try {
       await handler(data)
@@ -157,14 +158,14 @@ export class EventBus {
    */
   private handleError(error: any, eventType: EventType, handlerType: 'sync' | 'async'): void {
     console.error(`Error in ${handlerType} event handler for '${eventType}':`, error)
-    
+
     // Emit error event if it's registered and we're not already handling an error event
     if (eventType !== 'system.error' && this.eventTypes.has('system.error')) {
       this.emit('system.error', {
         error: error instanceof Error ? error : new Error(String(error)),
         context: `Event handler for '${eventType}'`,
         severity: 'medium',
-        timestamp: timeSourceManager.now()
+        timestamp: timeSourceManager.now(),
       })
     }
   }

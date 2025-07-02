@@ -5,6 +5,15 @@
 // Event system
 export * from './events'
 
+// Interfaces
+export * from './interfaces'
+
+// Market data
+export * from './market-data'
+
+// Network
+export * from './network'
+
 // Re-export shared types for convenience
 export type {
   // Market data types
@@ -15,7 +24,7 @@ export type {
   Ticker,
   OrderBook,
   Trade,
-  
+
   // Order types
   Order,
   OrderSide,
@@ -25,20 +34,20 @@ export type {
   OrderState,
   OrderEvent,
   Position,
-  
+
   // Agent types
   ITradeAgent,
   AgentSignal,
   AgentContext,
   AgentState,
   AgentType,
-  
+
   // Config types
   SystemConfig,
   TradingConfig,
   GridConfig,
   RiskConfig,
-  MinimalConfig
+  MinimalConfig,
 } from '@trdr/shared'
 
 export const version = '1.0.0'

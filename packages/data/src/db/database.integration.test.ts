@@ -13,17 +13,17 @@ describe('Database Integration Tests', () => {
   beforeEach(async () => {
     // Ensure test directory exists
     await fs.mkdir(path.dirname(testDbPath), { recursive: true })
-    
+
     // Create and initialize database
     db = await createDatabase({
       databasePath: testDbPath,
-      enableLogging: false
+      enableLogging: false,
     })
   })
 
   afterEach(async () => {
     await db.close()
-    
+
     // Clean up test database
     try {
       await fs.unlink(testDbPath)
@@ -45,11 +45,11 @@ describe('Database Integration Tests', () => {
         high: 51000,
         low: 49500,
         close: 50500,
-        volume: 1000
+        volume: 1000,
       }
-      
+
       await db.marketData.saveCandle(candle)
-      
+
       // 2. Agent makes a decision
       const agentDecision: AgentSignal & { agentType: 'momentum'; symbol: string } = {
         agentId: 'momentum-agent-1',
@@ -60,11 +60,11 @@ describe('Database Integration Tests', () => {
         trailDistance: 0.02,
         reasoning: { momentum: 'strong', trend: 'up' },
         marketContext: { volume: 'high', volatility: 'medium' },
-        timestamp: new Date()
+        timestamp: new Date(),
       }
-      
+
       await db.agents.recordDecision(agentDecision)
-      
+
       // 3. Create order based on agent decision
       const order: Order = {
         id: 'order-workflow-1',
@@ -76,19 +76,19 @@ describe('Database Integration Tests', () => {
         trailPercent: 2,
         agentId: agentDecision.agentId,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       }
-      
+
       await db.orders.createOrder(order)
-      
+
       // 4. Update order status
       await db.orders.updateOrder(order.id, {
         status: 'filled',
         filledSize: 0.1,
         averageFillPrice: 50000,
-        filledAt: new Date()
+        filledAt: new Date(),
       })
-      
+
       // 5. Record trade
       const trade: Trade = {
         id: 'trade-workflow-1',
@@ -100,22 +100,22 @@ describe('Database Integration Tests', () => {
         fee: 0.0001,
         feeCurrency: 'BTC',
         pnl: 0, // Initial trade
-        executedAt: new Date()
+        executedAt: new Date(),
       }
-      
+
       await db.trades.recordTrade(trade)
-      
+
       // Verify complete workflow
       const latestCandle = await db.marketData.getLatestCandle('BTC-USD', '1h')
       assert.ok(latestCandle)
-      
+
       const agentDecisions = await db.agents.getDecisions(agentDecision.agentId)
       assert.equal(agentDecisions.length, 1)
-      
+
       const filledOrder = await db.orders.getOrder(order.id)
       assert.ok(filledOrder)
       assert.equal(filledOrder.status, 'filled')
-      
+
       const orderTrades = await db.trades.getTradesByOrder(order.id)
       assert.equal(orderTrades.length, 1)
     })
@@ -124,10 +124,10 @@ describe('Database Integration Tests', () => {
   describe('Cross-Repository Queries', () => {
     it('should track agent performance through orders and trades', async () => {
       const agentId = 'performance-agent-1'
-      
+
       // Create multiple orders from agent
       const orderIds = ['perf-order-1', 'perf-order-2', 'perf-order-3']
-      
+
       for (let i = 0; i < orderIds.length; i++) {
         // Record agent decision
         await db.agents.recordDecision({
@@ -139,9 +139,9 @@ describe('Database Integration Tests', () => {
           trailDistance: 0.02,
           reasoning: { index: i },
           marketContext: { volume: 'medium', volatility: 'low' },
-          timestamp: new Date(Date.now() - (3 - i) * 3600000)
+          timestamp: new Date(Date.now() - (3 - i) * 3600000),
         })
-        
+
         // Create order
         await db.orders.createOrder({
           id: orderIds[i]!,
@@ -152,9 +152,9 @@ describe('Database Integration Tests', () => {
           size: 0.1,
           agentId: agentId,
           createdAt: new Date(Date.now() - (3 - i) * 3600000),
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
-        
+
         // Record trade
         await db.trades.recordTrade({
           id: `trade-${i}`,
@@ -165,17 +165,17 @@ describe('Database Integration Tests', () => {
           size: 0.1,
           fee: 0.0001,
           pnl: i === 0 ? 0 : (i % 2 === 0 ? -50 : 100),
-          executedAt: new Date(Date.now() - (3 - i) * 3600000)
+          executedAt: new Date(Date.now() - (3 - i) * 3600000),
         })
       }
-      
+
       // Analyze agent performance
       const agentOrders = await db.orders.getOrdersByAgent(agentId)
       assert.equal(agentOrders.length, 3)
-      
+
       const decisions = await db.agents.getDecisions(agentId)
       assert.equal(decisions.length, 3)
-      
+
       const pnl = await db.trades.calculatePnL('BTC-USD')
       assert.equal(pnl.totalPnL, 50) // 0 + 100 - 50
       assert.equal(pnl.tradeCount, 3)
@@ -195,9 +195,9 @@ describe('Database Integration Tests', () => {
         high: 51000,
         low: 49500,
         close: 50500,
-        volume: 1000
+        volume: 1000,
       })
-      
+
       await db.orders.createOrder({
         id: 'stats-order-1',
         symbol: 'BTC-USD',
@@ -206,11 +206,11 @@ describe('Database Integration Tests', () => {
         status: 'pending',
         size: 0.1,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
-      
+
       const stats = await db.getStats()
-      
+
       assert.ok(stats.connection.tables.includes('candles'))
       assert.ok(stats.connection.tables.includes('orders'))
       assert.equal(stats.migration.needsMigration, false)
@@ -234,19 +234,19 @@ describe('Database Integration Tests', () => {
           stopLoss: 49000,
           metrics: {
             winRate: 0.65,
-            totalTrades: 100
-          }
+            totalTrades: 100,
+          },
         },
         metadata: {
-          timestamp: new Date()
-        }
+          timestamp: new Date(),
+        },
       }
-      
+
       await db.agents.saveCheckpoint(checkpoint)
-      
+
       // Simulate restart - get latest checkpoint
       const restored = await db.agents.loadLatestCheckpoint('agent-state')
-      
+
       assert.ok(restored)
       assert.equal(restored.id, checkpoint.id)
       assert.deepEqual(restored.state, checkpoint.state)
@@ -256,7 +256,7 @@ describe('Database Integration Tests', () => {
     it('should list checkpoints', async () => {
       // Clean up any existing checkpoints from previous tests
       await db.connectionManager.execute('DELETE FROM checkpoints')
-      
+
       // Save multiple checkpoints with slight delay to ensure different timestamps
       const savedIds: string[] = []
       for (let i = 0; i < 3; i++) {
@@ -265,21 +265,21 @@ describe('Database Integration Tests', () => {
           id,
           type: 'system-state',
           version: i + 1,
-          state: { iteration: i }
+          state: { iteration: i },
         })
         savedIds.push(id)
         // Larger delay to ensure different created_at timestamps
         await new Promise(resolve => setTimeout(resolve, 50))
       }
-      
+
       const checkpoints = await db.agents.listCheckpoints('system-state')
-      
+
       // Verify we saved all 3 checkpoints
       for (const id of savedIds) {
         const checkpoint = await db.agents.loadCheckpoint(id)
         assert.ok(checkpoint, `Checkpoint ${id} should exist`)
       }
-      
+
       assert.equal(checkpoints.length, 3, `Expected 3 checkpoints but got ${checkpoints.length}`)
       assert.ok(checkpoints[0])
       assert.equal(checkpoints[0].version, 3) // Most recent first
@@ -290,7 +290,7 @@ describe('Database Integration Tests', () => {
     it('should handle complex time-range queries', async () => {
       const now = Date.now()
       const symbol = 'ETH-USD'
-      
+
       // Add candles over time
       const candles: Candle[] = Array.from({ length: 24 }, (_, i) => ({
         symbol,
@@ -302,19 +302,19 @@ describe('Database Integration Tests', () => {
         high: 3010 + i * 10,
         low: 2990 + i * 10,
         close: 3005 + i * 10,
-        volume: 100 + i
+        volume: 100 + i,
       }))
-      
+
       await db.marketData.saveCandlesBatch(candles)
-      
+
       // Query different time ranges
       const last6Hours = await db.marketData.getCandles(
         symbol,
         '1h',
         new Date(now - 6 * 3600000),
-        new Date(now)
+        new Date(now),
       )
-      
+
       assert.equal(last6Hours.length, 6)
       assert.ok(last6Hours[0])
       assert.ok(last6Hours[0].openTime.getTime() >= now - 6 * 3600000)
@@ -325,7 +325,7 @@ describe('Database Integration Tests', () => {
     it('should cleanup across all repositories', async () => {
       const oldDate = Date.now() - 100 * 86400000
       const recentDate = Date.now() - 3600000
-      
+
       // Add old data
       await db.marketData.saveCandle({
         symbol: 'BTC-USD',
@@ -337,9 +337,9 @@ describe('Database Integration Tests', () => {
         high: 41000,
         low: 39000,
         close: 40500,
-        volume: 1000
+        volume: 1000,
       })
-      
+
       await db.orders.createOrder({
         id: 'old-cleanup-order',
         symbol: 'BTC-USD',
@@ -348,9 +348,9 @@ describe('Database Integration Tests', () => {
         status: 'filled',
         size: 0.1,
         createdAt: new Date(oldDate),
-        updatedAt: new Date(oldDate)
+        updatedAt: new Date(oldDate),
       })
-      
+
       await db.trades.recordTrade({
         id: 'old-cleanup-trade',
         orderId: 'old-cleanup-order',
@@ -359,9 +359,9 @@ describe('Database Integration Tests', () => {
         price: 40000,
         size: 0.1,
         fee: 0.0001,
-        executedAt: new Date(oldDate)
+        executedAt: new Date(oldDate),
       })
-      
+
       await db.agents.recordDecision({
         agentId: 'cleanup-agent',
         agentType: 'momentum',
@@ -371,9 +371,9 @@ describe('Database Integration Tests', () => {
         trailDistance: 0,
         reasoning: {},
         marketContext: {},
-        timestamp: new Date(oldDate)
+        timestamp: new Date(oldDate),
       })
-      
+
       // Add recent data
       await db.marketData.saveCandle({
         symbol: 'BTC-USD',
@@ -385,17 +385,17 @@ describe('Database Integration Tests', () => {
         high: 51000,
         low: 49000,
         close: 50500,
-        volume: 2000
+        volume: 2000,
       })
-      
+
       // Run cleanup
       const cleanup = await db.cleanup(90)
-      
+
       assert.ok(cleanup.marketData.candlesDeleted > 0)
       assert.ok(cleanup.ordersDeleted > 0)
       assert.ok(cleanup.tradesDeleted > 0)
       assert.ok(cleanup.agentData.decisionsDeleted > 0)
-      
+
       // Verify recent data remains
       const recentCandles = await db.marketData.getLatestCandle('BTC-USD', '1h')
       assert.ok(recentCandles)
@@ -413,15 +413,15 @@ describe('Database Integration Tests', () => {
         status: 'pending',
         size: 0.1,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       }
-      
+
       await db.orders.createOrder(order)
-      
+
       // Try to create duplicate
       await assert.rejects(
         () => db.orders.createOrder(order),
-        /UNIQUE constraint|duplicate key/i
+        /UNIQUE constraint|duplicate key/i,
       )
     })
 
@@ -434,12 +434,12 @@ describe('Database Integration Tests', () => {
         status: 'pending' as const,
         size: 0.1,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       }
-      
+
       await assert.rejects(
         () => db.orders.createOrder(invalidOrder),
-        /CHECK constraint/i
+        /CHECK constraint/i,
       )
     })
   })

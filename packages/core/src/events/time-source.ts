@@ -7,12 +7,12 @@ export interface TimeSource {
    * Get current time
    */
   now(): Date
-  
+
   /**
    * Get current timestamp in milliseconds
    */
   nowMs(): number
-  
+
   /**
    * Reset time source (for testing/backtesting)
    */
@@ -26,7 +26,7 @@ export class RealTimeSource implements TimeSource {
   now(): Date {
     return new Date()
   }
-  
+
   nowMs(): number {
     return Date.now()
   }
@@ -39,20 +39,20 @@ export class SimulatedTimeSource implements TimeSource {
   private currentTime: Date
   private startTime: Date
   private speed: number = 1 // Speed multiplier
-  
+
   constructor(startTime: Date = new Date()) {
     this.startTime = startTime
     this.currentTime = new Date(startTime)
   }
-  
+
   now(): Date {
     return new Date(this.currentTime)
   }
-  
+
   nowMs(): number {
     return this.currentTime.getTime()
   }
-  
+
   /**
    * Advance time by specified milliseconds
    */
@@ -60,7 +60,7 @@ export class SimulatedTimeSource implements TimeSource {
     const advance = milliseconds * this.speed
     this.currentTime = new Date(this.currentTime.getTime() + advance)
   }
-  
+
   /**
    * Advance time to specific date
    */
@@ -70,7 +70,7 @@ export class SimulatedTimeSource implements TimeSource {
     }
     this.currentTime = new Date(date)
   }
-  
+
   /**
    * Set simulation speed multiplier
    */
@@ -80,7 +80,7 @@ export class SimulatedTimeSource implements TimeSource {
     }
     this.speed = speed
   }
-  
+
   /**
    * Reset to start time
    */
@@ -88,7 +88,7 @@ export class SimulatedTimeSource implements TimeSource {
     this.currentTime = new Date(this.startTime)
     this.speed = 1
   }
-  
+
   /**
    * Get elapsed time since start
    */
@@ -103,53 +103,53 @@ export class SimulatedTimeSource implements TimeSource {
 export class TimeSourceManager {
   private static instance: TimeSourceManager
   private timeSource: TimeSource
-  
+
   private constructor() {
     this.timeSource = new RealTimeSource()
   }
-  
+
   static getInstance(): TimeSourceManager {
     if (!TimeSourceManager.instance) {
       TimeSourceManager.instance = new TimeSourceManager()
     }
     return TimeSourceManager.instance
   }
-  
+
   /**
    * Set the time source
    */
   setTimeSource(source: TimeSource): void {
     this.timeSource = source
   }
-  
+
   /**
    * Get current time source
    */
   getTimeSource(): TimeSource {
     return this.timeSource
   }
-  
+
   /**
    * Convenience method to get current time
    */
   now(): Date {
     return this.timeSource.now()
   }
-  
+
   /**
    * Convenience method to get current timestamp
    */
   nowMs(): number {
     return this.timeSource.nowMs()
   }
-  
+
   /**
    * Reset to real-time source
    */
   useRealTime(): void {
     this.timeSource = new RealTimeSource()
   }
-  
+
   /**
    * Switch to simulated time
    */

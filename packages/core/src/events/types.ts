@@ -139,7 +139,7 @@ export const EventTypes = {
   MARKET_TICK: 'market.tick',
   MARKET_CANDLE: 'market.candle',
   MARKET_ORDERBOOK: 'market.orderbook',
-  
+
   // Orders
   ORDER_CREATED: 'order.created',
   ORDER_SUBMITTED: 'order.submitted',
@@ -148,23 +148,23 @@ export const EventTypes = {
   ORDER_CANCELLED: 'order.cancelled',
   ORDER_REJECTED: 'order.rejected',
   ORDER_EXPIRED: 'order.expired',
-  
+
   // Trades
   TRADE_EXECUTED: 'trade.executed',
   TRADE_CLOSED: 'trade.closed',
-  
+
   // Agents
   AGENT_SIGNAL: 'agent.signal',
   AGENT_CONSENSUS: 'agent.consensus',
   AGENT_ERROR: 'agent.error',
-  
+
   // System
   SYSTEM_START: 'system.start',
   SYSTEM_STOP: 'system.stop',
   SYSTEM_ERROR: 'system.error',
   SYSTEM_WARNING: 'system.warning',
   SYSTEM_INFO: 'system.info',
-  
+
   // Grid
   GRID_LEVEL_ACTIVATED: 'grid.level_activated',
   GRID_LEVEL_FILLED: 'grid.level_filled',

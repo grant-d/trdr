@@ -62,9 +62,9 @@ export class TradeRepository extends BaseRepository<TradeDto> {
       fee_currency: trade.feeCurrency,
       pnl: trade.pnl,
       metadata: trade.metadata ? JSON.stringify(trade.metadata) : null,
-      executed_at: toIsoDate(trade.executedAt)
+      executed_at: toIsoDate(trade.executedAt),
     }
-    
+
     await this.insert(model)
   }
 
@@ -83,9 +83,9 @@ export class TradeRepository extends BaseRepository<TradeDto> {
       fee_currency: trade.feeCurrency,
       pnl: trade.pnl,
       metadata: trade.metadata ? JSON.stringify(trade.metadata) : null,
-      executed_at: toIsoDate(trade.executedAt)
+      executed_at: toIsoDate(trade.executedAt),
     }))
-    
+
     await this.insertBatch(models)
   }
 
@@ -104,9 +104,9 @@ export class TradeRepository extends BaseRepository<TradeDto> {
     const models = await this.findMany(
       'order_id = ?',
       [orderId],
-      'executed_at ASC'
+      'executed_at ASC',
     )
-    
+
     return models.map(this.dtoToTrade)
   }
 
@@ -117,16 +117,16 @@ export class TradeRepository extends BaseRepository<TradeDto> {
     symbol: string,
     startTime: Date,
     endTime: Date,
-    side?: OrderSide
+    side?: OrderSide,
   ): Promise<Trade[]> {
     let where = 'symbol = ? AND executed_at >= ? AND executed_at <= ?'
     const params: any[] = [symbol, toIsoDate(startTime), toIsoDate(endTime)]
-    
+
     if (side) {
       where += ' AND side = ?'
       params.push(side)
     }
-    
+
     const models = await this.findMany(where, params, 'executed_at DESC')
     return models.map(this.dtoToTrade)
   }
@@ -137,7 +137,7 @@ export class TradeRepository extends BaseRepository<TradeDto> {
   async calculatePnL(
     symbol: string,
     startTime?: Date,
-    endTime?: Date
+    endTime?: Date,
   ): Promise<{
     totalPnL: number
     realizedPnL: number
@@ -147,17 +147,17 @@ export class TradeRepository extends BaseRepository<TradeDto> {
   }> {
     let where = 'symbol = ?'
     const params: any[] = [symbol]
-    
+
     if (startTime) {
       where += ' AND executed_at >= ?'
       params.push(toIsoDate(startTime))
     }
-    
+
     if (endTime) {
       where += ' AND executed_at <= ?'
       params.push(toIsoDate(endTime))
     }
-    
+
     const result = await this.query<{
       total_pnl: number
       total_fees: number
@@ -172,16 +172,16 @@ export class TradeRepository extends BaseRepository<TradeDto> {
       FROM ${this.tableName}
       WHERE ${where}
     `, params)
-    
+
     const stats = result[0]
     return {
       totalPnL: stats?.total_pnl || 0,
       realizedPnL: (stats?.total_pnl || 0) - (stats?.total_fees || 0),
       totalFees: stats?.total_fees || 0,
       tradeCount: stats?.trade_count || 0,
-      winRate: stats && stats.trade_count > 0 
-        ? stats.winning_trades / stats.trade_count 
-        : 0
+      winRate: stats && stats.trade_count > 0
+        ? stats.winning_trades / stats.trade_count
+        : 0,
     }
   }
 
@@ -191,7 +191,7 @@ export class TradeRepository extends BaseRepository<TradeDto> {
   async getTradeStatsByPeriod(
     symbol: string,
     period: 'hour' | 'day' | 'week' | 'month',
-    limit: number = 30
+    limit: number = 30,
   ): Promise<Array<{
     period: string
     tradeCount: number
@@ -204,9 +204,9 @@ export class TradeRepository extends BaseRepository<TradeDto> {
       hour: '%Y-%m-%d %H:00:00',
       day: '%Y-%m-%d',
       week: '%Y-%W',
-      month: '%Y-%m'
+      month: '%Y-%m',
     }[period]
-    
+
     const results = await this.query<{
       period: string
       trade_count: number
@@ -228,14 +228,14 @@ export class TradeRepository extends BaseRepository<TradeDto> {
       ORDER BY period DESC
       LIMIT ?
     `, [symbol, limit])
-    
+
     return results.map(row => ({
       period: row.period,
       tradeCount: row.trade_count,
       volume: row.volume,
       avgPrice: row.avg_price,
       pnl: row.pnl,
-      fees: row.fees
+      fees: row.fees,
     }))
   }
 
@@ -245,22 +245,22 @@ export class TradeRepository extends BaseRepository<TradeDto> {
   async getTopTrades(
     symbol?: string,
     limit: number = 10,
-    orderBy: 'pnl' | 'size' | 'recent' = 'pnl'
+    orderBy: 'pnl' | 'size' | 'recent' = 'pnl',
   ): Promise<Trade[]> {
     let where = '1=1'
     const params: any[] = []
-    
+
     if (symbol) {
       where += ' AND symbol = ?'
       params.push(symbol)
     }
-    
+
     const orderClause = {
       pnl: 'pnl DESC',
       size: 'size DESC',
-      recent: 'executed_at DESC'
+      recent: 'executed_at DESC',
     }[orderBy]
-    
+
     const models = await this.findMany(where, params, orderClause, limit)
     return models.map(this.dtoToTrade)
   }
@@ -271,11 +271,11 @@ export class TradeRepository extends BaseRepository<TradeDto> {
   async cleanup(daysToKeep: number = 365): Promise<number> {
     const cutoffDate = new Date()
     cutoffDate.setDate(cutoffDate.getDate() - daysToKeep)
-    
+
     const countBefore = await this.count()
     await this.delete('executed_at < ?', [toIsoDate(cutoffDate)])
     const countAfter = await this.count()
-    
+
     return countBefore - countAfter
   }
 
@@ -294,7 +294,7 @@ export class TradeRepository extends BaseRepository<TradeDto> {
       feeCurrency: model.fee_currency,
       pnl: model.pnl,
       metadata: model.metadata ? JSON.parse(model.metadata) : undefined,
-      executedAt: new Date(model.executed_at)
+      executedAt: new Date(model.executed_at),
     }
   }
 }

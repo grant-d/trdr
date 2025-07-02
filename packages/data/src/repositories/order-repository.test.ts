@@ -12,7 +12,7 @@ describe('OrderRepository', () => {
   beforeEach(async () => {
     connectionManager = createConnectionManager({ databasePath: ':memory:' })
     await connectionManager.initialize()
-    
+
     // Create orders table
     await connectionManager.execute(`
       CREATE TABLE orders (
@@ -36,7 +36,7 @@ describe('OrderRepository', () => {
         cancelled_at TIMESTAMP
       )
     `)
-    
+
     repository = new OrderRepository(connectionManager)
   })
 
@@ -54,14 +54,14 @@ describe('OrderRepository', () => {
       price: 50000,
       size: 0.1,
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
     }
 
     it('should create an order', async () => {
       await repository.createOrder(testOrder)
-      
+
       const retrieved = await repository.getOrder(testOrder.id)
-      
+
       assert.ok(retrieved)
       assert.equal(retrieved.id, testOrder.id)
       assert.equal(retrieved.symbol, testOrder.symbol)
@@ -71,16 +71,16 @@ describe('OrderRepository', () => {
 
     it('should update an order', async () => {
       await repository.createOrder(testOrder)
-      
+
       await repository.updateOrder(testOrder.id, {
         status: 'filled',
         filledSize: 0.1,
         averageFillPrice: 50000,
-        filledAt: new Date()
+        filledAt: new Date(),
       })
-      
+
       const updated = await repository.getOrder(testOrder.id)
-      
+
       assert.ok(updated)
       assert.equal(updated.status, 'filled')
       assert.equal(updated.filledSize, 0.1)
@@ -90,11 +90,11 @@ describe('OrderRepository', () => {
 
     it('should cancel an order', async () => {
       await repository.createOrder(testOrder)
-      
+
       await repository.cancelOrder(testOrder.id, 'User requested')
-      
+
       const cancelled = await repository.getOrder(testOrder.id)
-      
+
       assert.ok(cancelled)
       assert.equal(cancelled.status, 'cancelled')
       assert.ok(cancelled.cancelledAt)
@@ -119,7 +119,7 @@ describe('OrderRepository', () => {
           price: 50000,
           size: 0.1,
           createdAt: new Date(Date.now() - 3600000),
-          updatedAt: new Date(Date.now() - 3600000)
+          updatedAt: new Date(Date.now() - 3600000),
         },
         {
           id: 'order-2',
@@ -131,7 +131,7 @@ describe('OrderRepository', () => {
           size: 0.1,
           filledSize: 0.1,
           createdAt: new Date(Date.now() - 1800000),
-          updatedAt: new Date(Date.now() - 1800000)
+          updatedAt: new Date(Date.now() - 1800000),
         },
         {
           id: 'order-3',
@@ -142,10 +142,10 @@ describe('OrderRepository', () => {
           size: 1,
           filledSize: 1,
           createdAt: new Date(Date.now() - 900000),
-          updatedAt: new Date(Date.now() - 900000)
-        }
+          updatedAt: new Date(Date.now() - 900000),
+        },
       ]
-      
+
       for (const order of orders) {
         await repository.createOrder(order)
       }
@@ -156,7 +156,7 @@ describe('OrderRepository', () => {
       assert.equal(pendingOrders.length, 1)
       assert.ok(pendingOrders[0])
       assert.equal(pendingOrders[0].id, 'order-1')
-      
+
       const filledOrders = await repository.getOrdersByStatus('filled')
       assert.equal(filledOrders.length, 2)
     })
@@ -179,9 +179,9 @@ describe('OrderRepository', () => {
       const history = await repository.getOrderHistory(
         'BTC-USD',
         new Date(Date.now() - 7200000),
-        new Date()
+        new Date(),
       )
-      
+
       assert.equal(history.length, 2)
       assert.ok(history.every(order => order.symbol === 'BTC-USD'))
     })
@@ -191,9 +191,9 @@ describe('OrderRepository', () => {
         'BTC-USD',
         new Date(Date.now() - 7200000),
         new Date(),
-        ['filled']
+        ['filled'],
       )
-      
+
       assert.equal(filledHistory.length, 1)
       assert.ok(filledHistory[0])
       assert.equal(filledHistory[0].status, 'filled')
@@ -211,7 +211,7 @@ describe('OrderRepository', () => {
           status: 'filled',
           size: 0.1,
           createdAt: new Date(Date.now() - 86400000),
-          updatedAt: new Date()
+          updatedAt: new Date(),
         },
         {
           id: 'order-stat-2',
@@ -221,7 +221,7 @@ describe('OrderRepository', () => {
           status: 'filled',
           size: 0.1,
           createdAt: new Date(Date.now() - 43200000),
-          updatedAt: new Date()
+          updatedAt: new Date(),
         },
         {
           id: 'order-stat-3',
@@ -231,10 +231,10 @@ describe('OrderRepository', () => {
           status: 'cancelled',
           size: 0.2,
           createdAt: new Date(Date.now() - 3600000),
-          updatedAt: new Date()
-        }
+          updatedAt: new Date(),
+        },
       ]
-      
+
       for (const order of orders) {
         await repository.createOrder(order)
       }
@@ -242,7 +242,7 @@ describe('OrderRepository', () => {
 
     it('should calculate order statistics', async () => {
       const stats = await repository.getOrderStats('BTC-USD', 30)
-      
+
       assert.equal(stats.totalOrders, 3)
       assert.equal(stats.filledOrders, 2)
       assert.equal(stats.cancelledOrders, 1)
@@ -269,9 +269,9 @@ describe('OrderRepository', () => {
         status: 'filled',
         size: 0.1,
         createdAt: new Date(Date.now() - 100 * 86400000),
-        updatedAt: new Date(Date.now() - 100 * 86400000)
+        updatedAt: new Date(Date.now() - 100 * 86400000),
       }
-      
+
       const recentOrder: Order = {
         id: 'recent-order',
         symbol: 'BTC-USD',
@@ -280,19 +280,19 @@ describe('OrderRepository', () => {
         status: 'pending',
         size: 0.1,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       }
-      
+
       await repository.createOrder(oldOrder)
       await repository.createOrder(recentOrder)
-      
+
       const deleted = await repository.cleanup(90)
-      
+
       assert.equal(deleted, 1)
-      
+
       const oldRetrieved = await repository.getOrder('old-order')
       assert.equal(oldRetrieved, null)
-      
+
       const recentRetrieved = await repository.getOrder('recent-order')
       assert.ok(recentRetrieved)
     })
@@ -306,15 +306,15 @@ describe('OrderRepository', () => {
         status: 'pending',
         size: 0.1,
         createdAt: new Date(Date.now() - 100 * 86400000),
-        updatedAt: new Date(Date.now() - 100 * 86400000)
+        updatedAt: new Date(Date.now() - 100 * 86400000),
       }
-      
+
       await repository.createOrder(oldActiveOrder)
-      
+
       const deleted = await repository.cleanup(90)
-      
+
       assert.equal(deleted, 0)
-      
+
       const retrieved = await repository.getOrder('old-active')
       assert.ok(retrieved)
     })
@@ -331,11 +331,11 @@ describe('OrderRepository', () => {
         size: 0.1,
         agentId: 'agent-123',
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       }
-      
+
       await repository.createOrder(agentOrder)
-      
+
       const agentOrders = await repository.getOrdersByAgent('agent-123')
       assert.equal(agentOrders.length, 1)
       assert.ok(agentOrders[0])

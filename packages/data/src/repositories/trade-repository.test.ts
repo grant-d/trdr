@@ -12,7 +12,7 @@ describe('TradeRepository', () => {
   beforeEach(async () => {
     connectionManager = createConnectionManager({ databasePath: ':memory:' })
     await connectionManager.initialize()
-    
+
     // Create trades table
     await connectionManager.execute(`
       CREATE TABLE trades (
@@ -30,7 +30,7 @@ describe('TradeRepository', () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `)
-    
+
     repository = new TradeRepository(connectionManager)
   })
 
@@ -49,14 +49,14 @@ describe('TradeRepository', () => {
       fee: 0.0001,
       feeCurrency: 'BTC',
       pnl: 0,
-      executedAt: new Date()
+      executedAt: new Date(),
     }
 
     it('should record a trade', async () => {
       await repository.recordTrade(testTrade)
-      
+
       const retrieved = await repository.getTrade(testTrade.id)
-      
+
       assert.ok(retrieved)
       assert.equal(retrieved.id, testTrade.id)
       assert.equal(retrieved.price, testTrade.price)
@@ -72,11 +72,11 @@ describe('TradeRepository', () => {
         price: 50000 + i * 100,
         size: 0.1,
         fee: 0.0001,
-        executedAt: new Date(Date.now() - i * 1000)
+        executedAt: new Date(Date.now() - i * 1000),
       }))
-      
+
       await repository.recordTradesBatch(trades)
-      
+
       const firstTrade = await repository.getTrade('batch-trade-0')
       assert.ok(firstTrade)
       assert.equal(firstTrade.price, 50000)
@@ -93,7 +93,7 @@ describe('TradeRepository', () => {
           price: 50000,
           size: 0.05,
           fee: 0.00005,
-          executedAt: new Date(Date.now() - 2000)
+          executedAt: new Date(Date.now() - 2000),
         },
         {
           id: 'partial-2',
@@ -103,12 +103,12 @@ describe('TradeRepository', () => {
           price: 50100,
           size: 0.05,
           fee: 0.00005,
-          executedAt: new Date(Date.now() - 1000)
-        }
+          executedAt: new Date(Date.now() - 1000),
+        },
       ]
-      
+
       await repository.recordTradesBatch(trades)
-      
+
       const orderTrades = await repository.getTradesByOrder(orderId)
       assert.equal(orderTrades.length, 2)
       assert.ok(orderTrades[0])
@@ -129,7 +129,7 @@ describe('TradeRepository', () => {
           size: 0.1,
           fee: 0.0001,
           pnl: 0,
-          executedAt: new Date(Date.now() - 7200000)
+          executedAt: new Date(Date.now() - 7200000),
         },
         {
           id: 'history-2',
@@ -140,7 +140,7 @@ describe('TradeRepository', () => {
           size: 0.1,
           fee: 0.0001,
           pnl: 100,
-          executedAt: new Date(Date.now() - 3600000)
+          executedAt: new Date(Date.now() - 3600000),
         },
         {
           id: 'history-3',
@@ -151,10 +151,10 @@ describe('TradeRepository', () => {
           size: 1,
           fee: 0.001,
           pnl: 0,
-          executedAt: new Date(Date.now() - 1800000)
-        }
+          executedAt: new Date(Date.now() - 1800000),
+        },
       ]
-      
+
       for (const trade of trades) {
         await repository.recordTrade(trade)
       }
@@ -164,9 +164,9 @@ describe('TradeRepository', () => {
       const history = await repository.getTradeHistory(
         'BTC-USD',
         new Date(Date.now() - 4000000),
-        new Date()
+        new Date(),
       )
-      
+
       assert.equal(history.length, 1)
       assert.ok(history[0])
       assert.equal(history[0].id, 'history-2')
@@ -177,9 +177,9 @@ describe('TradeRepository', () => {
         'BTC-USD',
         new Date(Date.now() - 8000000),
         new Date(),
-        'buy'
+        'buy',
       )
-      
+
       assert.equal(buys.length, 1)
       assert.ok(buys[0])
       assert.equal(buys[0].side, 'buy')
@@ -198,7 +198,7 @@ describe('TradeRepository', () => {
           size: 0.1,
           fee: 50,
           pnl: 0,
-          executedAt: new Date(Date.now() - 3600000)
+          executedAt: new Date(Date.now() - 3600000),
         },
         {
           id: 'pnl-2',
@@ -209,7 +209,7 @@ describe('TradeRepository', () => {
           size: 0.1,
           fee: 51,
           pnl: 100,
-          executedAt: new Date(Date.now() - 1800000)
+          executedAt: new Date(Date.now() - 1800000),
         },
         {
           id: 'pnl-3',
@@ -220,16 +220,16 @@ describe('TradeRepository', () => {
           size: 0.1,
           fee: 49,
           pnl: -100,
-          executedAt: new Date()
-        }
+          executedAt: new Date(),
+        },
       ]
-      
+
       await repository.recordTradesBatch(trades)
     })
 
     it('should calculate total P&L', async () => {
       const pnl = await repository.calculatePnL('BTC-USD')
-      
+
       assert.equal(pnl.totalPnL, 0) // 0 + 100 - 100
       assert.equal(pnl.totalFees, 150) // 50 + 51 + 49
       assert.equal(pnl.realizedPnL, -150) // 0 - 150
@@ -241,18 +241,18 @@ describe('TradeRepository', () => {
       const now = new Date()
       const startTime = new Date(now.getTime() - 2000000) // 33 minutes ago
       const endTime = new Date(now)
-      
+
       // Debug: check what trades we expect
       // pnl-2: executedAt = now - 1800000 (30 minutes ago) - should be included
       // pnl-3: executedAt = now - should be included
       // Total P&L should be 100 + (-100) = 0
-      
+
       const pnl = await repository.calculatePnL(
         'BTC-USD',
         startTime,
-        endTime
+        endTime,
       )
-      
+
       assert.equal(pnl.totalPnL, 0) // 100 + (-100) = 0
       assert.equal(pnl.tradeCount, 2)
     })
@@ -273,17 +273,17 @@ describe('TradeRepository', () => {
             size: 0.1 + hour * 0.01,
             fee: 1,
             pnl: hour % 2 === 0 ? -10 : 20,
-            executedAt: new Date(Date.now() - day * 86400000 - hour * 3600000)
+            executedAt: new Date(Date.now() - day * 86400000 - hour * 3600000),
           })
         }
       }
-      
+
       await repository.recordTradesBatch(trades)
     })
 
     it('should get trade stats by day', async () => {
       const stats = await repository.getTradeStatsByPeriod('BTC-USD', 'day', 7)
-      
+
       assert.ok(stats.length > 0)
       assert.ok(stats[0])
       assert.ok(stats[0].tradeCount >= 4)
@@ -293,7 +293,7 @@ describe('TradeRepository', () => {
 
     it('should get trade stats by hour', async () => {
       const stats = await repository.getTradeStatsByPeriod('BTC-USD', 'hour', 24)
-      
+
       assert.ok(stats.length > 0)
       assert.ok(stats.every(s => s.tradeCount >= 0))
     })
@@ -311,7 +311,7 @@ describe('TradeRepository', () => {
           size: 1,
           fee: 10,
           pnl: 5000,
-          executedAt: new Date(Date.now() - 3600000)
+          executedAt: new Date(Date.now() - 3600000),
         },
         {
           id: 'top-size',
@@ -322,7 +322,7 @@ describe('TradeRepository', () => {
           size: 5,
           fee: 50,
           pnl: 0,
-          executedAt: new Date(Date.now() - 7200000)
+          executedAt: new Date(Date.now() - 7200000),
         },
         {
           id: 'recent',
@@ -333,16 +333,16 @@ describe('TradeRepository', () => {
           size: 0.1,
           fee: 5,
           pnl: -50,
-          executedAt: new Date(Date.now() - 60000)
-        }
+          executedAt: new Date(Date.now() - 60000),
+        },
       ]
-      
+
       await repository.recordTradesBatch(trades)
     })
 
     it('should get top trades by P&L', async () => {
       const topPnL = await repository.getTopTrades('BTC-USD', 10, 'pnl')
-      
+
       assert.ok(topPnL.length > 0)
       assert.ok(topPnL[0])
       assert.equal(topPnL[0].id, 'top-pnl')
@@ -351,7 +351,7 @@ describe('TradeRepository', () => {
 
     it('should get top trades by size', async () => {
       const topSize = await repository.getTopTrades('BTC-USD', 10, 'size')
-      
+
       assert.ok(topSize[0])
       assert.equal(topSize[0].id, 'top-size')
       assert.equal(topSize[0].size, 5)
@@ -359,7 +359,7 @@ describe('TradeRepository', () => {
 
     it('should get recent trades', async () => {
       const recent = await repository.getTopTrades('BTC-USD', 10, 'recent')
-      
+
       assert.ok(recent[0])
       assert.equal(recent[0].id, 'recent')
     })
@@ -375,9 +375,9 @@ describe('TradeRepository', () => {
         price: 40000,
         size: 0.1,
         fee: 4,
-        executedAt: new Date(Date.now() - 400 * 86400000)
+        executedAt: new Date(Date.now() - 400 * 86400000),
       }
-      
+
       const recentTrade: Trade = {
         id: 'recent-trade',
         orderId: 'recent-order',
@@ -386,19 +386,19 @@ describe('TradeRepository', () => {
         price: 50000,
         size: 0.1,
         fee: 5,
-        executedAt: new Date()
+        executedAt: new Date(),
       }
-      
+
       await repository.recordTrade(oldTrade)
       await repository.recordTrade(recentTrade)
-      
+
       const deleted = await repository.cleanup(365)
-      
+
       assert.equal(deleted, 1)
-      
+
       const oldRetrieved = await repository.getTrade('old-trade')
       assert.equal(oldRetrieved, null)
-      
+
       const recentRetrieved = await repository.getTrade('recent-trade')
       assert.ok(recentRetrieved)
     })

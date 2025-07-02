@@ -30,7 +30,11 @@
       "Bash(npx node --test:*)",
       "mcp__ide__getDiagnostics",
       "Bash(node:*)",
-      "Bash(true)"
+      "Bash(true)",
+      "mcp__taskmaster-ai__update_subtask",
+      "Bash(npm search:*)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npm run:*)"
     ],
     "deny": []
   }

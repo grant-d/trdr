@@ -1,4 +1,3 @@
-
 import type { Candle, MarketDataSnapshot } from './market-data'
 import type { Order, Position } from './orders'
 
@@ -50,11 +49,11 @@ export interface TradeResult {
  * Types of trading agents in the system.
  * Each agent specializes in different market analysis.
  */
-export type AgentType = 
-  /** Analyzes price volatility for trail distance */
+export type AgentType =
+/** Analyzes price volatility for trail distance */
   | 'volatility'
   /** Detects momentum and divergences */
-  | 'momentum' 
+  | 'momentum'
   /** Analyzes volume patterns and whale activity */
   | 'volume'
   /** Identifies support/resistance levels */
@@ -191,37 +190,37 @@ export interface ITradeAgent {
   readonly name: string
   /** Agent version for compatibility */
   readonly version: string
-  
+
   /**
    * Initialize agent with context.
    * Called once before agent starts analyzing.
    */
   initialize(context: AgentContext): Promise<void>
-  
+
   /**
    * Gracefully shutdown agent.
    * Clean up resources and save state.
    */
   shutdown(): Promise<void>
-  
+
   /**
    * Analyze market data and generate trading signal.
    * Core function called on each market update.
    */
   analyze(market: MarketData): Promise<AgentSignal>
-  
+
   /**
    * Update agent performance based on trade result.
    * Used for learning and weight adjustment.
    */
   updatePerformance(result: TradeResult): void
-  
+
   /**
    * Get current agent state.
    * Used for persistence and monitoring.
    */
   getState(): AgentState
-  
+
   /**
    * Restore agent state.
    * Used for recovery after restart.

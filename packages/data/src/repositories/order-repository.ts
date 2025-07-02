@@ -57,9 +57,9 @@ export class OrderRepository extends BaseRepository<OrderDto> {
       metadata: order.metadata ? JSON.stringify(order.metadata) : null,
       submitted_at: order.submittedAt ? toIsoDate(order.submittedAt) : undefined,
       created_at: order.createdAt ? toIsoDate(order.createdAt) : toIsoDate(new Date()),
-      updated_at: order.updatedAt ? toIsoDate(order.updatedAt) : toIsoDate(new Date())
+      updated_at: order.updatedAt ? toIsoDate(order.updatedAt) : toIsoDate(new Date()),
     }
-    
+
     await this.insert(model)
   }
 
@@ -68,9 +68,9 @@ export class OrderRepository extends BaseRepository<OrderDto> {
    */
   async updateOrder(orderId: string, updates: Partial<Order>): Promise<void> {
     const updateData: Partial<OrderDto> = {
-      updated_at: toIsoDate(new Date())
+      updated_at: toIsoDate(new Date()),
     }
-    
+
     if (updates.status !== undefined) updateData.status = updates.status
     if (updates.filledSize !== undefined) updateData.filled_size = updates.filledSize
     if (updates.averageFillPrice !== undefined) updateData.average_fill_price = updates.averageFillPrice
@@ -78,7 +78,7 @@ export class OrderRepository extends BaseRepository<OrderDto> {
     if (updates.filledAt !== undefined) updateData.filled_at = toIsoDate(updates.filledAt)
     if (updates.cancelledAt !== undefined) updateData.cancelled_at = toIsoDate(updates.cancelledAt)
     if (updates.metadata !== undefined) updateData.metadata = JSON.stringify(updates.metadata)
-    
+
     await this.update(updateData, 'id = ?', [orderId])
   }
 
@@ -98,9 +98,9 @@ export class OrderRepository extends BaseRepository<OrderDto> {
       'status = ?',
       [status],
       'created_at DESC',
-      limit
+      limit,
     )
-    
+
     return models.map(this.dtoToOrder)
   }
 
@@ -111,12 +111,12 @@ export class OrderRepository extends BaseRepository<OrderDto> {
     const activeStatuses = ['pending', 'submitted', 'partial']
     let where = `status IN (${activeStatuses.map(() => '?').join(', ')})`
     const params: any[] = [...activeStatuses]
-    
+
     if (symbol) {
       where += ' AND symbol = ?'
       params.push(symbol)
     }
-    
+
     const models = await this.findMany(where, params, 'created_at DESC')
     return models.map(this.dtoToOrder)
   }
@@ -129,9 +129,9 @@ export class OrderRepository extends BaseRepository<OrderDto> {
       'agent_id = ?',
       [agentId],
       'created_at DESC',
-      limit
+      limit,
     )
-    
+
     return models.map(this.dtoToOrder)
   }
 
@@ -142,16 +142,16 @@ export class OrderRepository extends BaseRepository<OrderDto> {
     symbol: string,
     startTime: Date,
     endTime: Date,
-    statuses?: OrderStatus[]
+    statuses?: OrderStatus[],
   ): Promise<Order[]> {
     let where = 'symbol = ? AND created_at >= ? AND created_at <= ?'
     const params: any[] = [symbol, toIsoDate(startTime), toIsoDate(endTime)]
-    
+
     if (statuses && statuses.length > 0) {
       where += ` AND status IN (${statuses.map(() => '?').join(', ')})`
       params.push(...statuses)
     }
-    
+
     const models = await this.findMany(where, params, 'created_at DESC')
     return models.map(this.dtoToOrder)
   }
@@ -161,11 +161,11 @@ export class OrderRepository extends BaseRepository<OrderDto> {
    */
   async cancelOrder(orderId: string, reason?: string): Promise<void> {
     const metadata = reason ? { cancellationReason: reason } : undefined
-    
+
     await this.updateOrder(orderId, {
       status: 'cancelled',
       cancelledAt: new Date(),
-      metadata
+      metadata,
     })
   }
 
@@ -182,15 +182,15 @@ export class OrderRepository extends BaseRepository<OrderDto> {
   }> {
     const startTime = new Date()
     startTime.setDate(startTime.getDate() - days)
-    
+
     let whereClause = 'created_at >= ?'
     const params: any[] = [toIsoDate(startTime)]
-    
+
     if (symbol) {
       whereClause += ' AND symbol = ?'
       params.push(symbol)
     }
-    
+
     // Get order counts by status
     const statusCounts = await this.query<{ status: string; count: number }>(`
       SELECT status, COUNT(*) as count
@@ -198,11 +198,11 @@ export class OrderRepository extends BaseRepository<OrderDto> {
       WHERE ${whereClause}
       GROUP BY status
     `, params)
-    
+
     const totalOrders = statusCounts.reduce((sum, row) => sum + row.count, 0)
     const filledOrders = statusCounts.find(row => row.status === 'filled')?.count || 0
     const cancelledOrders = statusCounts.find(row => row.status === 'cancelled')?.count || 0
-    
+
     // Get order counts by type
     const typeCounts = await this.query<{ type: string; count: number }>(`
       SELECT type, COUNT(*) as count
@@ -210,12 +210,12 @@ export class OrderRepository extends BaseRepository<OrderDto> {
       WHERE ${whereClause}
       GROUP BY type
     `, params)
-    
+
     const ordersByType = typeCounts.reduce((acc, row) => {
       acc[row.type as OrderType] = row.count
       return acc
     }, {} as Record<OrderType, number>)
-    
+
     // Get order counts by side
     const sideCounts = await this.query<{ side: string; count: number }>(`
       SELECT side, COUNT(*) as count
@@ -223,19 +223,19 @@ export class OrderRepository extends BaseRepository<OrderDto> {
       WHERE ${whereClause}
       GROUP BY side
     `, params)
-    
+
     const ordersBySide = sideCounts.reduce((acc, row) => {
       acc[row.side as OrderSide] = row.count
       return acc
     }, {} as Record<OrderSide, number>)
-    
+
     return {
       totalOrders,
       filledOrders,
       cancelledOrders,
       averageFillRate: totalOrders > 0 ? filledOrders / totalOrders : 0,
       ordersByType,
-      ordersBySide
+      ordersBySide,
     }
   }
 
@@ -245,14 +245,14 @@ export class OrderRepository extends BaseRepository<OrderDto> {
   async cleanup(daysToKeep: number = 90): Promise<number> {
     const cutoffDate = new Date()
     cutoffDate.setDate(cutoffDate.getDate() - daysToKeep)
-    
+
     const countBefore = await this.count()
-    
+
     await this.delete(
       'created_at < ? AND status IN (?, ?, ?)',
-      [toIsoDate(cutoffDate), 'filled', 'cancelled', 'rejected']
+      [toIsoDate(cutoffDate), 'filled', 'cancelled', 'rejected'],
     )
-    
+
     const countAfter = await this.count()
     return countBefore - countAfter
   }
@@ -280,7 +280,7 @@ export class OrderRepository extends BaseRepository<OrderDto> {
       updatedAt: new Date(model.updated_at),
       submittedAt: model.submitted_at ? new Date(model.submitted_at) : undefined,
       filledAt: model.filled_at ? new Date(model.filled_at) : undefined,
-      cancelledAt: model.cancelled_at ? new Date(model.cancelled_at) : undefined
+      cancelledAt: model.cancelled_at ? new Date(model.cancelled_at) : undefined,
     }
   }
 }

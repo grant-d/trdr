@@ -8,7 +8,7 @@ import {
   fromIsoDate,
   fromEpochDate,
   isoToEpoch,
-  epochToIso
+  epochToIso,
 } from './dates'
 
 describe('Date utility functions', () => {
@@ -165,10 +165,10 @@ describe('Date utility functions', () => {
       const farFuture = new Date('9999-12-31T23:59:59.999Z')
       const isoDate = toIsoDate(farFuture)
       const epochDate = toEpochDate(farFuture)
-      
+
       assert.ok(isoDate.startsWith('9999'))
       assert.ok(epochDate > 0)
-      
+
       // Round trip should work
       assert.equal(fromIsoDate(isoDate).getTime(), farFuture.getTime())
       assert.equal(fromEpochDate(epochDate).getTime(), farFuture.getTime())
@@ -178,10 +178,10 @@ describe('Date utility functions', () => {
       const farPast = new Date('0001-01-01T00:00:00.000Z')
       const isoDate = toIsoDate(farPast)
       const epochDate = toEpochDate(farPast)
-      
+
       assert.ok(isoDate.includes('0001'))
       assert.ok(epochDate < 0) // Before Unix epoch
-      
+
       // Round trip should work
       assert.equal(fromIsoDate(isoDate).getTime(), farPast.getTime())
       assert.equal(fromEpochDate(epochDate).getTime(), farPast.getTime())
@@ -191,7 +191,7 @@ describe('Date utility functions', () => {
       const preciseDate = new Date('2024-01-15T12:30:45.999Z')
       const isoDate = toIsoDate(preciseDate)
       const epochDate = toEpochDate(preciseDate)
-      
+
       assert.ok(isoDate.includes('.999Z'))
       assert.equal(epochDate % 1000, 999)
     })

@@ -12,7 +12,7 @@ describe('MarketDataRepository', () => {
   beforeEach(async () => {
     connectionManager = createConnectionManager({ databasePath: ':memory:' })
     await connectionManager.initialize()
-    
+
     // Create tables
     await connectionManager.execute(`
       CREATE TABLE candles (
@@ -31,7 +31,7 @@ describe('MarketDataRepository', () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `)
-    
+
     await connectionManager.execute(`
       CREATE TABLE market_ticks (
         id BIGINT PRIMARY KEY,
@@ -46,7 +46,7 @@ describe('MarketDataRepository', () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `)
-    
+
     repository = new MarketDataRepository(connectionManager)
   })
 
@@ -67,14 +67,14 @@ describe('MarketDataRepository', () => {
       close: 50500,
       volume: 1000,
       quoteVolume: 50500000,
-      tradesCount: 5000
+      tradesCount: 5000,
     }
 
     it('should save and retrieve a candle', async () => {
       await repository.saveCandle(testCandle)
-      
+
       const retrieved = await repository.getLatestCandle('BTC-USD', '1h')
-      
+
       assert.ok(retrieved)
       assert.equal(retrieved.symbol, testCandle.symbol)
       assert.equal(retrieved.open, testCandle.open)
@@ -93,18 +93,18 @@ describe('MarketDataRepository', () => {
         high: 50100 + i * 100,
         low: 49900 + i * 100,
         close: 50050 + i * 100,
-        volume: 1000 + i * 10
+        volume: 1000 + i * 10,
       }))
-      
+
       await repository.saveCandlesBatch(candles)
-      
+
       const retrieved = await repository.getCandles(
         'BTC-USD',
         '1h',
         new Date(Date.now() - 11 * 3600000),
-        new Date()
+        new Date(),
       )
-      
+
       assert.equal(retrieved.length, 10)
       assert.ok(retrieved[0])
       assert.equal(retrieved[0].open, 50000)
@@ -118,24 +118,24 @@ describe('MarketDataRepository', () => {
         {
           ...testCandle,
           openTime: new Date(now - 7200000),
-          closeTime: new Date(now - 3600000)
+          closeTime: new Date(now - 3600000),
         },
         {
           ...testCandle,
           openTime: new Date(now - 3600000),
-          closeTime: new Date(now)
-        }
+          closeTime: new Date(now),
+        },
       ]
-      
+
       await repository.saveCandlesBatch(candles)
-      
+
       const retrieved = await repository.getCandles(
         'BTC-USD',
         '1h',
         new Date(now - 5400000), // 1.5 hours ago
-        new Date()
+        new Date(),
       )
-      
+
       assert.equal(retrieved.length, 1)
     })
 
@@ -154,14 +154,14 @@ describe('MarketDataRepository', () => {
       bid: 49999,
       ask: 50001,
       bidSize: 1.5,
-      askSize: 2.0
+      askSize: 2.0,
     }
 
     it('should save and retrieve a tick', async () => {
       await repository.saveTick(testTick)
-      
+
       const retrieved = await repository.getLatestTick('BTC-USD')
-      
+
       assert.ok(retrieved)
       assert.equal(retrieved.symbol, testTick.symbol)
       assert.equal(retrieved.price, testTick.price)
@@ -174,17 +174,17 @@ describe('MarketDataRepository', () => {
         symbol: 'BTC-USD',
         timestamp: new Date(Date.now() - (5 - i) * 1000),
         price: 50000 + i,
-        volume: 0.1
+        volume: 0.1,
       }))
-      
+
       await repository.saveTicksBatch(ticks)
-      
+
       const retrieved = await repository.getTicks(
         'BTC-USD',
         new Date(Date.now() - 10000),
-        new Date()
+        new Date(),
       )
-      
+
       assert.equal(retrieved.length, 5)
     })
 
@@ -206,13 +206,13 @@ describe('MarketDataRepository', () => {
         high: 51000 + Math.random() * 1000,
         low: 49000 + Math.random() * 1000,
         close: 50000 + Math.random() * 1000,
-        volume: 1000 + Math.random() * 100
+        volume: 1000 + Math.random() * 100,
       }))
-      
+
       await repository.saveCandlesBatch(candles)
-      
+
       const stats = await repository.getMarketStats('BTC-USD', '1d', 30)
-      
+
       assert.ok(stats.avgVolume > 0)
       assert.ok(stats.avgPrice > 0)
       assert.ok(stats.priceRange.min > 0)
@@ -233,23 +233,23 @@ describe('MarketDataRepository', () => {
         high: 41000,
         low: 39000,
         close: 40500,
-        volume: 1000
+        volume: 1000,
       }
-      
+
       const recentCandle: Candle = {
         ...oldCandle,
         timestamp: new Date(Date.now() - 3600000),
         openTime: new Date(Date.now() - 3600000),
-        closeTime: new Date()
+        closeTime: new Date(),
       }
-      
+
       await repository.saveCandle(oldCandle)
       await repository.saveCandle(recentCandle)
-      
+
       const cleanup = await repository.cleanup(90)
-      
+
       assert.equal(cleanup.candlesDeleted, 1)
-      
+
       const remaining = await repository.getLatestCandle('BTC-USD', '1h')
       assert.ok(remaining)
       assert.equal(remaining.timestamp.getTime(), recentCandle.timestamp.getTime())
@@ -260,13 +260,13 @@ describe('MarketDataRepository', () => {
         symbol: 'BTC-USD',
         timestamp: new Date(Date.now() - 100 * 86400000),
         price: 40000,
-        volume: 0.1
+        volume: 0.1,
       }
-      
+
       await repository.saveTick(oldTick)
-      
+
       const cleanup = await repository.cleanup(90)
-      
+
       assert.equal(cleanup.ticksDeleted, 1)
     })
   })

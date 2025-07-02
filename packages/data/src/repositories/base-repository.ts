@@ -6,8 +6,9 @@ import type Database from 'better-sqlite3'
  */
 export abstract class BaseRepository<T> {
   protected abstract readonly tableName: string
-  
-  constructor(protected readonly connectionManager: ConnectionManager) {}
+
+  constructor(protected readonly connectionManager: ConnectionManager) {
+  }
 
   /**
    * Insert a single record
@@ -16,7 +17,7 @@ export abstract class BaseRepository<T> {
     const fields = Object.keys(data)
     const values = Object.values(data)
     const placeholders = fields.map(() => '?').join(', ')
-    
+
     const sql = `INSERT INTO ${this.tableName} (${fields.join(', ')}) VALUES (${placeholders})`
     await this.connectionManager.execute(sql, values)
   }
@@ -26,16 +27,16 @@ export abstract class BaseRepository<T> {
    */
   protected async insertBatch(records: Partial<T>[]): Promise<void> {
     if (records.length === 0) return
-    
+
     const firstRecord = records[0]
     if (!firstRecord) return
-    
+
     // SQLite handles batch inserts differently - use a transaction for performance
     await this.connectionManager.transaction((db) => {
       const fields = Object.keys(firstRecord)
       const placeholders = fields.map(() => '?').join(', ')
       const sql = `INSERT INTO ${this.tableName} (${fields.join(', ')}) VALUES (${placeholders})`
-      
+
       const stmt = db.prepare(sql)
       for (const record of records) {
         const values = fields.map(field => (record as any)[field])
@@ -50,12 +51,12 @@ export abstract class BaseRepository<T> {
   protected async update(
     data: Partial<T>,
     where: string,
-    whereParams: any[] = []
+    whereParams: any[] = [],
   ): Promise<void> {
     const fields = Object.keys(data)
     const setClause = fields.map(field => `${field} = ?`).join(', ')
     const values = [...Object.values(data), ...whereParams]
-    
+
     const sql = `UPDATE ${this.tableName} SET ${setClause} WHERE ${where}`
     await this.connectionManager.execute(sql, values)
   }
@@ -85,26 +86,26 @@ export abstract class BaseRepository<T> {
     params: any[] = [],
     orderBy?: string,
     limit?: number,
-    offset?: number
+    offset?: number,
   ): Promise<T[]> {
     let sql = `SELECT * FROM ${this.tableName}`
-    
+
     if (where) {
       sql += ` WHERE ${where}`
     }
-    
+
     if (orderBy) {
       sql += ` ORDER BY ${orderBy}`
     }
-    
+
     if (limit) {
       sql += ` LIMIT ${limit}`
     }
-    
+
     if (offset) {
       sql += ` OFFSET ${offset}`
     }
-    
+
     return this.connectionManager.query<T>(sql, params)
   }
 
@@ -113,11 +114,11 @@ export abstract class BaseRepository<T> {
    */
   protected async count(where?: string, params: any[] = []): Promise<number> {
     let sql = `SELECT COUNT(*) as count FROM ${this.tableName}`
-    
+
     if (where) {
       sql += ` WHERE ${where}`
     }
-    
+
     const results = await this.connectionManager.query<{ count: number }>(sql, params)
     return results[0]?.count || 0
   }
@@ -133,7 +134,7 @@ export abstract class BaseRepository<T> {
    * Execute in transaction
    */
   protected async transaction<R>(
-    fn: (db: Database.Database) => R
+    fn: (db: Database.Database) => R,
   ): Promise<R> {
     return this.connectionManager.transaction(fn)
   }

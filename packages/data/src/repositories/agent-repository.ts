@@ -100,9 +100,9 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
       trail_distance: decision.trailDistance,
       reasoning: JSON.stringify(decision.reasoning),
       market_context: decision.marketContext ? JSON.stringify(decision.marketContext) : null,
-      timestamp: toIsoDate(decision.timestamp)
+      timestamp: toIsoDate(decision.timestamp),
     }
-    
+
     await this.insert(model)
   }
 
@@ -119,9 +119,9 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
       trail_distance: decision.trailDistance,
       reasoning: JSON.stringify(decision.reasoning),
       market_context: decision.marketContext ? JSON.stringify(decision.marketContext) : null,
-      timestamp: toIsoDate(decision.timestamp)
+      timestamp: toIsoDate(decision.timestamp),
     }))
-    
+
     await this.insertBatch(models)
   }
 
@@ -133,34 +133,34 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
     symbol?: string,
     startTime?: Date,
     endTime?: Date,
-    limit?: number
+    limit?: number,
   ): Promise<AgentSignal[]> {
     const whereParts: string[] = []
     const params: any[] = []
-    
+
     if (agentId) {
       whereParts.push('agent_id = ?')
       params.push(agentId)
     }
-    
+
     if (symbol) {
       whereParts.push('symbol = ?')
       params.push(symbol)
     }
-    
+
     if (startTime) {
       whereParts.push('timestamp >= ?')
       params.push(toIsoDate(startTime))
     }
-    
+
     if (endTime) {
       whereParts.push('timestamp <= ?')
       params.push(toIsoDate(endTime))
     }
-    
+
     const where = whereParts.length > 0 ? whereParts.join(' AND ') : undefined
     const models = await this.findMany(where, params, 'timestamp DESC', limit)
-    
+
     return models.map(this.dtoToDecision)
   }
 
@@ -174,13 +174,13 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
       confidence: consensus.confidence,
       dissent: consensus.dissent,
       votes: JSON.stringify(consensus.votes),
-      timestamp: toIsoDate(consensus.timestamp)
+      timestamp: toIsoDate(consensus.timestamp),
     }
-    
+
     const fields = Object.keys(model)
     const values = Object.values(model)
     const placeholders = fields.map(() => '?').join(', ')
-    
+
     const sql = `INSERT INTO ${this.consensusTableName} (${fields.join(', ')}) VALUES (${placeholders})`
     await this.connectionManager.execute(sql, values)
   }
@@ -192,27 +192,27 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
     symbol: string,
     startTime?: Date,
     endTime?: Date,
-    limit?: number
+    limit?: number,
   ): Promise<AgentConsensus[]> {
     let sql = `SELECT * FROM ${this.consensusTableName} WHERE symbol = ?`
     const params: any[] = [symbol]
-    
+
     if (startTime) {
       sql += ' AND timestamp >= ?'
       params.push(toIsoDate(startTime))
     }
-    
+
     if (endTime) {
       sql += ' AND timestamp <= ?'
       params.push(toIsoDate(endTime))
     }
-    
+
     sql += ' ORDER BY timestamp DESC'
-    
+
     if (limit) {
       sql += ` LIMIT ${limit}`
     }
-    
+
     const models = await this.query<AgentConsensusDto>(sql, params)
     return models.map(this.dtoToConsensus)
   }
@@ -227,13 +227,13 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
       version: checkpoint.version,
       state: JSON.stringify(checkpoint.state),
       metadata: checkpoint.metadata ? JSON.stringify(checkpoint.metadata) : null,
-      created_at: toIsoDate(new Date())
+      created_at: toIsoDate(new Date()),
     }
-    
+
     const fields = Object.keys(model)
     const values = Object.values(model)
     const placeholders = fields.map(() => '?').join(', ')
-    
+
     const sql = `INSERT INTO ${this.checkpointsTableName} (${fields.join(', ')}) VALUES (${placeholders})`
     await this.connectionManager.execute(sql, values)
   }
@@ -248,7 +248,7 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
       ORDER BY created_at DESC
       LIMIT 1
     `
-    
+
     const models = await this.query<CheckpointDto>(sql, [type])
     return models.length > 0 && models[0] ? this.dtoToCheckpoint(models[0]) : null
   }
@@ -267,18 +267,18 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
    */
   async listCheckpoints(
     type?: string,
-    limit: number = 10
+    limit: number = 10,
   ): Promise<AgentCheckpoint[]> {
     let sql = `SELECT * FROM ${this.checkpointsTableName}`
     const params: any[] = []
-    
+
     if (type) {
       sql += ' WHERE type = ?'
       params.push(type)
     }
-    
+
     sql += ` ORDER BY created_at DESC LIMIT ${limit}`
-    
+
     const models = await this.query<CheckpointDto>(sql, params)
     return models.map(this.dtoToCheckpoint)
   }
@@ -288,7 +288,7 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
    */
   async getAgentStats(
     agentId: string,
-    days: number = 30
+    days: number = 30,
   ): Promise<{
     totalDecisions: number
     avgConfidence: number
@@ -297,7 +297,7 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
   }> {
     const startTime = new Date()
     startTime.setDate(startTime.getDate() - days)
-    
+
     // Get overall stats
     const overallStats = await this.query<{
       total_decisions: number
@@ -310,7 +310,7 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
       WHERE agent_id = ?
         AND timestamp >= ?
     `, [agentId, startTime.toISOString()])
-    
+
     // Get action distribution
     const actionStats = await this.query<{
       action: string
@@ -324,19 +324,19 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
         AND timestamp >= ?
       GROUP BY action
     `, [agentId, startTime.toISOString()])
-    
+
     const totalDecisions = Number(overallStats[0]?.total_decisions || 0)
     const avgConfidence = Number(overallStats[0]?.avg_confidence || 0)
-    
+
     const actionDistribution = actionStats.reduce((acc, row) => {
       acc[row.action] = Number(row.action_count)
       return acc
     }, {} as Record<string, number>)
-    
+
     return {
       totalDecisions,
       avgConfidence,
-      actionDistribution
+      actionDistribution,
     }
   }
 
@@ -350,40 +350,40 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
   }> {
     const cutoffDate = new Date()
     cutoffDate.setDate(cutoffDate.getDate() - daysToKeep)
-    
+
     // Count before deletion
     const decisionsBefore = await this.count()
     const consensusBefore = await this.query<{ count: number }>(
-      `SELECT COUNT(*) as count FROM ${this.consensusTableName}`
+      `SELECT COUNT(*) as count FROM ${this.consensusTableName}`,
     ).then(r => Number(r[0]?.count || 0))
     const checkpointsBefore = await this.query<{ count: number }>(
-      `SELECT COUNT(*) as count FROM ${this.checkpointsTableName}`
+      `SELECT COUNT(*) as count FROM ${this.checkpointsTableName}`,
     ).then(r => Number(r[0]?.count || 0))
-    
+
     // Delete old data
     await this.delete('timestamp < ?', [cutoffDate.toISOString()])
     await this.connectionManager.execute(
       `DELETE FROM ${this.consensusTableName} WHERE timestamp < ?`,
-      [cutoffDate.toISOString()]
+      [cutoffDate.toISOString()],
     )
     await this.connectionManager.execute(
       `DELETE FROM ${this.checkpointsTableName} WHERE created_at < ?`,
-      [cutoffDate.toISOString()]
+      [cutoffDate.toISOString()],
     )
-    
+
     // Count after deletion
     const decisionsAfter = await this.count()
     const consensusAfter = await this.query<{ count: number }>(
-      `SELECT COUNT(*) as count FROM ${this.consensusTableName}`
+      `SELECT COUNT(*) as count FROM ${this.consensusTableName}`,
     ).then(r => Number(r[0]?.count || 0))
     const checkpointsAfter = await this.query<{ count: number }>(
-      `SELECT COUNT(*) as count FROM ${this.checkpointsTableName}`
+      `SELECT COUNT(*) as count FROM ${this.checkpointsTableName}`,
     ).then(r => Number(r[0]?.count || 0))
-    
+
     return {
       decisionsDeleted: decisionsBefore - decisionsAfter,
       consensusDeleted: consensusBefore - consensusAfter,
-      checkpointsDeleted: checkpointsBefore - checkpointsAfter
+      checkpointsDeleted: checkpointsBefore - checkpointsAfter,
     }
   }
 
@@ -399,7 +399,7 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
       trailDistance: model.trail_distance || 0,
       reasoning: JSON.parse(model.reasoning),
       marketContext: model.market_context ? JSON.parse(model.market_context) : undefined,
-      timestamp: new Date(model.timestamp)
+      timestamp: new Date(model.timestamp),
     }
   }
 
@@ -414,7 +414,7 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
       confidence: model.confidence,
       dissent: model.dissent,
       votes: JSON.parse(model.votes),
-      timestamp: new Date(model.timestamp)
+      timestamp: new Date(model.timestamp),
     }
   }
 
@@ -428,7 +428,7 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
       version: model.version,
       state: JSON.parse(model.state),
       metadata: model.metadata ? JSON.parse(model.metadata) : undefined,
-      createdAt: new Date(model.created_at)
+      createdAt: new Date(model.created_at),
     }
   }
 }

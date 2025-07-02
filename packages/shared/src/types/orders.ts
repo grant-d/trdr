@@ -205,7 +205,7 @@ export interface OrderState {
  * Discriminated union of order lifecycle events.
  * Used for event-driven order management.
  */
-export type OrderEvent = 
+export type OrderEvent =
   | { type: 'created'; order: Order }
   | { type: 'submitted'; order: Order }
   | { type: 'partial_fill'; order: Order; fill: OrderFill }

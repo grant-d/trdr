@@ -28,7 +28,7 @@ export const SCHEMA_STATEMENTS = {
   candles_indexes: [
     'CREATE INDEX IF NOT EXISTS idx_candles_symbol_interval ON candles(symbol, interval)',
     'CREATE INDEX IF NOT EXISTS idx_candles_open_time ON candles(open_time)',
-    'CREATE INDEX IF NOT EXISTS idx_candles_symbol_time ON candles(symbol, open_time)'
+    'CREATE INDEX IF NOT EXISTS idx_candles_symbol_time ON candles(symbol, open_time)',
   ],
 
   market_ticks: `
@@ -49,7 +49,7 @@ export const SCHEMA_STATEMENTS = {
   market_ticks_indexes: [
     'CREATE INDEX IF NOT EXISTS idx_ticks_symbol ON market_ticks(symbol)',
     'CREATE INDEX IF NOT EXISTS idx_ticks_timestamp ON market_ticks(timestamp)',
-    'CREATE INDEX IF NOT EXISTS idx_ticks_symbol_time ON market_ticks(symbol, timestamp)'
+    'CREATE INDEX IF NOT EXISTS idx_ticks_symbol_time ON market_ticks(symbol, timestamp)',
   ],
 
   // Order tables
@@ -80,7 +80,7 @@ export const SCHEMA_STATEMENTS = {
     'CREATE INDEX IF NOT EXISTS idx_orders_symbol ON orders(symbol)',
     'CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)',
     'CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)',
-    'CREATE INDEX IF NOT EXISTS idx_orders_agent_id ON orders(agent_id)'
+    'CREATE INDEX IF NOT EXISTS idx_orders_agent_id ON orders(agent_id)',
   ],
 
   // Trade tables
@@ -104,7 +104,7 @@ export const SCHEMA_STATEMENTS = {
   trades_indexes: [
     'CREATE INDEX IF NOT EXISTS idx_trades_order_id ON trades(order_id)',
     'CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol)',
-    'CREATE INDEX IF NOT EXISTS idx_trades_executed_at ON trades(executed_at)'
+    'CREATE INDEX IF NOT EXISTS idx_trades_executed_at ON trades(executed_at)',
   ],
 
   // Agent decision tables
@@ -128,7 +128,7 @@ export const SCHEMA_STATEMENTS = {
     'CREATE INDEX IF NOT EXISTS idx_decisions_agent_id ON agent_decisions(agent_id)',
     'CREATE INDEX IF NOT EXISTS idx_decisions_symbol ON agent_decisions(symbol)',
     'CREATE INDEX IF NOT EXISTS idx_decisions_timestamp ON agent_decisions(timestamp)',
-    'CREATE INDEX IF NOT EXISTS idx_decisions_agent_time ON agent_decisions(agent_id, timestamp)'
+    'CREATE INDEX IF NOT EXISTS idx_decisions_agent_time ON agent_decisions(agent_id, timestamp)',
   ],
 
   agent_consensus: `
@@ -146,7 +146,7 @@ export const SCHEMA_STATEMENTS = {
 
   agent_consensus_indexes: [
     'CREATE INDEX IF NOT EXISTS idx_consensus_symbol ON agent_consensus(symbol)',
-    'CREATE INDEX IF NOT EXISTS idx_consensus_timestamp ON agent_consensus(timestamp)'
+    'CREATE INDEX IF NOT EXISTS idx_consensus_timestamp ON agent_consensus(timestamp)',
   ],
 
   // Checkpoint tables
@@ -163,7 +163,7 @@ export const SCHEMA_STATEMENTS = {
 
   checkpoints_indexes: [
     'CREATE INDEX IF NOT EXISTS idx_checkpoints_type ON checkpoints(type)',
-    'CREATE INDEX IF NOT EXISTS idx_checkpoints_created_at ON checkpoints(created_at)'
+    'CREATE INDEX IF NOT EXISTS idx_checkpoints_created_at ON checkpoints(created_at)',
   ],
 
   // Performance tracking tables
@@ -188,7 +188,7 @@ export const SCHEMA_STATEMENTS = {
   positions_indexes: [
     'CREATE INDEX IF NOT EXISTS idx_positions_symbol ON positions(symbol)',
     'CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status)',
-    'CREATE INDEX IF NOT EXISTS idx_positions_opened_at ON positions(opened_at)'
+    'CREATE INDEX IF NOT EXISTS idx_positions_opened_at ON positions(opened_at)',
   ],
 
   // Migration tracking
@@ -198,7 +198,7 @@ export const SCHEMA_STATEMENTS = {
       name TEXT NOT NULL,
       applied_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
-  `
+  `,
 }
 
 /**
@@ -206,7 +206,7 @@ export const SCHEMA_STATEMENTS = {
  */
 export function getAllSchemaStatements(): string[] {
   const statements: string[] = []
-  
+
   // Add table creation statements
   statements.push(SCHEMA_STATEMENTS.candles)
   statements.push(SCHEMA_STATEMENTS.market_ticks)
@@ -217,7 +217,7 @@ export function getAllSchemaStatements(): string[] {
   statements.push(SCHEMA_STATEMENTS.checkpoints)
   statements.push(SCHEMA_STATEMENTS.positions)
   statements.push(SCHEMA_STATEMENTS.schema_migrations)
-  
+
   // Add indexes
   statements.push(...SCHEMA_STATEMENTS.candles_indexes)
   statements.push(...SCHEMA_STATEMENTS.market_ticks_indexes)
@@ -227,7 +227,7 @@ export function getAllSchemaStatements(): string[] {
   statements.push(...SCHEMA_STATEMENTS.agent_consensus_indexes)
   statements.push(...SCHEMA_STATEMENTS.checkpoints_indexes)
   statements.push(...SCHEMA_STATEMENTS.positions_indexes)
-  
+
   return statements
 }
 

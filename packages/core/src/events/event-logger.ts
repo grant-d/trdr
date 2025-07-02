@@ -54,7 +54,7 @@ export class EventLogger {
       const subscription = eventBus.subscribe(
         eventType,
         (data: EventData) => this.logEvent(eventType, data),
-        { priority: -1000 } // Low priority to record after processing
+        { priority: -1000 }, // Low priority to record after processing
       )
       this.subscriptions.set(eventType, subscription)
     })
@@ -85,7 +85,7 @@ export class EventLogger {
       id: `event_${++this.eventCounter}`,
       type: eventType,
       timestamp: data.timestamp || timeSourceManager.now(),
-      data: { ...data } // Create a copy to avoid mutations
+      data: { ...data }, // Create a copy to avoid mutations
     }
     this.events.push(entry)
   }
@@ -153,14 +153,14 @@ export class EventLogger {
     // Otherwise, replay with timing
     const firstEvent = events[0]
     if (!firstEvent) return
-    
+
     const startTime = firstEvent.timestamp.getTime()
     const replayStartTime = timeSourceManager.nowMs()
 
     for (let i = 0; i < events.length; i++) {
       const event = events[i]
       if (!event) continue
-      
+
       const eventOffset = event.timestamp.getTime() - startTime
       const targetTime = replayStartTime + (eventOffset / speed)
       const currentTime = timeSourceManager.nowMs()
@@ -195,7 +195,7 @@ export class EventLogger {
     // Convert date strings back to Date objects
     this.events = parsed.map(entry => ({
       ...entry,
-      timestamp: new Date(entry.timestamp)
+      timestamp: new Date(entry.timestamp),
     }))
 
     // Update event counter
@@ -228,7 +228,7 @@ export class EventLogger {
     return {
       totalEvents: this.events.length,
       eventTypes: stats,
-      timeRange: { start: minTime, end: maxTime }
+      timeRange: { start: minTime, end: maxTime },
     }
   }
 

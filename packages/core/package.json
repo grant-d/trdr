@@ -8,11 +8,12 @@
   "scripts": {
     "build": "tsc -b",
     "clean": "rimraf dist *.tsbuildinfo",
-    "test": "node --test",
+    "test": "npm run build && node --test 'dist/**/*.test.js'",
     "lint": "eslint src --ext .ts"
   },
   "dependencies": {
+    "@coinbase-sample/advanced-trade-sdk-ts": "^0.2.0",
+    "@coinbase-sample/core-ts": "^0.2.0",
     "@trdr/shared": "1.0.0"
-  },
-  "devDependencies": {}
+  }
 }

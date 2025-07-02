@@ -44,7 +44,7 @@ export class ConnectionManager {
       }
       return ConnectionManager.testInstances.get(key)!
     }
-    
+
     // For production, use singleton
     if (!ConnectionManager.instance) {
       if (!config) {
@@ -80,7 +80,7 @@ export class ConnectionManager {
 
       // Create SQLite connection
       this.db = new Database(this.config.databasePath, {
-        verbose: this.config.enableLogging ? console.log : undefined
+        verbose: this.config.enableLogging ? console.log : undefined,
       })
 
       // Configure database settings
@@ -98,15 +98,15 @@ export class ConnectionManager {
       }
 
       this.isInitialized = true
-      
+
       // Emit system event
       eventBus.emit('system.info', {
         message: 'SQLite connection initialized',
         details: {
           databasePath: this.config.databasePath,
-          inMemory: this.config.databasePath === ':memory:'
+          inMemory: this.config.databasePath === ':memory:',
         },
-        timestamp: new Date()
+        timestamp: new Date(),
       })
     } catch (error) {
       this.isInitialized = false
@@ -114,7 +114,7 @@ export class ConnectionManager {
         error,
         context: 'SQLite connection initialization',
         severity: 'critical',
-        timestamp: new Date()
+        timestamp: new Date(),
       })
       throw error
     }
@@ -140,15 +140,15 @@ export class ConnectionManager {
    */
   async query<T = any>(sql: string, params?: any[]): Promise<T[]> {
     const db = await this.getDatabase()
-    
+
     try {
       const stmt = db.prepare(sql)
       const result = params ? stmt.all(...params) : stmt.all()
-      
+
       if (this.config.enableLogging) {
         console.log('Query executed:', sql)
       }
-      
+
       return result as T[]
     } catch (error) {
       if (this.config.enableLogging) {
@@ -163,7 +163,7 @@ export class ConnectionManager {
    */
   async execute(sql: string, params?: any[]): Promise<void> {
     const db = await this.getDatabase()
-    
+
     try {
       const stmt = db.prepare(sql)
       if (params) {
@@ -171,7 +171,7 @@ export class ConnectionManager {
       } else {
         stmt.run()
       }
-      
+
       if (this.config.enableLogging) {
         console.log('Statement executed:', sql)
       }
@@ -189,9 +189,9 @@ export class ConnectionManager {
    */
   async transaction<T>(fn: (db: Database.Database) => T): Promise<T> {
     const db = await this.getDatabase()
-    
+
     const transactionFn = db.transaction(() => fn(db))
-    
+
     try {
       return transactionFn()
     } catch (error) {
@@ -211,10 +211,10 @@ export class ConnectionManager {
       this.db.close()
       this.db = null
       this.isInitialized = false
-      
+
       eventBus.emit('system.info', {
         message: 'SQLite connection closed',
-        timestamp: new Date()
+        timestamp: new Date(),
       })
     } catch (error) {
       throw error
@@ -233,7 +233,7 @@ export class ConnectionManager {
    */
   async getStats(): Promise<Record<string, any>> {
     const stats: Record<string, any> = {}
-    
+
     // Get database size
     if (this.config.databasePath !== ':memory:') {
       try {
@@ -273,7 +273,7 @@ export function createConnectionManager(config: Partial<SQLiteConfig> = {}): Con
     enableLogging: process.env.NODE_ENV === 'development',
     enableWAL: true,
     busyTimeout: 5000,
-    ...config
+    ...config,
   }
 
   return ConnectionManager.getInstance(defaultConfig)

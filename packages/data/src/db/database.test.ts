@@ -15,20 +15,20 @@ describe('Database Integration', () => {
   beforeEach(async () => {
     // Ensure test directory exists
     await fs.mkdir(path.dirname(testDbPath), { recursive: true })
-    
+
     // Create database with test configuration
     db = new Database({
       databasePath: testDbPath,
-      enableLogging: false
+      enableLogging: false,
     })
-    
+
     await db.initialize()
   })
 
   afterEach(async () => {
     // Close database
     await db.close()
-    
+
     // Clean up test database
     try {
       await fs.unlink(testDbPath)
@@ -40,7 +40,7 @@ describe('Database Integration', () => {
   describe('Database Initialization', () => {
     it('should initialize database and run migrations', async () => {
       const stats = await db.getStats()
-      
+
       assert.equal(stats.migration.currentVersion, 1)
       assert.equal(stats.migration.needsMigration, false)
       assert.ok(stats.connection.tables.includes('candles'))
@@ -61,11 +61,11 @@ describe('Database Integration', () => {
         high: 51000,
         low: 49500,
         close: 50500,
-        volume: 1000
+        volume: 1000,
       }
-      
+
       await db.marketData.saveCandle(candle)
-      
+
       const retrieved = await db.marketData.getLatestCandle('BTC-USD', '1h')
       assert.ok(retrieved)
       assert.equal(retrieved.symbol, candle.symbol)
@@ -83,18 +83,18 @@ describe('Database Integration', () => {
         high: 50100 + i * 100,
         low: 49900 + i * 100,
         close: 50050 + i * 100,
-        volume: 1000 + i * 10
+        volume: 1000 + i * 10,
       }))
-      
+
       await db.marketData.saveCandlesBatch(candles)
-      
+
       const retrieved = await db.marketData.getCandles(
         'BTC-USD',
         '1h',
         new Date(Date.now() - 11 * 3600000),
-        new Date()
+        new Date(),
       )
-      
+
       assert.equal(retrieved.length, 10)
     })
   })
@@ -110,19 +110,19 @@ describe('Database Integration', () => {
         price: 50000,
         size: 0.1,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       }
-      
+
       await db.orders.createOrder(order)
-      
+
       // Update order
       await db.orders.updateOrder(order.id, {
         status: 'filled',
         filledSize: 0.1,
         averageFillPrice: 50000,
-        filledAt: new Date()
+        filledAt: new Date(),
       })
-      
+
       const retrieved = await db.orders.getOrder(order.id)
       assert.ok(retrieved)
       assert.equal(retrieved.status, 'filled')
@@ -140,7 +140,7 @@ describe('Database Integration', () => {
           price: 50000,
           size: 0.1,
           createdAt: new Date(),
-          updatedAt: new Date()
+          updatedAt: new Date(),
         },
         {
           id: 'order-2',
@@ -151,14 +151,14 @@ describe('Database Integration', () => {
           price: 51000,
           size: 0.1,
           createdAt: new Date(),
-          updatedAt: new Date()
-        }
+          updatedAt: new Date(),
+        },
       ]
-      
+
       for (const order of orders) {
         await db.orders.createOrder(order)
       }
-      
+
       const activeOrders = await db.orders.getActiveOrders('BTC-USD')
       assert.equal(activeOrders.length, 1)
       assert.ok(activeOrders[0])
@@ -178,9 +178,9 @@ describe('Database Integration', () => {
         price: 50000,
         size: 0.1,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
-      
+
       const trade: Trade = {
         id: 'trade-123',
         orderId: 'order-123',
@@ -191,11 +191,11 @@ describe('Database Integration', () => {
         fee: 0.001,
         feeCurrency: 'BTC',
         pnl: 100,
-        executedAt: new Date()
+        executedAt: new Date(),
       }
-      
+
       await db.trades.recordTrade(trade)
-      
+
       const retrieved = await db.trades.getTrade(trade.id)
       assert.ok(retrieved)
       assert.equal(retrieved.price, trade.price)
@@ -213,9 +213,9 @@ describe('Database Integration', () => {
         price: 50000,
         size: 0.1,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
-      
+
       await db.orders.createOrder({
         id: 'order-pnl-2',
         symbol: 'BTC-USD',
@@ -225,9 +225,9 @@ describe('Database Integration', () => {
         price: 51000,
         size: 0.1,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
-      
+
       const trades: Trade[] = [
         {
           id: 'trade-pnl-1',
@@ -238,7 +238,7 @@ describe('Database Integration', () => {
           size: 0.1,
           fee: 0.001,
           pnl: 100,
-          executedAt: new Date()
+          executedAt: new Date(),
         },
         {
           id: 'trade-pnl-2',
@@ -249,12 +249,12 @@ describe('Database Integration', () => {
           size: 0.1,
           fee: 0.001,
           pnl: 200,
-          executedAt: new Date()
-        }
+          executedAt: new Date(),
+        },
       ]
-      
+
       await db.trades.recordTradesBatch(trades)
-      
+
       const pnl = await db.trades.calculatePnL('BTC-USD')
       assert.equal(pnl.totalPnL, 300)
       assert.equal(pnl.totalFees, 0.002)
@@ -266,18 +266,18 @@ describe('Database Integration', () => {
   describe('Agent Repository', () => {
     it('should record agent decisions', async () => {
       const decision: AgentSignal & { agentType: 'momentum' } = {
-        agentId: 'agent-1', 
+        agentId: 'agent-1',
         agentType: 'momentum',
         symbol: 'BTC-USD',
         action: 'TRAIL_BUY',
         confidence: 0.85,
         trailDistance: 100,
         reasoning: { momentum: 'strong', trend: 'up' },
-        timestamp: new Date()
+        timestamp: new Date(),
       }
-      
+
       await db.agents.recordDecision(decision)
-      
+
       const retrieved = await db.agents.getDecisions('agent-1')
       assert.equal(retrieved.length, 1)
       assert.ok(retrieved[0])
@@ -293,12 +293,12 @@ describe('Database Integration', () => {
         state: {
           agentId: 'agent-1',
           position: 'long',
-          entryPrice: 50000
-        }
+          entryPrice: 50000,
+        },
       }
-      
+
       await db.agents.saveCheckpoint(checkpoint)
-      
+
       const retrieved = await db.agents.loadLatestCheckpoint('agent-state')
       assert.ok(retrieved)
       assert.equal(retrieved.id, checkpoint.id)
@@ -319,14 +319,14 @@ describe('Database Integration', () => {
         high: 41000,
         low: 39000,
         close: 40500,
-        volume: 1000
+        volume: 1000,
       }
-      
+
       await db.marketData.saveCandle(oldCandle)
-      
+
       // Run cleanup
       const cleanup = await db.cleanup(90)
-      
+
       assert.ok(cleanup.marketData.candlesDeleted > 0)
     })
   })

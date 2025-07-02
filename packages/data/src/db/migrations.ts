@@ -23,26 +23,27 @@ export const MIGRATIONS: Migration[] = [
       // Import schema statements and create all tables
       const { getAllSchemaStatements } = require('./schema')
       const statements = getAllSchemaStatements()
-      
+
       for (const statement of statements) {
         db.exec(statement)
       }
-    }
-  }
+    },
+  },
 ]
 
 /**
  * Migration runner for SQLite databases
  */
 export class MigrationRunner {
-  constructor(private readonly connectionManager: ConnectionManager) {}
+  constructor(private readonly connectionManager: ConnectionManager) {
+  }
 
   /**
    * Run all pending migrations
    */
   async migrate(): Promise<void> {
     const db = await this.connectionManager.getDatabase()
-    
+
     // Create migrations table if it doesn't exist
     db.exec(`
       CREATE TABLE IF NOT EXISTS migrations (
@@ -51,13 +52,13 @@ export class MigrationRunner {
         applied_at INTEGER DEFAULT (strftime('%s', 'now') * 1000)
       )
     `)
-    
+
     // Get current version
     const currentVersion = this.getCurrentVersion(db)
-    
+
     // Run pending migrations
     const pendingMigrations = MIGRATIONS.filter(m => m.version > currentVersion)
-    
+
     for (const migration of pendingMigrations) {
       await this.runMigration(db, migration)
     }
@@ -75,11 +76,11 @@ export class MigrationRunner {
     const currentVersion = this.getCurrentVersion(db)
     const targetVersion = MIGRATIONS[MIGRATIONS.length - 1]?.version || 0
     const pendingMigrations = MIGRATIONS.filter(m => m.version > currentVersion)
-    
+
     return {
       currentVersion,
       targetVersion,
-      pendingMigrations
+      pendingMigrations,
     }
   }
 
@@ -101,11 +102,11 @@ export class MigrationRunner {
   private async runMigration(db: Database.Database, migration: Migration): Promise<void> {
     await this.connectionManager.transaction(() => {
       migration.up(db)
-      
+
       // Record migration
       db.prepare('INSERT INTO migrations (version, description) VALUES (?, ?)').run(
         migration.version,
-        migration.description
+        migration.description,
       )
     })
   }
