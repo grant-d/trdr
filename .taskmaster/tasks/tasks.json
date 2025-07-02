@@ -79,8 +79,77 @@
         "dependencies": [
           2
         ],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement core EventBus class",
+            "description": "Create the central EventBus class with methods for event registration, subscription, and emission",
+            "dependencies": [],
+            "details": "Implement a singleton EventBus class with methods for: registerEvent(eventType), subscribe(eventType, handler), emit(eventType, data). Include internal storage for event types and subscribers. Ensure thread-safety for concurrent access. Add methods to unsubscribe handlers and check if event types exist.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Define typed event interfaces",
+            "description": "Create a type system for events to ensure type safety throughout the application",
+            "dependencies": [
+              1
+            ],
+            "details": "Define a base Event interface with common properties (id, timestamp, type). Create specific event interfaces extending the base (e.g., MarketDataEvent, OrderEvent, TradeEvent). Implement a type registry to validate event types at runtime. Include generic typing to ensure type safety when subscribing to specific events.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Implement TimeSource abstraction",
+            "description": "Create an abstraction for time access to support both live trading and backtesting",
+            "dependencies": [
+              1
+            ],
+            "details": "Define a TimeSource interface with methods to get current time. Implement RealTimeSource for live trading and SimulatedTimeSource for backtesting. Integrate TimeSource with EventBus to timestamp events consistently. Add methods to advance time in SimulatedTimeSource for backtesting scenarios.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Add synchronous and asynchronous handler support",
+            "description": "Extend EventBus to support both immediate and deferred event processing",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Implement synchronous handler execution for immediate processing. Add asynchronous handler support using Promises/async-await. Create a queue system for async event processing. Add methods to wait for all pending async handlers to complete. Include priority options for handlers to control execution order.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Implement error handling for event processing",
+            "description": "Add robust error handling to prevent failures in one handler from affecting others",
+            "dependencies": [
+              1,
+              4
+            ],
+            "details": "Implement try-catch blocks around handler executions. Create an error event type for propagating handler failures. Add error callback registration for centralized error handling. Implement retry mechanisms for failed async handlers. Include options for handlers to specify error behavior (fail-fast vs. continue).",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "Add event logging and replay capabilities",
+            "description": "Implement logging of all events for debugging and support for event replay",
+            "dependencies": [
+              1,
+              2,
+              3
+            ],
+            "details": "Create an EventLogger class to record all events with timestamps. Implement methods to serialize/deserialize events for storage. Add replay functionality to re-emit logged events in sequence. Include filtering options for selective replay. Create visualization tools for event sequence analysis.",
+            "status": "done",
+            "testStrategy": ""
+          }
+        ]
       },
       {
         "id": 4,
@@ -93,7 +162,64 @@
           1
         ],
         "status": "pending",
-        "subtasks": []
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement DuckDB Connection Manager",
+            "description": "Create a connection manager class that handles database initialization, connection pooling, and configuration for DuckDB",
+            "dependencies": [],
+            "details": "Implement a singleton ConnectionManager class that: 1) Initializes the DuckDB database with appropriate settings for trading data, 2) Manages connection lifecycle and pooling if needed, 3) Provides connection objects to repository classes, 4) Handles configuration options like file paths and memory settings, 5) Implements proper error handling and connection retry logic",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Define Schema and Migration Scripts",
+            "description": "Design the database schema and create migration scripts for all required tables",
+            "dependencies": [
+              1
+            ],
+            "details": "Create schema definitions and migration scripts for: 1) Market data tables (candles, ticks), 2) Order and trade tables, 3) Agent decision tables, 4) Checkpoint tables, 5) Include indexes optimized for time-series queries, 6) Implement versioning for schema changes, 7) Create utility functions for schema validation and upgrades",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Implement Repository Classes for Candles and Market Data",
+            "description": "Create repository classes to handle CRUD operations for market data",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Implement repository classes for market data that: 1) Store and retrieve candle data efficiently, 2) Support batch operations for high-volume data, 3) Implement query methods with time range filters, 4) Optimize for DuckDB's columnar storage, 5) Include methods for data aggregation and transformation, 6) Handle different timeframes and symbols",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Implement Repository Classes for Orders and Trades",
+            "description": "Create repository classes to handle CRUD operations for orders and trades",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Implement repository classes for orders and trades that: 1) Store and retrieve order data with status tracking, 2) Maintain trade history with execution details, 3) Support filtering by symbol, time range, and status, 4) Implement methods for order updates and cancellations, 5) Create queries for performance analysis, 6) Ensure data consistency between orders and related trades",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Implement Repository Classes for Agent Decisions and Checkpoints",
+            "description": "Create repository classes to handle CRUD operations for agent decisions and system checkpoints",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Implement repository classes for agent decisions and checkpoints that: 1) Store agent decision history with context data, 2) Implement checkpoint saving and loading for agent state, 3) Support querying decision history by time and context, 4) Optimize storage for potentially large state objects, 5) Implement cleanup policies for old checkpoint data, 6) Create methods for analyzing agent decision patterns",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
       },
       {
         "id": 5,
@@ -1054,7 +1180,7 @@
     ],
     "metadata": {
       "created": "2025-07-02T02:22:35.312Z",
-      "updated": "2025-07-02T03:04:08.327Z",
+      "updated": "2025-07-02T03:28:08.305Z",
       "description": "Tasks for master context"
     }
   }

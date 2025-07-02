@@ -22,7 +22,10 @@
       "mcp__taskmaster-ai__get_task",
       "Bash(grep:*)",
       "Bash(npm run tc:*)",
-      "Bash(rg:*)"
+      "Bash(rg:*)",
+      "Bash(npm test:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:*)"
     ],
     "deny": []
   }
