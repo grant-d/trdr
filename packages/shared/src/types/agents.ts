@@ -50,7 +50,7 @@ export interface TradeResult {
  * Each agent specializes in different market analysis.
  */
 export type AgentType =
-/** Analyzes price volatility for trail distance */
+  /** Analyzes price volatility for trail distance */
   | 'volatility'
   /** Detects momentum and divergences */
   | 'momentum'

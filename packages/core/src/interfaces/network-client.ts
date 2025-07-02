@@ -78,10 +78,7 @@ export interface NetworkClient {
    * @param context - Context string for logging
    * @returns Operation result
    */
-  executeWithRetry<T>(
-    operation: () => Promise<T>,
-    context: string,
-  ): Promise<T>
+  executeWithRetry<T>(operation: () => Promise<T>, context: string): Promise<T>
 
   /**
    * Check if an error is retryable

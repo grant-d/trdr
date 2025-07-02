@@ -1,14 +1,14 @@
-import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { describe, it } from 'node:test'
 import {
-  type IsoDate,
   type EpochDate,
-  toIsoDate,
-  toEpochDate,
-  fromIsoDate,
-  fromEpochDate,
-  isoToEpoch,
   epochToIso,
+  fromEpochDate,
+  fromIsoDate,
+  type IsoDate,
+  isoToEpoch,
+  toEpochDate,
+  toIsoDate,
 } from './dates'
 
 describe('Date utility functions', () => {

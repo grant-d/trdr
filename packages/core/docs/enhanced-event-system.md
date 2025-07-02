@@ -2,7 +2,9 @@
 
 ## Overview
 
-The Enhanced Event System provides advanced event filtering, priority handling, and comprehensive market data event management for all market data feeds. This system extends the base EventBus with enhanced capabilities while maintaining backward compatibility.
+The Enhanced Event System provides advanced event filtering, priority handling, and comprehensive market data event
+management for all market data feeds. This system extends the base EventBus with enhanced capabilities while maintaining
+backward compatibility.
 
 ## Architecture
 
@@ -26,6 +28,7 @@ Market Data Source → Enhanced Data Feed → Enhanced Event Bus → Filtered Su
 ### Enhanced Market Data Events
 
 #### EnhancedTickEvent
+
 Real-time price tick with enhanced metadata and analytics.
 
 ```typescript
@@ -47,12 +50,14 @@ interface EnhancedTickEvent {
 ```
 
 **Priority Classification:**
+
 - `critical`: Price change > 5% or volume > 10x average
-- `high`: Price change > 1% or volume > 3x average  
+- `high`: Price change > 1% or volume > 3x average
 - `medium`: Price change > 0.1% or volume > average
 - `low`: All other ticks
 
 #### EnhancedCandleEvent
+
 OHLCV candle data with technical analysis metadata.
 
 ```typescript
@@ -82,6 +87,7 @@ interface EnhancedCandleEvent {
 ```
 
 #### ConnectionStatusEvent
+
 Data feed connection status changes.
 
 ```typescript
@@ -154,36 +160,43 @@ const subscription = enhancedEventBus.subscribeWithFilter(
 ### Built-in Filters
 
 #### Symbol Filtering
+
 ```typescript
 MarketDataFilters.bySymbol(['BTC-USD', 'ETH-USD'])
 ```
 
 #### Price Range Filtering
+
 ```typescript
 MarketDataFilters.byPriceRange(50000, 70000) // $50k - $70k
 ```
 
 #### Volume Filtering
+
 ```typescript
 MarketDataFilters.byMinVolume(1000) // Minimum 1000 volume
 ```
 
 #### Priority Filtering
+
 ```typescript
 MarketDataFilters.byPriority(['high', 'critical'])
 ```
 
 #### Price Change Threshold
+
 ```typescript
 MarketDataFilters.byPriceChangeThreshold(0.01) // 1% minimum change
 ```
 
 #### Rate Limiting
+
 ```typescript
 MarketDataFilters.rateLimit(100) // Max 100 events/second per symbol
 ```
 
 #### Composite Filtering
+
 ```typescript
 // Complex filter combining multiple criteria
 const filter = MarketDataFilters.bySymbol(['BTC-USD'])
@@ -199,25 +212,28 @@ const filter = MarketDataFilters.bySymbol(['BTC-USD'])
 All market data feeds now extend `EnhancedMarketDataFeed` which provides:
 
 1. **Enhanced Event Emission** - Automatic priority calculation and metadata
-2. **Global Filter Integration** - Respects system-wide filtering policies  
+2. **Global Filter Integration** - Respects system-wide filtering policies
 3. **Performance Metrics** - Latency tracking and event statistics
 4. **Connection Status Events** - Automatic status change notifications
 
 ### Feed Implementations
 
 #### CoinbaseDataFeed
+
 - Extends `EnhancedMarketDataFeed`
 - Uses Coinbase Advanced Trade SDK
 - Emits enhanced tick and candle events
 - Provides connection status monitoring
 
-#### BacktestDataFeed  
+#### BacktestDataFeed
+
 - Extends `EnhancedMarketDataFeed`
 - Supports historical data replay with speed control
 - Simulates realistic market conditions
 - Time-accurate event sequencing
 
 #### PaperTradingFeed
+
 - Extends `EnhancedMarketDataFeed`
 - Wraps real data feeds with trading simulation
 - Applies market scenarios and execution modeling
@@ -303,6 +319,7 @@ const exportData = await dataFeed.exportEventData(
 ### Event Processing Patterns
 
 #### Real-time Processing
+
 ```typescript
 enhancedEventBus.subscribe('market.tick.enhanced', async (event) => {
   await updatePositions(event)
@@ -311,6 +328,7 @@ enhancedEventBus.subscribe('market.tick.enhanced', async (event) => {
 ```
 
 #### Batch Processing
+
 ```typescript
 const events: EnhancedTickEvent[] = []
 
@@ -325,6 +343,7 @@ enhancedEventBus.subscribe('market.tick.enhanced', (event) => {
 ```
 
 #### Filtered Processing
+
 ```typescript
 const subscription = enhancedEventBus.subscribeWithFilter(
   'market.tick.enhanced',
@@ -434,6 +453,7 @@ The enhanced system maintains full backward compatibility:
 ### Unit Testing
 
 Test event filtering:
+
 ```typescript
 test('should filter by symbol', () => {
   const filter = MarketDataFilters.bySymbol(['BTC-USD'])
@@ -445,6 +465,7 @@ test('should filter by symbol', () => {
 ### Integration Testing
 
 Test complete event flow:
+
 ```typescript
 test('should process enhanced tick events', async () => {
   const events: EnhancedTickEvent[] = []
@@ -462,4 +483,5 @@ test('should process enhanced tick events', async () => {
 })
 ```
 
-This documentation provides comprehensive guidance for consumers of the enhanced event system, covering all aspects from basic usage to advanced filtering and performance optimization.
+This documentation provides comprehensive guidance for consumers of the enhanced event system, covering all aspects from
+basic usage to advanced filtering and performance optimization.

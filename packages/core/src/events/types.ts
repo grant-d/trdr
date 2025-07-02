@@ -197,4 +197,4 @@ export const EventTypes = {
 } as const
 
 export type EventTypeKeys = keyof typeof EventTypes
-export type EventTypeValues = typeof EventTypes[EventTypeKeys]
+export type EventTypeValues = (typeof EventTypes)[EventTypeKeys]

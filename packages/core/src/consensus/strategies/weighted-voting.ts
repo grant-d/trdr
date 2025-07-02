@@ -259,7 +259,7 @@ export class WeightedVotingStrategy implements IConsensusStrategy {
             action = act as OrderSide | 'hold'
           }
         }
-        confidence = maxVotes / signals.length * 0.5 // Reduce confidence for fallback
+        confidence = (maxVotes / signals.length) * 0.5 // Reduce confidence for fallback
         leadAgentId = signals.find(s => s.signal === action)?.agentId || ''
       }
     }
