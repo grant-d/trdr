@@ -25,7 +25,12 @@
       "Bash(rg:*)",
       "Bash(npm test:*)",
       "Bash(npx tsc:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(npm install:*)",
+      "Bash(npx node --test:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(node:*)",
+      "Bash(true)"
     ],
     "deny": []
   }

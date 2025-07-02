@@ -127,6 +127,12 @@ export interface ErrorEvent extends EventData {
   readonly severity: 'low' | 'medium' | 'high' | 'critical'
 }
 
+export interface SystemInfoEvent extends EventData {
+  readonly message: string
+  readonly context: string
+  readonly details?: Record<string, any>
+}
+
 // Event type constants
 export const EventTypes = {
   // Market data
@@ -157,6 +163,7 @@ export const EventTypes = {
   SYSTEM_STOP: 'system.stop',
   SYSTEM_ERROR: 'system.error',
   SYSTEM_WARNING: 'system.warning',
+  SYSTEM_INFO: 'system.info',
   
   // Grid
   GRID_LEVEL_ACTIVATED: 'grid.level_activated',

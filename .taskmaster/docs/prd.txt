@@ -41,13 +41,13 @@ Build sophisticated yet maintainable grid trading bot for retail traders on Coin
 │  │-Unified API│  │-Competition  │  │-Risk Control     │   │
 │  └─────────────┘  └──────────────┘  └──────────────────┘   │
 ├─────────────────────────────────────────────────────────────┤
-│                      Data Layer (DuckDB)                      │
+│                      Data Layer (Sqlite)                      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ### 2.2 Technology Stack
 - **Runtime**: Node.js 20+ with TypeScript 5+
-- **Database**: DuckDB (embedded analytical database)
+- **Database**: Sqlite (embedded analytical database)
 - **Frontend**: React 18+ with Vite
 - **API**: Express + Socket.io for real-time updates
 - **Testing**: Node.js built-in test runner (node:test) + Testing Library
@@ -69,7 +69,7 @@ trdr/
 │   │   └── tests/
 │   ├── data/                 # Data layer
 │   │   ├── src/
-│   │   │   ├── db/          # DuckDB integration
+│   │   │   ├── db/          # Sqlite integration
 │   │   │   ├── feeds/       # Market data feeds
 │   │   │   └── models/      # Data models
 │   │   └── tests/
@@ -88,7 +88,7 @@ trdr/
 #### Protocol Strategy
 - **Primary**: WebSocket for real-time data (low latency)
 - **Fallback**: REST polling every 30s (reliability)
-- **Backtesting**: DuckDB cursor with speed control
+- **Backtesting**: Sqlite cursor with speed control
 - **Paper Trading**: Same live feed, simulated execution
 
 ```typescript
@@ -107,7 +107,7 @@ class BacktestDataFeed implements MarketDataPipeline {
   private speed = 1000; // 1000x speed
   
   async loadHistoricalData(symbol: string, start: Date, end: Date) {
-    // Load from DuckDB
+    // Load from Sqlite
     this.data = await this.db.query(`
       SELECT * FROM candles 
       WHERE symbol = ? AND timestamp BETWEEN ? AND ?
@@ -1082,7 +1082,7 @@ class TrailAlgorithm {
 
 ## 4. Data Schema
 
-### 4.1 DuckDB Tables
+### 4.1 Sqlite Tables
 
 ```sql
 -- Price data (optimized for analytics)
@@ -2289,7 +2289,7 @@ class OptimizationTracker {
 
 ```typescript
 class HistoricalDataManager {
-  private db: DuckDBConnection;
+  private db: SqliteConnection;
   private dataCollector: DataCollector;
   
   // Dual approach: Live caching + batch import
@@ -2312,7 +2312,7 @@ class HistoricalDataManager {
   // Live trading continuously caches data
   async startLiveDataCollection(): Promise<void> {
     this.dataCollector.on('candle', async (candle) => {
-      // Store in DuckDB immediately
+      // Store in Sqlite immediately
       await this.db.run(`
         INSERT INTO candles (timestamp, symbol, open, high, low, close, volume)
         VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -2380,7 +2380,7 @@ class HistoricalDataManager {
 ### 14.2 Data Storage Architecture
 
 ```typescript
-// DuckDB schema optimized for time-series queries
+// Sqlite schema optimized for time-series queries
 const DATA_SCHEMA = `
 -- Main candle data partitioned by month
 CREATE TABLE candles (
@@ -3300,8 +3300,8 @@ class AgentRegistry {
 
 ### Phase 2: Data Layer (Week 2-3)
 
-#### 2.1 DuckDB Integration
-- Set up DuckDB connection management
+#### 2.1 Sqlite Integration
+- Set up Sqlite connection management
 - Create schema migrations
 - Implement data models (candles, orders, trades)
 - Build query builders and repositories
@@ -3310,7 +3310,7 @@ class AgentRegistry {
 
 #### 2.2 Market Data Pipeline
 - Create `MarketDataPipeline` interface
-- Implement `BacktestDataFeed` (reads from DuckDB)
+- Implement `BacktestDataFeed` (reads from Sqlite)
 - Build data validation and cleaning
 - Add data streaming for large datasets
 
@@ -3555,7 +3555,7 @@ class AgentRegistry {
 
 ```
 1. Event Bus → Data Models → Order System → Paper Trading
-2. DuckDB → Historical Data → Backtesting
+2. Sqlite → Historical Data → Backtesting
 3. Grid Logic → Trailing Orders → Agent System
 4. Paper Trading → Live Integration → Production
 ```

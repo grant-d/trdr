@@ -8,11 +8,16 @@
   "scripts": {
     "build": "tsc -b",
     "clean": "rimraf dist *.tsbuildinfo",
-    "test": "node --test",
+    "test": "npm run build && NODE_ENV=test node --test 'dist/**/*.test.js'",
+    "test:watch": "npm run build && NODE_ENV=test node --test --watch 'dist/**/*.test.js'",
     "lint": "eslint src --ext .ts"
   },
   "dependencies": {
-    "@trdr/shared": "1.0.0"
+    "@trdr/core": "1.0.0",
+    "@trdr/shared": "1.0.0",
+    "better-sqlite3": "^12.2.0"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13"
+  }
 }

@@ -153,23 +153,23 @@
       },
       {
         "id": 4,
-        "title": "Setup DuckDB Integration",
-        "description": "Implement the data layer using DuckDB as specified in the architecture section.",
-        "details": "Create a DuckDB connection manager in packages/data/src/db. Implement the database schema as defined in section 4.1 of the PRD, including tables for candles, orders, agent_decisions, trades, and checkpoints. Create migration scripts for schema creation and updates. Implement repository classes for each entity type with CRUD operations. Add query builders for common data access patterns.",
+        "title": "Setup  Integration",
+        "description": "Implement the data layer using Sqlite as specified in the architecture section.",
+        "details": "Create a Sqlite connection manager in packages/data/src/db. Implement the database schema as defined in section 4.1 of the PRD, including tables for candles, orders, agent_decisions, trades, and checkpoints. Create migration scripts for schema creation and updates. Implement repository classes for each entity type with CRUD operations. Add query builders for common data access patterns.",
         "testStrategy": "Test database connection and initialization. Verify schema creation with all required tables. Test CRUD operations for each entity type. Benchmark query performance for typical data access patterns.",
         "priority": "high",
         "dependencies": [
           1
         ],
-        "status": "pending",
+        "status": "done",
         "subtasks": [
           {
             "id": 1,
-            "title": "Implement DuckDB Connection Manager",
-            "description": "Create a connection manager class that handles database initialization, connection pooling, and configuration for DuckDB",
+            "title": "Implement Sqlite Connection Manager",
+            "description": "Create a connection manager class that handles database initialization, connection pooling, and configuration for Sqlite",
             "dependencies": [],
-            "details": "Implement a singleton ConnectionManager class that: 1) Initializes the DuckDB database with appropriate settings for trading data, 2) Manages connection lifecycle and pooling if needed, 3) Provides connection objects to repository classes, 4) Handles configuration options like file paths and memory settings, 5) Implements proper error handling and connection retry logic",
-            "status": "pending",
+            "details": "Implement a singleton ConnectionManager class that: 1) Initializes the Sqlite database with appropriate settings for trading data, 2) Manages connection lifecycle and pooling if needed, 3) Provides connection objects to repository classes, 4) Handles configuration options like file paths and memory settings, 5) Implements proper error handling and connection retry logic",
+            "status": "done",
             "testStrategy": ""
           },
           {
@@ -180,7 +180,7 @@
               1
             ],
             "details": "Create schema definitions and migration scripts for: 1) Market data tables (candles, ticks), 2) Order and trade tables, 3) Agent decision tables, 4) Checkpoint tables, 5) Include indexes optimized for time-series queries, 6) Implement versioning for schema changes, 7) Create utility functions for schema validation and upgrades",
-            "status": "pending",
+            "status": "done",
             "testStrategy": ""
           },
           {
@@ -191,8 +191,8 @@
               1,
               2
             ],
-            "details": "Implement repository classes for market data that: 1) Store and retrieve candle data efficiently, 2) Support batch operations for high-volume data, 3) Implement query methods with time range filters, 4) Optimize for DuckDB's columnar storage, 5) Include methods for data aggregation and transformation, 6) Handle different timeframes and symbols",
-            "status": "pending",
+            "details": "Implement repository classes for market data that: 1) Store and retrieve candle data efficiently, 2) Support batch operations for high-volume data, 3) Implement query methods with time range filters, 4) Optimize for Sqlite's columnar storage, 5) Include methods for data aggregation and transformation, 6) Handle different timeframes and symbols",
+            "status": "done",
             "testStrategy": ""
           },
           {
@@ -204,7 +204,7 @@
               2
             ],
             "details": "Implement repository classes for orders and trades that: 1) Store and retrieve order data with status tracking, 2) Maintain trade history with execution details, 3) Support filtering by symbol, time range, and status, 4) Implement methods for order updates and cancellations, 5) Create queries for performance analysis, 6) Ensure data consistency between orders and related trades",
-            "status": "pending",
+            "status": "done",
             "testStrategy": ""
           },
           {
@@ -216,7 +216,7 @@
               2
             ],
             "details": "Implement repository classes for agent decisions and checkpoints that: 1) Store agent decision history with context data, 2) Implement checkpoint saving and loading for agent state, 3) Support querying decision history by time and context, 4) Optimize storage for potentially large state objects, 5) Implement cleanup policies for old checkpoint data, 6) Create methods for analyzing agent decision patterns",
-            "status": "pending",
+            "status": "done",
             "testStrategy": ""
           }
         ]
@@ -1180,7 +1180,7 @@
     ],
     "metadata": {
       "created": "2025-07-02T02:22:35.312Z",
-      "updated": "2025-07-02T03:28:08.305Z",
+      "updated": "2025-07-02T03:56:07.526Z",
       "description": "Tasks for master context"
     }
   }
