@@ -1,4 +1,4 @@
-import type { OrderSide, EpochDate } from '@trdr/shared'
+import type { OrderSide, EpochDate, StockSymbol } from '@trdr/shared'
 
 /**
  * Individual agent signal for consensus
@@ -173,7 +173,7 @@ export interface SignalRequest {
   /** Unique request identifier */
   readonly requestId: string
   /** Trading symbol */
-  readonly symbol: string
+  readonly symbol: StockSymbol
   /** Current market price */
   readonly currentPrice: number
   /** Request timestamp */

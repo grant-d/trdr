@@ -1,6 +1,6 @@
 import type { EpochDate } from './dates'
 import type { Candle, MarketDataSnapshot } from './market-data'
-import type { Order, Position } from './orders'
+import type { Order, Position, StockSymbol } from './orders'
 
 /**
  * Market data provided to agents for analysis.
@@ -8,7 +8,7 @@ import type { Order, Position } from './orders'
  */
 export interface MarketData {
   /** Trading pair symbol */
-  readonly symbol: string
+  readonly symbol: StockSymbol
   /** Data timestamp */
   readonly timestamp: Date
   /** Current market price */
@@ -235,7 +235,7 @@ export interface ITradeAgent {
  */
 export interface AgentContext {
   /** Trading pair symbol */
-  readonly symbol: string
+  readonly symbol: StockSymbol
   /** Current unix timestamp */
   readonly timestamp: EpochDate
   /** Current market price */

@@ -1,4 +1,4 @@
-import { EpochDate, epochDateNow } from '@trdr/shared'
+import { EpochDate, epochDateNow, StockSymbol, toStockSymbol } from '@trdr/shared'
 import assert from 'node:assert/strict'
 import { beforeEach, describe, it, mock } from 'node:test'
 import { enhancedEventBus } from './enhanced-event-bus'
@@ -6,7 +6,7 @@ import { FilterBuilder, MarketDataFilters } from './event-filter'
 import type { EventData } from './types'
 
 interface TestEvent extends EventData {
-  readonly symbol: string
+  readonly symbol: StockSymbol
   readonly price: number
   readonly volume?: number
 }
@@ -25,7 +25,7 @@ describe('EnhancedEventBus', () => {
 
       const eventData: TestEvent = {
         timestamp: epochDateNow(),
-        symbol: 'BTC-USD',
+        symbol: toStockSymbol('BTC-USD'),
         price: 50000,
       }
 

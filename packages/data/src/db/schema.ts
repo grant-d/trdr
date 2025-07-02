@@ -11,16 +11,20 @@ export const SCHEMA_STATEMENTS = {
     CREATE TABLE IF NOT EXISTS candles (
       id INTEGER PRIMARY KEY,
       symbol TEXT NOT NULL,
+
       interval TEXT NOT NULL,
       open_time TEXT NOT NULL,
       close_time TEXT NOT NULL,
+
       open REAL NOT NULL,
       high REAL NOT NULL,
       low REAL NOT NULL,
       close REAL NOT NULL,
       volume REAL NOT NULL,
+
       quote_volume REAL,
       trades_count INTEGER,
+
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `,
@@ -35,13 +39,16 @@ export const SCHEMA_STATEMENTS = {
     CREATE TABLE IF NOT EXISTS market_ticks (
       id INTEGER PRIMARY KEY,
       symbol TEXT NOT NULL,
+
       price REAL NOT NULL,
       volume REAL NOT NULL,
       timestamp TEXT NOT NULL,
+
       bid REAL,
       ask REAL,
       bid_size REAL,
       ask_size REAL,
+
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `,
@@ -57,17 +64,23 @@ export const SCHEMA_STATEMENTS = {
     CREATE TABLE IF NOT EXISTS orders (
       id TEXT PRIMARY KEY,
       symbol TEXT NOT NULL,
+
       side TEXT NOT NULL CHECK (side IN ('buy', 'sell')),
       type TEXT NOT NULL CHECK (type IN ('market', 'limit', 'stop', 'trailing')),
       status TEXT NOT NULL CHECK (status IN ('pending', 'open', 'submitted', 'partial', 'filled', 'cancelled', 'rejected', 'expired')),
+
       price REAL,
       size REAL NOT NULL,
       filled_size REAL DEFAULT 0,
       average_fill_price REAL,
+
       stop_price REAL,
       trail_distance REAL,
+
       agent_id TEXT,
+
       metadata TEXT,
+
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
       submitted_at TEXT,

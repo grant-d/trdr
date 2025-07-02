@@ -1,24 +1,8 @@
-import type { Candle as BaseCandle, PriceTick as BasePriceTick, EpochDate } from '@trdr/shared'
+// Re-export market data types from @trdr/types
+export type { Candle } from '@trdr/types'
 
-/**
- * Extended candle interface for database storage
- */
-export interface Candle extends Omit<BaseCandle, 'timestamp'> {
-  /** Trading pair symbol */
-  readonly symbol: string
-  /** Time interval (e.g., '1h', '4h', '1d') */
-  readonly interval: string
-  /** Timestamp as Date object */
-  readonly timestamp: EpochDate
-  /** Opening time as Date object */
-  readonly openTime: EpochDate
-  /** Closing time as Date object */
-  readonly closeTime: EpochDate
-  /** Quote asset volume */
-  readonly quoteVolume?: number
-  /** Number of trades in this period */
-  readonly tradesCount?: number
-}
+// Import base types from shared
+import type { PriceTick as BasePriceTick, EpochDate } from '@trdr/shared'
 
 /**
  * Extended price tick interface for database storage

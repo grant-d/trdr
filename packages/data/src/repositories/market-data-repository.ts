@@ -1,5 +1,6 @@
 import type { EpochDate } from '@trdr/shared'
 import { epochDateNow, type IsoDate, isoToEpoch, toIsoDate } from '@trdr/shared'
+import type { MarketDataRepository as IMarketDataRepository } from '@trdr/types'
 import type { ConnectionManager } from '../db/connection-manager'
 import type { Candle, PriceTick } from '../types/market-data'
 import { BaseRepository } from './base-repository'
@@ -42,7 +43,7 @@ interface PriceTickDto {
 /**
  * Repository for market data (candles and ticks)
  */
-export class MarketDataRepository extends BaseRepository<CandleDto> {
+export class MarketDataRepository extends BaseRepository<CandleDto> implements IMarketDataRepository {
   protected readonly tableName = 'candles'
   private readonly ticksTableName = 'market_ticks'
   private idCounter = epochDateNow()

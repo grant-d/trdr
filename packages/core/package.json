@@ -14,7 +14,9 @@
   "dependencies": {
     "@coinbase-sample/advanced-trade-sdk-ts": "^0.2.0",
     "@coinbase-sample/core-ts": "^0.2.0",
+    "@trdr/data": "1.0.0",
     "@trdr/shared": "1.0.0",
+    "@trdr/types": "1.0.0",
     "uuid": "^11.1.0"
   },
   "devDependencies": {

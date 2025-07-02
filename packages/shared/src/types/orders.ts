@@ -1,5 +1,11 @@
 import type { EpochDate } from './dates'
 
+export type StockSymbol = string // & { readonly __brand: 'StockSymbol' }
+
+export function toStockSymbol(symbol: string | StockSymbol): StockSymbol {
+  return symbol as StockSymbol
+}
+
 /** Order direction - buy (long) or sell (short) */
 export type OrderSide = 'buy' | 'sell'
 
@@ -17,7 +23,7 @@ export interface OrderBase {
   /** Unique order identifier */
   readonly id: string
   /** Trading pair symbol (e.g., 'BTC-USD') */
-  readonly symbol: string
+  readonly symbol: StockSymbol
   /** Order direction */
   readonly side: OrderSide
   /** Order execution type */
@@ -110,7 +116,7 @@ export interface OrderFill {
  */
 export interface Position {
   /** Trading pair symbol */
-  readonly symbol: string
+  readonly symbol: StockSymbol
   /** Current position size (positive=long, negative=short) */
   readonly size: number
   /** Volume-weighted average entry price */
@@ -129,7 +135,7 @@ export interface Position {
  */
 export interface OrderRequest {
   /** Trading pair symbol */
-  readonly symbol: string
+  readonly symbol: StockSymbol
   /** Order direction */
   readonly side: OrderSide
   /** Order execution type */

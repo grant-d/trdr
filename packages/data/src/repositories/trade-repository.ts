@@ -1,7 +1,7 @@
-import { BaseRepository } from './base-repository'
-import type { EpochDate, OrderSide} from '@trdr/shared'
+import type { EpochDate, OrderSide, StockSymbol } from '@trdr/shared'
 import { type IsoDate, toEpochDate, toIsoDate } from '@trdr/shared'
 import type { ConnectionManager } from '../db/connection-manager'
+import { BaseRepository } from './base-repository'
 
 /**
  * Trade interface matching PRD
@@ -9,7 +9,7 @@ import type { ConnectionManager } from '../db/connection-manager'
 export interface Trade {
   readonly id: string
   readonly orderId: string
-  readonly symbol: string
+  readonly symbol: StockSymbol
   readonly side: OrderSide
   readonly price: number
   readonly size: number

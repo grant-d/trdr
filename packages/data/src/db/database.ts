@@ -1,12 +1,12 @@
-import { eventBus } from '@trdr/core'
 import { epochDateNow } from '@trdr/shared'
+import type { EventBus } from '@trdr/types'
 import type { ConnectionManager } from './connection-manager'
 import { getAllSchemaStatements } from './schema'
 
 /**
  * Initialize the database with all required tables and indexes
  */
-export async function initializeDatabase(connectionManager: ConnectionManager): Promise<void> {
+export async function initializeDatabase(connectionManager: ConnectionManager, eventBus?: EventBus): Promise<void> {
   const db = await connectionManager.getDatabase()
 
   try {
@@ -20,21 +20,25 @@ export async function initializeDatabase(connectionManager: ConnectionManager): 
       }
     })
 
-    eventBus.emit('system.info', {
-      message: 'Database schema initialized successfully',
-      details: {
-        tablesCreated: statements.filter(s => s.includes('CREATE TABLE')).length,
-        indexesCreated: statements.filter(s => s.includes('CREATE INDEX')).length,
-      },
-      timestamp: epochDateNow()
-    })
+    if (eventBus) {
+      eventBus.emit('system.info', {
+        message: 'Database schema initialized successfully',
+        details: {
+          tablesCreated: statements.filter(s => s.includes('CREATE TABLE')).length,
+          indexesCreated: statements.filter(s => s.includes('CREATE INDEX')).length,
+        },
+        timestamp: epochDateNow()
+      })
+    }
   } catch (error) {
-    eventBus.emit('system.error', {
-      error,
-      context: 'Database initialization',
-      severity: 'critical',
-      timestamp: epochDateNow()
-    })
+    if (eventBus) {
+      eventBus.emit('system.error', {
+        error,
+        context: 'Database initialization',
+        severity: 'critical',
+        timestamp: epochDateNow()
+      })
+    }
     throw error
   }
 }
@@ -42,7 +46,7 @@ export async function initializeDatabase(connectionManager: ConnectionManager): 
 /**
  * Drop all tables from the database
  */
-export async function dropAllTables(connectionManager: ConnectionManager): Promise<void> {
+export async function dropAllTables(connectionManager: ConnectionManager, eventBus?: EventBus): Promise<void> {
   const tables = [
     'candles',
     'market_ticks',
@@ -68,17 +72,21 @@ export async function dropAllTables(connectionManager: ConnectionManager): Promi
       db.pragma('foreign_keys = ON')
     })
 
-    eventBus.emit('system.info', {
-      message: 'All database tables dropped successfully',
-      timestamp: epochDateNow()
-    })
+    if (eventBus) {
+      eventBus.emit('system.info', {
+        message: 'All database tables dropped successfully',
+        timestamp: epochDateNow()
+      })
+    }
   } catch (error) {
-    eventBus.emit('system.error', {
-      error,
-      context: 'Database table drop',
-      severity: 'warning',
-      timestamp: epochDateNow()
-    })
+    if (eventBus) {
+      eventBus.emit('system.error', {
+        error,
+        context: 'Database table drop',
+        severity: 'warning',
+        timestamp: epochDateNow()
+      })
+    }
     throw error
   }
 }

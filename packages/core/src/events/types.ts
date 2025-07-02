@@ -1,4 +1,4 @@
-import type { EpochDate } from '@trdr/shared'
+import type { EpochDate, StockSymbol } from '@trdr/shared'
 
 /**
  * Base event type
@@ -39,13 +39,13 @@ export interface BaseEvent<T extends EventData = EventData> {
 
 // Market data events
 export interface MarketDataEvent extends EventData {
-  readonly symbol: string
+  readonly symbol: StockSymbol
   readonly price: number
   readonly volume: number
 }
 
 export interface CandleEvent extends EventData {
-  readonly symbol: string
+  readonly symbol: StockSymbol
   readonly open: number
   readonly high: number
   readonly low: number
@@ -57,7 +57,7 @@ export interface CandleEvent extends EventData {
 // Order events
 export interface OrderEvent extends EventData {
   readonly orderId: string
-  readonly symbol: string
+  readonly symbol: StockSymbol
   readonly side: 'buy' | 'sell'
   readonly price: number
   readonly size: number
@@ -83,7 +83,7 @@ export interface OrderCancelledEvent extends OrderEvent {
 export interface TradeEvent extends EventData {
   readonly tradeId: string
   readonly orderId: string
-  readonly symbol: string
+  readonly symbol: StockSymbol
   readonly side: 'buy' | 'sell'
   readonly price: number
   readonly size: number
@@ -196,6 +196,19 @@ export const EventTypes = {
   CONSENSUS_COMPLETED: 'consensus.completed',
   CONSENSUS_FAILED: 'consensus.failed',
   SIGNAL_REQUEST: 'signal.request',
+  
+  // Market data events
+  CANDLE: 'candle',
+  TICK: 'tick',
+  
+  // Connection events
+  CONNECTION_STATUS: 'connection.status',
+  
+  // Historical data events
+  HISTORICAL_DATA_SAVED: 'historical.data.saved',
+  HISTORICAL_DATA_VALIDATED: 'historical.data.validated',
+  BACKFILL_COMPLETED: 'backfill.completed',
+  BACKFILL_FAILED: 'backfill.failed',
 } as const
 
 export type EventTypeKeys = keyof typeof EventTypes

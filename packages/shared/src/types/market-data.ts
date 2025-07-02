@@ -1,8 +1,9 @@
 import type { EpochDate } from './dates'
+import { StockSymbol } from './orders'
 
 /**
  * Represents a single candlestick in OHLCV format.
- * Used for price chart visualization and technical analysis.
+ * Use for price chart visualization and technical analysis.
  */
 export interface Candle {
   /** Unix timestamp in milliseconds */
@@ -44,7 +45,7 @@ export interface OrderBookLevel {
 
 /**
  * Represents a completed trade execution in the market.
- * Used for analyzing market activity and trade flow.
+ * Use for analyzing market activity and trade flow.
  */
 export interface Trade {
   /** Unique trade identifier from exchange */
@@ -67,7 +68,7 @@ export interface Trade {
  */
 export interface Ticker {
   /** Trading pair symbol (e.g., 'BTC-USD') */
-  readonly symbol: string
+  readonly symbol: StockSymbol
   /** Unix timestamp in milliseconds */
   readonly timestamp: EpochDate
   /** Best bid price */
@@ -86,7 +87,7 @@ export interface Ticker {
  */
 export interface MarketDataSnapshot {
   /** Trading pair symbol */
-  readonly symbol: string
+  readonly symbol: StockSymbol
   /** Unix timestamp in milliseconds */
   readonly timestamp: EpochDate
   /** Current candle data */
@@ -101,17 +102,17 @@ export interface MarketDataSnapshot {
  * Supported time intervals for candlestick data.
  * Used for different trading timeframes and analysis.
  */
-export type TimeInterval = '1m' | '5m' | '15m' | '1h' | '4h' | '1d'
+export type TimeInterval = '1m' | '5m' | '15m' | '1h' | '4h' | '1d' | '3d' | '1w'
 
 /**
  * Represents a subscription to market data updates.
- * Used to manage real-time data feeds.
+ * Use to manage real-time data feeds.
  */
 export interface MarketDataSubscription {
   /** Unique subscription identifier */
   readonly id: string
   /** Trading pair to subscribe to */
-  readonly symbol: string
+  readonly symbol: StockSymbol
   /** Type of market data to receive */
   readonly type: 'candle' | 'orderbook' | 'trade' | 'ticker'
   /** Time interval for candle subscriptions */
@@ -126,7 +127,7 @@ export interface MarketUpdate {
   /** Type of market data update */
   readonly type: 'candle' | 'tick' | 'orderbook' | 'trade'
   /** Trading pair symbol */
-  readonly symbol: string
+  readonly symbol: StockSymbol
   /** Unix timestamp in milliseconds */
   readonly timestamp: EpochDate
   /** Actual market data payload */
@@ -139,7 +140,7 @@ export interface MarketUpdate {
  */
 export interface PriceTick {
   /** Trading pair symbol */
-  readonly symbol: string
+  readonly symbol: StockSymbol
   /** Unix timestamp in milliseconds */
   readonly timestamp: EpochDate
   /** Current price */

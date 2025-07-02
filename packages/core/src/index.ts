@@ -14,6 +14,9 @@ export * from './market-data'
 // Network
 export * from './network'
 
+// Database
+export { createDatabaseWithEventBus } from './database/database-factory'
+
 // Re-export shared types for convenience
 export type {
   // Market data types

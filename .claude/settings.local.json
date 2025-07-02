@@ -37,7 +37,11 @@
       "Bash(npm run:*)",
       "Bash(sed:*)",
       "Bash(npx eslint:*)",
-      "Bash(awk:*)"
+      "Bash(awk:*)",
+      "Bash(pnpm test:*)",
+      "Bash(timeout 60s npm test:*)",
+      "Bash(gtimeout 60s npm test)",
+      "Bash(timeout 30s node --test:*)"
     ],
     "deny": []
   }

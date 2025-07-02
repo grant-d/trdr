@@ -6,10 +6,10 @@ import type { ConnectionManager } from './connection-manager'
 import type Database from 'better-sqlite3'
 
 export interface Migration {
-  version: number
-  description: string
-  up: (db: Database.Database) => void
-  down?: (db: Database.Database) => void
+  readonly version: number
+  readonly description: string
+  readonly up: (db: Database.Database) => void
+  readonly down?: (db: Database.Database) => void
 }
 
 /**
@@ -50,7 +50,7 @@ export class MigrationRunner {
       CREATE TABLE IF NOT EXISTS migrations (
         version INTEGER PRIMARY KEY,
         description TEXT NOT NULL,
-        applied_at INTEGER DEFAULT (strftime('%s', 'now') * 1000)
+        applied_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     `)
 

@@ -50,6 +50,14 @@ export class EventBus {
   }
 
   /**
+   * Unregister an event type
+   */
+  unregisterEvent(eventType: EventType): void {
+    this.eventTypes.delete(eventType)
+    this.handlers.delete(eventType)
+  }
+
+  /**
    * Subscribe to an event
    */
   subscribe<T extends EventData>(
@@ -98,6 +106,13 @@ export class EventBus {
         }
       },
     }
+  }
+
+  /**
+   * Unsubscribe from an event
+   */
+  unsubscribe(subscription: EventSubscription): void {
+    subscription.unsubscribe()
   }
 
   /**

@@ -1,5 +1,5 @@
-import { eventBus } from '@trdr/core'
 import { epochDateNow } from '@trdr/shared'
+import type { EventBus } from '@trdr/types'
 import Database from 'better-sqlite3'
 import fs from 'node:fs/promises'
 import path from 'node:path'
@@ -12,7 +12,7 @@ export interface SQLiteConfig {
   readonly databasePath: string
   /** Enable/disable query logging */
   readonly enableLogging?: boolean
-  /** Enable WAL mode for better concurrency */
+  /** Enable Write-ahead Logging mode for better concurrency */
   readonly enableWAL?: boolean
   /** Busy timeout in milliseconds */
   readonly busyTimeout?: number
@@ -23,14 +23,22 @@ export interface SQLiteConfig {
  * Handles database initialization, connection lifecycle, and configuration
  */
 export class ConnectionManager {
-  private static instance: ConnectionManager
+  private static instance: ConnectionManager | null = null
   private static readonly testInstances = new Map<string, ConnectionManager>()
   private db: Database.Database | null = null
   private readonly config: SQLiteConfig
   private isInitialized = false
+  private eventBus?: EventBus
 
   private constructor(config: SQLiteConfig) {
     this.config = config
+  }
+
+  /**
+   * Set the event bus for this connection manager
+   */
+  setEventBus(eventBus: EventBus): void {
+    this.eventBus = eventBus
   }
 
   /**
@@ -60,7 +68,7 @@ export class ConnectionManager {
    * Reset all instances (for testing)
    */
   static resetInstances(): void {
-    ConnectionManager.instance = null as unknown as ConnectionManager
+    ConnectionManager.instance = null
     ConnectionManager.testInstances.clear()
   }
 
@@ -100,23 +108,29 @@ export class ConnectionManager {
 
       this.isInitialized = true
 
-      // Emit system event
-      eventBus.emit('system.info', {
-        message: 'SQLite connection initialized',
-        details: {
-          databasePath: this.config.databasePath,
-          inMemory: this.config.databasePath === ':memory:',
-        },
-        timestamp: epochDateNow(),
-      })
+      // Emit system event if event bus is available
+      if (this.eventBus) {
+        this.eventBus.emit('system.info', {
+          message: 'SQLite connection initialized',
+          details: {
+            databasePath: this.config.databasePath,
+            inMemory: this.config.databasePath === ':memory:',
+          },
+          timestamp: epochDateNow(),
+        })
+      }
     } catch (error) {
       this.isInitialized = false
-      eventBus.emit('system.error', {
-        error,
-        context: 'SQLite connection initialization',
-        severity: 'critical',
-        timestamp: epochDateNow(),
-      })
+
+      if (this.eventBus) {
+        this.eventBus.emit('system.error', {
+          error,
+          context: 'SQLite connection initialization',
+          severity: 'critical',
+          timestamp: epochDateNow(),
+        })
+      }
+
       throw error
     }
   }
@@ -208,10 +222,12 @@ export class ConnectionManager {
     this.db = null
     this.isInitialized = false
 
-    eventBus.emit('system.info', {
-      message: 'SQLite connection closed',
-      timestamp: epochDateNow(),
-    })
+    if (this.eventBus) {
+      this.eventBus.emit('system.info', {
+        message: 'SQLite connection closed',
+        timestamp: epochDateNow(),
+      })
+    }
   }
 
   /**

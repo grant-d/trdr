@@ -1,8 +1,8 @@
-import { BaseRepository } from './base-repository'
-import type { AgentType, EpochDate} from '@trdr/shared'
-import { type IsoDate, toIsoDate, isoToEpoch, epochDateNow, isoDateNow } from '@trdr/shared'
+import type { AgentType, EpochDate, StockSymbol } from '@trdr/shared'
+import { epochDateNow, type IsoDate, isoDateNow, isoToEpoch, toIsoDate } from '@trdr/shared'
 import type { ConnectionManager } from '../db/connection-manager'
 import type { AgentSignal } from '../types/agents'
+import { BaseRepository } from './base-repository'
 
 /**
  * Database agent decision dto
@@ -26,7 +26,7 @@ interface AgentDecisionDto {
  */
 export interface AgentConsensus {
   readonly id: number
-  readonly symbol: string
+  readonly symbol: StockSymbol
   readonly decision: 'buy' | 'sell' | 'hold'
   readonly confidence: number
   readonly dissent: number

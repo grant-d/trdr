@@ -3,20 +3,21 @@ import type {
   OrderEvent,
   OrderExecutionMetrics,
   OrderSide,
+  StockSymbol,
   TrailingOrder
 } from '@trdr/shared'
 import { EnhancedOrderState, epochDateNow, type EpochDate } from '@trdr/shared'
+import type { Logger } from '@trdr/types'
 import { EventEmitter } from 'events'
 import { v4 as uuidv4 } from 'uuid'
 import type { EventBus } from '../events/event-bus'
 import { EventTypes } from '../events/types'
-import type { Logger } from '../utils/logger'
 
 /**
  * Parameters for creating a trailing order
  */
 export interface TrailingOrderParams {
-  readonly symbol: string
+  readonly symbol: StockSymbol
   readonly side: OrderSide
   readonly size: number
   readonly trailPercent: number

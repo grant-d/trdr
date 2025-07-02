@@ -1,9 +1,9 @@
-import { eventBus } from '@trdr/core'
 import { epochDateNow } from '@trdr/shared'
 import { AgentRepository } from '../repositories/agent-repository'
 import { MarketDataRepository } from '../repositories/market-data-repository'
 import { OrderRepository } from '../repositories/order-repository'
 import { TradeRepository } from '../repositories/trade-repository'
+import type { EventBus } from '@trdr/types'
 import type { ConnectionManager, SQLiteConfig } from './connection-manager'
 import { createConnectionManager } from './connection-manager'
 import { MigrationRunner } from './migrations'
@@ -24,10 +24,17 @@ export class Database {
   readonly orders: OrderRepository
   readonly trades: TradeRepository
   readonly agents: AgentRepository
+  private eventBus?: EventBus
 
-  constructor(config: Partial<SQLiteConfig> = {}) {
+  constructor(config: Partial<SQLiteConfig> = {}, eventBus?: EventBus) {
     this.connectionManager = createConnectionManager(config)
     this.migrationRunner = new MigrationRunner(this.connectionManager)
+    this.eventBus = eventBus
+    
+    // Set event bus on connection manager if provided
+    if (eventBus) {
+      this.connectionManager.setEventBus(eventBus)
+    }
 
     // Initialize repositories
     this.marketData = new MarketDataRepository(this.connectionManager)
@@ -47,17 +54,21 @@ export class Database {
       // Run migrations
       await this.migrationRunner.migrate()
 
-      eventBus.emit('system.info', {
-        message: 'Database initialized successfully',
-        timestamp: epochDateNow(),
-      })
+      if (this.eventBus) {
+        this.eventBus.emit('system.info', {
+          message: 'Database initialized successfully',
+          timestamp: epochDateNow(),
+        })
+      }
     } catch (error) {
-      eventBus.emit('system.error', {
-        error: error instanceof Error ? error : new Error(String(error)),
-        context: 'Database initialization',
-        severity: 'critical',
-        timestamp: epochDateNow(),
-      })
+      if (this.eventBus) {
+        this.eventBus.emit('system.error', {
+          error: error instanceof Error ? error : new Error(String(error)),
+          context: 'Database initialization',
+          severity: 'critical',
+          timestamp: epochDateNow(),
+        })
+      }
       throw error
     }
   }
@@ -149,8 +160,8 @@ export class Database {
 /**
  * Create and initialize a database instance
  */
-export async function createDatabase(config: Partial<SQLiteConfig> = {}): Promise<Database> {
-  const db = new Database(config)
+export async function createDatabase(config: Partial<SQLiteConfig> = {}, eventBus?: EventBus): Promise<Database> {
+  const db = new Database(config, eventBus)
   await db.initialize()
   return db
 }

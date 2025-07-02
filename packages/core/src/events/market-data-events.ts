@@ -1,4 +1,4 @@
-import type { EpochDate } from '@trdr/shared'
+import type { EpochDate, StockSymbol } from '@trdr/shared'
 import type { EventData } from './types'
 
 /**
@@ -6,7 +6,7 @@ import type { EventData } from './types'
  */
 export interface EnhancedMarketDataEvent extends EventData {
   /** Trading symbol */
-  readonly symbol: string
+  readonly symbol: StockSymbol
   /** Data source identifier */
   readonly source: string
   /** Feed type that generated the event */

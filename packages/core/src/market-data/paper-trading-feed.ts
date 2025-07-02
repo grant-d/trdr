@@ -1,11 +1,12 @@
+import type { StockSymbol } from '@trdr/shared'
 import { epochDateNow, toEpochDate, type Candle, type EpochDate } from '@trdr/shared'
-import type {
-  HistoricalDataRequest,
-  ConnectionStats,
-} from '../interfaces/market-data-pipeline'
-import { EnhancedMarketDataFeed, type EnhancedDataFeedConfig } from './enhanced-market-data-feed'
-import { CoinbaseDataFeed } from './coinbase-data-feed'
 import { EventTypes } from '../events/types'
+import type {
+  ConnectionStats,
+  HistoricalDataRequest,
+} from '../interfaces/market-data-pipeline'
+import { CoinbaseDataFeed } from './coinbase-data-feed'
+import { EnhancedMarketDataFeed, type EnhancedDataFeedConfig } from './enhanced-market-data-feed'
 
 /**
  * Configuration specific to paper trading data feed with enhanced event capabilities
@@ -386,7 +387,7 @@ export class PaperTradingFeed extends EnhancedMarketDataFeed {
    */
   private applyScenarioToCandle(candle: Record<string, unknown>): Candle {
     const candleData = candle as { 
-      readonly symbol: string
+      readonly symbol: StockSymbol
       readonly open: number
       readonly high: number 
       readonly low: number

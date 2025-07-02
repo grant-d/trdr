@@ -1,12 +1,5 @@
-/**
- * Simple logger interface for the trading system
- */
-export interface Logger {
-  debug(message: string, context?: Record<string, any>): void
-  info(message: string, context?: Record<string, any>): void
-  warn(message: string, context?: Record<string, any>): void
-  error(message: string, context?: Record<string, any>): void
-}
+// Import Logger interface from @trdr/types
+import type { Logger } from '@trdr/types'
 
 /**
  * Console-based logger implementation

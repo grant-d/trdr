@@ -1,11 +1,11 @@
-import type { Candle, PriceTick, EpochDate } from '@trdr/shared'
+import type { Candle, PriceTick, EpochDate, StockSymbol } from '@trdr/shared'
 
 /**
  * Configuration for market data feed
  */
 export interface DataFeedConfig {
   /** Trading symbol (e.g., 'BTC-USD') */
-  readonly symbol: string
+  readonly symbol: StockSymbol
   /** Feed type identifier */
   readonly feedType: 'coinbase' | 'backtest' | 'paper'
   /** Optional API credentials */
@@ -44,7 +44,7 @@ export interface MarketDataEvents {
  */
 export interface HistoricalDataRequest {
   /** Trading symbol */
-  readonly symbol: string
+  readonly symbol: StockSymbol
   /** Start time for historical data */
   readonly start: EpochDate
   /** End time for historical data */

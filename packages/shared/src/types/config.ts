@@ -1,5 +1,6 @@
 import type { AgentConfig } from './agents'
 import type { EpochDate } from './dates'
+import { StockSymbol } from './orders'
 
 /** Risk tolerance levels for position sizing and strategy */
 export type RiskTolerance = 'conservative' | 'moderate' | 'aggressive'
@@ -13,7 +14,7 @@ export type TradingMode = 'live' | 'paper' | 'backtest'
  */
 export interface TradingConfig {
   /** Trading pair symbol (e.g., 'BTC-USD') */
-  readonly symbol: string
+  readonly symbol: StockSymbol
   /** Total capital allocated for trading */
   readonly capital: number
   /** Risk tolerance level */
@@ -66,7 +67,7 @@ export interface RiskConfig {
  */
 export interface ExchangeConfig {
   /** Exchange platform name */
-  readonly name: 'coinbase' | 'binance' | 'kraken'
+  readonly name: 'coinbase' | 'alpaca'
   /** API key (stored securely) */
   readonly apiKey?: string
   /** API secret (stored securely) */
@@ -124,7 +125,7 @@ export interface SystemConfig {
  */
 export interface MinimalConfig {
   /** Trading pair symbol - what to trade */
-  readonly symbol: string
+  readonly symbol: StockSymbol
   /** Total capital to trade - how much money */
   readonly capital: number
   /** Risk tolerance level - risk preference */

@@ -1,8 +1,8 @@
 import type { ManagedOrder, OrderAgentConsensus, TrailingOrder } from '@trdr/shared'
 import { epochDateNow } from '@trdr/shared'
+import type { Logger } from '@trdr/types'
 import { EventBus } from '../events/event-bus'
 import { EventTypes } from '../events/types'
-import type { Logger } from '../utils/logger'
 import { OrderLifecycleManager } from './order-lifecycle-manager'
 import { TrailingOrderManager, type TrailingOrderParams } from './trailing-order-manager'
 

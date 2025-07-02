@@ -1,23 +1,26 @@
-import { describe, it, beforeEach, afterEach, mock } from 'node:test'
 import assert from 'node:assert/strict'
-import { ConnectionManager, createConnectionManager } from './connection-manager'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { eventBus } from '@trdr/core'
+import { afterEach, beforeEach, describe, it, mock } from 'node:test'
+import type { EventBus } from '@trdr/types'
+import { ConnectionManager, createConnectionManager } from './connection-manager'
 
 describe('ConnectionManager', () => {
   let manager: ConnectionManager
+  let mockEventBus: EventBus
   const testDbPath = path.join(__dirname, '../../test-data/test-connection.db')
 
   beforeEach(async () => {
     // Reset singleton instance
     ;(ConnectionManager as any).instance = null
 
+    // Create mock event bus
+    mockEventBus = {
+      emit: mock.fn(() => {})
+    } as any
+
     // Ensure test directory exists
     await fs.mkdir(path.dirname(testDbPath), { recursive: true })
-
-    // Mock event bus
-    mock.method(eventBus, 'emit')
   })
 
   afterEach(async () => {
@@ -77,11 +80,12 @@ describe('ConnectionManager', () => {
       manager = ConnectionManager.getInstance({
         databasePath: ':memory:',
       })
+      manager.setEventBus(mockEventBus)
 
       await manager.initialize()
 
       assert.equal(manager.isConnected(), true)
-      const mockCalls = (eventBus.emit as any).mock.calls
+      const mockCalls = (mockEventBus.emit as any).mock.calls
       assert.equal(mockCalls.length, 1)
       assert.ok(mockCalls[0])
       assert.equal(mockCalls[0].arguments[0], 'system.info')
