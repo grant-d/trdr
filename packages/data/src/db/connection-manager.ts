@@ -23,10 +23,10 @@ export interface SQLiteConfig {
  */
 export class ConnectionManager {
   private static instance: ConnectionManager
-  private static testInstances: Map<string, ConnectionManager> = new Map()
+  private static readonly testInstances = new Map<string, ConnectionManager>()
   private db: Database.Database | null = null
-  private config: SQLiteConfig
-  private isInitialized: boolean = false
+  private readonly config: SQLiteConfig
+  private isInitialized = false
 
   private constructor(config: SQLiteConfig) {
     this.config = config
@@ -192,33 +192,25 @@ export class ConnectionManager {
 
     const transactionFn = db.transaction(() => fn(db))
 
-    try {
-      return transactionFn()
-    } catch (error) {
-      throw error
-    }
+    return transactionFn()
   }
 
   /**
    * Close the database connection
    */
-  async close(): Promise<void> {
+  close(): void {
     if (!this.db) {
       return
     }
 
-    try {
-      this.db.close()
-      this.db = null
-      this.isInitialized = false
+    this.db.close()
+    this.db = null
+    this.isInitialized = false
 
-      eventBus.emit('system.info', {
-        message: 'SQLite connection closed',
-        timestamp: new Date(),
-      })
-    } catch (error) {
-      throw error
-    }
+    eventBus.emit('system.info', {
+      message: 'SQLite connection closed',
+      timestamp: new Date(),
+    })
   }
 
   /**

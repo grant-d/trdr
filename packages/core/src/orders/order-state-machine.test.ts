@@ -58,7 +58,7 @@ describe('OrderStateMachine', () => {
       const eventHandler = mock.fn()
       eventBus.subscribe('order.state.changed', eventHandler)
 
-      await stateMachine.transition(mockOrder, EnhancedOrderState.SUBMITTED)
+      stateMachine.transition(mockOrder, EnhancedOrderState.SUBMITTED)
 
       assert.equal(mockOrder.state, EnhancedOrderState.SUBMITTED)
       assert.ok(mockOrder.lastModified instanceof Date)
@@ -72,7 +72,7 @@ describe('OrderStateMachine', () => {
 
     it('should throw error for invalid transition', async () => {
       await assert.rejects(
-        () => stateMachine.transition(mockOrder, EnhancedOrderState.FILLED),
+        async () => stateMachine.transition(mockOrder, EnhancedOrderState.FILLED),
         /Invalid state transition: PENDING → FILLED/
       )
     })
@@ -85,7 +85,7 @@ describe('OrderStateMachine', () => {
       eventBus.subscribe('order.filled', filledHandler)
 
       // Test submitted event
-      await stateMachine.transition(mockOrder, EnhancedOrderState.SUBMITTED)
+      stateMachine.transition(mockOrder, EnhancedOrderState.SUBMITTED)
       assert.equal(submittedHandler.mock.calls.length, 1)
 
       // Set up order to be fully filled before transitioning to FILLED
@@ -101,21 +101,21 @@ describe('OrderStateMachine', () => {
       }]
 
       // Test filled event
-      await stateMachine.transition(mockOrder, EnhancedOrderState.FILLED)
+      stateMachine.transition(mockOrder, EnhancedOrderState.FILLED)
       assert.equal(filledHandler.mock.calls.length, 1)
     })
 
     it('should store rejection reason', async () => {
       // First update order state to SUBMITTED since mockOrder starts at PENDING
       mockOrder.state = EnhancedOrderState.SUBMITTED
-      await stateMachine.transition(mockOrder, EnhancedOrderState.REJECTED, 'Insufficient funds')
+      stateMachine.transition(mockOrder, EnhancedOrderState.REJECTED, 'Insufficient funds')
 
       assert.equal(mockOrder.rejectionReason, 'Insufficient funds')
     })
 
     it('should store cancellation reason', async () => {
-      await stateMachine.transition(mockOrder, EnhancedOrderState.SUBMITTED)
-      await stateMachine.transition(mockOrder, EnhancedOrderState.CANCELLED, 'User requested')
+      stateMachine.transition(mockOrder, EnhancedOrderState.SUBMITTED)
+      stateMachine.transition(mockOrder, EnhancedOrderState.CANCELLED, 'User requested')
 
       assert.equal(mockOrder.cancellationReason, 'User requested')
     })

@@ -1,6 +1,7 @@
 import { BaseRepository } from './base-repository'
-import { OrderSide, type IsoDate, toIsoDate } from '@trdr/shared'
-import { ConnectionManager } from '../db/connection-manager'
+import type { OrderSide} from '@trdr/shared'
+import { type IsoDate, toIsoDate } from '@trdr/shared'
+import type { ConnectionManager } from '../db/connection-manager'
 
 /**
  * Trade interface matching PRD
@@ -15,7 +16,7 @@ export interface Trade {
   readonly fee: number
   readonly feeCurrency?: string
   readonly pnl?: number
-  readonly metadata?: Record<string, any>
+  readonly metadata?: Record<string, unknown>
   readonly executedAt: Date
 }
 
@@ -32,7 +33,7 @@ interface TradeDto {
   fee: number
   fee_currency?: string
   pnl?: number
-  metadata?: any
+  metadata?: unknown
   executed_at: IsoDate
   created_at: IsoDate
 }
@@ -107,7 +108,7 @@ export class TradeRepository extends BaseRepository<TradeDto> {
       'executed_at ASC',
     )
 
-    return models.map(this.dtoToTrade)
+    return models.map(model => this.dtoToTrade(model))
   }
 
   /**
@@ -120,7 +121,7 @@ export class TradeRepository extends BaseRepository<TradeDto> {
     side?: OrderSide,
   ): Promise<Trade[]> {
     let where = 'symbol = ? AND executed_at >= ? AND executed_at <= ?'
-    const params: any[] = [symbol, toIsoDate(startTime), toIsoDate(endTime)]
+    const params: unknown[] = [symbol, toIsoDate(startTime), toIsoDate(endTime)]
 
     if (side) {
       where += ' AND side = ?'
@@ -128,7 +129,7 @@ export class TradeRepository extends BaseRepository<TradeDto> {
     }
 
     const models = await this.findMany(where, params, 'executed_at DESC')
-    return models.map(this.dtoToTrade)
+    return models.map(model => this.dtoToTrade(model))
   }
 
   /**
@@ -146,7 +147,7 @@ export class TradeRepository extends BaseRepository<TradeDto> {
     winRate: number
   }> {
     let where = 'symbol = ?'
-    const params: any[] = [symbol]
+    const params: unknown[] = [symbol]
 
     if (startTime) {
       where += ' AND executed_at >= ?'
@@ -191,7 +192,7 @@ export class TradeRepository extends BaseRepository<TradeDto> {
   async getTradeStatsByPeriod(
     symbol: string,
     period: 'hour' | 'day' | 'week' | 'month',
-    limit: number = 30,
+    limit = 30,
   ): Promise<Array<{
     period: string
     tradeCount: number
@@ -244,11 +245,11 @@ export class TradeRepository extends BaseRepository<TradeDto> {
    */
   async getTopTrades(
     symbol?: string,
-    limit: number = 10,
+    limit = 10,
     orderBy: 'pnl' | 'size' | 'recent' = 'pnl',
   ): Promise<Trade[]> {
     let where = '1=1'
-    const params: any[] = []
+    const params: unknown[] = []
 
     if (symbol) {
       where += ' AND symbol = ?'
@@ -262,13 +263,13 @@ export class TradeRepository extends BaseRepository<TradeDto> {
     }[orderBy]
 
     const models = await this.findMany(where, params, orderClause, limit)
-    return models.map(this.dtoToTrade)
+    return models.map(model => this.dtoToTrade(model))
   }
 
   /**
    * Cleanup old trades
    */
-  async cleanup(daysToKeep: number = 365): Promise<number> {
+  async cleanup(daysToKeep = 365): Promise<number> {
     const cutoffDate = new Date()
     cutoffDate.setDate(cutoffDate.getDate() - daysToKeep)
 
@@ -293,7 +294,7 @@ export class TradeRepository extends BaseRepository<TradeDto> {
       fee: model.fee,
       feeCurrency: model.fee_currency,
       pnl: model.pnl,
-      metadata: model.metadata ? JSON.parse(model.metadata) : undefined,
+      metadata: model.metadata ? JSON.parse(model.metadata as string) as Record<string, unknown> : undefined,
       executedAt: new Date(model.executed_at),
     }
   }

@@ -150,12 +150,12 @@ export interface EnhancedMarketStats {
 export abstract class EnhancedMarketDataFeed extends BaseMarketDataFeed {
   protected enhancedConfig: EnhancedDataFeedConfig
   protected enhancedStats: EnhancedMarketStats
-  protected lastPrices: Map<string, number> = new Map()
-  protected priceHistory: Map<string, Array<{ price: number; time: Date }>> = new Map()
+  protected lastPrices = new Map<string, number>()
+  protected priceHistory = new Map<string, Array<{ price: number; time: Date }>>()
   protected sequenceNumber = 0
   protected eventSubscriptions: FilteredEventSubscription[] = []
-  protected rateLimitMap: Map<string, number[]> = new Map()
-  protected filterLastPrices: Map<string, number> = new Map() // Separate price tracking for filters
+  protected rateLimitMap = new Map<string, number[]>()
+  protected filterLastPrices = new Map<string, number>() // Separate price tracking for filters
 
   protected constructor(config: EnhancedDataFeedConfig) {
     super(config)
@@ -500,9 +500,13 @@ export abstract class EnhancedMarketDataFeed extends BaseMarketDataFeed {
           const dummySubscription = {
             id: Math.random(),
             eventType: EnhancedEventTypes.MARKET_TICK_ENHANCED,
-            updateFilter: () => {},
+            updateFilter: () => {
+              // No-op for dummy subscription
+            },
             hasFilter: () => false,
-            unsubscribe: () => {}
+            unsubscribe: () => {
+              // No-op for dummy subscription
+            }
           }
           resolve(dummySubscription)
         }
@@ -554,10 +558,10 @@ export abstract class EnhancedMarketDataFeed extends BaseMarketDataFeed {
   /**
    * Export event data for analysis
    */
-  async exportEventData(
+  exportEventData(
     eventTypes: string[],
     timeRange: { start: Date; end: Date },
-  ): Promise<string> {
+  ): string {
     // This is a simplified implementation
     // In a real system, you'd query stored events
     const mockEvents = this.generateMockEventData(eventTypes, timeRange)
@@ -647,7 +651,7 @@ export abstract class EnhancedMarketDataFeed extends BaseMarketDataFeed {
   /**
    * Generate mock event data for export
    */
-  private generateMockEventData(eventTypes: string[], timeRange: { start: Date; end: Date }): any[] {
+  private generateMockEventData(eventTypes: string[], timeRange: { start: Date; end: Date }): Array<{ type: string; timestamp: Date; symbol: string; mockData: boolean }> {
     // This is a placeholder - in a real implementation, you'd retrieve stored events
     return eventTypes.map(type => ({
       type,
@@ -671,5 +675,7 @@ export abstract class EnhancedMarketDataFeed extends BaseMarketDataFeed {
     // Set connected state
     this.connected = false
     this.emitDisconnected('Manual stop')
+    // Method is async to satisfy the abstract interface requirement
+    await Promise.resolve()
   }
 }

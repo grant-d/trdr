@@ -1,4 +1,4 @@
-import { ConnectionManager } from './connection-manager'
+import type { ConnectionManager } from './connection-manager'
 import { getAllSchemaStatements } from './schema'
 import { eventBus } from '@trdr/core'
 

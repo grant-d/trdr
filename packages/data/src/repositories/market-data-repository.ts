@@ -1,6 +1,6 @@
 import { BaseRepository } from './base-repository'
-import { ConnectionManager } from '../db/connection-manager'
-import { Candle, PriceTick } from '../types/market-data'
+import type { ConnectionManager } from '../db/connection-manager'
+import type { Candle, PriceTick } from '../types/market-data'
 import { type IsoDate, toIsoDate } from '@trdr/shared'
 
 /**
@@ -43,7 +43,7 @@ interface PriceTickDto {
  */
 export class MarketDataRepository extends BaseRepository<CandleDto> {
   protected readonly tableName = 'candles'
-  private ticksTableName = 'market_ticks'
+  private readonly ticksTableName = 'market_ticks'
   private idCounter = Date.now()
 
   constructor(connectionManager: ConnectionManager) {
@@ -120,7 +120,7 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
     const params = [symbol, interval, startTime.toISOString(), endTime.toISOString()]
     const models = await this.query<CandleDto>(sql, params)
 
-    return models.map(this.dtoToCandle)
+    return models.map(model => this.dtoToCandle(model))
   }
 
   /**
@@ -193,7 +193,7 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
       const stmt = db.prepare(sql)
       let count = 0
       for (const model of models) {
-        const values = fields.map(field => (model as any)[field])
+        const values = fields.map(field => (model as Record<string, unknown>)[field])
         stmt.run(...values)
         count++
       }
@@ -225,7 +225,7 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
     const params = [symbol, toIsoDate(startTime), toIsoDate(endTime)]
     const models = await this.query<PriceTickDto>(sql, params)
 
-    return models.map(this.dtoToTick)
+    return models.map(model => this.dtoToTick(model))
   }
 
   /**
@@ -249,7 +249,7 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
   async getMarketStats(
     symbol: string,
     interval: string,
-    days: number = 30,
+    days = 30,
   ): Promise<{
     avgVolume: number
     avgPrice: number
@@ -302,7 +302,7 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
   /**
    * Delete old market data
    */
-  async cleanup(daysToKeep: number = 90): Promise<{ candlesDeleted: number; ticksDeleted: number }> {
+  async cleanup(daysToKeep = 90): Promise<{ candlesDeleted: number; ticksDeleted: number }> {
     const cutoffDate = new Date()
     cutoffDate.setDate(cutoffDate.getDate() - daysToKeep)
 

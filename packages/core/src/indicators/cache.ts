@@ -4,7 +4,7 @@ import type { CacheEntry, IIndicatorCache } from './interfaces'
  * LRU cache implementation for indicator results
  */
 export class IndicatorCache implements IIndicatorCache {
-  private readonly cache = new Map<string, CacheEntry<any>>()
+  private readonly cache = new Map<string, CacheEntry<unknown>>()
   private readonly maxSize: number
   private hits = 0
   private misses = 0
@@ -27,7 +27,7 @@ export class IndicatorCache implements IIndicatorCache {
     this.cache.set(key, entry)
 
     this.hits++
-    return entry.value
+    return entry.value as T
   }
 
   set<T>(key: string, value: T, candleCount: number): void {
@@ -88,7 +88,7 @@ export class IndicatorCache implements IIndicatorCache {
     return this.cache.size
   }
 
-  getStats() {
+  getStats(): { hits: number; misses: number; evictions: number; size: number } {
     return {
       hits: this.hits,
       misses: this.misses,
@@ -103,12 +103,12 @@ export class IndicatorCache implements IIndicatorCache {
  */
 export function createCacheKey(
   indicatorName: string,
-  params: Record<string, any>,
+  params: Record<string, unknown>,
   candleHash: string
 ): string {
   const paramStr = Object.entries(params)
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([k, v]) => `${k}:${v}`)
+    .map(([k, v]) => `${k}:${String(v)}`)
     .join(',')
 
   return `${indicatorName}:${paramStr}:${candleHash}`

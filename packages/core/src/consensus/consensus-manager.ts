@@ -21,14 +21,14 @@ export class ConsensusManager {
   private readonly config: ConsensusConfig
   private readonly eventBus: EventBus
   private readonly strategy: IConsensusStrategy
-  private readonly agentPerformance: Map<string, AgentPerformance> = new Map()
-  private activeRequests: Map<string, {
+  private readonly agentPerformance = new Map<string, AgentPerformance>()
+  private readonly activeRequests = new Map<string, {
     signals: AgentSignal[]
     expectedAgents: Set<string>
     timeout: NodeJS.Timeout
     resolve: (result: ConsensusResult) => void
     startTime: number
-  }> = new Map()
+  }>()
 
   /**
    * Creates a new ConsensusManager instance
@@ -67,9 +67,10 @@ export class ConsensusManager {
    */
   private setupEventHandlers(): void {
     // Listen for agent signals
-    this.eventBus.subscribe(EventTypes.AGENT_SIGNAL, (data: any) => {
-      if (data.requestId && data.signal) {
-        this.addAgentSignal(data.requestId, data.signal)
+    this.eventBus.subscribe(EventTypes.AGENT_SIGNAL, (data: unknown) => {
+      const val = data as { requestId?: string, signal?: AgentSignal }
+      if (typeof val.requestId === 'string' && val.signal && typeof val.signal === 'object') {
+        this.addAgentSignal(val.requestId, val.signal)
       }
     })
   }
@@ -109,7 +110,7 @@ export class ConsensusManager {
       })
 
       // Broadcast signal request to agents
-      this.eventBus.emit(EventTypes.SIGNAL_REQUEST, request)
+      this.eventBus.emit(EventTypes.SIGNAL_REQUEST, { ...request })
     })
   }
 
@@ -253,7 +254,7 @@ export class ConsensusManager {
     agentId: string,
     correct: boolean,
     confidence: number,
-    pnlContribution: number = 0
+    pnlContribution = 0
   ): void {
     const existing = this.agentPerformance.get(agentId) || {
       agentId,

@@ -179,5 +179,5 @@ export interface SignalRequest {
   /** Request timestamp */
   readonly timestamp: Date
   /** Additional context data */
-  readonly context?: Record<string, any>
+  readonly context?: Record<string, unknown>
 }

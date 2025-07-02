@@ -10,7 +10,7 @@ import { CoinbaseAdvTradeClient, ProductsService, CoinbaseAdvTradeCredentials } 
  */
 export class CoinbaseDataFeed extends EnhancedMarketDataFeed {
   private readonly client: CoinbaseAdvTradeClient
-  private productsService: ProductsService
+  private readonly productsService: ProductsService
   private wsConnected = false
   private reconnectTimer: NodeJS.Timeout | null = null
 
@@ -45,6 +45,7 @@ export class CoinbaseDataFeed extends EnhancedMarketDataFeed {
       this.emitConnectionStatus('error')
       // Don't throw - we can still function with REST API only
     }
+    await Promise.resolve()
   }
 
   /**
@@ -57,6 +58,8 @@ export class CoinbaseDataFeed extends EnhancedMarketDataFeed {
     this.wsConnected = false
 
     this.emitDisconnected('Manual stop')
+    // Method is async to satisfy the abstract interface requirement
+    await Promise.resolve()
   }
 
   /**
@@ -71,6 +74,8 @@ export class CoinbaseDataFeed extends EnhancedMarketDataFeed {
     // For now, we'll implement periodic price polling
     // Real WebSocket implementation can be added later
     this.debug('Symbols added to subscription list')
+    // Method is async to satisfy the abstract interface requirement
+    await Promise.resolve()
   }
 
   /**
@@ -81,6 +86,8 @@ export class CoinbaseDataFeed extends EnhancedMarketDataFeed {
 
     // Remove symbols from our set
     symbols.forEach(symbol => this.subscribedSymbols.delete(symbol))
+    // Method is async to satisfy the abstract interface requirement
+    await Promise.resolve()
   }
 
   /**
@@ -146,17 +153,16 @@ export class CoinbaseDataFeed extends EnhancedMarketDataFeed {
 
     const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000) // Max 30s
 
-    this.reconnectTimer = setTimeout(async () => {
+    this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
       this.emitReconnecting(this.reconnectAttempts + 1)
 
-      try {
-        await this.start()
+      void this.start().then(() => {
         this.debug('Reconnected successfully')
-      } catch (error) {
+      }).catch((error) => {
         this.debug('Reconnection failed', error)
         this.scheduleReconnect()
-      }
+      })
     }, delay)
   }
 

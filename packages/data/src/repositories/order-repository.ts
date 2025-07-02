@@ -1,7 +1,8 @@
 import { BaseRepository } from './base-repository'
-import { OrderStatus, OrderType, OrderSide, type IsoDate, toIsoDate } from '@trdr/shared'
-import { ConnectionManager } from '../db/connection-manager'
-import { Order } from '../types/orders'
+import type { OrderStatus, OrderType, OrderSide} from '@trdr/shared'
+import { type IsoDate, toIsoDate } from '@trdr/shared'
+import type { ConnectionManager } from '../db/connection-manager'
+import type { Order } from '../types/orders'
 
 /**
  * Database order dto
@@ -19,7 +20,7 @@ interface OrderDto {
   stop_price?: number
   trail_distance?: number
   agent_id?: string
-  metadata?: any
+  metadata?: unknown
   created_at: IsoDate
   updated_at: IsoDate
   submitted_at?: IsoDate
@@ -101,7 +102,7 @@ export class OrderRepository extends BaseRepository<OrderDto> {
       limit,
     )
 
-    return models.map(this.dtoToOrder)
+    return models.map(model => this.dtoToOrder(model))
   }
 
   /**
@@ -110,7 +111,7 @@ export class OrderRepository extends BaseRepository<OrderDto> {
   async getActiveOrders(symbol?: string): Promise<Order[]> {
     const activeStatuses = ['pending', 'submitted', 'partial']
     let where = `status IN (${activeStatuses.map(() => '?').join(', ')})`
-    const params: any[] = [...activeStatuses]
+    const params: unknown[] = [...activeStatuses]
 
     if (symbol) {
       where += ' AND symbol = ?'
@@ -118,7 +119,7 @@ export class OrderRepository extends BaseRepository<OrderDto> {
     }
 
     const models = await this.findMany(where, params, 'created_at DESC')
-    return models.map(this.dtoToOrder)
+    return models.map(model => this.dtoToOrder(model))
   }
 
   /**
@@ -132,7 +133,7 @@ export class OrderRepository extends BaseRepository<OrderDto> {
       limit,
     )
 
-    return models.map(this.dtoToOrder)
+    return models.map(model => this.dtoToOrder(model))
   }
 
   /**
@@ -145,7 +146,7 @@ export class OrderRepository extends BaseRepository<OrderDto> {
     statuses?: OrderStatus[],
   ): Promise<Order[]> {
     let where = 'symbol = ? AND created_at >= ? AND created_at <= ?'
-    const params: any[] = [symbol, toIsoDate(startTime), toIsoDate(endTime)]
+    const params: unknown[] = [symbol, toIsoDate(startTime), toIsoDate(endTime)]
 
     if (statuses && statuses.length > 0) {
       where += ` AND status IN (${statuses.map(() => '?').join(', ')})`
@@ -153,7 +154,7 @@ export class OrderRepository extends BaseRepository<OrderDto> {
     }
 
     const models = await this.findMany(where, params, 'created_at DESC')
-    return models.map(this.dtoToOrder)
+    return models.map(model => this.dtoToOrder(model))
   }
 
   /**
@@ -172,7 +173,7 @@ export class OrderRepository extends BaseRepository<OrderDto> {
   /**
    * Get order statistics
    */
-  async getOrderStats(symbol?: string, days: number = 30): Promise<{
+  async getOrderStats(symbol?: string, days = 30): Promise<{
     totalOrders: number
     filledOrders: number
     cancelledOrders: number
@@ -184,7 +185,7 @@ export class OrderRepository extends BaseRepository<OrderDto> {
     startTime.setDate(startTime.getDate() - days)
 
     let whereClause = 'created_at >= ?'
-    const params: any[] = [toIsoDate(startTime)]
+    const params: unknown[] = [toIsoDate(startTime)]
 
     if (symbol) {
       whereClause += ' AND symbol = ?'
@@ -242,7 +243,7 @@ export class OrderRepository extends BaseRepository<OrderDto> {
   /**
    * Cleanup old orders
    */
-  async cleanup(daysToKeep: number = 90): Promise<number> {
+  async cleanup(daysToKeep = 90): Promise<number> {
     const cutoffDate = new Date()
     cutoffDate.setDate(cutoffDate.getDate() - daysToKeep)
 
@@ -275,7 +276,7 @@ export class OrderRepository extends BaseRepository<OrderDto> {
       trailPercent: model.trail_distance,
       trailAmount: model.trail_distance,
       agentId: model.agent_id,
-      metadata: model.metadata ? JSON.parse(model.metadata) : undefined,
+      metadata: model.metadata ? JSON.parse(model.metadata as string) as Record<string, unknown> : undefined,
       createdAt: new Date(model.created_at),
       updatedAt: new Date(model.updated_at),
       submittedAt: model.submitted_at ? new Date(model.submitted_at) : undefined,

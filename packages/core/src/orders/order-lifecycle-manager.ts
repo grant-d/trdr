@@ -27,7 +27,7 @@ import { ConsensusManager, type SignalRequest } from '../consensus'
  */
 export class OrderLifecycleManager {
   /** Map of active orders by order ID */
-  private readonly activeOrders: Map<string, ManagedOrder> = new Map()
+  private readonly activeOrders = new Map<string, ManagedOrder>()
   /** State machine for managing order state transitions */
   private readonly orderStateMachine: OrderStateMachine
   /** Event bus for publishing order lifecycle events */
@@ -127,7 +127,7 @@ export class OrderLifecycleManager {
    * const order = await manager.processAgentConsensus(consensus)
    * ```
    */
-  async processAgentConsensus(consensus: OrderAgentConsensus): Promise<TrailingOrder | null> {
+  processAgentConsensus(consensus: OrderAgentConsensus): TrailingOrder | null {
     // Check circuit breaker before processing
     if (this.executionMonitor.isCircuitBreakerActive()) {
       this.eventBus.emit(EventTypes.ORDER_CONSENSUS_REJECTED, {
@@ -151,12 +151,12 @@ export class OrderLifecycleManager {
     // Check for conflicting orders
     const existingOrder = this.findConflictingOrder(consensus)
     if (existingOrder) {
-      await this.modifyOrder(existingOrder, consensus)
+      this.modifyOrder(existingOrder, consensus)
       return null
     }
 
     // Calculate order size using dynamic position sizing
-    const size = await this.calculateOrderSize(consensus)
+    const size = this.calculateOrderSize(consensus)
     if (size < this.config.minOrderSize) {
       this.eventBus.emit(EventTypes.ORDER_SIZE_TOO_SMALL, {
         consensus,
@@ -207,13 +207,13 @@ export class OrderLifecycleManager {
    * - Risk limit enforcement
    * - Adaptive sizing based on performance
    */
-  async calculateOrderSize(consensus: OrderAgentConsensus): Promise<number> {
+  calculateOrderSize(consensus: OrderAgentConsensus): number {
     // Get current market conditions
-    const marketConditions = await this.getCurrentMarketConditions()
+    const marketConditions = this.getCurrentMarketConditions()
     
     // Get risk parameters
     const accountBalance = 10000 // TODO: Get from portfolio manager
-    const currentExposure = await this.getCurrentExposure()
+    const currentExposure = this.getCurrentExposure()
     const openPositions = this.activeOrders.size
     
     const riskParams = PositionSizingManager.createRiskParameters(
@@ -226,7 +226,7 @@ export class OrderLifecycleManager {
     const symbol = consensus.symbol || this.config.symbol || 'BTC-USD'
     
     // Calculate stop loss based on trail distance
-    const currentPrice = await this.getCurrentPrice(symbol)
+    const currentPrice = this.getCurrentPrice(symbol)
     const stopLoss = consensus.action === 'buy'
       ? currentPrice * (1 - consensus.trailDistance / 100)
       : currentPrice * (1 + consensus.trailDistance / 100)
@@ -241,7 +241,7 @@ export class OrderLifecycleManager {
       confidence: consensus.confidence,
       riskParams,
       marketConditions,
-      historicalMetrics: await this.getHistoricalMetrics()
+      historicalMetrics: this.getHistoricalMetrics()
     }
     
     // Calculate position size
@@ -275,18 +275,18 @@ export class OrderLifecycleManager {
    * - Starts real-time monitoring for price updates
    * - Handles rejection with proper state transition
    */
-  async submitOrder(order: TrailingOrder): Promise<ManagedOrder> {
+  submitOrder(order: TrailingOrder): ManagedOrder {
     const managedOrder = this.createManagedOrder(order)
     
     try {
       // First transition to PENDING (validated)
-      await this.orderStateMachine.transition(
+      this.orderStateMachine.transition(
         managedOrder,
         EnhancedOrderState.PENDING
       )
       
       // Then transition to SUBMITTED
-      await this.orderStateMachine.transition(
+      this.orderStateMachine.transition(
         managedOrder,
         EnhancedOrderState.SUBMITTED
       )
@@ -303,7 +303,7 @@ export class OrderLifecycleManager {
       return managedOrder
     } catch (error) {
       // Transition to rejected state on submission failure
-      await this.orderStateMachine.transition(
+      this.orderStateMachine.transition(
         managedOrder,
         EnhancedOrderState.REJECTED,
         (error as Error).message
@@ -321,10 +321,10 @@ export class OrderLifecycleManager {
    * 
    * @example
    * ```typescript
-   * await manager.cancelOrder('order_123', 'User requested cancellation')
+   * manager.cancelOrder('order_123', 'User requested cancellation')
    * ```
    */
-  async cancelOrder(orderId: string, reason?: string): Promise<void> {
+  cancelOrder(orderId: string, reason?: string): void {
     const order = this.activeOrders.get(orderId)
     if (!order) {
       throw new Error(`Order ${orderId} not found`)
@@ -338,7 +338,7 @@ export class OrderLifecycleManager {
       // Cancel with exchange would go here
       // await this.exchange.cancelOrder(order.exchangeOrderId)
 
-      await this.orderStateMachine.transition(
+      this.orderStateMachine.transition(
         order,
         EnhancedOrderState.CANCELLED,
         reason || 'Manual cancellation'
@@ -366,12 +366,12 @@ export class OrderLifecycleManager {
    * Only modifies orders in active states (PENDING, SUBMITTED, PARTIAL).
    * Updates order size and trail percentage based on new consensus.
    */
-  async modifyOrder(order: ManagedOrder, consensus: OrderAgentConsensus): Promise<ManagedOrder | null> {
+  modifyOrder(order: ManagedOrder, consensus: OrderAgentConsensus): ManagedOrder | null {
     if (!this.orderStateMachine.isActiveState(order.state)) {
       return null
     }
 
-    const newSize = await this.calculateOrderSize(consensus)
+    const newSize = this.calculateOrderSize(consensus)
     const modification: OrderModification = {
       size: newSize,
       trailPercent: consensus.trailDistance
@@ -379,7 +379,7 @@ export class OrderLifecycleManager {
 
     try {
       // Apply modification
-      await this.applyOrderModification(order, modification)
+      this.applyOrderModification(order, modification)
       
       this.eventBus.emit(EventTypes.ORDER_MODIFIED, {
         orderId: order.id,
@@ -415,9 +415,10 @@ export class OrderLifecycleManager {
    */
   private monitorOrder(order: ManagedOrder): void {
     // Set up price monitoring
-    const priceSubscription = this.eventBus.subscribe(EventTypes.MARKET_TICK, (data: any) => {
-      if (data.symbol === order.symbol) {
-        this.handlePriceUpdate(order, data.price)
+    const priceSubscription = this.eventBus.subscribe(EventTypes.MARKET_TICK, (data: unknown) => {
+      const marketData = data as { symbol?: string, price?: number }
+      if (marketData.symbol === order.symbol && typeof marketData.price === 'number') {
+        this.handlePriceUpdate(order, marketData.price)
       }
     })
 
@@ -427,12 +428,13 @@ export class OrderLifecycleManager {
     }
 
     // Clean up subscriptions when order completes
-    const cleanup = () => {
+    const cleanup = (): void => {
       priceSubscription.unsubscribe()
     }
 
-    this.eventBus.subscribe(EventTypes.ORDER_STATE_CHANGED, (data: any) => {
-      if (data.orderId === order.id && this.orderStateMachine.isTerminalState(data.newState)) {
+    this.eventBus.subscribe(EventTypes.ORDER_STATE_CHANGED, (data: unknown) => {
+      const stateChange = data as { orderId?: string, newState?: EnhancedOrderState }
+      if (stateChange.orderId === order.id && stateChange.newState && this.orderStateMachine.isTerminalState(stateChange.newState)) {
         cleanup()
       }
     })
@@ -448,13 +450,13 @@ export class OrderLifecycleManager {
    * Checks if order improvement is enabled and if current price
    * presents an opportunity to improve the order price.
    */
-  private async handlePriceUpdate(order: ManagedOrder, currentPrice: number): Promise<void> {
+  private handlePriceUpdate(order: ManagedOrder, currentPrice: number): void {
     if (!this.config.enableOrderImprovement) {
       return
     }
 
     if (this.shouldImproveOrder(order, currentPrice)) {
-      await this.improveOrder(order, currentPrice)
+      this.improveOrder(order, currentPrice)
     }
   }
 
@@ -497,10 +499,10 @@ export class OrderLifecycleManager {
    * - Buy order at $50,000, market drops to $49,500 → improve to $49,500
    * - Sell order at $50,000, market rises to $50,500 → improve to $50,500
    */
-  private async improveOrder(order: ManagedOrder, newPrice: number): Promise<void> {
+  private improveOrder(order: ManagedOrder, newPrice: number): void {
     try {
       const modification: OrderModification = { price: newPrice }
-      await this.applyOrderModification(order, modification)
+      this.applyOrderModification(order, modification)
 
       this.eventBus.emit(EventTypes.ORDER_IMPROVED, {
         orderId: order.id,
@@ -520,10 +522,10 @@ export class OrderLifecycleManager {
   /**
    * Apply modifications to an order
    */
-  private async applyOrderModification(
+  private applyOrderModification(
     order: ManagedOrder,
     modification: OrderModification
-  ): Promise<void> {
+  ): void {
     const mut = order as Mutable<ManagedOrder>
     
     // Update order properties
@@ -591,7 +593,7 @@ export class OrderLifecycleManager {
   /**
    * Get current market conditions for position sizing
    */
-  private async getCurrentMarketConditions() {
+  private getCurrentMarketConditions(): ReturnType<typeof PositionSizingManager.assessMarketConditions> {
     // TODO: Get actual market data from data provider
     const currentPrice = 50000 // BTC price
     const recentPrices = Array.from({ length: 50 }, (_, i) => 
@@ -611,7 +613,7 @@ export class OrderLifecycleManager {
   /**
    * Get current price for a symbol
    */
-  private async getCurrentPrice(_symbol: string): Promise<number> {
+  private getCurrentPrice(_symbol: string): number {
     // TODO: Get actual price from market data provider
     // Will use _symbol parameter when market data provider is integrated
     return 50000 // BTC-USD price placeholder
@@ -620,7 +622,7 @@ export class OrderLifecycleManager {
   /**
    * Get current exposure across all positions
    */
-  private async getCurrentExposure(): Promise<number> {
+  private getCurrentExposure(): number {
     let totalExposure = 0
     for (const order of this.activeOrders.values()) {
       if (this.orderStateMachine.isActiveState(order.state)) {
@@ -633,7 +635,15 @@ export class OrderLifecycleManager {
   /**
    * Get historical performance metrics
    */
-  private async getHistoricalMetrics() {
+  private getHistoricalMetrics(): {
+    avgWinRate: number
+    avgRiskReward: number
+    maxConsecutiveLosses: number
+    currentConsecutiveLosses: number
+    sharpeRatio: number
+    maxDrawdown: number
+    profitFactor: number
+  } {
     // TODO: Get actual metrics from performance tracker
     return {
       avgWinRate: 0.6,
@@ -725,16 +735,16 @@ export class OrderLifecycleManager {
    * Removes order from active orders map.
    * Emits error event if transition fails.
    */
-  private async handleTimeConstraintViolation(
+  private handleTimeConstraintViolation(
     order: ManagedOrder,
     violationType: string
-  ): Promise<void> {
+  ): void {
     if (!this.orderStateMachine.isActiveState(order.state)) {
       return
     }
 
     try {
-      await this.orderStateMachine.transition(
+      this.orderStateMachine.transition(
         order,
         EnhancedOrderState.EXPIRED,
         `Time constraint violation: ${violationType}`
@@ -763,20 +773,26 @@ export class OrderLifecycleManager {
    */
   private setupEventHandlers(): void {
     // Handle order fills
-    this.eventBus.subscribe(EventTypes.ORDER_FILL, (data: any) => {
-      this.handleOrderFill(data.orderId, data.fill)
+    this.eventBus.subscribe(EventTypes.ORDER_FILL, (data: unknown) => {
+      const fillData = data as { orderId?: string, fill?: OrderFill }
+      if (typeof fillData.orderId === 'string' && fillData.fill) {
+        this.handleOrderFill(fillData.orderId, fillData.fill)
+      }
     })
 
     // Handle partial fills
-    this.eventBus.subscribe(EventTypes.ORDER_PARTIAL_FILL, (data: any) => {
-      this.handlePartialFill(data.orderId, data.fill)
+    this.eventBus.subscribe(EventTypes.ORDER_PARTIAL_FILL, (data: unknown) => {
+      const fillData = data as { orderId?: string, fill?: OrderFill }
+      if (typeof fillData.orderId === 'string' && fillData.fill) {
+        this.handlePartialFill(fillData.orderId, fillData.fill)
+      }
     })
   }
 
   /**
    * Handle order fill events
    */
-  private async handleOrderFill(orderId: string, fill: OrderFill): Promise<void> {
+  private handleOrderFill(orderId: string, fill: OrderFill): void {
     const order = this.activeOrders.get(orderId)
     if (!order) return
 
@@ -794,7 +810,7 @@ export class OrderLifecycleManager {
 
     // Check if completely filled
     if (order.filledSize >= order.size) {
-      await this.orderStateMachine.transition(order, EnhancedOrderState.FILLED)
+      this.orderStateMachine.transition(order, EnhancedOrderState.FILLED)
       
       // Check circuit breaker on completion
       const isSuccess = order.state === EnhancedOrderState.FILLED
@@ -803,15 +819,15 @@ export class OrderLifecycleManager {
       
       this.activeOrders.delete(orderId)
     } else {
-      await this.orderStateMachine.transition(order, EnhancedOrderState.PARTIALLY_FILLED)
+      this.orderStateMachine.transition(order, EnhancedOrderState.PARTIALLY_FILLED)
     }
   }
 
   /**
    * Handle partial fill events
    */
-  private async handlePartialFill(orderId: string, fill: any): Promise<void> {
-    await this.handleOrderFill(orderId, fill)
+  private handlePartialFill(orderId: string, fill: OrderFill): void {
+    this.handleOrderFill(orderId, fill)
   }
 
   /**
@@ -876,7 +892,7 @@ export class OrderLifecycleManager {
    * console.log(`Average slippage: ${stats.avgSlippage.toFixed(3)}%`)
    * ```
    */
-  getExecutionStatistics(timeWindowMs?: number) {
+  getExecutionStatistics(timeWindowMs?: number): ReturnType<typeof this.executionMonitor.getExecutionStatistics> {
     return this.executionMonitor.getExecutionStatistics(timeWindowMs)
   }
 
@@ -894,7 +910,7 @@ export class OrderLifecycleManager {
    * console.log(`Reasoning: ${recommendation.reasoning}`)
    * ```
    */
-  getOrderTypeRecommendation(orderSize: number, side: 'buy' | 'sell') {
+  getOrderTypeRecommendation(orderSize: number, side: 'buy' | 'sell'): ReturnType<typeof this.executionMonitor.getAdaptiveOrderTypeRecommendation> {
     return this.executionMonitor.getAdaptiveOrderTypeRecommendation(orderSize, side)
   }
 
@@ -931,7 +947,7 @@ export class OrderLifecycleManager {
     const request: SignalRequest = {
       requestId: `req_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
       symbol,
-      currentPrice: await this.getCurrentPrice(symbol),
+      currentPrice: this.getCurrentPrice(symbol),
       timestamp: new Date()
     }
 
@@ -955,9 +971,9 @@ export class OrderLifecycleManager {
    * Updates agent weights based on prediction accuracy and P&L contribution.
    * Should be called after order is closed to improve future consensus quality.
    */
-  async updateAgentPerformance(orderId: string, profitable: boolean): Promise<void> {
+  updateAgentPerformance(orderId: string, profitable: boolean): void {
     const order = this.activeOrders.get(orderId)
-    if (!order || !order.metadata?.consensus) return
+    if (!order?.metadata?.consensus) return
 
     const consensus = order.metadata.consensus
     const pnl = this.calculateOrderPnL(order)
@@ -976,14 +992,14 @@ export class OrderLifecycleManager {
   /**
    * Get consensus manager configuration.
    */
-  getConsensusConfig() {
+  getConsensusConfig(): ReturnType<typeof this.consensusManager.getConfig> {
     return this.consensusManager.getConfig()
   }
 
   /**
    * Get agent performance metrics.
    */
-  getAgentPerformanceMetrics() {
+  getAgentPerformanceMetrics(): ReturnType<typeof this.consensusManager.getAgentPerformanceMetrics> {
     return this.consensusManager.getAgentPerformanceMetrics()
   }
 }

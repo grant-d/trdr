@@ -21,7 +21,7 @@ export abstract class BaseMarketDataFeed implements MarketDataPipeline {
   protected lastError?: string
   protected lastMessageTime?: Date
   protected startTime: Date | null = null
-  protected subscribedSymbols: Set<string> = new Set()
+  protected subscribedSymbols = new Set<string>()
 
   constructor(config: DataFeedConfig) {
     this.config = config
@@ -176,8 +176,9 @@ export abstract class BaseMarketDataFeed implements MarketDataPipeline {
   /**
    * Log debug message if debug mode is enabled
    */
-  protected debug(message: string, data?: any): void {
+  protected debug(message: string, data?: unknown): void {
     if (this.config.debug) {
+      // eslint-disable-next-line no-console
       console.debug(`[${this.config.feedType}] ${message}`, data)
     }
   }

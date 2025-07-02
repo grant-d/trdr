@@ -146,7 +146,7 @@ export class MACDIndicator implements IMultiValueIndicator<MACDResult, MACDConfi
   /**
    * Calculate all MACD components
    */
-  private calculateMACDData(candles: readonly Candle[]) {
+  private calculateMACDData(candles: readonly Candle[]): { macdValues: number[]; signalValues: number[]; histogramValues: number[] } | null {
     // Calculate fast and slow EMAs
     const fastEMAResults = this.fastEMA.calculateAll(candles)
     const slowEMAResults = this.slowEMA.calculateAll(candles)

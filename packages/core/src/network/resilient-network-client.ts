@@ -28,7 +28,7 @@ const DEFAULT_RETRY_CONFIG: RetryConfig = {
  */
 export class ResilientNetworkClient implements NetworkClient {
   private retryConfig: RetryConfig
-  private eventBus: EventBus
+  private readonly eventBus: EventBus
 
   constructor(retryConfig?: Partial<RetryConfig>) {
     this.retryConfig = { ...DEFAULT_RETRY_CONFIG, ...retryConfig }

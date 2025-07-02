@@ -110,15 +110,15 @@ export class OrderStateMachine {
    * 
    * @example
    * ```typescript
-   * await stateMachine.transition(order, EnhancedOrderState.SUBMITTED)
-   * await stateMachine.transition(order, EnhancedOrderState.CANCELLED, 'User requested')
+   * stateMachine.transition(order, EnhancedOrderState.SUBMITTED)
+   * stateMachine.transition(order, EnhancedOrderState.CANCELLED, 'User requested')
    * ```
    */
-  async transition(
+  transition(
     order: ManagedOrder,
     newState: EnhancedOrderState,
     reason?: string
-  ): Promise<void> {
+  ): void {
     // Validate transition is allowed
     if (!this.canTransition(order.state, newState)) {
       throw new Error(

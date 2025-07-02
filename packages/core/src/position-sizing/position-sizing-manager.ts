@@ -20,7 +20,7 @@ import { EventTypes } from '../events/types'
  * market conditions and performance metrics.
  */
 export class PositionSizingManager {
-  private readonly strategies: Map<string, IPositionSizingStrategy> = new Map()
+  private readonly strategies = new Map<string, IPositionSizingStrategy>()
   private readonly config: PositionSizingConfig
   private readonly eventBus: EventBus
   private currentStrategy: string
@@ -308,8 +308,8 @@ export class PositionSizingManager {
    */
   static createRiskParameters(
     accountBalance: number,
-    currentExposure: number = 0,
-    openPositions: number = 0
+    currentExposure = 0,
+    openPositions = 0
   ): RiskParameters {
     return {
       accountBalance,

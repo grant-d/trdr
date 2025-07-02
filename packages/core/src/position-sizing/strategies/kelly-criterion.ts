@@ -31,8 +31,8 @@ export class KellyCriterionStrategy implements IPositionSizingStrategy {
    * @param maxKellyFraction - Maximum allowed Kelly fraction (default: 0.25)
    */
   constructor(
-    kellySafetyFactor: number = 0.25,
-    maxKellyFraction: number = 0.25
+    kellySafetyFactor = 0.25,
+    maxKellyFraction = 0.25
   ) {
     this.kellySafetyFactor = kellySafetyFactor
     this.maxKellyFraction = maxKellyFraction
@@ -169,7 +169,7 @@ export class KellyCriterionStrategy implements IPositionSizingStrategy {
     }
   }
   
-  getDefaultParams(): Record<string, any> {
+  getDefaultParams(): Record<string, unknown> {
     return {
       kellySafetyFactor: this.kellySafetyFactor,
       maxKellyFraction: this.maxKellyFraction

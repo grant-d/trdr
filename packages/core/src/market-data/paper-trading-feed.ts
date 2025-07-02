@@ -86,7 +86,7 @@ export interface SimulatedExecution {
  * Combines real market data with realistic execution simulation and enhanced event features
  */
 export class PaperTradingFeed extends EnhancedMarketDataFeed {
-  private baseFeed: CoinbaseDataFeed
+  private readonly baseFeed: CoinbaseDataFeed
   private readonly slippage: number
   private readonly executionDelay: number
   private readonly maxPriceImpact: number
@@ -94,9 +94,9 @@ export class PaperTradingFeed extends EnhancedMarketDataFeed {
   private readonly acceleratedTime: boolean
   private readonly enableCustomScenarios: boolean
   private timeAcceleration: number
-  private activeScenarios: Map<string, MarketScenario> = new Map()
-  private currentPrices: Map<string, number> = new Map()
-  protected priceHistory: Map<string, Array<{ price: number; time: Date }>> = new Map()
+  private readonly activeScenarios = new Map<string, MarketScenario>()
+  private readonly currentPrices = new Map<string, number>()
+  protected priceHistory = new Map<string, Array<{ price: number; time: Date }>>()
 
   constructor(config: PaperTradingConfig) {
     super(config)
@@ -307,12 +307,12 @@ export class PaperTradingFeed extends EnhancedMarketDataFeed {
    */
   private setupBaseFeedSubscriptions(): void {
     // Subscribe to candle events from base feed
-    this.eventBus.subscribe(EventTypes.MARKET_CANDLE, (data: any) => {
+    this.eventBus.subscribe(EventTypes.MARKET_CANDLE, (data: unknown) => {
       this.handleBaseFeedCandle(data)
     })
 
     // Subscribe to tick events from base feed
-    this.eventBus.subscribe(EventTypes.MARKET_TICK, (data: any) => {
+    this.eventBus.subscribe(EventTypes.MARKET_TICK, (data: unknown) => {
       this.handleBaseFeedTick(data)
     })
   }
@@ -320,20 +320,22 @@ export class PaperTradingFeed extends EnhancedMarketDataFeed {
   /**
    * Handle candle events from base feed
    */
-  private handleBaseFeedCandle(data: any): void {
+  private handleBaseFeedCandle(data: unknown): void {
+    const candleData = data as { symbol: string; interval?: string; [key: string]: unknown }
     // Apply market scenarios and re-emit
-    const adjustedCandle = this.applyScenarioToCandle(data)
+    const adjustedCandle = this.applyScenarioToCandle(candleData)
 
     // Emit enhanced candle event
-    this.emitEnhancedCandle(adjustedCandle, data.symbol, data.interval || '1m')
+    this.emitEnhancedCandle(adjustedCandle, candleData.symbol, candleData.interval || '1m')
   }
 
   /**
    * Handle tick events from base feed
    */
-  private handleBaseFeedTick(data: any): void {
-    const symbol = data.symbol
-    const adjustedPrice = this.applyMarketScenarios(symbol, data.price)
+  private handleBaseFeedTick(data: unknown): void {
+    const tickData = data as { symbol: string; price: number; timestamp: Date; volume?: number }
+    const symbol = tickData.symbol
+    const adjustedPrice = this.applyMarketScenarios(symbol, tickData.price)
 
     // Update price tracking
     this.currentPrices.set(symbol, adjustedPrice)
@@ -343,8 +345,8 @@ export class PaperTradingFeed extends EnhancedMarketDataFeed {
     this.emitEnhancedTick({
       symbol,
       price: adjustedPrice,
-      timestamp: data.timestamp,
-      volume: data.volume,
+      timestamp: tickData.timestamp.getTime(),
+      volume: tickData.volume,
     })
   }
 
@@ -382,17 +384,27 @@ export class PaperTradingFeed extends EnhancedMarketDataFeed {
   /**
    * Apply scenario effects to candle data
    */
-  private applyScenarioToCandle(candle: any): any {
+  private applyScenarioToCandle(candle: Record<string, unknown>): Candle {
+    const candleData = candle as { 
+      symbol: string; 
+      open: number; 
+      high: number; 
+      low: number; 
+      close: number;
+      timestamp: number;
+      volume: number;
+    }
+    
     if (!this.enableCustomScenarios) {
-      return candle
+      return candleData as Candle
     }
 
     return {
-      ...candle,
-      open: this.applyMarketScenarios(candle.symbol, candle.open),
-      high: this.applyMarketScenarios(candle.symbol, candle.high),
-      low: this.applyMarketScenarios(candle.symbol, candle.low),
-      close: this.applyMarketScenarios(candle.symbol, candle.close),
+      ...candleData,
+      open: this.applyMarketScenarios(candleData.symbol, candleData.open),
+      high: this.applyMarketScenarios(candleData.symbol, candleData.high),
+      low: this.applyMarketScenarios(candleData.symbol, candleData.low),
+      close: this.applyMarketScenarios(candleData.symbol, candleData.close),
     }
   }
 

@@ -1,4 +1,4 @@
-import { ConnectionManager } from '../db/connection-manager'
+import type { ConnectionManager } from '../db/connection-manager'
 import type Database from 'better-sqlite3'
 
 /**
@@ -39,7 +39,7 @@ export abstract class BaseRepository<T> {
 
       const stmt = db.prepare(sql)
       for (const record of records) {
-        const values = fields.map(field => (record as any)[field])
+        const values = fields.map(field => (record as Record<string, unknown>)[field])
         stmt.run(...values)
       }
     })
@@ -51,7 +51,7 @@ export abstract class BaseRepository<T> {
   protected async update(
     data: Partial<T>,
     where: string,
-    whereParams: any[] = [],
+    whereParams: unknown[] = [],
   ): Promise<void> {
     const fields = Object.keys(data)
     const setClause = fields.map(field => `${field} = ?`).join(', ')
@@ -64,7 +64,7 @@ export abstract class BaseRepository<T> {
   /**
    * Delete records
    */
-  protected async delete(where: string, params: any[] = []): Promise<void> {
+  protected async delete(where: string, params: unknown[] = []): Promise<void> {
     const sql = `DELETE FROM ${this.tableName} WHERE ${where}`
     await this.connectionManager.execute(sql, params)
   }
@@ -72,7 +72,7 @@ export abstract class BaseRepository<T> {
   /**
    * Find one record
    */
-  protected async findOne(where: string, params: any[] = []): Promise<T | null> {
+  protected async findOne(where: string, params: unknown[] = []): Promise<T | null> {
     const sql = `SELECT * FROM ${this.tableName} WHERE ${where} LIMIT 1`
     const results = await this.connectionManager.query<T>(sql, params)
     return results[0] || null
@@ -83,7 +83,7 @@ export abstract class BaseRepository<T> {
    */
   protected async findMany(
     where?: string,
-    params: any[] = [],
+    params: unknown[] = [],
     orderBy?: string,
     limit?: number,
     offset?: number,
@@ -112,7 +112,7 @@ export abstract class BaseRepository<T> {
   /**
    * Count records
    */
-  protected async count(where?: string, params: any[] = []): Promise<number> {
+  protected async count(where?: string, params: unknown[] = []): Promise<number> {
     let sql = `SELECT COUNT(*) as count FROM ${this.tableName}`
 
     if (where) {
@@ -126,7 +126,7 @@ export abstract class BaseRepository<T> {
   /**
    * Execute raw query
    */
-  protected async query<R = any>(sql: string, params: any[] = []): Promise<R[]> {
+  protected async query<R = unknown>(sql: string, params: unknown[] = []): Promise<R[]> {
     return this.connectionManager.query<R>(sql, params)
   }
 

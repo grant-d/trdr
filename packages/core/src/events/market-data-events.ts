@@ -160,7 +160,7 @@ export class EventSerializer {
   /**
    * Serialize event to JSON string with proper date handling
    */
-  static serialize(event: any): string {
+  static serialize(event: unknown): string {
     // Pre-process the object to handle Dates before JSON.stringify
     const processedEvent = this.preprocessForSerialization(event)
     return JSON.stringify(processedEvent, (_key, value) => {
@@ -172,6 +172,7 @@ export class EventSerializer {
           stack: value.stack,
         }
       }
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
       return value
     })
   }
@@ -179,7 +180,7 @@ export class EventSerializer {
   /**
    * Pre-process object to handle Date objects
    */
-  private static preprocessForSerialization(obj: any): any {
+  private static preprocessForSerialization(obj: unknown): unknown {
     if (obj instanceof Date) {
       return { __type: 'Date', value: obj.toISOString() }
     }
@@ -192,10 +193,10 @@ export class EventSerializer {
       }
     }
     if (Array.isArray(obj)) {
-      return obj.map(item => this.preprocessForSerialization(item))
+      return obj.map((item: unknown) => this.preprocessForSerialization(item))
     }
     if (obj && typeof obj === 'object') {
-      const processed: any = {}
+      const processed: Record<string, unknown> = {}
       for (const [key, value] of Object.entries(obj)) {
         processed[key] = this.preprocessForSerialization(value)
       }
@@ -207,7 +208,7 @@ export class EventSerializer {
   /**
    * Deserialize event from JSON string with proper date reconstruction
    */
-  static deserialize<T = any>(json: string): T {
+  static deserialize<T = unknown>(json: string): T {
     return JSON.parse(json, (_key, value) => {
       if (value && typeof value === 'object') {
         if (value.__type === 'Date') {
@@ -220,14 +221,15 @@ export class EventSerializer {
           return error
         }
       }
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
       return value
-    })
+    }) as T
   }
 
   /**
    * Create a serializable snapshot of event data
    */
-  static createSnapshot(event: any): any {
+  static createSnapshot(event: Record<string, unknown>): Record<string, unknown> {
     const snapshot = { ...event }
 
     // Ensure timestamp is serializable
@@ -313,7 +315,7 @@ export class EventCompressor {
   /**
    * Detect if events can be compressed based on time window
    */
-  static canCompress(events: EnhancedMarketDataEvent[], windowMs: number = 1000): boolean {
+  static canCompress(events: EnhancedMarketDataEvent[], windowMs = 1000): boolean {
     if (events.length < 2) return false
 
     const lastEvent = events[events.length - 1]

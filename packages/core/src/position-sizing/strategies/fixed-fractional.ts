@@ -23,7 +23,7 @@ export class FixedFractionalStrategy implements IPositionSizingStrategy {
    * Creates a new Fixed Fractional strategy
    * @param riskPercentage - Percentage of account to risk per trade (default: 0.01 = 1%)
    */
-  constructor(riskPercentage: number = 0.01) {
+  constructor(riskPercentage = 0.01) {
     this.riskPercentage = riskPercentage
   }
   
@@ -149,7 +149,7 @@ export class FixedFractionalStrategy implements IPositionSizingStrategy {
     }
   }
   
-  getDefaultParams(): Record<string, any> {
+  getDefaultParams(): Record<string, unknown> {
     return {
       riskPercentage: this.riskPercentage
     }

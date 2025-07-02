@@ -31,8 +31,8 @@ export interface BacktestConfig extends EnhancedDataFeedConfig {
  * Provides controlled time simulation with advanced event filtering and priority handling
  */
 export class BacktestDataFeed extends EnhancedMarketDataFeed {
-  private data: Map<string, Candle[]> = new Map()
-  private currentIndices: Map<string, number> = new Map()
+  private readonly data = new Map<string, Candle[]>()
+  private readonly currentIndices = new Map<string, number>()
   private replayTimer: NodeJS.Timeout | null = null
   private isReplaying = false
   private speed: number
@@ -96,6 +96,7 @@ export class BacktestDataFeed extends EnhancedMarketDataFeed {
     this.connected = false
     this.emitDisconnected('Manual stop')
     this.emitConnectionStatus('disconnected')
+    await Promise.resolve()
   }
 
   /**
@@ -135,6 +136,7 @@ export class BacktestDataFeed extends EnhancedMarketDataFeed {
         this.replayTimer = null
       }
     }
+    await Promise.resolve()
   }
 
   /**
@@ -144,7 +146,7 @@ export class BacktestDataFeed extends EnhancedMarketDataFeed {
     this.debug('Fetching historical data', request)
 
     await this.simulateNetworkDelay()
-    await this.simulateFailure()
+    this.simulateFailure()
 
     const symbolData = this.data.get(request.symbol)
     if (!symbolData) {
@@ -172,7 +174,7 @@ export class BacktestDataFeed extends EnhancedMarketDataFeed {
     this.debug('Fetching current price for', symbol)
 
     await this.simulateNetworkDelay()
-    await this.simulateFailure()
+    this.simulateFailure()
 
     const symbolData = this.data.get(symbol)
     const currentIndex = this.currentIndices.get(symbol) || 0
@@ -242,6 +244,7 @@ export class BacktestDataFeed extends EnhancedMarketDataFeed {
     })
 
     this.debug(`Seeked to time: ${time.toISOString()}`)
+    await Promise.resolve()
   }
 
   /**
@@ -272,6 +275,7 @@ export class BacktestDataFeed extends EnhancedMarketDataFeed {
     }
 
     this.debug(`Loaded data for ${symbols.length} symbols`)
+    await Promise.resolve()
   }
 
   /**
@@ -390,6 +394,7 @@ export class BacktestDataFeed extends EnhancedMarketDataFeed {
         timestamp: new Date(),
       })
     }
+    await Promise.resolve()
   }
 
   /**
@@ -405,10 +410,9 @@ export class BacktestDataFeed extends EnhancedMarketDataFeed {
   /**
    * Simulate random network failures
    */
-  private async simulateFailure(): Promise<void> {
+  private simulateFailure(): void {
     if (this.failureRate > 0 && Math.random() < this.failureRate) {
       throw new Error('Simulated network failure')
     }
   }
-
 }

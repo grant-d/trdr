@@ -1,7 +1,8 @@
 import { BaseRepository } from './base-repository'
-import { AgentType, type IsoDate, toIsoDate } from '@trdr/shared'
-import { ConnectionManager } from '../db/connection-manager'
-import { AgentSignal } from '../types/agents'
+import type { AgentType} from '@trdr/shared'
+import { type IsoDate, toIsoDate } from '@trdr/shared'
+import type { ConnectionManager } from '../db/connection-manager'
+import type { AgentSignal } from '../types/agents'
 
 /**
  * Database agent decision dto
@@ -14,8 +15,8 @@ interface AgentDecisionDto {
   action: string
   confidence: number
   trail_distance?: number
-  reasoning: any
-  market_context?: any
+  reasoning: unknown
+  market_context?: unknown
   timestamp: IsoDate
   created_at: IsoDate
 }
@@ -46,7 +47,7 @@ interface AgentConsensusDto {
   decision: string
   confidence: number
   dissent: number
-  votes: any
+  votes: unknown
   timestamp: IsoDate
   created_at: IsoDate
 }
@@ -58,8 +59,8 @@ export interface AgentCheckpoint {
   readonly id: string
   readonly type: string
   readonly version: number
-  readonly state: Record<string, any>
-  readonly metadata?: Record<string, any>
+  readonly state: Record<string, unknown>
+  readonly metadata?: Record<string, unknown>
   readonly createdAt: Date
 }
 
@@ -70,8 +71,8 @@ interface CheckpointDto {
   id: string
   type: string
   version: number
-  state: any
-  metadata?: any
+  state: unknown
+  metadata?: unknown
   created_at: IsoDate
 }
 
@@ -80,8 +81,8 @@ interface CheckpointDto {
  */
 export class AgentRepository extends BaseRepository<AgentDecisionDto> {
   protected readonly tableName = 'agent_decisions'
-  private consensusTableName = 'agent_consensus'
-  private checkpointsTableName = 'checkpoints'
+  private readonly consensusTableName = 'agent_consensus'
+  private readonly checkpointsTableName = 'checkpoints'
 
   constructor(connectionManager: ConnectionManager) {
     super(connectionManager)
@@ -136,7 +137,7 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
     limit?: number,
   ): Promise<AgentSignal[]> {
     const whereParts: string[] = []
-    const params: any[] = []
+    const params: unknown[] = []
 
     if (agentId) {
       whereParts.push('agent_id = ?')
@@ -161,7 +162,7 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
     const where = whereParts.length > 0 ? whereParts.join(' AND ') : undefined
     const models = await this.findMany(where, params, 'timestamp DESC', limit)
 
-    return models.map(this.dtoToDecision)
+    return models.map(model => this.dtoToDecision(model))
   }
 
   /**
@@ -195,7 +196,7 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
     limit?: number,
   ): Promise<AgentConsensus[]> {
     let sql = `SELECT * FROM ${this.consensusTableName} WHERE symbol = ?`
-    const params: any[] = [symbol]
+    const params: unknown[] = [symbol]
 
     if (startTime) {
       sql += ' AND timestamp >= ?'
@@ -214,7 +215,7 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
     }
 
     const models = await this.query<AgentConsensusDto>(sql, params)
-    return models.map(this.dtoToConsensus)
+    return models.map(model => this.dtoToConsensus(model))
   }
 
   /**
@@ -267,10 +268,10 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
    */
   async listCheckpoints(
     type?: string,
-    limit: number = 10,
+    limit = 10,
   ): Promise<AgentCheckpoint[]> {
     let sql = `SELECT * FROM ${this.checkpointsTableName}`
-    const params: any[] = []
+    const params: unknown[] = []
 
     if (type) {
       sql += ' WHERE type = ?'
@@ -280,7 +281,7 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
     sql += ` ORDER BY created_at DESC LIMIT ${limit}`
 
     const models = await this.query<CheckpointDto>(sql, params)
-    return models.map(this.dtoToCheckpoint)
+    return models.map(model => this.dtoToCheckpoint(model))
   }
 
   /**
@@ -288,7 +289,7 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
    */
   async getAgentStats(
     agentId: string,
-    days: number = 30,
+    days = 30,
   ): Promise<{
     totalDecisions: number
     avgConfidence: number
@@ -343,7 +344,7 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
   /**
    * Cleanup old data
    */
-  async cleanup(daysToKeep: number = 90): Promise<{
+  async cleanup(daysToKeep = 90): Promise<{
     decisionsDeleted: number
     consensusDeleted: number
     checkpointsDeleted: number
@@ -397,8 +398,8 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
       action: model.action as 'TRAIL_BUY' | 'TRAIL_SELL' | 'HOLD',
       confidence: model.confidence,
       trailDistance: model.trail_distance || 0,
-      reasoning: JSON.parse(model.reasoning),
-      marketContext: model.market_context ? JSON.parse(model.market_context) : undefined,
+      reasoning: JSON.parse(model.reasoning as string) as Record<string, unknown>,
+      marketContext: model.market_context ? JSON.parse(model.market_context as string) as Record<string, unknown> : undefined,
       timestamp: new Date(model.timestamp),
     }
   }
@@ -413,7 +414,7 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
       decision: model.decision as 'buy' | 'sell' | 'hold',
       confidence: model.confidence,
       dissent: model.dissent,
-      votes: JSON.parse(model.votes),
+      votes: JSON.parse(model.votes as string) as Array<{ agentId: string; action: string; confidence: number }>,
       timestamp: new Date(model.timestamp),
     }
   }
@@ -426,8 +427,8 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
       id: model.id,
       type: model.type,
       version: model.version,
-      state: JSON.parse(model.state),
-      metadata: model.metadata ? JSON.parse(model.metadata) : undefined,
+      state: JSON.parse(model.state as string) as Record<string, unknown>,
+      metadata: model.metadata ? JSON.parse(model.metadata as string) as Record<string, unknown> : undefined,
       createdAt: new Date(model.created_at),
     }
   }

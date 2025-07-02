@@ -80,7 +80,7 @@ describe('OrderLifecycleManager', () => {
     it('should reject order with size too small', async () => {
       // Mock the calculateOrderSize to return a very small value
       const originalCalculateOrderSize = manager['calculateOrderSize']
-      manager['calculateOrderSize'] = async () => 50 // Below minOrderSize of 100
+      manager['calculateOrderSize'] = () => 50 // Below minOrderSize of 100
 
       const eventHandler = mock.fn()
       eventBus.subscribe('order.size.too.small', eventHandler)
@@ -96,20 +96,20 @@ describe('OrderLifecycleManager', () => {
   })
 
   describe('Position Sizing', () => {
-    it('should calculate Kelly size correctly', async () => {
-      const size = await manager.calculateOrderSize(mockConsensus)
+    it('should calculate Kelly size correctly', () => {
+      const size = manager.calculateOrderSize(mockConsensus)
 
       assert.ok(size > 0)
       assert.ok(size >= config.minOrderSize)
       assert.ok(size <= config.maxOrderSize)
     })
 
-    it('should apply confidence adjustment', async () => {
+    it('should apply confidence adjustment', () => {
       const highConfidenceConsensus = { ...mockConsensus, confidence: 0.9 }
       const lowConfidenceConsensus = { ...mockConsensus, confidence: 0.65 }
 
-      const highSize = await manager.calculateOrderSize(highConfidenceConsensus)
-      const lowSize = await manager.calculateOrderSize(lowConfidenceConsensus)
+      const highSize = manager.calculateOrderSize(highConfidenceConsensus)
+      const lowSize = manager.calculateOrderSize(lowConfidenceConsensus)
 
       // Higher confidence should generally result in larger position
       // (though other factors may influence the final size)
@@ -143,7 +143,7 @@ describe('OrderLifecycleManager', () => {
 
     it('should reject cancellation of non-existent order', async () => {
       await assert.rejects(
-        () => manager.cancelOrder('non-existent-id'),
+        async () => manager.cancelOrder('non-existent-id'),
         /Order non-existent-id not found/
       )
     })
@@ -158,7 +158,7 @@ describe('OrderLifecycleManager', () => {
       submittedOrder.state = EnhancedOrderState.FILLED
 
       await assert.rejects(
-        () => manager.cancelOrder(submittedOrder.id),
+        async () => manager.cancelOrder(submittedOrder.id),
         /Cannot cancel order.*in state FILLED/
       )
     })

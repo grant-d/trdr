@@ -24,7 +24,7 @@ export class OrderExecutionMonitor {
   private recentLosses: Array<{ amount: number; timestamp: Date }> = []
   
   // Execution history for adaptive algorithms
-  private executionHistory: Map<string, OrderExecutionMetrics> = new Map()
+  private readonly executionHistory = new Map<string, OrderExecutionMetrics>()
   
   /**
    * Creates a new OrderExecutionMonitor instance.

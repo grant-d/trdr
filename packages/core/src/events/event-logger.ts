@@ -10,7 +10,7 @@ export interface EventLogEntry<T extends EventData = EventData> {
   readonly type: EventType
   readonly timestamp: Date
   readonly data: T
-  readonly metadata?: Record<string, any>
+  readonly metadata?: Record<string, unknown>
 }
 
 /**
@@ -36,7 +36,7 @@ export class EventLogger {
   private events: EventLogEntry[] = []
   private isRecording = false
   private eventCounter = 0
-  private subscriptions: Map<EventType, any> = new Map()
+  private readonly subscriptions = new Map<EventType, { unsubscribe: () => void }>()
 
   /**
    * Start recording events
@@ -157,8 +157,7 @@ export class EventLogger {
     const startTime = firstEvent.timestamp.getTime()
     const replayStartTime = timeSourceManager.nowMs()
 
-    for (let i = 0; i < events.length; i++) {
-      const event = events[i]
+    for (const event of events) {
       if (!event) continue
 
       const eventOffset = event.timestamp.getTime() - startTime
@@ -187,16 +186,19 @@ export class EventLogger {
    * Import events from JSON
    */
   importFromJSON(json: string): void {
-    const parsed = JSON.parse(json)
+    const parsed = JSON.parse(json) as unknown
     if (!Array.isArray(parsed)) {
       throw new Error('Invalid event log format')
     }
 
     // Convert date strings back to Date objects
-    this.events = parsed.map(entry => ({
-      ...entry,
-      timestamp: new Date(entry.timestamp),
-    }))
+    this.events = parsed.map(entry => {
+      const eventEntry = entry as { timestamp: string; [key: string]: unknown }
+      return {
+        ...eventEntry,
+        timestamp: new Date(eventEntry.timestamp),
+      } as EventLogEntry
+    })
 
     // Update event counter
     this.eventCounter = this.events.length

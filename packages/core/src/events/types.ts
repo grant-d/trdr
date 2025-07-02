@@ -8,7 +8,7 @@ export type EventType = string
  */
 export interface EventData {
   readonly timestamp: Date
-  [key: string]: any
+  [key: string]: unknown
 }
 
 /**
@@ -96,7 +96,7 @@ export interface AgentSignalEvent extends EventData {
   readonly action: 'TRAIL_BUY' | 'TRAIL_SELL' | 'HOLD'
   readonly confidence: number
   readonly trailDistance: number
-  readonly reasoning: Record<string, any>
+  readonly reasoning: Record<string, unknown>
 }
 
 export interface AgentConsensusEvent extends EventData {
@@ -113,7 +113,7 @@ export interface AgentConsensusEvent extends EventData {
 // System events
 export interface SystemStartEvent extends EventData {
   readonly mode: 'live' | 'paper' | 'backtest'
-  readonly config: Record<string, any>
+  readonly config: Record<string, unknown>
 }
 
 export interface SystemStopEvent extends EventData {
@@ -130,7 +130,7 @@ export interface ErrorEvent extends EventData {
 export interface SystemInfoEvent extends EventData {
   readonly message: string
   readonly context: string
-  readonly details?: Record<string, any>
+  readonly details?: Record<string, unknown>
 }
 
 // Event type constants

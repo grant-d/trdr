@@ -100,7 +100,7 @@ export interface AgentSignal {
   /** Recommended trail distance as percentage */
   readonly trailDistance: number
   /** Detailed reasoning for the signal */
-  readonly reasoning: Record<string, any>
+  readonly reasoning: Record<string, unknown>
   /** Signal urgency level */
   readonly urgency?: 'low' | 'medium' | 'high'
 }

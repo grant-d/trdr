@@ -1,4 +1,4 @@
-import { OrderBase } from '@trdr/shared'
+import type { OrderBase } from '@trdr/shared'
 
 /**
  * Flattened order interface for database storage.
@@ -32,7 +32,7 @@ export interface Order extends Omit<OrderBase, 'createdAt' | 'updatedAt'> {
   /** Agent that created this order */
   readonly agentId?: string
   /** Additional metadata */
-  readonly metadata?: Record<string, any>
+  readonly metadata?: Record<string, unknown>
   /** When the order was submitted to exchange */
   readonly submittedAt?: Date
   /** When the order was completely filled */

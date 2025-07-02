@@ -26,16 +26,16 @@ export class MarketDataFilters {
   /**
    * Filter events by symbol
    */
-  static bySymbol(symbols: string[]): EventFilter<any> {
+  static bySymbol(symbols: string[]): EventFilter<EventData & { symbol?: string }> {
     const symbolSet = new Set(symbols)
-    return (data: any) => !data.symbol || symbolSet.has(data.symbol)
+    return (data) => !data.symbol || symbolSet.has(data.symbol)
   }
 
   /**
    * Filter events by price range
    */
-  static byPriceRange(min: number, max: number): EventFilter<any> {
-    return (data: any) => {
+  static byPriceRange(min: number, max: number): EventFilter<EventData & { price?: number }> {
+    return (data) => {
       if (typeof data.price !== 'number') return true
       return data.price >= min && data.price <= max
     }
@@ -44,8 +44,8 @@ export class MarketDataFilters {
   /**
    * Filter events by volume threshold
    */
-  static byVolumeThreshold(minVolume: number): EventFilter<any> {
-    return (data: any) => {
+  static byVolumeThreshold(minVolume: number): EventFilter<EventData & { volume?: number }> {
+    return (data) => {
       if (typeof data.volume !== 'number') return true
       return data.volume >= minVolume
     }
@@ -54,8 +54,8 @@ export class MarketDataFilters {
   /**
    * Filter events by time range
    */
-  static byTimeRange(startTime: Date, endTime: Date): EventFilter<any> {
-    return (data: any) => {
+  static byTimeRange(startTime: Date, endTime: Date): EventFilter<EventData> {
+    return (data) => {
       const timestamp = data.timestamp
       if (!timestamp) return true
       const eventTime = timestamp instanceof Date ? timestamp : new Date(timestamp)
@@ -66,8 +66,8 @@ export class MarketDataFilters {
   /**
    * Filter tick events by price change threshold
    */
-  static byPriceChangeThreshold(threshold: number, lastPrices: Map<string, number>): EventFilter<any> {
-    return (data: any) => {
+  static byPriceChangeThreshold(threshold: number, lastPrices: Map<string, number>): EventFilter<EventData & { symbol?: string; price?: number }> {
+    return (data) => {
       if (!data.symbol || typeof data.price !== 'number') return true
 
       const lastPrice = lastPrices.get(data.symbol)
@@ -89,16 +89,16 @@ export class MarketDataFilters {
   /**
    * Filter candle events by interval
    */
-  static byInterval(intervals: string[]): EventFilter<any> {
+  static byInterval(intervals: string[]): EventFilter<EventData & { interval?: string }> {
     const intervalSet = new Set(intervals)
-    return (data: any) => !data.interval || intervalSet.has(data.interval)
+    return (data) => !data.interval || intervalSet.has(data.interval)
   }
 
   /**
    * Rate limit filter - only allow events at specified frequency
    */
-  static rateLimit(maxEventsPerSecond: number, eventTimes: Map<string, number[]>): EventFilter<any> {
-    return (data: any) => {
+  static rateLimit(maxEventsPerSecond: number, eventTimes: Map<string, number[]>): EventFilter<EventData & { symbol?: string }> {
+    return (data) => {
       const key = data.symbol || 'global'
       const now = Date.now()
 
@@ -138,22 +138,22 @@ export class SystemFilters {
   /**
    * Filter system events by severity
    */
-  static bySeverity(minSeverity: 'low' | 'medium' | 'high' | 'critical'): EventFilter<any> {
+  static bySeverity(minSeverity: 'low' | 'medium' | 'high' | 'critical'): EventFilter<EventData & { severity?: 'low' | 'medium' | 'high' | 'critical' }> {
     const severityLevels = { low: 1, medium: 2, high: 3, critical: 4 }
     const minLevel = severityLevels[minSeverity]
 
-    return (data: any) => {
+    return (data) => {
       if (!data.severity) return true
-      return severityLevels[data.severity as keyof typeof severityLevels] >= minLevel
+      return severityLevels[data.severity] >= minLevel
     }
   }
 
   /**
    * Filter events by context
    */
-  static byContext(contexts: string[]): EventFilter<any> {
+  static byContext(contexts: string[]): EventFilter<EventData & { context?: string }> {
     const contextSet = new Set(contexts)
-    return (data: any) => !data.context || contextSet.has(data.context)
+    return (data) => !data.context || contextSet.has(data.context)
   }
 }
 
@@ -164,16 +164,16 @@ export class TradingFilters {
   /**
    * Filter by order side
    */
-  static bySide(sides: Array<'buy' | 'sell'>): EventFilter<any> {
+  static bySide(sides: Array<'buy' | 'sell'>): EventFilter<EventData & { side?: 'buy' | 'sell' }> {
     const sideSet = new Set(sides)
-    return (data: any) => !data.side || sideSet.has(data.side)
+    return (data) => !data.side || sideSet.has(data.side)
   }
 
   /**
    * Filter by order size range
    */
-  static bySizeRange(min: number, max: number): EventFilter<any> {
-    return (data: any) => {
+  static bySizeRange(min: number, max: number): EventFilter<EventData & { size?: number }> {
+    return (data) => {
       if (typeof data.size !== 'number') return true
       return data.size >= min && data.size <= max
     }
@@ -182,9 +182,9 @@ export class TradingFilters {
   /**
    * Filter by order status
    */
-  static byStatus(statuses: string[]): EventFilter<any> {
+  static byStatus(statuses: string[]): EventFilter<EventData & { status?: string }> {
     const statusSet = new Set(statuses)
-    return (data: any) => !data.status || statusSet.has(data.status)
+    return (data) => !data.status || statusSet.has(data.status)
   }
 }
 

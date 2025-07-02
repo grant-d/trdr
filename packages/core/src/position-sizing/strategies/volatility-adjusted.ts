@@ -28,9 +28,9 @@ export class VolatilityAdjustedStrategy implements IPositionSizingStrategy {
    * @param maxVolatilityMultiplier - Maximum volatility adjustment multiplier (default: 3)
    */
   constructor(
-    baseRiskPercentage: number = 0.01,
-    volatilityLookback: number = 20,
-    maxVolatilityMultiplier: number = 3
+    baseRiskPercentage = 0.01,
+    volatilityLookback = 20,
+    maxVolatilityMultiplier = 3
   ) {
     this.baseRiskPercentage = baseRiskPercentage
     this.volatilityLookback = volatilityLookback
@@ -175,7 +175,7 @@ export class VolatilityAdjustedStrategy implements IPositionSizingStrategy {
     }
   }
   
-  getDefaultParams(): Record<string, any> {
+  getDefaultParams(): Record<string, unknown> {
     return {
       baseRiskPercentage: this.baseRiskPercentage,
       volatilityLookback: this.volatilityLookback,

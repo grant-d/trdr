@@ -7,7 +7,7 @@ import { EventBus } from './event-bus'
  */
 export interface FilteredEventSubscription extends EventSubscription {
   /** Update the filter for this subscription */
-  updateFilter(filter: EventFilter<any>): void
+  updateFilter(filter: EventFilter<EventData>): void
   /** Get current filter status */
   hasFilter(): boolean
 }
@@ -37,19 +37,19 @@ interface GlobalFilterConfig<T extends EventData> {
  */
 export class EnhancedEventBus {
   private static enhancedInstance: EnhancedEventBus
-  private baseEventBus: EventBus
-  private enhancedHandlers: Map<EventType, EnhancedHandlerWrapper<any>[]> = new Map()
-  private globalFilters: Map<EventType, GlobalFilterConfig<any>[]> = new Map()
-  private eventMetrics: Map<EventType, {
+  private readonly baseEventBus: EventBus
+  private readonly enhancedHandlers = new Map<EventType, EnhancedHandlerWrapper<EventData>[]>()
+  private readonly globalFilters = new Map<EventType, GlobalFilterConfig<EventData>[]>()
+  private readonly eventMetrics = new Map<EventType, {
     emitted: number
     filtered: number
     handled: number
     errors: number
     lastEmitted?: Date
-  }> = new Map()
+  }>()
   private isDebugging = false
   private subscriptionId = 0
-  private asyncPromises: Set<Promise<void>> = new Set()
+  private readonly asyncPromises = new Set<Promise<void>>()
 
   private constructor() {
     this.baseEventBus = EventBus.getInstance()
@@ -124,7 +124,7 @@ export class EnhancedEventBus {
     return {
       id: subscriptionId,
       eventType,
-      updateFilter: (newFilter: EventFilter<T>) => {
+      updateFilter: (newFilter: EventFilter<EventData>) => {
         wrapper.filter = newFilter
       },
       hasFilter: () => !!wrapper.filter,
@@ -231,7 +231,7 @@ export class EnhancedEventBus {
             return
           }
         } catch (error) {
-          this.debug(`Error in subscription filter: ${error}`)
+          this.debug(`Error in subscription filter: ${String(error)}`)
           // Emit error event for filter failures
           this.baseEventBus.emit('system.error', {
             timestamp: new Date(),
@@ -260,7 +260,7 @@ export class EnhancedEventBus {
   /**
    * Get event metrics
    */
-  getEventMetrics(eventType?: EventType): Map<EventType, any> | any {
+  getEventMetrics(eventType?: EventType): Map<EventType, { emitted: number; filtered: number; handled: number; errors: number; lastEmitted?: Date }> | { emitted: number; filtered: number; handled: number; errors: number; lastEmitted?: Date } {
     if (eventType) {
       return this.eventMetrics.get(eventType) || {
         emitted: 0,
@@ -293,7 +293,7 @@ export class EnhancedEventBus {
   /**
    * Get all active global filters
    */
-  getGlobalFilters(): Map<EventType, GlobalFilterConfig<any>[]> {
+  getGlobalFilters(): Map<EventType, GlobalFilterConfig<EventData>[]> {
     return new Map(this.globalFilters)
   }
 
@@ -345,7 +345,7 @@ export class EnhancedEventBus {
       try {
         return filterConfig.filter(data)
       } catch (error) {
-        this.debug(`Error in global filter ${filterConfig.name}: ${error}`)
+        this.debug(`Error in global filter ${filterConfig.name}: ${String(error)}`)
         // Emit error event for filter failures
         this.baseEventBus.emit('system.error', {
           timestamp: new Date(),
@@ -412,7 +412,7 @@ export class EnhancedEventBus {
   /**
    * Safe error handling
    */
-  private handleErrorSafely(error: any, eventType: EventType, handlerType: 'sync' | 'async'): void {
+  private handleErrorSafely(error: unknown, eventType: EventType, handlerType: 'sync' | 'async'): void {
     console.error(`Error in ${handlerType} event handler for '${eventType}':`, error)
 
     // Emit error event if it's registered and we're not already handling an error event
@@ -451,8 +451,9 @@ export class EnhancedEventBus {
   /**
    * Debug logging
    */
-  private debug(message: string, ...args: any[]): void {
+  private debug(message: string, ...args: unknown[]): void {
     if (this.isDebugging) {
+      // eslint-disable-next-line no-console
       console.debug(`[EnhancedEventBus] ${message}`, ...args)
     }
   }

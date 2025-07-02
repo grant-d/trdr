@@ -21,7 +21,8 @@ export const MIGRATIONS: Migration[] = [
     description: 'Initial schema',
     up: (db) => {
       // Import schema statements and create all tables
-      const { getAllSchemaStatements } = require('./schema')
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { getAllSchemaStatements } = require('./schema') as { getAllSchemaStatements: () => string[] }
       const statements = getAllSchemaStatements()
 
       for (const statement of statements) {

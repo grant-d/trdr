@@ -1,4 +1,4 @@
-import { Candle as BaseCandle, PriceTick as BasePriceTick } from '@trdr/shared'
+import type { Candle as BaseCandle, PriceTick as BasePriceTick } from '@trdr/shared'
 
 /**
  * Extended candle interface for database storage

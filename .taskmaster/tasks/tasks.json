@@ -414,7 +414,62 @@
           7
         ],
         "status": "pending",
-        "subtasks": []
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement TrailingOrderManager class structure",
+            "description": "Create the core TrailingOrderManager class with essential methods and properties for managing trailing orders",
+            "dependencies": [],
+            "details": "Design and implement the TrailingOrderManager class with the following components: constructor for initialization, data structures to track active trailing orders, methods for adding/removing trailing orders, and a method to process market updates. Include proper error handling and logging capabilities.",
+            "status": "in-progress",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Implement trailing buy order logic",
+            "description": "Develop the logic for trailing buy orders that track price decreases",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement the specific logic for trailing buy orders where orders are triggered when price falls by a specified percentage/amount and then rises by a specified trigger amount. Include methods to calculate and update the trailing price, check trigger conditions, and execute the buy order when conditions are met.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Implement trailing sell order logic",
+            "description": "Develop the logic for trailing sell orders that track price increases",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement the specific logic for trailing sell orders where orders are triggered when price rises by a specified percentage/amount and then falls by a specified trigger amount. Include methods to calculate and update the trailing price, check trigger conditions, and execute the sell order when conditions are met.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Implement trigger price calculation and update mechanism",
+            "description": "Create a robust system for calculating and updating trigger prices based on market movements",
+            "dependencies": [
+              2,
+              3
+            ],
+            "details": "Develop algorithms for dynamically calculating trigger prices based on market data, including support for both percentage-based and fixed-amount trailing stops. Implement an efficient update mechanism that processes market data updates and recalculates trigger prices accordingly. Include optimization to handle high-frequency price updates.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Integrate with order management system",
+            "description": "Connect the trailing order system with the existing order management infrastructure",
+            "dependencies": [
+              4
+            ],
+            "details": "Integrate the TrailingOrderManager with the broader order management system. Implement interfaces to submit triggered orders to the execution engine, receive market data updates, and synchronize order status. Ensure proper handling of edge cases such as partial fills, rejected orders, and system restarts with order recovery.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
       },
       {
         "id": 9,
@@ -1250,7 +1305,7 @@
     ],
     "metadata": {
       "created": "2025-07-02T02:22:35.312Z",
-      "updated": "2025-07-02T16:28:30.140Z",
+      "updated": "2025-07-02T16:32:05.406Z",
       "description": "Tasks for master context"
     }
   }

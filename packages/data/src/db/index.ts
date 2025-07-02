@@ -1,13 +1,17 @@
-export { ConnectionManager, createConnectionManager, SQLiteConfig } from './connection-manager'
-export { Migration, MigrationRunner, MIGRATIONS } from './migrations'
-export { CURRENT_SCHEMA_VERSION, getAllSchemaStatements } from './schema'
 import { eventBus } from '@trdr/core'
 import { AgentRepository } from '../repositories/agent-repository'
 import { MarketDataRepository } from '../repositories/market-data-repository'
 import { OrderRepository } from '../repositories/order-repository'
 import { TradeRepository } from '../repositories/trade-repository'
-import { ConnectionManager, createConnectionManager, SQLiteConfig } from './connection-manager'
+import type { ConnectionManager, SQLiteConfig } from './connection-manager'
+import { createConnectionManager } from './connection-manager'
 import { MigrationRunner } from './migrations'
+
+export { ConnectionManager, createConnectionManager } from './connection-manager'
+export type { SQLiteConfig } from './connection-manager'
+export { MigrationRunner, MIGRATIONS } from './migrations'
+export type { Migration } from './migrations'
+export { CURRENT_SCHEMA_VERSION, getAllSchemaStatements } from './schema'
 
 /**
  * Database instance with all repositories
@@ -60,27 +64,31 @@ export class Database {
   /**
    * Close the database connection
    */
-  async close(): Promise<void> {
-    await this.connectionManager.close()
+  close(): void {
+    this.connectionManager.close()
   }
 
   /**
    * Get database statistics
    */
   async getStats(): Promise<{
-    connection: Record<string, any>
-    migration: {
-      currentVersion: number
-      targetVersion: number
-      needsMigration: boolean
+    readonly connection: {
+      readonly sizeBytes?: number | null
+      readonly tables: string[]
+      readonly rowCounts: Record<string, number>
     }
-    repositories: {
-      candles: number
-      ticks: number
-      orders: number
-      trades: number
-      decisions: number
-      checkpoints: number
+    readonly migration: {
+      readonly currentVersion: number
+      readonly targetVersion: number
+      readonly needsMigration: boolean
+    }
+    readonly repositories: {
+      readonly candles: number
+      readonly ticks: number
+      readonly orders: number
+      readonly trades: number
+      readonly decisions: number
+      readonly checkpoints: number
     }
   }> {
     const connectionStats = await this.connectionManager.getStats()
@@ -107,7 +115,7 @@ export class Database {
   /**
    * Run database cleanup
    */
-  async cleanup(daysToKeep: number = 90): Promise<{
+  async cleanup(daysToKeep = 90): Promise<{
     marketData: { candlesDeleted: number; ticksDeleted: number }
     ordersDeleted: number
     tradesDeleted: number

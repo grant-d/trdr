@@ -148,7 +148,7 @@ export interface IPositionSizingStrategy {
    * Get default parameters for the strategy
    * @returns Default configuration
    */
-  getDefaultParams(): Record<string, any>
+  getDefaultParams(): Record<string, unknown>
   
   /**
    * Backtest the strategy with historical data

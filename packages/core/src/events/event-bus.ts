@@ -16,12 +16,13 @@ interface HandlerWrapper<T extends EventData> {
  */
 export class EventBus {
   private static instance: EventBus
-  private handlers: Map<EventType, HandlerWrapper<any>[]> = new Map()
-  private eventTypes: Set<EventType> = new Set()
+  private readonly handlers = new Map<EventType, HandlerWrapper<any>[]>()
+  private readonly eventTypes = new Set<EventType>()
   private subscriptionId = 0
-  private pendingAsyncHandlers: Set<Promise<void>> = new Set()
+  private readonly pendingAsyncHandlers = new Set<Promise<void>>()
 
   private constructor() {
+    // Empty constructor
   }
 
   /**
@@ -156,7 +157,7 @@ export class EventBus {
   /**
    * Handle errors from event handlers
    */
-  private handleError(error: any, eventType: EventType, handlerType: 'sync' | 'async'): void {
+  private handleError(error: unknown, eventType: EventType, handlerType: 'sync' | 'async'): void {
     console.error(`Error in ${handlerType} event handler for '${eventType}':`, error)
 
     // Emit error event if it's registered and we're not already handling an error event

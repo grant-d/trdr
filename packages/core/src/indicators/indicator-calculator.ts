@@ -116,7 +116,7 @@ export class IndicatorCalculator implements IIndicatorCalculator {
   /**
    * Calculate all standard indicators in a single pass
    */
-  calculateAll(candles: readonly Candle[]) {
+  calculateAll(candles: readonly Candle[]): ReturnType<IIndicatorCalculator['calculateAll']> {
     const results: ReturnType<IIndicatorCalculator['calculateAll']> = {}
 
     // Calculate trend indicators
@@ -148,7 +148,7 @@ export class IndicatorCalculator implements IIndicatorCalculator {
   /**
    * Get cache statistics
    */
-  getCacheStats() {
+  getCacheStats(): { hits: number; misses: number; evictions: number; size: number } {
     return this.cache.getStats()
   }
 }
