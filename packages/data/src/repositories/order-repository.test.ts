@@ -1,5 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
+import { epochDateNow, toEpochDate } from '@trdr/shared'
 import { OrderRepository } from './order-repository'
 import { createConnectionManager } from '../db/connection-manager'
 import type { ConnectionManager } from '../db/connection-manager'
@@ -53,8 +54,8 @@ describe('OrderRepository', () => {
       status: 'pending',
       price: 50000,
       size: 0.1,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: epochDateNow(),
+      updatedAt: epochDateNow(),
     }
 
     it('should create an order', async () => {
@@ -76,7 +77,7 @@ describe('OrderRepository', () => {
         status: 'filled',
         filledSize: 0.1,
         averageFillPrice: 50000,
-        filledAt: new Date(),
+        filledAt: epochDateNow(),
       })
 
       const updated = await repository.getOrder(testOrder.id)
@@ -118,8 +119,8 @@ describe('OrderRepository', () => {
           status: 'pending',
           price: 50000,
           size: 0.1,
-          createdAt: new Date(Date.now() - 3600000),
-          updatedAt: new Date(Date.now() - 3600000),
+          createdAt: toEpochDate(Date.now() - 3600000),
+          updatedAt: toEpochDate(Date.now() - 3600000),
         },
         {
           id: 'order-2',
@@ -130,8 +131,8 @@ describe('OrderRepository', () => {
           price: 51000,
           size: 0.1,
           filledSize: 0.1,
-          createdAt: new Date(Date.now() - 1800000),
-          updatedAt: new Date(Date.now() - 1800000),
+          createdAt: toEpochDate(Date.now() - 1800000),
+          updatedAt: toEpochDate(Date.now() - 1800000),
         },
         {
           id: 'order-3',
@@ -141,8 +142,8 @@ describe('OrderRepository', () => {
           status: 'filled',
           size: 1,
           filledSize: 1,
-          createdAt: new Date(Date.now() - 900000),
-          updatedAt: new Date(Date.now() - 900000),
+          createdAt: toEpochDate(Date.now() - 900000),
+          updatedAt: toEpochDate(Date.now() - 900000),
         },
       ]
 
@@ -178,8 +179,8 @@ describe('OrderRepository', () => {
     it('should get order history', async () => {
       const history = await repository.getOrderHistory(
         'BTC-USD',
-        new Date(Date.now() - 7200000),
-        new Date(),
+        toEpochDate(Date.now() - 7200000),
+        epochDateNow(),
       )
 
       assert.equal(history.length, 2)
@@ -189,8 +190,8 @@ describe('OrderRepository', () => {
     it('should filter order history by status', async () => {
       const filledHistory = await repository.getOrderHistory(
         'BTC-USD',
-        new Date(Date.now() - 7200000),
-        new Date(),
+        toEpochDate(Date.now() - 7200000),
+        epochDateNow(),
         ['filled'],
       )
 
@@ -210,8 +211,8 @@ describe('OrderRepository', () => {
           type: 'limit',
           status: 'filled',
           size: 0.1,
-          createdAt: new Date(Date.now() - 86400000),
-          updatedAt: new Date(),
+          createdAt: toEpochDate(Date.now() - 86400000),
+          updatedAt: epochDateNow(),
         },
         {
           id: 'order-stat-2',
@@ -220,8 +221,8 @@ describe('OrderRepository', () => {
           type: 'market',
           status: 'filled',
           size: 0.1,
-          createdAt: new Date(Date.now() - 43200000),
-          updatedAt: new Date(),
+          createdAt: toEpochDate(Date.now() - 43200000),
+          updatedAt: epochDateNow(),
         },
         {
           id: 'order-stat-3',
@@ -230,8 +231,8 @@ describe('OrderRepository', () => {
           type: 'limit',
           status: 'cancelled',
           size: 0.2,
-          createdAt: new Date(Date.now() - 3600000),
-          updatedAt: new Date(),
+          createdAt: toEpochDate(Date.now() - 3600000),
+          updatedAt: epochDateNow(),
         },
       ]
 
@@ -268,8 +269,8 @@ describe('OrderRepository', () => {
         type: 'limit',
         status: 'filled',
         size: 0.1,
-        createdAt: new Date(Date.now() - 100 * 86400000),
-        updatedAt: new Date(Date.now() - 100 * 86400000),
+        createdAt: toEpochDate(Date.now() - 100 * 86400000),
+        updatedAt: toEpochDate(Date.now() - 100 * 86400000),
       }
 
       const recentOrder: Order = {
@@ -279,8 +280,8 @@ describe('OrderRepository', () => {
         type: 'limit',
         status: 'pending',
         size: 0.1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: epochDateNow(),
+        updatedAt: epochDateNow(),
       }
 
       await repository.createOrder(oldOrder)
@@ -305,8 +306,8 @@ describe('OrderRepository', () => {
         type: 'limit',
         status: 'pending',
         size: 0.1,
-        createdAt: new Date(Date.now() - 100 * 86400000),
-        updatedAt: new Date(Date.now() - 100 * 86400000),
+        createdAt: toEpochDate(Date.now() - 100 * 86400000),
+        updatedAt: toEpochDate(Date.now() - 100 * 86400000),
       }
 
       await repository.createOrder(oldActiveOrder)
@@ -330,8 +331,8 @@ describe('OrderRepository', () => {
         status: 'pending',
         size: 0.1,
         agentId: 'agent-123',
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: epochDateNow(),
+        updatedAt: epochDateNow(),
       }
 
       await repository.createOrder(agentOrder)

@@ -1,3 +1,4 @@
+import { epochDateNow, type EpochDate } from '@trdr/shared'
 import type { CacheEntry, IIndicatorCache } from './interfaces'
 
 /**
@@ -49,7 +50,7 @@ export class IndicatorCache implements IIndicatorCache {
     const entry: CacheEntry<T> = {
       key,
       value,
-      timestamp: Date.now(),
+      timestamp: epochDateNow(),
       candleCount,
     }
 
@@ -118,7 +119,7 @@ export function createCacheKey(
  * Create a hash of candle data for cache invalidation
  */
 export function createCandleHash(
-  candles: readonly { timestamp: number; close: number }[],
+  candles: readonly { timestamp: EpochDate; close: number }[],
   lastN = 10
 ): string {
   if (candles.length === 0) return 'empty'

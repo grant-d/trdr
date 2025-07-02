@@ -4,7 +4,7 @@ import type {
   ConsensusConfig,
   ConsensusResult
 } from '../interfaces'
-import type { OrderSide } from '@trdr/shared'
+import { epochDateNow, type OrderSide } from '@trdr/shared'
 
 /**
  * Weighted voting consensus strategy.
@@ -73,7 +73,7 @@ export class WeightedVotingStrategy implements IConsensusStrategy {
       dissentLevel: 1 - agreementPercentage,
       usedFallback: false,
       processingTimeMs: Date.now() - startTime,
-      timestamp: new Date()
+      timestamp: epochDateNow()
     }
   }
 
@@ -282,7 +282,7 @@ export class WeightedVotingStrategy implements IConsensusStrategy {
       usedFallback: true,
       fallbackReason: reason,
       processingTimeMs: Date.now() - startTime,
-      timestamp: new Date()
+      timestamp: epochDateNow()
     }
   }
 }

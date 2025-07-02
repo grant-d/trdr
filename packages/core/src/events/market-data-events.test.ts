@@ -1,108 +1,60 @@
-import { describe, it } from 'node:test'
+import { epochDateNow, toEpochDate } from '@trdr/shared'
 import assert from 'node:assert/strict'
+import { describe, it } from 'node:test'
 import {
-  EventSerializer,
+  EnhancedEventTypes,
   EventCompressor,
   EventPriorityClassifier,
-  type EnhancedTickEvent,
+  EventSerializer,
+  type ConnectionStatusEvent,
   type EnhancedCandleEvent,
   type EnhancedOrderBookEvent,
+  type EnhancedTickEvent,
   type MarketStatusEvent,
-  type ConnectionStatusEvent,
-  EnhancedEventTypes,
 } from './market-data-events'
 
 describe('MarketDataEvents', () => {
   describe('EventSerializer', () => {
-    it('should serialize and deserialize events with dates', () => {
+    it('should serialize and deserialize events', () => {
       const event = {
         type: 'test.event',
-        timestamp: new Date('2024-01-01T12:00:00Z'),
-        sourceTimestamp: new Date('2024-01-01T11:59:59Z'),
+        timestamp: epochDateNow(),
+        sourceTimestamp: epochDateNow() - 1000,
         data: 'test',
       }
 
       const serialized = EventSerializer.serialize(event)
-      const deserialized = EventSerializer.deserialize(serialized)
+      const deserialized = EventSerializer.deserialize(serialized) as typeof event
 
       assert.equal(deserialized.type, 'test.event')
       assert.equal(deserialized.data, 'test')
-      assert.ok(deserialized.timestamp instanceof Date)
-      assert.ok(deserialized.sourceTimestamp instanceof Date)
-      assert.equal(deserialized.timestamp.toISOString(), '2024-01-01T12:00:00.000Z')
-      assert.equal(deserialized.sourceTimestamp.toISOString(), '2024-01-01T11:59:59.000Z')
+      assert.equal(deserialized.timestamp, event.timestamp)
+      assert.equal(deserialized.sourceTimestamp, event.sourceTimestamp)
     })
 
-    it('should serialize and deserialize events with errors', () => {
-      const error = new Error('Test error')
-      error.name = 'TestError'
-
+    it('should serialize and deserialize complex objects', () => {
       const event = {
-        type: 'test.error',
-        timestamp: new Date(),
-        error,
+        type: 'test.complex',
+        timestamp: epochDateNow(),
+        nested: {
+          data: 'nested value',
+          number: 42,
+          array: [1, 2, 3],
+        },
       }
 
       const serialized = EventSerializer.serialize(event)
-      const deserialized = EventSerializer.deserialize(serialized)
+      const deserialized = EventSerializer.deserialize(serialized) as typeof event
 
-      assert.ok(deserialized.error instanceof Error)
-      assert.equal(deserialized.error.message, 'Test error')
-      assert.equal(deserialized.error.name, 'TestError')
-      assert.ok(deserialized.error.stack)
+      assert.equal(deserialized.type, 'test.complex')
+      assert.equal(deserialized.nested.data, 'nested value')
+      assert.equal(deserialized.nested.number, 42)
+      assert.deepEqual(deserialized.nested.array, [1, 2, 3])
     })
 
-    it('should create serializable snapshots', () => {
-      const event = {
-        type: 'test.snapshot',
-        timestamp: new Date('2024-01-01T12:00:00Z'),
-        sourceTimestamp: new Date('2024-01-01T11:59:59Z'),
-        price: 50000,
-      }
 
-      const snapshot = EventSerializer.createSnapshot(event)
 
-      assert.equal(snapshot.type, 'test.snapshot')
-      assert.equal(snapshot.price, 50000)
-      assert.equal(snapshot.timestamp, '2024-01-01T12:00:00.000Z')
-      assert.equal(snapshot.sourceTimestamp, '2024-01-01T11:59:59.000Z')
-    })
 
-    it('should validate event structure', () => {
-      assert.equal(EventSerializer.validate({ type: 'test', timestamp: new Date() }), true)
-      assert.equal(EventSerializer.validate({ type: 'test', timestamp: '2024-01-01T12:00:00Z' }), true)
-      assert.equal(EventSerializer.validate({ type: 'test', timestamp: 1234567890 }), true)
-
-      assert.equal(EventSerializer.validate({}), false) // Missing type and timestamp
-      assert.equal(EventSerializer.validate({ type: 'test' }), false) // Missing timestamp
-      assert.equal(EventSerializer.validate({ timestamp: new Date() }), false) // Missing type
-      assert.equal(EventSerializer.validate(null), false) // Null
-      assert.equal(EventSerializer.validate('string'), false) // Not object
-    })
-
-    it('should calculate event size', () => {
-      const smallEvent = { type: 'small', timestamp: new Date() }
-      const largeEvent = {
-        type: 'large',
-        timestamp: new Date(),
-        data: 'x'.repeat(1000),
-        metadata: { extra: 'data' },
-      }
-
-      const smallSize = EventSerializer.getEventSize(smallEvent)
-      const largeSize = EventSerializer.getEventSize(largeEvent)
-
-      assert.ok(smallSize > 0)
-      assert.ok(largeSize > smallSize)
-    })
-
-    it('should handle serialization errors gracefully', () => {
-      const circularEvent = {} as any
-      circularEvent.self = circularEvent // Circular reference
-
-      const size = EventSerializer.getEventSize(circularEvent)
-      assert.equal(size, 0)
-    })
   })
 
   describe('EventCompressor', () => {
@@ -112,7 +64,7 @@ describe('MarketDataEvents', () => {
       const ticks: EnhancedTickEvent[] = [
         {
           type: 'market.tick.enhanced',
-          timestamp: new Date(baseTime.getTime()),
+          timestamp: toEpochDate(baseTime.getTime()),
           symbol: 'BTC-USD',
           price: 50000,
           volume: 10,
@@ -122,7 +74,7 @@ describe('MarketDataEvents', () => {
         },
         {
           type: 'market.tick.enhanced',
-          timestamp: new Date(baseTime.getTime() + 100),
+          timestamp: toEpochDate(baseTime.getTime() + 100),
           symbol: 'BTC-USD',
           price: 50050,
           volume: 15,
@@ -132,7 +84,7 @@ describe('MarketDataEvents', () => {
         },
         {
           type: 'market.tick.enhanced',
-          timestamp: new Date(baseTime.getTime() + 200),
+          timestamp: toEpochDate(baseTime.getTime() + 200),
           symbol: 'BTC-USD',
           price: 50100,
           volume: 20,
@@ -158,7 +110,7 @@ describe('MarketDataEvents', () => {
     it('should handle single tick event', () => {
       const tick: EnhancedTickEvent = {
         type: 'market.tick.enhanced',
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'BTC-USD',
         price: 50000,
         volume: 10,
@@ -322,7 +274,7 @@ describe('MarketDataEvents', () => {
     it('should validate enhanced tick event structure', () => {
       const tickEvent: EnhancedTickEvent = {
         type: 'market.tick.enhanced',
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'BTC-USD',
         price: 50000,
         volume: 100,
@@ -335,7 +287,7 @@ describe('MarketDataEvents', () => {
         bid: 49950,
         ask: 50050,
         spread: 100,
-        sourceTimestamp: new Date(),
+        sourceTimestamp: epochDateNow(),
         latency: 10,
         timeSinceLastTick: 1000,
       }
@@ -351,7 +303,7 @@ describe('MarketDataEvents', () => {
     it('should validate enhanced candle event structure', () => {
       const candleEvent: EnhancedCandleEvent = {
         type: 'market.candle.enhanced',
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'BTC-USD',
         open: 49000,
         high: 51000,
@@ -381,7 +333,7 @@ describe('MarketDataEvents', () => {
     it('should validate enhanced order book event structure', () => {
       const orderBookEvent: EnhancedOrderBookEvent = {
         type: 'market.orderbook.enhanced',
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'BTC-USD',
         source: 'test',
         feedType: 'live',
@@ -413,7 +365,7 @@ describe('MarketDataEvents', () => {
     it('should validate market status event structure', () => {
       const statusEvent: MarketStatusEvent = {
         type: 'market.status',
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'BTC-USD',
         source: 'test',
         feedType: 'live',
@@ -441,7 +393,7 @@ describe('MarketDataEvents', () => {
     it('should validate connection status event structure', () => {
       const connectionEvent: ConnectionStatusEvent = {
         type: 'market.connection',
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         source: 'test',
         feedType: 'live',
         status: 'connected',

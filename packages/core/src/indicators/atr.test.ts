@@ -1,4 +1,4 @@
-import type { Candle } from '@trdr/shared'
+import { toEpochDate, type Candle } from '@trdr/shared'
 import assert from 'node:assert/strict'
 import { beforeEach, describe, it } from 'node:test'
 import { ATRIndicator } from './atr'
@@ -9,22 +9,22 @@ describe('ATRIndicator', () => {
   beforeEach(() => {
     // Create test candles with known values
     candles = [
-      { timestamp: 1000, open: 10, high: 12, low: 9, close: 11, volume: 100 },
-      { timestamp: 2000, open: 11, high: 14, low: 10, close: 13, volume: 110 },
-      { timestamp: 3000, open: 13, high: 15, low: 11, close: 12, volume: 120 },
-      { timestamp: 4000, open: 12, high: 16, low: 11, close: 15, volume: 130 },
-      { timestamp: 5000, open: 15, high: 18, low: 14, close: 17, volume: 140 },
-      { timestamp: 6000, open: 17, high: 19, low: 15, close: 16, volume: 150 },
-      { timestamp: 7000, open: 16, high: 17, low: 14, close: 14, volume: 160 },
-      { timestamp: 8000, open: 14, high: 15, low: 12, close: 13, volume: 170 },
-      { timestamp: 9000, open: 13, high: 14, low: 11, close: 12, volume: 180 },
-      { timestamp: 10000, open: 12, high: 13, low: 10, close: 11, volume: 190 },
-      { timestamp: 11000, open: 11, high: 12, low: 9, close: 10, volume: 200 },
-      { timestamp: 12000, open: 10, high: 11, low: 8, close: 9, volume: 210 },
-      { timestamp: 13000, open: 9, high: 10, low: 7, close: 8, volume: 220 },
-      { timestamp: 14000, open: 8, high: 9, low: 6, close: 7, volume: 230 },
-      { timestamp: 15000, open: 7, high: 8, low: 5, close: 6, volume: 240 },
-      { timestamp: 16000, open: 6, high: 7, low: 4, close: 5, volume: 250 },
+      { timestamp: toEpochDate(1000), open: 10, high: 12, low: 9, close: 11, volume: 100 },
+      { timestamp: toEpochDate(2000), open: 11, high: 14, low: 10, close: 13, volume: 110 },
+      { timestamp: toEpochDate(3000), open: 13, high: 15, low: 11, close: 12, volume: 120 },
+      { timestamp: toEpochDate(4000), open: 12, high: 16, low: 11, close: 15, volume: 130 },
+      { timestamp: toEpochDate(5000), open: 15, high: 18, low: 14, close: 17, volume: 140 },
+      { timestamp: toEpochDate(6000), open: 17, high: 19, low: 15, close: 16, volume: 150 },
+      { timestamp: toEpochDate(7000), open: 16, high: 17, low: 14, close: 14, volume: 160 },
+      { timestamp: toEpochDate(8000), open: 14, high: 15, low: 12, close: 13, volume: 170 },
+      { timestamp: toEpochDate(9000), open: 13, high: 14, low: 11, close: 12, volume: 180 },
+      { timestamp: toEpochDate(10000), open: 12, high: 13, low: 10, close: 11, volume: 190 },
+      { timestamp: toEpochDate(11000), open: 11, high: 12, low: 9, close: 10, volume: 200 },
+      { timestamp: toEpochDate(12000), open: 10, high: 11, low: 8, close: 9, volume: 210 },
+      { timestamp: toEpochDate(13000), open: 9, high: 10, low: 7, close: 8, volume: 220 },
+      { timestamp: toEpochDate(14000), open: 8, high: 9, low: 6, close: 7, volume: 230 },
+      { timestamp: toEpochDate(15000), open: 7, high: 8, low: 5, close: 6, volume: 240 },
+      { timestamp: toEpochDate(16000), open: 6, high: 7, low: 4, close: 5, volume: 250 },
     ]
   })
 
@@ -84,8 +84,8 @@ describe('ATRIndicator', () => {
     it('should calculate true range correctly', () => {
       // Test with simple candles where we can verify TR calculation
       const testCandles: Candle[] = [
-        { timestamp: 1000, open: 10, high: 15, low: 8, close: 12, volume: 100 },
-        { timestamp: 2000, open: 12, high: 16, low: 10, close: 14, volume: 100 },
+        { timestamp: toEpochDate(1000), open: 10, high: 15, low: 8, close: 12, volume: 100 },
+        { timestamp: toEpochDate(2000), open: 12, high: 16, low: 10, close: 14, volume: 100 },
       ]
 
       const atr = new ATRIndicator({ period: 1 })

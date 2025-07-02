@@ -1,3 +1,4 @@
+import { epochDateNow } from '@trdr/shared'
 import type {
   AgentSignal,
   ConsensusConfig,
@@ -106,7 +107,7 @@ export class ConsensusManager {
       this.eventBus.emit(EventTypes.CONSENSUS_STARTED, {
         requestId: request.requestId,
         agentCount: expectedAgents.length,
-        timestamp: new Date()
+        timestamp: epochDateNow()
       })
 
       // Broadcast signal request to agents
@@ -132,7 +133,7 @@ export class ConsensusManager {
       requestId,
       agentId: signal.agentId,
       signal: adjustedSignal,
-      timestamp: new Date()
+      timestamp: epochDateNow()
     })
 
     // Check if all expected agents have responded
@@ -181,7 +182,7 @@ export class ConsensusManager {
       requestId,
       receivedCount: request.signals.length,
       expectedCount: request.expectedAgents.size,
-      timestamp: new Date()
+      timestamp: epochDateNow()
     })
 
     // Evaluate with whatever signals we have
@@ -205,7 +206,7 @@ export class ConsensusManager {
     this.eventBus.emit(EventTypes.CONSENSUS_COMPLETED, {
       requestId,
       result,
-      timestamp: new Date()
+      timestamp: epochDateNow()
     })
 
     // Clean up and resolve
@@ -265,7 +266,7 @@ export class ConsensusManager {
       pnlContribution: 0,
       currentWeight: this.config.defaultAgentWeight,
       suggestedWeight: this.config.defaultAgentWeight,
-      lastUpdated: new Date()
+      lastUpdated: epochDateNow()
     }
 
     // Update counts
@@ -307,7 +308,7 @@ export class ConsensusManager {
       this.config.maxAgentWeight
     )
     existing.currentWeight = existing.suggestedWeight
-    existing.lastUpdated = new Date()
+    existing.lastUpdated = epochDateNow()
 
     this.agentPerformance.set(agentId, existing)
   }

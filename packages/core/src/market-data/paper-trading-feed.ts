@@ -1,4 +1,4 @@
-import type { Candle } from '@trdr/shared'
+import { epochDateNow, toEpochDate, type Candle, type EpochDate } from '@trdr/shared'
 import type {
   HistoricalDataRequest,
   ConnectionStats,
@@ -38,7 +38,7 @@ export interface MarketScenario {
   /** Scenario identifier */
   readonly id: string
   /** Start time for scenario */
-  readonly startTime: Date
+  readonly startTime: EpochDate
   /** Duration in milliseconds */
   readonly duration: number
   /** Price volatility multiplier (1.0 = normal, 2.0 = double volatility) */
@@ -60,7 +60,7 @@ export interface ExecutionSimulation {
   /** Limit price (null for market orders) */
   readonly limitPrice?: number
   /** Timestamp when order was placed */
-  readonly timestamp: Date
+  readonly timestamp: EpochDate
 }
 
 /**
@@ -78,7 +78,7 @@ export interface SimulatedExecution {
   /** Execution delay in milliseconds */
   readonly executionDelay: number
   /** Execution timestamp */
-  readonly executionTime: Date
+  readonly executionTime: EpochDate
 }
 
 /**
@@ -96,7 +96,7 @@ export class PaperTradingFeed extends EnhancedMarketDataFeed {
   private timeAcceleration: number
   private readonly activeScenarios = new Map<string, MarketScenario>()
   private readonly currentPrices = new Map<string, number>()
-  protected priceHistory = new Map<string, Array<{ price: number; time: Date }>>()
+  protected priceHistory = new Map<string, Array<{ price: number; time: EpochDate }>>()
 
   constructor(config: PaperTradingConfig) {
     super(config)
@@ -123,7 +123,7 @@ export class PaperTradingFeed extends EnhancedMarketDataFeed {
       await this.baseFeed.start()
 
       this.connected = true
-      this.startTime = new Date()
+      this.startTime = epochDateNow()
 
       // Setup event subscriptions after base feed is started
       this.setupBaseFeedSubscriptions()
@@ -285,13 +285,13 @@ export class PaperTradingFeed extends EnhancedMarketDataFeed {
   /**
    * Get current virtual time (for accelerated time mode)
    */
-  getVirtualTime(): Date {
+  getVirtualTime(): EpochDate {
     if (this.acceleratedTime) {
-      const realTimeElapsed = Date.now() - (this.startTime?.getTime() || Date.now())
+      const realTimeElapsed = Date.now() - (this.startTime || epochDateNow())
       const virtualTimeElapsed = realTimeElapsed * this.timeAcceleration
-      return new Date((this.startTime?.getTime() || Date.now()) + virtualTimeElapsed)
+      return toEpochDate((this.startTime || epochDateNow()) + virtualTimeElapsed)
     }
-    return new Date()
+    return epochDateNow()
   }
 
   /**
@@ -333,7 +333,7 @@ export class PaperTradingFeed extends EnhancedMarketDataFeed {
    * Handle tick events from base feed
    */
   private handleBaseFeedTick(data: unknown): void {
-    const tickData = data as { symbol: string; price: number; timestamp: Date; volume?: number }
+    const tickData = data as { symbol: string; price: number; timestamp: EpochDate; volume?: number }
     const symbol = tickData.symbol
     const adjustedPrice = this.applyMarketScenarios(symbol, tickData.price)
 
@@ -345,7 +345,7 @@ export class PaperTradingFeed extends EnhancedMarketDataFeed {
     this.emitEnhancedTick({
       symbol,
       price: adjustedPrice,
-      timestamp: tickData.timestamp.getTime(),
+      timestamp: tickData.timestamp,
       volume: tickData.volume,
     })
   }
@@ -362,11 +362,11 @@ export class PaperTradingFeed extends EnhancedMarketDataFeed {
     const currentTime = this.getVirtualTime()
 
     for (const scenario of this.activeScenarios.values()) {
-      const scenarioEndTime = new Date(scenario.startTime.getTime() + scenario.duration)
+      const scenarioEndTime = toEpochDate(scenario.startTime + scenario.duration)
 
       if (currentTime >= scenario.startTime && currentTime <= scenarioEndTime) {
         // Apply scenario effects
-        const progress = (currentTime.getTime() - scenario.startTime.getTime()) / scenario.duration
+        const progress = (currentTime - scenario.startTime) / scenario.duration
 
         // Apply trend
         const trendAdjustment = scenario.trendDirection * progress * 0.01 // 1% max trend per scenario
@@ -386,13 +386,13 @@ export class PaperTradingFeed extends EnhancedMarketDataFeed {
    */
   private applyScenarioToCandle(candle: Record<string, unknown>): Candle {
     const candleData = candle as { 
-      symbol: string; 
-      open: number; 
-      high: number; 
-      low: number; 
-      close: number;
-      timestamp: number;
-      volume: number;
+      readonly symbol: string
+      readonly open: number
+      readonly high: number 
+      readonly low: number
+      readonly close: number
+      readonly timestamp: EpochDate
+      readonly volume: number
     }
     
     if (!this.enableCustomScenarios) {
@@ -431,7 +431,7 @@ export class PaperTradingFeed extends EnhancedMarketDataFeed {
     // Apply liquidity constraints from active scenarios
     for (const scenario of this.activeScenarios.values()) {
       const currentTime = this.getVirtualTime()
-      const scenarioEndTime = new Date(scenario.startTime.getTime() + scenario.duration)
+      const scenarioEndTime = toEpochDate(scenario.startTime + scenario.duration)
 
       if (currentTime >= scenario.startTime && currentTime <= scenarioEndTime) {
         slippage *= (2 - scenario.liquidityImpact) // Lower liquidity = higher slippage

@@ -1,22 +1,23 @@
-import {
-  EnhancedOrderState
-} from '@trdr/shared'
 import type {
-  OrderAgentConsensus,
   ManagedOrder,
+  Mutable,
+  OrderAgentConsensus,
+  OrderFill,
   OrderLifecycleConfig,
   OrderModification,
   OrderValidationResult,
-  TrailingOrder,
-  Mutable,
-  OrderFill
+  TrailingOrder
 } from '@trdr/shared'
-import { OrderStateMachine } from './order-state-machine'
-import { OrderExecutionMonitor } from './order-execution-monitor'
+import {
+  EnhancedOrderState,
+  epochDateNow
+} from '@trdr/shared'
+import { ConsensusManager, type SignalRequest } from '../consensus'
 import { EventBus } from '../events/event-bus'
 import { EventTypes } from '../events/types'
 import { PositionSizingManager, type PositionSizingInput } from '../position-sizing'
-import { ConsensusManager, type SignalRequest } from '../consensus'
+import { OrderExecutionMonitor } from './order-execution-monitor'
+import { OrderStateMachine } from './order-state-machine'
 
 /**
  * Manages the complete lifecycle of orders from agent consensus to execution.
@@ -133,7 +134,7 @@ export class OrderLifecycleManager {
       this.eventBus.emit(EventTypes.ORDER_CONSENSUS_REJECTED, {
         consensus,
         reason: 'Circuit breaker is active - trading suspended',
-        timestamp: new Date()
+        timestamp: epochDateNow()
       })
       return null
     }
@@ -143,7 +144,7 @@ export class OrderLifecycleManager {
       this.eventBus.emit(EventTypes.ORDER_CONSENSUS_REJECTED, {
         consensus,
         reason: `Confidence ${consensus.confidence} below threshold ${this.config.minConfidenceThreshold}`,
-        timestamp: new Date()
+        timestamp: epochDateNow()
       })
       return null
     }
@@ -162,7 +163,7 @@ export class OrderLifecycleManager {
         consensus,
         calculatedSize: size,
         minSize: this.config.minOrderSize,
-        timestamp: new Date()
+        timestamp: epochDateNow()
       })
       return null
     }
@@ -177,7 +178,7 @@ export class OrderLifecycleManager {
         order,
         errors: validation.errors,
         warnings: validation.warnings,
-        timestamp: new Date()
+        timestamp: epochDateNow()
       })
       return null
     }
@@ -186,7 +187,7 @@ export class OrderLifecycleManager {
     this.eventBus.emit(EventTypes.ORDER_CREATED, {
       order,
       consensus,
-      timestamp: new Date()
+      timestamp: epochDateNow()
     })
 
     return order
@@ -252,7 +253,7 @@ export class OrderLifecycleManager {
       this.eventBus.emit(EventTypes.SYSTEM_WARNING, {
         context: 'position_sizing',
         warnings: sizingOutput.warnings,
-        timestamp: new Date()
+        timestamp: epochDateNow()
       })
     }
     
@@ -349,7 +350,7 @@ export class OrderLifecycleManager {
       this.eventBus.emit(EventTypes.ORDER_CANCEL_FAILED, {
         orderId,
         error: (error as Error).message,
-        timestamp: new Date()
+        timestamp: epochDateNow()
       })
       throw error
     }
@@ -385,7 +386,7 @@ export class OrderLifecycleManager {
         orderId: order.id,
         modification,
         consensus,
-        timestamp: new Date()
+        timestamp: epochDateNow()
       })
 
       return order
@@ -393,7 +394,7 @@ export class OrderLifecycleManager {
       this.eventBus.emit(EventTypes.ORDER_MODIFICATION_FAILED, {
         orderId: order.id,
         error: (error as Error).message,
-        timestamp: new Date()
+        timestamp: epochDateNow()
       })
       return null
     }
@@ -508,13 +509,13 @@ export class OrderLifecycleManager {
         orderId: order.id,
         oldPrice: ('price' in order) ? order.price : undefined,
         newPrice,
-        timestamp: new Date()
+        timestamp: epochDateNow()
       })
     } catch (error) {
       this.eventBus.emit(EventTypes.ORDER_IMPROVEMENT_FAILED, {
         orderId: order.id,
         error: (error as Error).message,
-        timestamp: new Date()
+        timestamp: epochDateNow()
       })
     }
   }
@@ -539,7 +540,7 @@ export class OrderLifecycleManager {
       mut.trailPercent = modification.trailPercent
     }
 
-    mut.lastModified = new Date()
+    mut.lastModified = epochDateNow()
 
     // Exchange modification would go here
     // await this.exchange.modifyOrder(order.exchangeOrderId, modification)
@@ -569,8 +570,8 @@ export class OrderLifecycleManager {
       type: 'trailing',
       size,
       trailPercent: consensus.trailDistance,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      createdAt: epochDateNow(),
+      updatedAt: epochDateNow(),
       status: 'pending'
     }
   }
@@ -585,7 +586,7 @@ export class OrderLifecycleManager {
       filledSize: 0,
       averageFillPrice: 0,
       fees: 0,
-      lastModified: new Date(),
+      lastModified: epochDateNow(),
       fills: []
     }
   }
@@ -715,7 +716,7 @@ export class OrderLifecycleManager {
     }
 
     if (constraints.expiresAt) {
-      const timeToExpiry = constraints.expiresAt.getTime() - Date.now() // milliseconds
+      const timeToExpiry = constraints.expiresAt - epochDateNow() // milliseconds
       if (timeToExpiry > 0) {
         setTimeout(() => {
           this.handleTimeConstraintViolation(order, 'expiration')
@@ -756,7 +757,7 @@ export class OrderLifecycleManager {
         orderId: order.id,
         violationType,
         error: (error as Error).message,
-        timestamp: new Date()
+        timestamp: epochDateNow()
       })
     }
   }
@@ -765,7 +766,7 @@ export class OrderLifecycleManager {
    * Generate unique order ID
    */
   private generateOrderId(): string {
-    return `order_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+    return `order_${epochDateNow()}_${Math.random().toString(36).substring(2, 11)}`
   }
 
   /**
@@ -945,10 +946,10 @@ export class OrderLifecycleManager {
   ): Promise<OrderAgentConsensus | null> {
     // Create signal request
     const request: SignalRequest = {
-      requestId: `req_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
+      requestId: `req_${epochDateNow()}_${Math.random().toString(36).substring(2, 11)}`,
       symbol,
       currentPrice: this.getCurrentPrice(symbol),
-      timestamp: new Date()
+      timestamp: epochDateNow()
     }
 
     // Gather consensus from agents

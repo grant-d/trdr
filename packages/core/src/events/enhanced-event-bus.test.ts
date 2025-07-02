@@ -1,3 +1,4 @@
+import { EpochDate, epochDateNow } from '@trdr/shared'
 import assert from 'node:assert/strict'
 import { beforeEach, describe, it, mock } from 'node:test'
 import { enhancedEventBus } from './enhanced-event-bus'
@@ -23,7 +24,7 @@ describe('EnhancedEventBus', () => {
       enhancedEventBus.subscribe('test.event', handler)
 
       const eventData: TestEvent = {
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'BTC-USD',
         price: 50000,
       }
@@ -44,14 +45,14 @@ describe('EnhancedEventBus', () => {
 
       // Should pass filter
       enhancedEventBus.emitWithFiltering('test.filtered', {
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'BTC-USD',
         price: 50000,
       })
 
       // Should not pass filter
       enhancedEventBus.emitWithFiltering('test.filtered', {
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'ETH-USD',
         price: 3000,
       })
@@ -76,7 +77,7 @@ describe('EnhancedEventBus', () => {
       }, { priority: 5 })
 
       enhancedEventBus.emitWithFiltering('test.priority', {
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'BTC-USD',
         price: 50000,
       })
@@ -95,7 +96,7 @@ describe('EnhancedEventBus', () => {
       }, { isAsync: true })
 
       enhancedEventBus.emitWithFiltering('test.async.filtered', {
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'BTC-USD',
         price: 50000,
       })
@@ -124,14 +125,14 @@ describe('EnhancedEventBus', () => {
 
       // Should pass global filter
       enhancedEventBus.emitWithFiltering('test.global.filter', {
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'BTC-USD',
         price: 50000,
       })
 
       // Should not pass global filter
       enhancedEventBus.emitWithFiltering('test.global.filter', {
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'ETH-USD',
         price: 3000,
       })
@@ -171,7 +172,7 @@ describe('EnhancedEventBus', () => {
       enhancedEventBus.subscribe('test.multi.global', handler)
 
       enhancedEventBus.emitWithFiltering('test.multi.global', {
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'BTC-USD',
         price: 50000,
       })
@@ -211,7 +212,7 @@ describe('EnhancedEventBus', () => {
       enhancedEventBus.subscribe('test.filter.fail', handler)
 
       enhancedEventBus.emitWithFiltering('test.filter.fail', {
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'BTC-USD',
         price: 50000,
       })
@@ -235,7 +236,7 @@ describe('EnhancedEventBus', () => {
 
       // Should pass filter
       enhancedEventBus.emitWithFiltering('test.remove.filter', {
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'BTC-USD',
         price: 50000,
       })
@@ -245,7 +246,7 @@ describe('EnhancedEventBus', () => {
 
       // Should now pass even with different symbol
       enhancedEventBus.emitWithFiltering('test.remove.filter', {
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'ETH-USD',
         price: 3000,
       })
@@ -265,17 +266,17 @@ describe('EnhancedEventBus', () => {
       // Emit several events
       for (let i = 0; i < 5; i++) {
         enhancedEventBus.emit('test.metrics', {
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           symbol: 'BTC-USD',
           price: 50000 + i,
         })
       }
 
-      const metrics = enhancedEventBus.getEventMetrics('test.metrics')
+      const metrics = enhancedEventBus.getEventMetrics('test.metrics') as { emitted: number; filtered: number; handled: number; errors: number; lastEmitted?: EpochDate }
 
       assert.equal(metrics.emitted, 5)
       assert.equal(metrics.handled, 5)
-      assert.ok(metrics.lastEmitted instanceof Date)
+      assert.ok(typeof metrics.lastEmitted === 'number')
     })
 
     it('should track global metrics', () => {
@@ -287,10 +288,10 @@ describe('EnhancedEventBus', () => {
       enhancedEventBus.subscribe('test.metrics.1', mock.fn())
       enhancedEventBus.subscribe('test.metrics.2', mock.fn())
 
-      enhancedEventBus.emit('test.metrics.1', { timestamp: new Date() })
-      enhancedEventBus.emit('test.metrics.2', { timestamp: new Date() })
+      enhancedEventBus.emit('test.metrics.1', { timestamp: epochDateNow() })
+      enhancedEventBus.emit('test.metrics.2', { timestamp: epochDateNow() })
 
-      const allMetrics = enhancedEventBus.getEventMetrics()
+      const allMetrics = enhancedEventBus.getEventMetrics() as Map<string, { emitted: number; filtered: number; handled: number; errors: number; lastEmitted?: EpochDate }>
 
       assert.ok(allMetrics.has('test.metrics.1'))
       assert.ok(allMetrics.has('test.metrics.2'))
@@ -303,9 +304,9 @@ describe('EnhancedEventBus', () => {
       // Debug mode is disabled by default but metrics should still be tracked
 
       enhancedEventBus.subscribeWithFilter('test.always.metrics', mock.fn())
-      enhancedEventBus.emit('test.always.metrics', { timestamp: new Date() })
+      enhancedEventBus.emit('test.always.metrics', { timestamp: epochDateNow() })
 
-      const metrics = enhancedEventBus.getEventMetrics('test.always.metrics')
+      const metrics = enhancedEventBus.getEventMetrics('test.always.metrics') as { emitted: number; filtered: number; handled: number; errors: number; lastEmitted?: EpochDate }
 
       assert.equal(metrics.emitted, 1)
       assert.equal(metrics.handled, 1)
@@ -334,21 +335,21 @@ describe('EnhancedEventBus', () => {
 
       // Should pass both filters
       enhancedEventBus.emitWithFiltering('test.combined.filters', {
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'BTC-USD',
         price: 50000,
       })
 
       // Should fail global filter
       enhancedEventBus.emitWithFiltering('test.combined.filters', {
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'ETH-USD',
         price: 50000,
       })
 
       // Should fail subscription filter
       enhancedEventBus.emitWithFiltering('test.combined.filters', {
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'BTC-USD',
         price: 30000,
       })
@@ -373,20 +374,20 @@ describe('EnhancedEventBus', () => {
 
       // First two should pass
       enhancedEventBus.emitWithFiltering('test.rate.limit', {
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'BTC-USD',
         price: 50000,
       })
 
       enhancedEventBus.emitWithFiltering('test.rate.limit', {
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'BTC-USD',
         price: 50001,
       })
 
       // Third should be rate limited
       enhancedEventBus.emitWithFiltering('test.rate.limit', {
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'BTC-USD',
         price: 50002,
       })
@@ -417,7 +418,7 @@ describe('EnhancedEventBus', () => {
       enhancedEventBus.subscribeWithFilter('test.filter.error', handler)
 
       enhancedEventBus.emitWithFiltering('test.filter.error', {
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'BTC-USD',
         price: 50000,
       })
@@ -438,7 +439,7 @@ describe('EnhancedEventBus', () => {
       })
 
       enhancedEventBus.emitWithFiltering('test.unsubscribe', {
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'BTC-USD',
         price: 50000,
       })
@@ -448,7 +449,7 @@ describe('EnhancedEventBus', () => {
       subscription.unsubscribe()
 
       enhancedEventBus.emitWithFiltering('test.unsubscribe', {
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'BTC-USD',
         price: 50001,
       })
@@ -478,28 +479,28 @@ describe('EnhancedEventBus', () => {
 
       // Should pass
       enhancedEventBus.emitWithFiltering('test.filter.builder', {
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'BTC-USD',
         price: 50000,
       })
 
       // Should pass
       enhancedEventBus.emitWithFiltering('test.filter.builder', {
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'ETH-USD',
         price: 3000,
       })
 
       // Should fail (wrong symbol)
       enhancedEventBus.emitWithFiltering('test.filter.builder', {
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'DOGE-USD',
         price: 2000,
       })
 
       // Should fail (price too low)
       enhancedEventBus.emitWithFiltering('test.filter.builder', {
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         symbol: 'BTC-USD',
         price: 500,
       })

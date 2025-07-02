@@ -1,9 +1,10 @@
-import { describe, it, beforeEach, afterEach } from 'node:test'
+import { epochDateNow, toEpochDate } from '@trdr/shared'
 import assert from 'node:assert/strict'
-import { MarketDataRepository } from './market-data-repository'
-import { createConnectionManager } from '../db/connection-manager'
+import { afterEach, beforeEach, describe, it } from 'node:test'
 import type { ConnectionManager } from '../db/connection-manager'
+import { createConnectionManager } from '../db/connection-manager'
 import type { Candle, PriceTick } from '../types/market-data'
+import { MarketDataRepository } from './market-data-repository'
 
 describe('MarketDataRepository', () => {
   let repository: MarketDataRepository
@@ -58,9 +59,9 @@ describe('MarketDataRepository', () => {
     const testCandle: Candle = {
       symbol: 'BTC-USD',
       interval: '1h',
-      timestamp: new Date(Date.now() - 3600000),
-      openTime: new Date(Date.now() - 3600000),
-      closeTime: new Date(),
+      timestamp: toEpochDate(Date.now() - 3600000),
+      openTime: toEpochDate(Date.now() - 3600000),
+      closeTime: epochDateNow(),
       open: 50000,
       high: 51000,
       low: 49500,
@@ -86,9 +87,9 @@ describe('MarketDataRepository', () => {
       const candles: Candle[] = Array.from({ length: 10 }, (_, i) => ({
         symbol: 'BTC-USD',
         interval: '1h',
-        timestamp: new Date(Date.now() - (10 - i) * 3600000),
-        openTime: new Date(Date.now() - (10 - i) * 3600000),
-        closeTime: new Date(Date.now() - (9 - i) * 3600000),
+        timestamp: toEpochDate(Date.now() - (10 - i) * 3600000),
+        openTime: toEpochDate(Date.now() - (10 - i) * 3600000),
+        closeTime: toEpochDate(Date.now() - (9 - i) * 3600000),
         open: 50000 + i * 100,
         high: 50100 + i * 100,
         low: 49900 + i * 100,
@@ -102,7 +103,7 @@ describe('MarketDataRepository', () => {
         'BTC-USD',
         '1h',
         new Date(Date.now() - 11 * 3600000),
-        new Date(),
+        epochDateNow(),
       )
 
       assert.equal(retrieved.length, 10)
@@ -117,13 +118,13 @@ describe('MarketDataRepository', () => {
       const candles: Candle[] = [
         {
           ...testCandle,
-          openTime: new Date(now - 7200000),
-          closeTime: new Date(now - 3600000),
+          openTime: toEpochDate(now - 7200000),
+          closeTime: toEpochDate(now - 3600000),
         },
         {
           ...testCandle,
-          openTime: new Date(now - 3600000),
-          closeTime: new Date(now),
+          openTime: toEpochDate(now - 3600000),
+          closeTime: toEpochDate(now),
         },
       ]
 
@@ -133,7 +134,7 @@ describe('MarketDataRepository', () => {
         'BTC-USD',
         '1h',
         new Date(now - 5400000), // 1.5 hours ago
-        new Date(),
+        epochDateNow(),
       )
 
       assert.equal(retrieved.length, 1)
@@ -148,7 +149,7 @@ describe('MarketDataRepository', () => {
   describe('Tick Operations', () => {
     const testTick: PriceTick = {
       symbol: 'BTC-USD',
-      timestamp: new Date(),
+      timestamp: epochDateNow(),
       price: 50000,
       volume: 0.1,
       bid: 49999,
@@ -172,7 +173,7 @@ describe('MarketDataRepository', () => {
     it('should save ticks in batch', async () => {
       const ticks: PriceTick[] = Array.from({ length: 5 }, (_, i) => ({
         symbol: 'BTC-USD',
-        timestamp: new Date(Date.now() - (5 - i) * 1000),
+        timestamp: toEpochDate(Date.now() - (5 - i) * 1000),
         price: 50000 + i,
         volume: 0.1,
       }))
@@ -182,7 +183,7 @@ describe('MarketDataRepository', () => {
       const retrieved = await repository.getTicks(
         'BTC-USD',
         new Date(Date.now() - 10000),
-        new Date(),
+        epochDateNow(),
       )
 
       assert.equal(retrieved.length, 5)
@@ -199,9 +200,9 @@ describe('MarketDataRepository', () => {
       const candles: Candle[] = Array.from({ length: 30 }, (_, i) => ({
         symbol: 'BTC-USD',
         interval: '1d',
-        timestamp: new Date(Date.now() - (30 - i) * 86400000),
-        openTime: new Date(Date.now() - (30 - i) * 86400000),
-        closeTime: new Date(Date.now() - (29 - i) * 86400000),
+        timestamp: toEpochDate(Date.now() - (30 - i) * 86400000),
+        openTime: toEpochDate(Date.now() - (30 - i) * 86400000),
+        closeTime: toEpochDate(Date.now() - (29 - i) * 86400000),
         open: 50000 + Math.random() * 1000,
         high: 51000 + Math.random() * 1000,
         low: 49000 + Math.random() * 1000,
@@ -226,9 +227,9 @@ describe('MarketDataRepository', () => {
       const oldCandle: Candle = {
         symbol: 'BTC-USD',
         interval: '1h',
-        timestamp: new Date(Date.now() - 100 * 86400000),
-        openTime: new Date(Date.now() - 100 * 86400000),
-        closeTime: new Date(Date.now() - 100 * 86400000 + 3600000),
+        timestamp: toEpochDate(Date.now() - 100 * 86400000),
+        openTime: toEpochDate(Date.now() - 100 * 86400000),
+        closeTime: toEpochDate(Date.now() - 100 * 86400000 + 3600000),
         open: 40000,
         high: 41000,
         low: 39000,
@@ -238,9 +239,9 @@ describe('MarketDataRepository', () => {
 
       const recentCandle: Candle = {
         ...oldCandle,
-        timestamp: new Date(Date.now() - 3600000),
-        openTime: new Date(Date.now() - 3600000),
-        closeTime: new Date(),
+        timestamp: toEpochDate(Date.now() - 3600000),
+        openTime: toEpochDate(Date.now() - 3600000),
+        closeTime: epochDateNow(),
       }
 
       await repository.saveCandle(oldCandle)
@@ -252,13 +253,13 @@ describe('MarketDataRepository', () => {
 
       const remaining = await repository.getLatestCandle('BTC-USD', '1h')
       assert.ok(remaining)
-      assert.equal(remaining.timestamp.getTime(), recentCandle.timestamp.getTime())
+      assert.equal(remaining.timestamp, recentCandle.timestamp)
     })
 
     it('should cleanup old ticks', async () => {
       const oldTick: PriceTick = {
         symbol: 'BTC-USD',
-        timestamp: new Date(Date.now() - 100 * 86400000),
+        timestamp: toEpochDate(Date.now() - 100 * 86400000),
         price: 40000,
         volume: 0.1,
       }

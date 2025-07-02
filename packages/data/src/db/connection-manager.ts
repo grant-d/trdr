@@ -1,7 +1,8 @@
-import Database from 'better-sqlite3'
 import { eventBus } from '@trdr/core'
-import path from 'node:path'
+import { epochDateNow } from '@trdr/shared'
+import Database from 'better-sqlite3'
 import fs from 'node:fs/promises'
+import path from 'node:path'
 
 /**
  * Configuration options for SQLite connection
@@ -59,7 +60,7 @@ export class ConnectionManager {
    * Reset all instances (for testing)
    */
   static resetInstances(): void {
-    ConnectionManager.instance = null as any
+    ConnectionManager.instance = null as unknown as ConnectionManager
     ConnectionManager.testInstances.clear()
   }
 
@@ -80,7 +81,7 @@ export class ConnectionManager {
 
       // Create SQLite connection
       this.db = new Database(this.config.databasePath, {
-        verbose: this.config.enableLogging ? console.log : undefined,
+        verbose: this.config.enableLogging ? console.warn : undefined,
       })
 
       // Configure database settings
@@ -106,7 +107,7 @@ export class ConnectionManager {
           databasePath: this.config.databasePath,
           inMemory: this.config.databasePath === ':memory:',
         },
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
       })
     } catch (error) {
       this.isInitialized = false
@@ -114,7 +115,7 @@ export class ConnectionManager {
         error,
         context: 'SQLite connection initialization',
         severity: 'critical',
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
       })
       throw error
     }
@@ -138,7 +139,7 @@ export class ConnectionManager {
   /**
    * Execute a query and return results
    */
-  async query<T = any>(sql: string, params?: any[]): Promise<T[]> {
+  async query<T = unknown>(sql: string, params?: unknown[]): Promise<T[]> {
     const db = await this.getDatabase()
 
     try {
@@ -146,7 +147,7 @@ export class ConnectionManager {
       const result = params ? stmt.all(...params) : stmt.all()
 
       if (this.config.enableLogging) {
-        console.log('Query executed:', sql)
+        console.warn('Query executed:', sql)
       }
 
       return result as T[]
@@ -161,7 +162,7 @@ export class ConnectionManager {
   /**
    * Execute a statement without returning results
    */
-  async execute(sql: string, params?: any[]): Promise<void> {
+  async execute(sql: string, params?: unknown[]): Promise<void> {
     const db = await this.getDatabase()
 
     try {
@@ -173,7 +174,7 @@ export class ConnectionManager {
       }
 
       if (this.config.enableLogging) {
-        console.log('Statement executed:', sql)
+        console.warn('Statement executed:', sql)
       }
     } catch (error) {
       if (this.config.enableLogging) {
@@ -209,7 +210,7 @@ export class ConnectionManager {
 
     eventBus.emit('system.info', {
       message: 'SQLite connection closed',
-      timestamp: new Date(),
+      timestamp: epochDateNow(),
     })
   }
 
@@ -217,21 +218,32 @@ export class ConnectionManager {
    * Check if the database is connected
    */
   isConnected(): boolean {
-    return this.isInitialized && this.db !== null && this.db.open
+    return this.isInitialized && this.db !== null && this.db?.open === true
   }
 
   /**
    * Get database statistics
    */
-  async getStats(): Promise<Record<string, any>> {
-    const stats: Record<string, any> = {}
+  async getStats(): Promise<{
+    readonly sizeBytes?: number | null
+    readonly tables: string[]
+    readonly rowCounts: Record<string, number>
+  }> {
+    const stats: {
+      sizeBytes?: number | null
+      tables: string[]
+      rowCounts: Record<string, number>
+    } = {
+      tables: [],
+      rowCounts: {}
+    }
 
     // Get database size
     if (this.config.databasePath !== ':memory:') {
       try {
         const stat = await fs.stat(this.config.databasePath)
         stats.sizeBytes = stat.size
-      } catch (error) {
+      } catch {
         stats.sizeBytes = null
       }
     }
@@ -246,7 +258,6 @@ export class ConnectionManager {
     stats.tables = tables.map(t => t.name)
 
     // Get row counts for each table
-    stats.rowCounts = {}
     for (const table of tables) {
       const result = await this.query<{ count: number }>(`SELECT COUNT(*) as count FROM ${table.name}`)
       stats.rowCounts[table.name] = result[0]?.count || 0

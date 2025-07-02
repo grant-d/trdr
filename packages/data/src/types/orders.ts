@@ -1,4 +1,4 @@
-import type { OrderBase } from '@trdr/shared'
+import type { OrderBase, EpochDate } from '@trdr/shared'
 
 /**
  * Flattened order interface for database storage.
@@ -6,9 +6,9 @@ import type { OrderBase } from '@trdr/shared'
  */
 export interface Order extends Omit<OrderBase, 'createdAt' | 'updatedAt'> {
   /** Creation timestamp as Date object */
-  readonly createdAt: Date
+  readonly createdAt: EpochDate
   /** Update timestamp as Date object */
-  readonly updatedAt: Date
+  readonly updatedAt: EpochDate
   /** Optional price for limit orders */
   readonly price?: number
   /** Stop trigger price for stop orders */
@@ -34,9 +34,9 @@ export interface Order extends Omit<OrderBase, 'createdAt' | 'updatedAt'> {
   /** Additional metadata */
   readonly metadata?: Record<string, unknown>
   /** When the order was submitted to exchange */
-  readonly submittedAt?: Date
+  readonly submittedAt?: EpochDate
   /** When the order was completely filled */
-  readonly filledAt?: Date
+  readonly filledAt?: EpochDate
   /** When the order was cancelled */
-  readonly cancelledAt?: Date
+  readonly cancelledAt?: EpochDate
 }

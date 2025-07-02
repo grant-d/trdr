@@ -10,16 +10,19 @@
 export type IsoDate = string & { readonly __brand: 'IsoDate' }
 
 /**
- * Branded number type for epoch timestamps in milliseconds since 1970-01-01.
+ * Returns the current date and time as an ISO 8601 formatted string.
  *
- * This type ensures type safety when working with epoch timestamps
- * throughout the application. Values are stored as numbers representing
- * milliseconds since the Unix epoch (January 1, 1970 00:00:00 UTC).
+ * This is a convenience function that returns the current time in ISO format,
+ * branded as IsoDate.
+ *
+ * @returns The current date and time as IsoDate
  *
  * @example
- * const timestamp: EpochDate = 1705321845123 as EpochDate
+ * const now = isoDateNow() // '2024-01-15T12:30:45.123Z'
  */
-export type EpochDate = number & { readonly __brand: 'EpochDate' }
+export function isoDateNow(): IsoDate {
+  return new Date().toISOString() as IsoDate
+}
 
 /**
  * Converts a Date object or timestamp to an ISO 8601 formatted date string.
@@ -42,12 +45,39 @@ export type EpochDate = number & { readonly __brand: 'EpochDate' }
  * const isoDate = toIsoDate(1705321845, 's') // '2024-01-15T12:30:45.000Z'
  */
 export function toIsoDate(value: Date): IsoDate
-export function toIsoDate(value: number, precision?: 'ms' | 's'): IsoDate
-export function toIsoDate(value: Date | number, precision?: 'ms' | 's'): IsoDate {
+export function toIsoDate(value: number | EpochDate, precision?: 'ms' | 's'): IsoDate
+export function toIsoDate(value: Date | number | EpochDate, precision?: 'ms' | 's'): IsoDate {
   if (typeof value === 'number') {
     value = new Date(precision === 's' ? value * 1000 : value)
   }
   return value.toISOString() as IsoDate
+}
+
+/**
+ * Branded number type for epoch timestamps in milliseconds since 1970-01-01.
+ *
+ * This type ensures type safety when working with epoch timestamps
+ * throughout the application. Values are stored as numbers representing
+ * milliseconds since the Unix epoch (January 1, 1970 00:00:00 UTC).
+ *
+ * @example
+ * const timestamp: EpochDate = 1705321845123 as EpochDate
+ */
+export type EpochDate = number & { readonly __brand: 'EpochDate' }
+
+/**
+ * Returns the current timestamp as an EpochDate.
+ *
+ * This is a convenience function that returns the current time in milliseconds
+ * since the Unix epoch, branded as EpochDate.
+ *
+ * @returns The current timestamp as EpochDate
+ *
+ * @example
+ * const now = epochDateNow() // 1705321845123
+ */
+export function epochDateNow(): EpochDate {
+  return Date.now() as EpochDate
 }
 
 /**

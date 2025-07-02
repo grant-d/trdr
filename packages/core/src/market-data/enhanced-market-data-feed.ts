@@ -1,4 +1,5 @@
-import type { Candle, PriceTick } from '@trdr/shared'
+import type { EpochDate} from '@trdr/shared'
+import { epochDateNow, toEpochDate, type Candle, type PriceTick } from '@trdr/shared'
 import type {
   DataFeedConfig,
   ConnectionStats,
@@ -82,7 +83,7 @@ export interface EnhancedMarketStats {
     eventsFiltered: number
     eventsCompressed: number
     avgLatency: number
-    lastEventTime?: Date
+    lastEventTime?: EpochDate
   }
   /** Market statistics */
   market: {
@@ -151,7 +152,7 @@ export abstract class EnhancedMarketDataFeed extends BaseMarketDataFeed {
   protected enhancedConfig: EnhancedDataFeedConfig
   protected enhancedStats: EnhancedMarketStats
   protected lastPrices = new Map<string, number>()
-  protected priceHistory = new Map<string, Array<{ price: number; time: Date }>>()
+  protected priceHistory = new Map<string, Array<{ price: number; time: EpochDate }>>()
   protected sequenceNumber = 0
   protected eventSubscriptions: FilteredEventSubscription[] = []
   protected rateLimitMap = new Map<string, number[]>()
@@ -261,19 +262,19 @@ export abstract class EnhancedMarketDataFeed extends BaseMarketDataFeed {
    * }, originalTimestamp)
    * ```
    */
-  protected emitEnhancedTick(tick: PriceTick, sourceTimestamp?: Date): void {
+  protected emitEnhancedTick(tick: PriceTick, sourceTimestamp?: EpochDate): void {
     this.messagesReceived++
-    this.lastMessageTime = new Date()
+    this.lastMessageTime = epochDateNow()
     this.enhancedStats.events.ticksReceived++
 
     const symbol = tick.symbol
-    const currentTime = new Date()
+    const currentTime = epochDateNow()
     const lastPrice = this.lastPrices.get(symbol) || tick.price
 
     // Calculate enhanced metrics
     const priceChange = tick.price - lastPrice
     const priceChangePercent = lastPrice > 0 ? (priceChange / lastPrice) * 100 : 0
-    const latency = sourceTimestamp ? currentTime.getTime() - sourceTimestamp.getTime() : 0
+    const latency = sourceTimestamp ? currentTime - sourceTimestamp : 0
 
     // Update price tracking
     this.lastPrices.set(symbol, tick.price)
@@ -288,13 +289,18 @@ export abstract class EnhancedMarketDataFeed extends BaseMarketDataFeed {
       priceChange,
       priceChangePercent,
       source: this.config.feedType,
-      feedType: this.config.feedType as any,
+      feedType: this.config.feedType === 'coinbase' ? 'live' : this.config.feedType,
       sequence: ++this.sequenceNumber,
       priority: EventPriorityClassifier.classifyPriority({
         symbol,
         priceChangePercent,
         volume: tick.volume,
-      } as any),
+        timestamp: epochDateNow(),
+        source: this.config.feedType,
+        feedType: this.config.feedType === 'coinbase' ? 'live' : this.config.feedType,
+        priority: 'normal',
+        type: 'market.tick.enhanced',
+      } as EnhancedMarketDataEvent),
       sourceTimestamp,
       latency,
     }
@@ -354,13 +360,13 @@ export abstract class EnhancedMarketDataFeed extends BaseMarketDataFeed {
    * }, 'BTC-USD', '1m', originalTimestamp)
    * ```
    */
-  protected emitEnhancedCandle(candle: Candle, symbol: string, interval: string, sourceTimestamp?: Date): void {
+  protected emitEnhancedCandle(candle: Candle, symbol: string, interval: string, sourceTimestamp?: EpochDate): void {
     this.messagesReceived++
-    this.lastMessageTime = new Date()
+    this.lastMessageTime = epochDateNow()
     this.enhancedStats.events.candlesReceived++
 
-    const currentTime = new Date()
-    const latency = sourceTimestamp ? currentTime.getTime() - sourceTimestamp.getTime() : 0
+    const currentTime = epochDateNow()
+    const latency = sourceTimestamp ? currentTime - sourceTimestamp : 0
 
     // Calculate enhanced candle metrics
     const range = candle.high - candle.low
@@ -393,12 +399,17 @@ export abstract class EnhancedMarketDataFeed extends BaseMarketDataFeed {
       typicalPrice,
       candleType,
       source: this.config.feedType,
-      feedType: this.config.feedType as any,
+      feedType: this.config.feedType === 'coinbase' ? 'live' : this.config.feedType,
       sequence: ++this.sequenceNumber,
       priority: EventPriorityClassifier.classifyPriority({
         symbol,
         volume: candle.volume,
-      } as any),
+        timestamp: epochDateNow(),
+        source: this.config.feedType,
+        feedType: this.config.feedType === 'coinbase' ? 'live' : this.config.feedType,
+        priority: 'normal',
+        type: 'market.candle.enhanced',
+      } as EnhancedMarketDataEvent),
       sourceTimestamp,
       latency,
     }
@@ -421,13 +432,13 @@ export abstract class EnhancedMarketDataFeed extends BaseMarketDataFeed {
   protected emitConnectionStatus(status: 'connecting' | 'connected' | 'disconnected' | 'error' | 'reconnecting'): void {
     const event: ConnectionStatusEvent = {
       type: 'market.connection',
-      timestamp: new Date(),
+      timestamp: epochDateNow(),
       source: this.config.feedType,
-      feedType: this.config.feedType as any,
+      feedType: this.config.feedType === 'coinbase' ? 'live' : this.config.feedType,
       status,
       details: {
         reconnectAttempts: this.reconnectAttempts,
-        uptime: this.startTime ? Date.now() - this.startTime.getTime() : 0,
+        uptime: this.startTime ? Date.now() - this.startTime : 0,
         lastError: this.lastError,
         subscriptions: Array.from(this.subscribedSymbols),
       },
@@ -479,7 +490,7 @@ export abstract class EnhancedMarketDataFeed extends BaseMarketDataFeed {
   ): Promise<FilteredEventSubscription> {
     return new Promise((resolve) => {
       // First do the normal subscription
-      this.subscribe(symbols).then(() => {
+      void this.subscribe(symbols).then(() => {
         // Then add filtered subscription for enhanced events
         if (filter && this.enhancedConfig.enhancedEvents !== false) {
           const subscription = enhancedEventBus.subscribeWithFilter(
@@ -560,14 +571,14 @@ export abstract class EnhancedMarketDataFeed extends BaseMarketDataFeed {
    */
   exportEventData(
     eventTypes: string[],
-    timeRange: { start: Date; end: Date },
+    timeRange: { start: EpochDate; end: EpochDate },
   ): string {
     // This is a simplified implementation
     // In a real system, you'd query stored events
     const mockEvents = this.generateMockEventData(eventTypes, timeRange)
 
     return EventSerializer.serialize({
-      exportTimestamp: new Date(),
+      exportTimestamp: epochDateNow(),
       timeRange,
       eventTypes,
       events: mockEvents,
@@ -577,13 +588,16 @@ export abstract class EnhancedMarketDataFeed extends BaseMarketDataFeed {
   /**
    * Update price history for symbol
    */
-  private updatePriceHistory(symbol: string, price: number, time: Date): void {
+  private updatePriceHistory(symbol: string, price: number, time: EpochDate | Date): void {
     if (!this.priceHistory.has(symbol)) {
       this.priceHistory.set(symbol, [])
     }
 
     const history = this.priceHistory.get(symbol)!
-    history.push({ price, time })
+    history.push({
+      price,
+      time: time instanceof Date ? toEpochDate(time) : time
+    })
 
     // Keep only last 1000 price points
     if (history.length > 1000) {
@@ -651,7 +665,7 @@ export abstract class EnhancedMarketDataFeed extends BaseMarketDataFeed {
   /**
    * Generate mock event data for export
    */
-  private generateMockEventData(eventTypes: string[], timeRange: { start: Date; end: Date }): Array<{ type: string; timestamp: Date; symbol: string; mockData: boolean }> {
+  private generateMockEventData(eventTypes: string[], timeRange: { start: EpochDate; end: EpochDate }): Array<{ type: string; timestamp: EpochDate; symbol: string; mockData: boolean }> {
     // This is a placeholder - in a real implementation, you'd retrieve stored events
     return eventTypes.map(type => ({
       type,

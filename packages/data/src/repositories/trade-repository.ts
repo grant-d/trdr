@@ -1,6 +1,6 @@
 import { BaseRepository } from './base-repository'
-import type { OrderSide} from '@trdr/shared'
-import { type IsoDate, toIsoDate } from '@trdr/shared'
+import type { EpochDate, OrderSide} from '@trdr/shared'
+import { type IsoDate, toEpochDate, toIsoDate } from '@trdr/shared'
 import type { ConnectionManager } from '../db/connection-manager'
 
 /**
@@ -17,7 +17,7 @@ export interface Trade {
   readonly feeCurrency?: string
   readonly pnl?: number
   readonly metadata?: Record<string, unknown>
-  readonly executedAt: Date
+  readonly executedAt: EpochDate
 }
 
 /**
@@ -295,7 +295,7 @@ export class TradeRepository extends BaseRepository<TradeDto> {
       feeCurrency: model.fee_currency,
       pnl: model.pnl,
       metadata: model.metadata ? JSON.parse(model.metadata as string) as Record<string, unknown> : undefined,
-      executedAt: new Date(model.executed_at),
+      executedAt: toEpochDate(new Date(model.executed_at)),
     }
   }
 }

@@ -1,12 +1,12 @@
-import type { Candle, PriceTick } from '@trdr/shared'
-import type {
-  MarketDataPipeline,
-  DataFeedConfig,
-  HistoricalDataRequest,
-  ConnectionStats,
-} from '../interfaces/market-data-pipeline'
+import { epochDateNow, type Candle, type EpochDate, type PriceTick } from '@trdr/shared'
 import { EventBus } from '../events/event-bus'
 import { EventTypes } from '../events/types'
+import type {
+  ConnectionStats,
+  DataFeedConfig,
+  HistoricalDataRequest,
+  MarketDataPipeline,
+} from '../interfaces/market-data-pipeline'
 
 /**
  * Base abstract class for market data feed implementations
@@ -19,8 +19,8 @@ export abstract class BaseMarketDataFeed implements MarketDataPipeline {
   protected reconnectAttempts = 0
   protected messagesReceived = 0
   protected lastError?: string
-  protected lastMessageTime?: Date
-  protected startTime: Date | null = null
+  protected lastMessageTime?: EpochDate
+  protected startTime: EpochDate | null = null
   protected subscribedSymbols = new Set<string>()
 
   constructor(config: DataFeedConfig) {
@@ -64,7 +64,7 @@ export abstract class BaseMarketDataFeed implements MarketDataPipeline {
   isHealthy(): boolean {
     return this.connected &&
       this.lastMessageTime !== undefined &&
-      Date.now() - this.lastMessageTime.getTime() < 60000 // 1 minute
+      Date.now() - this.lastMessageTime < 60000 // 1 minute
   }
 
   /**
@@ -73,7 +73,7 @@ export abstract class BaseMarketDataFeed implements MarketDataPipeline {
   getStats(): ConnectionStats {
     return {
       connected: this.connected,
-      uptime: this.startTime ? Date.now() - this.startTime.getTime() : 0,
+      uptime: this.startTime ? Date.now() - this.startTime : 0,
       reconnectAttempts: this.reconnectAttempts,
       messagesReceived: this.messagesReceived,
       lastError: this.lastError,
@@ -88,7 +88,7 @@ export abstract class BaseMarketDataFeed implements MarketDataPipeline {
   protected emitCandle(candle: Candle, symbol: string, interval: string): void {
     this.updateMessageStats()
     this.eventBus.emit(EventTypes.MARKET_CANDLE, {
-      timestamp: new Date(),
+      timestamp: epochDateNow(),
       symbol,
       open: candle.open,
       high: candle.high,
@@ -105,7 +105,7 @@ export abstract class BaseMarketDataFeed implements MarketDataPipeline {
   protected emitTick(tick: PriceTick): void {
     this.updateMessageStats()
     this.eventBus.emit(EventTypes.MARKET_TICK, {
-      timestamp: new Date(tick.timestamp),
+      timestamp: tick.timestamp,
       symbol: tick.symbol,
       price: tick.price,
       volume: tick.volume,
@@ -117,9 +117,9 @@ export abstract class BaseMarketDataFeed implements MarketDataPipeline {
    */
   protected emitConnected(): void {
     this.connected = true
-    this.startTime = new Date()
+    this.startTime = epochDateNow()
     this.eventBus.emit(EventTypes.SYSTEM_INFO, {
-      timestamp: new Date(),
+      timestamp: epochDateNow(),
       message: `Market data feed connected: ${this.config.feedType}`,
       context: 'MarketDataFeed',
       details: { feedType: this.config.feedType, symbol: this.config.symbol },
@@ -132,7 +132,7 @@ export abstract class BaseMarketDataFeed implements MarketDataPipeline {
   protected emitDisconnected(reason: string): void {
     this.connected = false
     this.eventBus.emit(EventTypes.SYSTEM_WARNING, {
-      timestamp: new Date(),
+      timestamp: epochDateNow(),
       message: `Market data feed disconnected: ${reason}`,
       context: 'MarketDataFeed',
       details: { feedType: this.config.feedType, reason },
@@ -145,7 +145,7 @@ export abstract class BaseMarketDataFeed implements MarketDataPipeline {
   protected emitError(error: Error): void {
     this.lastError = error.message
     this.eventBus.emit(EventTypes.SYSTEM_ERROR, {
-      timestamp: new Date(),
+      timestamp: epochDateNow(),
       error,
       context: 'MarketDataFeed',
       severity: 'medium',
@@ -158,7 +158,7 @@ export abstract class BaseMarketDataFeed implements MarketDataPipeline {
   protected emitReconnecting(attempt: number): void {
     this.reconnectAttempts = attempt
     this.eventBus.emit(EventTypes.SYSTEM_INFO, {
-      timestamp: new Date(),
+      timestamp: epochDateNow(),
       message: `Market data feed reconnecting: attempt ${attempt}`,
       context: 'MarketDataFeed',
       details: { feedType: this.config.feedType, attempt },
@@ -170,7 +170,7 @@ export abstract class BaseMarketDataFeed implements MarketDataPipeline {
    */
   private updateMessageStats(): void {
     this.messagesReceived++
-    this.lastMessageTime = new Date()
+    this.lastMessageTime = epochDateNow()
   }
 
   /**

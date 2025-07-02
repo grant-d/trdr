@@ -1,14 +1,15 @@
-import { describe, it, beforeEach, afterEach } from 'node:test'
+import { epochDateNow, toEpochDate } from '@trdr/shared'
 import assert from 'node:assert/strict'
-import {
-  PaperTradingFeed,
-  type PaperTradingConfig,
-  type MarketScenario,
-  type ExecutionSimulation,
-} from './paper-trading-feed'
-import type { HistoricalDataRequest } from '../interfaces/market-data-pipeline'
+import { afterEach, beforeEach, describe, it } from 'node:test'
 import { EventBus } from '../events/event-bus'
 import { EventTypes } from '../events/types'
+import type { HistoricalDataRequest } from '../interfaces/market-data-pipeline'
+import {
+  PaperTradingFeed,
+  type ExecutionSimulation,
+  type MarketScenario,
+  type PaperTradingConfig,
+} from './paper-trading-feed'
 
 describe('PaperTradingFeed', () => {
   let feed: PaperTradingFeed
@@ -111,7 +112,7 @@ describe('PaperTradingFeed', () => {
       const originalStart = feed['baseFeed'].start
       feed['baseFeed'].start = async () => {
         feed['baseFeed']['connected'] = true
-        feed['baseFeed']['startTime'] = new Date()
+        feed['baseFeed']['startTime'] = epochDateNow()
       }
 
       await feed.start()
@@ -205,7 +206,7 @@ describe('PaperTradingFeed', () => {
         feed['baseFeed']['connected'] = true
       }
       feed['baseFeed'].getHistorical = async () => [{
-        timestamp: Date.now(),
+        timestamp: epochDateNow(),
         open: 50000,
         high: 51000,
         low: 49000,
@@ -219,8 +220,8 @@ describe('PaperTradingFeed', () => {
     it('should fetch historical data from base feed', async () => {
       const request: HistoricalDataRequest = {
         symbol: 'BTC-USD',
-        start: new Date('2023-01-01'),
-        end: new Date('2023-01-02'),
+        start: toEpochDate(new Date('2023-01-01')),
+        end: toEpochDate(new Date('2023-01-02')),
         interval: '1h',
       }
 
@@ -254,7 +255,7 @@ describe('PaperTradingFeed', () => {
       // Add a bullish scenario
       const scenario: MarketScenario = {
         id: 'bullish-test',
-        startTime: new Date(Date.now() - 1000),
+        startTime: toEpochDate(new Date(Date.now() - 1000)),
         duration: 10000,
         volatilityMultiplier: 1.5,
         trendDirection: 1,
@@ -285,7 +286,7 @@ describe('PaperTradingFeed', () => {
       const execution: ExecutionSimulation = {
         size: 1.0,
         side: 'buy',
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
       }
 
       const result = await feed.simulateExecution('BTC-USD', execution)
@@ -295,7 +296,7 @@ describe('PaperTradingFeed', () => {
       assert.ok(result.slippage >= 0)
       assert.ok(result.priceImpact >= 0)
       assert.ok(result.executionDelay >= config.executionDelay!)
-      assert.ok(result.executionTime instanceof Date)
+      assert.ok(typeof result.executionTime === 'number')
 
       // Buy order should execute at higher price due to slippage
       assert.ok(result.executedPrice > 50000)
@@ -306,7 +307,7 @@ describe('PaperTradingFeed', () => {
         size: 1.0,
         side: 'buy',
         limitPrice: 51000,
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
       }
 
       const result = await feed.simulateExecution('BTC-USD', execution)
@@ -319,7 +320,7 @@ describe('PaperTradingFeed', () => {
       const execution: ExecutionSimulation = {
         size: 1.0,
         side: 'sell',
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
       }
 
       const result = await feed.simulateExecution('BTC-USD', execution)
@@ -332,13 +333,13 @@ describe('PaperTradingFeed', () => {
       const smallOrder: ExecutionSimulation = {
         size: 0.1,
         side: 'buy',
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
       }
 
       const largeOrder: ExecutionSimulation = {
         size: 10.0,
         side: 'buy',
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
       }
 
       const smallResult = await feed.simulateExecution('BTC-USD', smallOrder)
@@ -353,7 +354,7 @@ describe('PaperTradingFeed', () => {
       const execution: ExecutionSimulation = {
         size: 1.0,
         side: 'buy',
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
       }
 
       await feed.simulateExecution('BTC-USD', execution)
@@ -385,7 +386,7 @@ describe('PaperTradingFeed', () => {
     it('should add and remove market scenarios', () => {
       const scenario: MarketScenario = {
         id: 'test-scenario',
-        startTime: new Date(),
+        startTime: epochDateNow(),
         duration: 5000,
         volatilityMultiplier: 2.0,
         trendDirection: 1,
@@ -408,7 +409,7 @@ describe('PaperTradingFeed', () => {
 
       const scenario: MarketScenario = {
         id: 'test',
-        startTime: new Date(),
+        startTime: epochDateNow(),
         duration: 1000,
         volatilityMultiplier: 1.0,
         trendDirection: 0,
@@ -425,7 +426,7 @@ describe('PaperTradingFeed', () => {
       // Add scenario with reduced liquidity
       const scenario: MarketScenario = {
         id: 'low-liquidity',
-        startTime: new Date(Date.now() - 1000),
+        startTime: toEpochDate(Date.now() - 1000),
         duration: 10000,
         volatilityMultiplier: 1.0,
         trendDirection: 0,
@@ -438,7 +439,7 @@ describe('PaperTradingFeed', () => {
       const baselineExecution: ExecutionSimulation = {
         size: 2000, // Use larger size for meaningful slippage
         side: 'buy',
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
       }
 
       // Remove scenario temporarily to get baseline
@@ -463,13 +464,13 @@ describe('PaperTradingFeed', () => {
       })
 
       // Mock start time
-      acceleratedFeed['startTime'] = new Date(Date.now() - 1000)
+      acceleratedFeed['startTime'] = toEpochDate(Date.now() - 1000)
 
       const virtualTime = acceleratedFeed.getVirtualTime()
-      const realTime = new Date()
+      const realTime = epochDateNow()
 
       // Virtual time should be ahead of real time
-      assert.ok(virtualTime.getTime() > realTime.getTime())
+      assert.ok(virtualTime > realTime)
     })
 
     it('should set time acceleration factor', () => {
@@ -486,10 +487,10 @@ describe('PaperTradingFeed', () => {
 
     it('should return real time when acceleration disabled', () => {
       const normalTime = feed.getVirtualTime()
-      const realTime = new Date()
+      const realTime = epochDateNow()
 
       // Should be approximately equal (within 100ms)
-      assert.ok(Math.abs(normalTime.getTime() - realTime.getTime()) < 100)
+      assert.ok(Math.abs(normalTime - realTime) < 100)
     })
   })
 
@@ -532,7 +533,7 @@ describe('PaperTradingFeed', () => {
         uptime: 1000,
         reconnectAttempts: 0,
         messagesReceived: 10,
-        lastMessageTime: new Date(),
+        lastMessageTime: epochDateNow(),
         subscribedSymbols: ['BTC-USD'],
       })
 
@@ -565,7 +566,7 @@ describe('PaperTradingFeed', () => {
       const execution: ExecutionSimulation = {
         size: 0,
         side: 'buy',
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
       }
 
       const result = await feed.simulateExecution('BTC-USD', execution)
@@ -584,7 +585,7 @@ describe('PaperTradingFeed', () => {
       const execution: ExecutionSimulation = {
         size: 1000000, // Very large order
         side: 'buy',
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
       }
 
       const result = await feed.simulateExecution('BTC-USD', execution)
@@ -606,7 +607,7 @@ describe('PaperTradingFeed', () => {
       const execution: ExecutionSimulation = {
         size: 1.0,
         side: 'buy',
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
       }
 
       const result = await feed.simulateExecution('BTC-USD', execution)

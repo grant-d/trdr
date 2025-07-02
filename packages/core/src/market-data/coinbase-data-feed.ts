@@ -1,4 +1,4 @@
-import type { Candle } from '@trdr/shared'
+import type { Candle, EpochDate } from '@trdr/shared'
 import type { HistoricalDataRequest } from '../interfaces/market-data-pipeline'
 import { EnhancedMarketDataFeed, type EnhancedDataFeedConfig } from './enhanced-market-data-feed'
 import { CoinbaseAdvTradeClient, ProductsService, CoinbaseAdvTradeCredentials } from '@coinbase-sample/advanced-trade-sdk-ts/dist/index'
@@ -101,8 +101,8 @@ export class CoinbaseDataFeed extends EnhancedMarketDataFeed {
 
       const response = await this.productsService.getProductCandles({
         productId: request.symbol,
-        start: Math.floor(request.start.getTime() / 1000).toString(),
-        end: Math.floor(request.end.getTime() / 1000).toString(),
+        start: Math.floor(request.start / 1000).toString(),
+        end: Math.floor(request.end / 1000).toString(),
         granularity: granularity,
       })
 
@@ -195,15 +195,18 @@ export class CoinbaseDataFeed extends EnhancedMarketDataFeed {
   /**
    * Transform Coinbase candle data to our format
    */
-  private transformCandleData(candles: any[]): Candle[] {
-    return candles.map(candle => ({
-      timestamp: parseInt(candle.start) * 1000, // Convert to milliseconds
-      open: parseFloat(candle.open),
-      high: parseFloat(candle.high),
-      low: parseFloat(candle.low),
-      close: parseFloat(candle.close),
-      volume: parseFloat(candle.volume),
-    }))
+  private transformCandleData(candles: unknown[]): Candle[] {
+    return candles.map(candle => {
+      const candleData = candle as Record<string, unknown>
+      return {
+        timestamp: (parseInt(candleData.start as string) * 1000) as EpochDate, // Convert to milliseconds
+        open: parseFloat(candleData.open as string),
+        high: parseFloat(candleData.high as string),
+        low: parseFloat(candleData.low as string),
+        close: parseFloat(candleData.close as string),
+        volume: parseFloat(candleData.volume as string),
+      }
+    })
   }
 
   /**

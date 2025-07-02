@@ -1,4 +1,4 @@
-import type { Candle } from '@trdr/shared'
+import { toEpochDate, type Candle } from '@trdr/shared'
 import assert from 'node:assert/strict'
 import { beforeEach, describe, it } from 'node:test'
 import { BollingerBandsIndicator } from './bollinger-bands'
@@ -16,7 +16,7 @@ describe('BollingerBandsIndicator', () => {
       const price = basePrice + amplitude * Math.sin(i * 0.5)
 
       candles.push({
-        timestamp: (i + 1) * 1000,
+        timestamp: toEpochDate((i + 1) * 1000),
         open: price - 0.5,
         high: price + 1,
         low: price - 1,
@@ -107,7 +107,7 @@ describe('BollingerBandsIndicator', () => {
       const constantCandles: Candle[] = []
       for (let i = 0; i < 20; i++) {
         constantCandles.push({
-          timestamp: (i + 1) * 1000,
+          timestamp: toEpochDate((i + 1) * 1000),
           open: 100,
           high: 100,
           low: 100,
@@ -252,7 +252,7 @@ describe('BollingerBandsIndicator', () => {
       for (let i = 0; i < 25; i++) {
         const price = i % 2 === 0 ? 100 : 150 // Oscillate between 100 and 150
         volatileCandles.push({
-          timestamp: (i + 1) * 1000,
+          timestamp: toEpochDate((i + 1) * 1000),
           open: price,
           high: price + 5,
           low: price - 5,

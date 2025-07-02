@@ -1,3 +1,4 @@
+import { epochDateNow, toEpochDate } from '@trdr/shared'
 import assert from 'node:assert/strict'
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import type { ConnectionManager } from '../db/connection-manager'
@@ -38,7 +39,7 @@ describe('AgentRepository', () => {
       trailDistance: 0.02,
       reasoning: { momentum: 'strong', trend: 'up' },
       marketContext: { volume: 'high', volatility: 'medium' },
-      timestamp: new Date(),
+      timestamp: epochDateNow(),
     }
 
     it('should record agent decision', async () => {
@@ -62,7 +63,7 @@ describe('AgentRepository', () => {
         confidence: 0.7 + i * 0.05,
         trailDistance: 0.01 + i * 0.005,
         reasoning: { batch: i },
-        timestamp: new Date(Date.now() - i * 1000),
+        timestamp: toEpochDate(Date.now() - i * 1000)
       }))
 
       await repository.recordDecisionsBatch(decisions)
@@ -78,13 +79,13 @@ describe('AgentRepository', () => {
       await repository.recordDecision({
         ...testDecision,
         agentId,
-        timestamp: new Date(Date.now() - 2000),
+        timestamp: toEpochDate(Date.now() - 2000)
       })
 
       await repository.recordDecision({
         ...testDecision,
         agentId: otherAgentId,
-        timestamp: new Date(Date.now() - 1000),
+        timestamp: toEpochDate(Date.now() - 1000)
       })
 
       const agentDecisions = await repository.getDecisions(agentId)
@@ -97,13 +98,13 @@ describe('AgentRepository', () => {
       await repository.recordDecision({
         ...testDecision,
         symbol: 'BTC-USD',
-        timestamp: new Date(Date.now() - 2000),
+        timestamp: toEpochDate(Date.now() - 2000)
       })
 
       await repository.recordDecision({
         ...testDecision,
         symbol: 'ETH-USD',
-        timestamp: new Date(Date.now() - 1000),
+        timestamp: toEpochDate(Date.now() - 1000)
       })
 
       const btcDecisions = await repository.getDecisions(undefined, 'BTC-USD')
@@ -117,19 +118,19 @@ describe('AgentRepository', () => {
 
       await repository.recordDecision({
         ...testDecision,
-        timestamp: new Date(now - 7200000), // 2 hours ago
+        timestamp: toEpochDate(now - 7200000), // 2 hours ago
       })
 
       await repository.recordDecision({
         ...testDecision,
-        timestamp: new Date(now - 1800000), // 30 minutes ago
+        timestamp: toEpochDate(now - 1800000), // 30 minutes ago
       })
 
       const recentDecisions = await repository.getDecisions(
         undefined,
         undefined,
-        new Date(now - 3600000), // 1 hour ago
-        new Date(),
+        toEpochDate(now - 3600000), // 1 hour ago
+        epochDateNow()
       )
 
       assert.equal(recentDecisions.length, 1)
@@ -148,7 +149,7 @@ describe('AgentRepository', () => {
           { agentId: 'agent-2', action: 'buy', confidence: 0.7 },
           { agentId: 'agent-3', action: 'sell', confidence: 0.6 },
         ],
-        timestamp: new Date(),
+        timestamp: epochDateNow()
       }
 
       await repository.recordConsensus(consensus)
@@ -163,8 +164,8 @@ describe('AgentRepository', () => {
     })
 
     it('should get consensus history with time filter', async () => {
-      const now = new Date()
-      const past = new Date(now.getTime() - 3600000)
+      const now = epochDateNow()
+      const past = toEpochDate(now - 3600000)
 
       await repository.recordConsensus({
         symbol: 'BTC-USD',
@@ -186,7 +187,7 @@ describe('AgentRepository', () => {
 
       const recentHistory = await repository.getConsensusHistory(
         'BTC-USD',
-        new Date(now.getTime() - 1800000),
+        toEpochDate(now - 1800000),
         now,
       )
 
@@ -216,7 +217,7 @@ describe('AgentRepository', () => {
         },
       },
       metadata: {
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
         source: 'test',
       },
     }
@@ -309,7 +310,7 @@ describe('AgentRepository', () => {
             confidence: decision.confidence,
             trailDistance: 0.02,
             reasoning: { index: i },
-            timestamp: new Date(Date.now() - (decisions.length - i) * 3600000),
+            timestamp: toEpochDate(Date.now() - (decisions.length - i) * 3600000),
           })
         }
       }
@@ -329,8 +330,8 @@ describe('AgentRepository', () => {
 
   describe('Cleanup Operations', () => {
     it('should cleanup old data', async () => {
-      const oldDate = Date.now() - 100 * 86400000
-      const recentDate = Date.now() - 3600000
+      const oldDate = toEpochDate(Date.now() - 100 * 86400000)
+      const recentDate = toEpochDate(Date.now() - 3600000)
 
       // Add old data
       await repository.recordDecision({
@@ -341,7 +342,7 @@ describe('AgentRepository', () => {
         confidence: 0.5,
         trailDistance: 0,
         reasoning: { old: true },
-        timestamp: new Date(oldDate),
+        timestamp: toEpochDate(oldDate),
       })
 
       await repository.recordConsensus({
@@ -350,7 +351,7 @@ describe('AgentRepository', () => {
         confidence: 0.5,
         dissent: 0.3,
         votes: [],
-        timestamp: new Date(oldDate),
+        timestamp: toEpochDate(oldDate),
       })
 
       await repository.saveCheckpoint({
@@ -369,7 +370,7 @@ describe('AgentRepository', () => {
         confidence: 0.8,
         trailDistance: 0.02,
         reasoning: { recent: true },
-        timestamp: new Date(recentDate),
+        timestamp: toEpochDate(recentDate),
       })
 
       const cleanup = await repository.cleanup(90)
@@ -382,7 +383,7 @@ describe('AgentRepository', () => {
       const recentDecisions = await repository.getDecisions('cleanup-agent')
       assert.equal(recentDecisions.length, 1)
       assert.ok(recentDecisions[0])
-      assert.equal(recentDecisions[0].timestamp.getTime(), recentDate)
+      assert.equal(recentDecisions[0].timestamp, recentDate)
     })
   })
 })

@@ -1,4 +1,5 @@
 import { EnhancedOrderState } from '@trdr/shared'
+import { epochDateNow } from '@trdr/shared'
 import type { ManagedOrder, Mutable } from '@trdr/shared'
 import { EventBus } from '../events/event-bus'
 import { EventTypes } from '../events/types'
@@ -131,7 +132,7 @@ export class OrderStateMachine {
 
     const oldState = order.state
     order.state = newState
-    order.lastModified = new Date()
+    order.lastModified = epochDateNow()
 
     // Add reason for terminal states
     if (newState === EnhancedOrderState.CANCELLED && reason) {
@@ -148,7 +149,7 @@ export class OrderStateMachine {
       orderId: order.id,
       oldState,
       newState,
-      timestamp: new Date(),
+      timestamp: epochDateNow(),
       reason
     })
 
@@ -157,21 +158,21 @@ export class OrderStateMachine {
       case EnhancedOrderState.SUBMITTED:
         this.eventBus.emit(EventTypes.ORDER_SUBMITTED, {
           order: { ...order },
-          timestamp: new Date()
+          timestamp: epochDateNow()
         })
         break
 
       case EnhancedOrderState.PARTIALLY_FILLED:
         this.eventBus.emit(EventTypes.ORDER_PARTIAL_FILL, {
           order: { ...order },
-          timestamp: new Date()
+          timestamp: epochDateNow()
         })
         break
 
       case EnhancedOrderState.FILLED:
         this.eventBus.emit(EventTypes.ORDER_FILLED, {
           order: { ...order },
-          timestamp: new Date()
+          timestamp: epochDateNow()
         })
         break
 
@@ -179,7 +180,7 @@ export class OrderStateMachine {
         this.eventBus.emit(EventTypes.ORDER_CANCELLED, {
           order: { ...order },
           reason,
-          timestamp: new Date()
+          timestamp: epochDateNow()
         })
         break
 
@@ -187,14 +188,14 @@ export class OrderStateMachine {
         this.eventBus.emit(EventTypes.ORDER_REJECTED, {
           order: { ...order },
           reason: reason || 'Unknown rejection reason',
-          timestamp: new Date()
+          timestamp: epochDateNow()
         })
         break
 
       case EnhancedOrderState.EXPIRED:
         this.eventBus.emit(EventTypes.ORDER_EXPIRED, {
           order: { ...order },
-          timestamp: new Date()
+          timestamp: epochDateNow()
         })
         break
     }

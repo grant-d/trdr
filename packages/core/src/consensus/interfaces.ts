@@ -1,4 +1,4 @@
-import type { OrderSide } from '@trdr/shared'
+import type { OrderSide, EpochDate } from '@trdr/shared'
 
 /**
  * Individual agent signal for consensus
@@ -21,7 +21,7 @@ export interface AgentSignal {
   /** Reasoning for the signal */
   readonly reasoning: string
   /** Timestamp of signal generation */
-  readonly timestamp: Date
+  readonly timestamp: EpochDate
   /** Priority weight for this agent */
   readonly weight?: number
 }
@@ -83,7 +83,7 @@ export interface ConsensusResult {
   /** Processing time in milliseconds */
   readonly processingTimeMs: number
   /** Timestamp of consensus */
-  readonly timestamp: Date
+  readonly timestamp: EpochDate
 }
 
 /**
@@ -107,7 +107,7 @@ export interface AgentPerformance {
   /** Suggested new weight */
   suggestedWeight: number
   /** Last updated timestamp */
-  lastUpdated: Date
+  lastUpdated: EpochDate
 }
 
 /**
@@ -140,29 +140,29 @@ export interface ConsensusEvents {
   'consensus.started': {
     requestId: string
     agentCount: number
-    timestamp: Date
+    timestamp: EpochDate
   }
   'consensus.signal.received': {
     requestId: string
     agentId: string
     signal: AgentSignal
-    timestamp: Date
+    timestamp: EpochDate
   }
   'consensus.timeout': {
     requestId: string
     receivedCount: number
     expectedCount: number
-    timestamp: Date
+    timestamp: EpochDate
   }
   'consensus.completed': {
     requestId: string
     result: ConsensusResult
-    timestamp: Date
+    timestamp: EpochDate
   }
   'consensus.failed': {
     requestId: string
     reason: string
-    timestamp: Date
+    timestamp: EpochDate
   }
 }
 
@@ -177,7 +177,7 @@ export interface SignalRequest {
   /** Current market price */
   readonly currentPrice: number
   /** Request timestamp */
-  readonly timestamp: Date
+  readonly timestamp: EpochDate
   /** Additional context data */
   readonly context?: Record<string, unknown>
 }

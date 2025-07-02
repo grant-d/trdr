@@ -1,5 +1,6 @@
 import { describe, it, beforeEach, mock } from 'node:test'
 import assert from 'node:assert/strict'
+import { epochDateNow, toEpochDate } from '@trdr/shared'
 import { eventBus, EventTypes, eventLogger, timeSourceManager } from './index'
 import type { MarketDataEvent, OrderCreatedEvent } from './types'
 
@@ -31,12 +32,12 @@ describe('EventBus', () => {
       const handler = mock.fn()
 
       const subscription = eventBus.subscribe('test.event', handler)
-      eventBus.emit('test.event', { timestamp: new Date() })
+      eventBus.emit('test.event', { timestamp: epochDateNow() })
 
       assert.equal(handler.mock.calls.length, 1)
 
       subscription.unsubscribe()
-      eventBus.emit('test.event', { timestamp: new Date() })
+      eventBus.emit('test.event', { timestamp: epochDateNow() })
 
       assert.equal(handler.mock.calls.length, 1) // Still 1, not called again
     })
@@ -49,7 +50,7 @@ describe('EventBus', () => {
       eventBus.subscribe('test.event', handler1)
       eventBus.subscribe('test.event', handler2)
 
-      eventBus.emit('test.event', { timestamp: new Date() })
+      eventBus.emit('test.event', { timestamp: epochDateNow() })
 
       assert.equal(handler1.mock.calls.length, 1)
       assert.equal(handler2.mock.calls.length, 1)
@@ -69,7 +70,7 @@ describe('EventBus', () => {
         callOrder.push(2)
       }, { priority: 5 })
 
-      eventBus.emit('test.event', { timestamp: new Date() })
+      eventBus.emit('test.event', { timestamp: epochDateNow() })
 
       assert.deepEqual(callOrder, [1, 2, 3])
     })
@@ -85,7 +86,7 @@ describe('EventBus', () => {
         resolved = true
       }, { isAsync: true })
 
-      eventBus.emit('test.async', { timestamp: new Date() })
+      eventBus.emit('test.async', { timestamp: epochDateNow() })
       assert.equal(resolved, false) // Not resolved immediately
 
       await eventBus.waitForAsyncHandlers()
@@ -103,7 +104,7 @@ describe('EventBus', () => {
         throw new Error('Async error')
       }, { isAsync: true })
 
-      eventBus.emit('test.async.error', { timestamp: new Date() })
+      eventBus.emit('test.async.error', { timestamp: epochDateNow() })
       await eventBus.waitForAsyncHandlers()
 
       assert.equal(errorHandler.mock.calls.length, 1)
@@ -124,7 +125,7 @@ describe('EventBus', () => {
       eventBus.subscribe('test.error', handler1)
       eventBus.subscribe('test.error', handler2)
 
-      eventBus.emit('test.error', { timestamp: new Date() })
+      eventBus.emit('test.error', { timestamp: epochDateNow() })
 
       assert.equal(handler2.mock.calls.length, 1) // Handler 2 still called
     })
@@ -140,7 +141,7 @@ describe('EventBus', () => {
         symbol: 'BTC-USD',
         price: 50000,
         volume: 100,
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
       }
 
       eventBus.emit(EventTypes.MARKET_TICK, marketData)
@@ -164,7 +165,7 @@ describe('EventBus', () => {
         price: 50000,
         size: 0.1,
         status: 'pending',
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
       }
 
       eventBus.emit(EventTypes.ORDER_CREATED, orderEvent)
@@ -187,8 +188,8 @@ describe('EventLogger', () => {
   it('should record events', () => {
     eventLogger.startRecording(['test.log'])
 
-    eventBus.emit('test.log', { data: 'test1', timestamp: new Date() })
-    eventBus.emit('test.log', { data: 'test2', timestamp: new Date() })
+    eventBus.emit('test.log', { data: 'test1', timestamp: epochDateNow() })
+    eventBus.emit('test.log', { data: 'test2', timestamp: epochDateNow() })
 
     eventLogger.stopRecording()
 
@@ -203,8 +204,8 @@ describe('EventLogger', () => {
 
     // Record some events
     eventLogger.startRecording(['test.log'])
-    eventBus.emit('test.log', { data: 'replay1', timestamp: new Date() })
-    eventBus.emit('test.log', { data: 'replay2', timestamp: new Date() })
+    eventBus.emit('test.log', { data: 'replay1', timestamp: epochDateNow() })
+    eventBus.emit('test.log', { data: 'replay2', timestamp: epochDateNow() })
     eventLogger.stopRecording()
 
     // Subscribe and replay
@@ -222,7 +223,7 @@ describe('EventLogger', () => {
 
   it('should export and import events', () => {
     eventLogger.startRecording(['test.log'])
-    eventBus.emit('test.log', { data: 'export', timestamp: new Date() })
+    eventBus.emit('test.log', { data: 'export', timestamp: epochDateNow() })
     eventLogger.stopRecording()
 
     const json = eventLogger.exportToJSON()
@@ -241,23 +242,23 @@ describe('EventLogger', () => {
 describe('TimeSource', () => {
   it('should use real time by default', () => {
     const before = Date.now()
-    const time = timeSourceManager.nowMs()
+    const time = timeSourceManager.nowEpoch()
     const after = Date.now()
 
     assert.ok(time >= before && time <= after)
   })
 
   it('should support simulated time', () => {
-    const startTime = new Date('2024-01-01T00:00:00Z')
+    const startTime = toEpochDate(new Date('2024-01-01T00:00:00Z'))
     const simulated = timeSourceManager.useSimulatedTime(startTime)
 
-    assert.equal(timeSourceManager.now().getTime(), startTime.getTime())
+    assert.equal(timeSourceManager.nowEpoch(), startTime)
 
     simulated.advance(1000) // Advance 1 second
-    assert.equal(timeSourceManager.now().getTime(), startTime.getTime() + 1000)
+    assert.equal(timeSourceManager.nowEpoch(), startTime + 1000)
 
     simulated.setSpeed(10) // 10x speed
     simulated.advance(1000) // Advance 10 seconds
-    assert.equal(timeSourceManager.now().getTime(), startTime.getTime() + 11000)
+    assert.equal(timeSourceManager.nowEpoch(), startTime + 11000)
   })
 })

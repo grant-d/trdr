@@ -1,6 +1,6 @@
 import { BaseRepository } from './base-repository'
-import type { AgentType} from '@trdr/shared'
-import { type IsoDate, toIsoDate } from '@trdr/shared'
+import type { AgentType, EpochDate} from '@trdr/shared'
+import { type IsoDate, toIsoDate, isoToEpoch, epochDateNow, isoDateNow } from '@trdr/shared'
 import type { ConnectionManager } from '../db/connection-manager'
 import type { AgentSignal } from '../types/agents'
 
@@ -35,7 +35,7 @@ export interface AgentConsensus {
     action: string
     confidence: number
   }>
-  readonly timestamp: Date
+  readonly timestamp: EpochDate
 }
 
 /**
@@ -61,7 +61,7 @@ export interface AgentCheckpoint {
   readonly version: number
   readonly state: Record<string, unknown>
   readonly metadata?: Record<string, unknown>
-  readonly createdAt: Date
+  readonly createdAt: EpochDate
 }
 
 /**
@@ -132,8 +132,8 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
   async getDecisions(
     agentId?: string,
     symbol?: string,
-    startTime?: Date,
-    endTime?: Date,
+    startTime?: EpochDate | Date,
+    endTime?: EpochDate | Date,
     limit?: number,
   ): Promise<AgentSignal[]> {
     const whereParts: string[] = []
@@ -150,13 +150,15 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
     }
 
     if (startTime) {
+      const dt = startTime instanceof Date ? toIsoDate(startTime) : toIsoDate(startTime)
       whereParts.push('timestamp >= ?')
-      params.push(toIsoDate(startTime))
+      params.push(dt)
     }
 
     if (endTime) {
+      const dt = endTime instanceof Date ? toIsoDate(endTime) : toIsoDate(endTime)
       whereParts.push('timestamp <= ?')
-      params.push(toIsoDate(endTime))
+      params.push(dt)
     }
 
     const where = whereParts.length > 0 ? whereParts.join(' AND ') : undefined
@@ -191,21 +193,23 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
    */
   async getConsensusHistory(
     symbol: string,
-    startTime?: Date,
-    endTime?: Date,
+    startTime?: EpochDate | Date,
+    endTime?: EpochDate | Date,
     limit?: number,
   ): Promise<AgentConsensus[]> {
     let sql = `SELECT * FROM ${this.consensusTableName} WHERE symbol = ?`
     const params: unknown[] = [symbol]
 
     if (startTime) {
+      const dt = startTime instanceof Date ? toIsoDate(startTime) : toIsoDate(startTime)
       sql += ' AND timestamp >= ?'
-      params.push(toIsoDate(startTime))
+      params.push(dt)
     }
 
     if (endTime) {
+      const dt = endTime instanceof Date ? toIsoDate(endTime) : toIsoDate(endTime)
       sql += ' AND timestamp <= ?'
-      params.push(toIsoDate(endTime))
+      params.push(dt)
     }
 
     sql += ' ORDER BY timestamp DESC'
@@ -228,7 +232,7 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
       version: checkpoint.version,
       state: JSON.stringify(checkpoint.state),
       metadata: checkpoint.metadata ? JSON.stringify(checkpoint.metadata) : null,
-      created_at: toIsoDate(new Date()),
+      created_at: isoDateNow(),
     }
 
     const fields = Object.keys(model)
@@ -296,8 +300,7 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
     actionDistribution: Record<string, number>
     accuracyRate?: number
   }> {
-    const startTime = new Date()
-    startTime.setDate(startTime.getDate() - days)
+    const startTime = epochDateNow() - (days * 24 * 60 * 60 * 1000)
 
     // Get overall stats
     const overallStats = await this.query<{
@@ -310,7 +313,7 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
       FROM ${this.tableName}
       WHERE agent_id = ?
         AND timestamp >= ?
-    `, [agentId, startTime.toISOString()])
+    `, [agentId, toIsoDate(startTime)])
 
     // Get action distribution
     const actionStats = await this.query<{
@@ -324,7 +327,7 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
       WHERE agent_id = ?
         AND timestamp >= ?
       GROUP BY action
-    `, [agentId, startTime.toISOString()])
+    `, [agentId, toIsoDate(startTime)])
 
     const totalDecisions = Number(overallStats[0]?.total_decisions || 0)
     const avgConfidence = Number(overallStats[0]?.avg_confidence || 0)
@@ -349,8 +352,7 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
     consensusDeleted: number
     checkpointsDeleted: number
   }> {
-    const cutoffDate = new Date()
-    cutoffDate.setDate(cutoffDate.getDate() - daysToKeep)
+    const cutoffDate = epochDateNow() - (daysToKeep * 24 * 60 * 60 * 1000)
 
     // Count before deletion
     const decisionsBefore = await this.count()
@@ -362,14 +364,14 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
     ).then(r => Number(r[0]?.count || 0))
 
     // Delete old data
-    await this.delete('timestamp < ?', [cutoffDate.toISOString()])
+    await this.delete('timestamp < ?', [toIsoDate(cutoffDate)])
     await this.connectionManager.execute(
       `DELETE FROM ${this.consensusTableName} WHERE timestamp < ?`,
-      [cutoffDate.toISOString()],
+      [toIsoDate(cutoffDate)],
     )
     await this.connectionManager.execute(
       `DELETE FROM ${this.checkpointsTableName} WHERE created_at < ?`,
-      [cutoffDate.toISOString()],
+      [toIsoDate(cutoffDate)],
     )
 
     // Count after deletion
@@ -400,7 +402,7 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
       trailDistance: model.trail_distance || 0,
       reasoning: JSON.parse(model.reasoning as string) as Record<string, unknown>,
       marketContext: model.market_context ? JSON.parse(model.market_context as string) as Record<string, unknown> : undefined,
-      timestamp: new Date(model.timestamp),
+      timestamp: isoToEpoch(model.timestamp),
     }
   }
 
@@ -415,7 +417,7 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
       confidence: model.confidence,
       dissent: model.dissent,
       votes: JSON.parse(model.votes as string) as Array<{ agentId: string; action: string; confidence: number }>,
-      timestamp: new Date(model.timestamp),
+      timestamp: isoToEpoch(model.timestamp),
     }
   }
 
@@ -429,7 +431,7 @@ export class AgentRepository extends BaseRepository<AgentDecisionDto> {
       version: model.version,
       state: JSON.parse(model.state as string) as Record<string, unknown>,
       metadata: model.metadata ? JSON.parse(model.metadata as string) as Record<string, unknown> : undefined,
-      createdAt: new Date(model.created_at),
+      createdAt: isoToEpoch(model.created_at),
     }
   }
 }

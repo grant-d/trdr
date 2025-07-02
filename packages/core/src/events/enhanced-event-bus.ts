@@ -1,6 +1,7 @@
-import type { EventHandler, EventType, EventData, EventSubscription } from './types'
-import type { EventFilter, EventFilterConfig } from './event-filter'
+import { epochDateNow, type EpochDate } from '@trdr/shared'
 import { EventBus } from './event-bus'
+import type { EventFilter, EventFilterConfig } from './event-filter'
+import type { EventData, EventHandler, EventSubscription, EventType } from './types'
 
 /**
  * Enhanced subscription with filtering capabilities
@@ -45,7 +46,7 @@ export class EnhancedEventBus {
     filtered: number
     handled: number
     errors: number
-    lastEmitted?: Date
+    lastEmitted?: EpochDate
   }>()
   private isDebugging = false
   private subscriptionId = 0
@@ -104,11 +105,11 @@ export class EnhancedEventBus {
     const handlers = this.enhancedHandlers.get(eventType)!
     const subscriptionId = ++this.subscriptionId
 
-    const wrapper: EnhancedHandlerWrapper<T> = {
-      handler,
+    const wrapper: EnhancedHandlerWrapper<EventData> = {
+      handler: handler as EventHandler<EventData>,
       priority,
       isAsync,
-      filter,
+      filter: filter as EventFilter<EventData> | undefined,
       subscriptionId,
     }
 
@@ -149,8 +150,8 @@ export class EnhancedEventBus {
     }
 
     const filters = this.globalFilters.get(config.eventType)!
-    const filterConfig: GlobalFilterConfig<T> = {
-      filter: config.filter,
+    const filterConfig: GlobalFilterConfig<EventData> = {
+      filter: config.filter as EventFilter<EventData>,
       priority: config.priority || 0,
       name: config.name,
     }
@@ -218,7 +219,7 @@ export class EnhancedEventBus {
     // Add timestamp if not present
     const eventData = {
       ...data,
-      timestamp: data.timestamp || new Date(),
+      timestamp: data.timestamp || epochDateNow(),
     }
 
     // Execute enhanced handlers with filtering
@@ -234,7 +235,7 @@ export class EnhancedEventBus {
           this.debug(`Error in subscription filter: ${String(error)}`)
           // Emit error event for filter failures
           this.baseEventBus.emit('system.error', {
-            timestamp: new Date(),
+            timestamp: epochDateNow(),
             error: error as Error,
             context: 'EnhancedEventBus',
             severity: 'medium',
@@ -260,7 +261,7 @@ export class EnhancedEventBus {
   /**
    * Get event metrics
    */
-  getEventMetrics(eventType?: EventType): Map<EventType, { emitted: number; filtered: number; handled: number; errors: number; lastEmitted?: Date }> | { emitted: number; filtered: number; handled: number; errors: number; lastEmitted?: Date } {
+  getEventMetrics(eventType?: EventType): Map<EventType, { emitted: number; filtered: number; handled: number; errors: number; lastEmitted?: EpochDate }> | { emitted: number; filtered: number; handled: number; errors: number; lastEmitted?: EpochDate } {
     if (eventType) {
       return this.eventMetrics.get(eventType) || {
         emitted: 0,
@@ -348,7 +349,7 @@ export class EnhancedEventBus {
         this.debug(`Error in global filter ${filterConfig.name}: ${String(error)}`)
         // Emit error event for filter failures
         this.baseEventBus.emit('system.error', {
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           error: error as Error,
           context: 'EnhancedEventBus',
           severity: 'medium',
@@ -367,7 +368,7 @@ export class EnhancedEventBus {
     eventType: EventType,
   ): void {
     try {
-      handler(data)
+      void handler(data)
     } catch (error) {
       this.updateMetrics(eventType, 'errors')
       this.handleErrorSafely(error, eventType, 'sync')
@@ -421,7 +422,7 @@ export class EnhancedEventBus {
         error: error instanceof Error ? error : new Error(String(error)),
         context: `Event handler for '${eventType}'`,
         severity: 'medium',
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
       })
     }
   }
@@ -444,7 +445,7 @@ export class EnhancedEventBus {
     metrics[metric]++
 
     if (metric === 'emitted') {
-      metrics.lastEmitted = new Date()
+      metrics.lastEmitted = epochDateNow()
     }
   }
 

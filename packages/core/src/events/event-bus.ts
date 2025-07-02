@@ -16,7 +16,7 @@ interface HandlerWrapper<T extends EventData> {
  */
 export class EventBus {
   private static instance: EventBus
-  private readonly handlers = new Map<EventType, HandlerWrapper<any>[]>()
+  private readonly handlers = new Map<EventType, HandlerWrapper<EventData>[]>()
   private readonly eventTypes = new Set<EventType>()
   private subscriptionId = 0
   private readonly pendingAsyncHandlers = new Set<Promise<void>>()
@@ -68,8 +68,8 @@ export class EventBus {
     }
 
     const handlers = this.handlers.get(eventType)!
-    const wrapper: HandlerWrapper<T> = {
-      handler,
+    const wrapper: HandlerWrapper<EventData> = {
+      handler: handler as EventHandler<EventData>,
       priority,
       isAsync,
     }
@@ -116,7 +116,7 @@ export class EventBus {
     // Add timestamp if not present
     const eventData = {
       ...data,
-      timestamp: data.timestamp || timeSourceManager.now(),
+      timestamp: data.timestamp || timeSourceManager.nowEpoch(),
     }
 
     // Execute all handlers
@@ -125,13 +125,13 @@ export class EventBus {
         // Handle async handlers
         const promise = this.executeAsyncHandler(wrapper.handler, eventData, eventType)
         this.pendingAsyncHandlers.add(promise)
-        promise.finally(() => {
+        void promise.finally(() => {
           this.pendingAsyncHandlers.delete(promise)
         })
       } else {
         // Handle sync handlers
         try {
-          wrapper.handler(eventData)
+          void wrapper.handler(eventData)
         } catch (error) {
           this.handleError(error, eventType, 'sync')
         }
@@ -166,7 +166,7 @@ export class EventBus {
         error: error instanceof Error ? error : new Error(String(error)),
         context: `Event handler for '${eventType}'`,
         severity: 'medium',
-        timestamp: timeSourceManager.now(),
+        timestamp: timeSourceManager.nowEpoch(),
       })
     }
   }

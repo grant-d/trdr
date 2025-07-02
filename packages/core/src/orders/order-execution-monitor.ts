@@ -4,6 +4,7 @@ import type {
   CircuitBreakerConfig,
   OrderFill
 } from '@trdr/shared'
+import { epochDateNow, type EpochDate } from '@trdr/shared'
 import { EventBus } from '../events/event-bus'
 import { EventTypes } from '../events/types'
 
@@ -19,9 +20,9 @@ export class OrderExecutionMonitor {
   
   // Circuit breaker state
   private circuitBreakerTripped = false
-  private circuitBreakerTripTime?: Date
+  private circuitBreakerTripTime?: EpochDate
   private consecutiveFailures = 0
-  private recentLosses: Array<{ amount: number; timestamp: Date }> = []
+  private recentLosses: Array<{ amount: number; timestamp: EpochDate }> = []
   
   // Execution history for adaptive algorithms
   private readonly executionHistory = new Map<string, OrderExecutionMetrics>()
@@ -61,7 +62,7 @@ export class OrderExecutionMonitor {
     const metrics: OrderExecutionMetrics = {
       fillRate: 0,
       fillCount: 0,
-      submittedAt: new Date()
+      submittedAt: epochDateNow()
     }
     
     // Store initial metrics
@@ -87,7 +88,7 @@ export class OrderExecutionMonitor {
     
     // Calculate time to first fill
     if (!metrics.timeToFirstFill && metrics.submittedAt) {
-      metrics.timeToFirstFill = Date.now() - metrics.submittedAt.getTime()
+      metrics.timeToFirstFill = epochDateNow() - metrics.submittedAt
     }
     
     // Calculate slippage for limit orders
@@ -104,14 +105,14 @@ export class OrderExecutionMonitor {
     
     // Check if order is completely filled
     if (order.filledSize >= order.size && metrics.submittedAt) {
-      metrics.timeToComplete = Date.now() - metrics.submittedAt.getTime()
-      metrics.completedAt = new Date()
+      metrics.timeToComplete = epochDateNow() - metrics.submittedAt
+      metrics.completedAt = epochDateNow()
       
       // Emit execution metrics event
       this.eventBus.emit(EventTypes.ORDER_EXECUTION_METRICS, {
         orderId: order.id,
         metrics,
-        timestamp: new Date()
+        timestamp: epochDateNow()
       })
       
       // Check execution quality
@@ -147,12 +148,12 @@ export class OrderExecutionMonitor {
     
     // Track losses
     if (loss && loss > 0) {
-      this.recentLosses.push({ amount: loss, timestamp: new Date() })
+      this.recentLosses.push({ amount: loss, timestamp: epochDateNow() })
       
       // Remove old losses outside window
-      const cutoffTime = Date.now() - config.lossWindowMs
+      const cutoffTime = epochDateNow() - config.lossWindowMs
       this.recentLosses = this.recentLosses.filter(
-        l => l.timestamp.getTime() > cutoffTime
+        l => l.timestamp > cutoffTime
       )
       
       // Calculate total recent loss
@@ -183,11 +184,11 @@ export class OrderExecutionMonitor {
    */
   private tripCircuitBreaker(reason: string): void {
     this.circuitBreakerTripped = true
-    this.circuitBreakerTripTime = new Date()
+    this.circuitBreakerTripTime = epochDateNow()
     
     this.eventBus.emit(EventTypes.CIRCUIT_BREAKER_TRIPPED, {
       reason,
-      timestamp: new Date()
+      timestamp: epochDateNow()
     })
   }
   
@@ -203,7 +204,7 @@ export class OrderExecutionMonitor {
     
     // Check if cooldown period has passed
     const cooldownExpired = 
-      Date.now() - this.circuitBreakerTripTime.getTime() > 
+      epochDateNow() - this.circuitBreakerTripTime > 
       (this.circuitBreakerConfig?.cooldownPeriodMs || 0)
     
     if (cooldownExpired) {
@@ -223,7 +224,7 @@ export class OrderExecutionMonitor {
     this.consecutiveFailures = 0
     
     this.eventBus.emit(EventTypes.CIRCUIT_BREAKER_RESET, {
-      timestamp: new Date()
+      timestamp: epochDateNow()
     })
   }
   
@@ -256,7 +257,7 @@ export class OrderExecutionMonitor {
         orderId: order.id,
         warnings,
         metrics,
-        timestamp: new Date()
+        timestamp: epochDateNow()
       })
     }
   }
@@ -274,9 +275,9 @@ export class OrderExecutionMonitor {
     fillRateDistribution: Record<string, number>
     successRate: number
   } {
-    const cutoffTime = Date.now() - timeWindowMs
+    const cutoffTime = epochDateNow() - timeWindowMs
     const recentMetrics = Array.from(this.executionHistory.values())
-      .filter(m => m.submittedAt && m.submittedAt.getTime() > cutoffTime)
+      .filter(m => m.submittedAt && m.submittedAt > cutoffTime)
     
     if (recentMetrics.length === 0) {
       return {
@@ -388,10 +389,10 @@ export class OrderExecutionMonitor {
    * @param olderThanMs - Clear entries older than this (default: 7 days)
    */
   clearOldHistory(olderThanMs = 604800000): void {
-    const cutoffTime = Date.now() - olderThanMs
+    const cutoffTime = epochDateNow() - olderThanMs
     
     for (const [orderId, metrics] of this.executionHistory.entries()) {
-      if (metrics.submittedAt && metrics.submittedAt.getTime() < cutoffTime) {
+      if (metrics.submittedAt && metrics.submittedAt < cutoffTime) {
         this.executionHistory.delete(orderId)
       }
     }

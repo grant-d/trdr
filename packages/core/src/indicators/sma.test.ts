@@ -1,4 +1,4 @@
-import type { Candle } from '@trdr/shared'
+import type { Candle, EpochDate } from '@trdr/shared'
 import assert from 'node:assert/strict'
 import { beforeEach, describe, it } from 'node:test'
 import { SMAIndicator } from './sma'
@@ -9,16 +9,16 @@ describe('SMAIndicator', () => {
   beforeEach(() => {
     // Create test candles with known values
     candles = [
-      { timestamp: 1000, open: 10, high: 12, low: 9, close: 11, volume: 100 },
-      { timestamp: 2000, open: 11, high: 13, low: 10, close: 12, volume: 110 },
-      { timestamp: 3000, open: 12, high: 14, low: 11, close: 13, volume: 120 },
-      { timestamp: 4000, open: 13, high: 15, low: 12, close: 14, volume: 130 },
-      { timestamp: 5000, open: 14, high: 16, low: 13, close: 15, volume: 140 },
-      { timestamp: 6000, open: 15, high: 17, low: 14, close: 16, volume: 150 },
-      { timestamp: 7000, open: 16, high: 18, low: 15, close: 17, volume: 160 },
-      { timestamp: 8000, open: 17, high: 19, low: 16, close: 18, volume: 170 },
-      { timestamp: 9000, open: 18, high: 20, low: 17, close: 19, volume: 180 },
-      { timestamp: 10000, open: 19, high: 21, low: 18, close: 20, volume: 190 },
+      { timestamp: 1000 as EpochDate, open: 10, high: 12, low: 9, close: 11, volume: 100 },
+      { timestamp: 2000 as EpochDate, open: 11, high: 13, low: 10, close: 12, volume: 110 },
+      { timestamp: 3000 as EpochDate, open: 12, high: 14, low: 11, close: 13, volume: 120 },
+      { timestamp: 4000 as EpochDate, open: 13, high: 15, low: 12, close: 14, volume: 130 },
+      { timestamp: 5000 as EpochDate, open: 14, high: 16, low: 13, close: 15, volume: 140 },
+      { timestamp: 6000 as EpochDate, open: 15, high: 17, low: 14, close: 16, volume: 150 },
+      { timestamp: 7000 as EpochDate, open: 16, high: 18, low: 15, close: 17, volume: 160 },
+      { timestamp: 8000 as EpochDate, open: 17, high: 19, low: 16, close: 18, volume: 170 },
+      { timestamp: 9000 as EpochDate, open: 18, high: 20, low: 17, close: 19, volume: 180 },
+      { timestamp: 10000 as EpochDate, open: 19, high: 21, low: 18, close: 20, volume: 190 },
     ]
   })
 

@@ -1,3 +1,4 @@
+import { toEpochDate, type EpochDate } from '@trdr/shared'
 import type { EventType, EventData } from './types'
 import { eventBus } from './event-bus'
 import { timeSourceManager } from './time-source'
@@ -8,7 +9,7 @@ import { timeSourceManager } from './time-source'
 export interface EventLogEntry<T extends EventData = EventData> {
   readonly id: string
   readonly type: EventType
-  readonly timestamp: Date
+  readonly timestamp: EpochDate
   readonly data: T
   readonly metadata?: Record<string, unknown>
 }
@@ -20,9 +21,9 @@ export interface ReplayOptions {
   /** Filter events by type */
   eventTypes?: EventType[]
   /** Start time for replay */
-  startTime?: Date
+  startTime?: EpochDate | Date
   /** End time for replay */
-  endTime?: Date
+  endTime?: EpochDate | Date
   /** Speed multiplier for replay */
   speed?: number
   /** Whether to use original timestamps */
@@ -84,7 +85,7 @@ export class EventLogger {
     const entry: EventLogEntry<T> = {
       id: `event_${++this.eventCounter}`,
       type: eventType,
-      timestamp: data.timestamp || timeSourceManager.now(),
+      timestamp: data.timestamp || timeSourceManager.nowEpoch(),
       data: { ...data }, // Create a copy to avoid mutations
     }
     this.events.push(entry)
@@ -108,11 +109,13 @@ export class EventLogger {
     }
 
     if (options.startTime) {
-      filtered = filtered.filter(e => e.timestamp >= options.startTime!)
+      const st = options.startTime instanceof Date ? toEpochDate(options.startTime) : options.startTime
+      filtered = filtered.filter(e => e.timestamp >= st)
     }
 
     if (options.endTime) {
-      filtered = filtered.filter(e => e.timestamp <= options.endTime!)
+      const et = options.endTime instanceof Date ? toEpochDate(options.endTime) : options.endTime
+      filtered = filtered.filter(e => e.timestamp <= et)
     }
 
     return filtered
@@ -139,7 +142,7 @@ export class EventLogger {
     const preserveTimestamps = options.preserveTimestamps ?? false
 
     // Sort events by timestamp
-    events.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+    events.sort((a, b) => a.timestamp - b.timestamp)
 
     // If preserving timestamps, emit all events with original timestamps
     if (preserveTimestamps) {
@@ -154,15 +157,15 @@ export class EventLogger {
     const firstEvent = events[0]
     if (!firstEvent) return
 
-    const startTime = firstEvent.timestamp.getTime()
-    const replayStartTime = timeSourceManager.nowMs()
+    const startTime = firstEvent.timestamp
+    const replayStartTime = timeSourceManager.nowEpoch()
 
     for (const event of events) {
       if (!event) continue
 
-      const eventOffset = event.timestamp.getTime() - startTime
+      const eventOffset = event.timestamp - startTime
       const targetTime = replayStartTime + (eventOffset / speed)
-      const currentTime = timeSourceManager.nowMs()
+      const currentTime = timeSourceManager.nowEpoch()
       const delay = targetTime - currentTime
 
       if (delay > 0) {
@@ -196,7 +199,7 @@ export class EventLogger {
       const eventEntry = entry as { timestamp: string; [key: string]: unknown }
       return {
         ...eventEntry,
-        timestamp: new Date(eventEntry.timestamp),
+        timestamp: parseInt(eventEntry.timestamp, 10) as EpochDate,
       } as EventLogEntry
     })
 
@@ -210,20 +213,31 @@ export class EventLogger {
   getStatistics(): {
     totalEvents: number
     eventTypes: Record<EventType, number>
-    timeRange: { start: Date | null; end: Date | null }
+    timeRange: { start: EpochDate | Date | null; end: EpochDate | Date | null }
   } {
     const stats: Record<EventType, number> = {}
-    let minTime: Date | null = null
-    let maxTime: Date | null = null
+    let minTime: EpochDate | Date | null = null
+    let maxTime: EpochDate | Date | null = null
 
     this.events.forEach(event => {
       stats[event.type] = (stats[event.type] || 0) + 1
 
-      if (!minTime || event.timestamp < minTime) {
+      if (!minTime) {
         minTime = event.timestamp
+      } else {
+        minTime = minTime instanceof Date ? toEpochDate(minTime) : minTime
+        if (event.timestamp < minTime) {
+          minTime = event.timestamp
+        }
       }
-      if (!maxTime || event.timestamp > maxTime) {
+
+      if (!maxTime) {
         maxTime = event.timestamp
+      } else {
+        maxTime = maxTime instanceof Date ? toEpochDate(maxTime) : maxTime
+        if (event.timestamp > maxTime) {
+          maxTime = event.timestamp
+        }
       }
     })
 

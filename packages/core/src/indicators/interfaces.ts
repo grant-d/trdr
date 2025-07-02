@@ -1,11 +1,11 @@
-import type { Candle } from '@trdr/shared'
+import type { Candle, EpochDate } from '@trdr/shared'
 
 /**
  * Result of an indicator calculation
  */
 export interface IndicatorResult {
   readonly value: number
-  readonly timestamp: number // Unix timestamp in milliseconds
+  readonly timestamp: EpochDate // Unix timestamp in milliseconds
 }
 
 /**
@@ -41,7 +41,7 @@ export interface BollingerBandsResult extends IndicatorResult {
 export interface SwingPoint {
   readonly type: 'high' | 'low'
   readonly price: number
-  readonly timestamp: number // Unix timestamp in milliseconds
+  readonly timestamp: EpochDate // Unix timestamp in milliseconds
   readonly strength: number // 1-5, higher is stronger
   readonly index: number
 }
@@ -200,7 +200,7 @@ export interface IIndicatorCalculator {
 export interface CacheEntry<T> {
   readonly key: string
   readonly value: T
-  readonly timestamp: number
+  readonly timestamp: EpochDate
   readonly candleCount: number
 }
 

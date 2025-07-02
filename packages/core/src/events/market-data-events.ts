@@ -1,3 +1,4 @@
+import type { EpochDate } from '@trdr/shared'
 import type { EventData } from './types'
 
 /**
@@ -15,7 +16,7 @@ export interface EnhancedMarketDataEvent extends EventData {
   /** Event priority for processing */
   readonly priority: 'low' | 'normal' | 'high' | 'critical'
   /** Original timestamp from data source */
-  readonly sourceTimestamp?: Date
+  readonly sourceTimestamp?: EpochDate
   /** Processing latency in milliseconds */
   readonly latency?: number
 }
@@ -158,72 +159,18 @@ export interface ConnectionStatusEvent extends EventData {
  */
 export class EventSerializer {
   /**
-   * Serialize event to JSON string with proper date handling
+   * Serialize event to JSON string
    */
   static serialize(event: unknown): string {
-    // Pre-process the object to handle Dates before JSON.stringify
-    const processedEvent = this.preprocessForSerialization(event)
-    return JSON.stringify(processedEvent, (_key, value) => {
-      if (value instanceof Error) {
-        return {
-          __type: 'Error',
-          name: value.name,
-          message: value.message,
-          stack: value.stack,
-        }
-      }
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-      return value
-    })
+    return JSON.stringify(event)
   }
 
-  /**
-   * Pre-process object to handle Date objects
-   */
-  private static preprocessForSerialization(obj: unknown): unknown {
-    if (obj instanceof Date) {
-      return { __type: 'Date', value: obj.toISOString() }
-    }
-    if (obj instanceof Error) {
-      return {
-        __type: 'Error',
-        name: obj.name,
-        message: obj.message,
-        stack: obj.stack,
-      }
-    }
-    if (Array.isArray(obj)) {
-      return obj.map((item: unknown) => this.preprocessForSerialization(item))
-    }
-    if (obj && typeof obj === 'object') {
-      const processed: Record<string, unknown> = {}
-      for (const [key, value] of Object.entries(obj)) {
-        processed[key] = this.preprocessForSerialization(value)
-      }
-      return processed
-    }
-    return obj
-  }
 
   /**
-   * Deserialize event from JSON string with proper date reconstruction
+   * Deserialize event from JSON string
    */
   static deserialize<T = unknown>(json: string): T {
-    return JSON.parse(json, (_key, value) => {
-      if (value && typeof value === 'object') {
-        if (value.__type === 'Date') {
-          return new Date(value.value)
-        }
-        if (value.__type === 'Error') {
-          const error = new Error(value.message)
-          error.name = value.name
-          error.stack = value.stack
-          return error
-        }
-      }
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-      return value
-    }) as T
+    return JSON.parse(json) as T
   }
 
   /**
@@ -248,20 +195,22 @@ export class EventSerializer {
   /**
    * Validate event structure
    */
-  static validate(event: any): boolean {
+  static validate(event: unknown): boolean {
     if (!event || typeof event !== 'object') {
       return false
     }
 
+    const eventObj = event as Record<string, unknown>
+
     // Check required fields
-    if (!event.type || !event.timestamp) {
+    if (!eventObj.type || !eventObj.timestamp) {
       return false
     }
 
     // Check timestamp format
-    if (!(event.timestamp instanceof Date) &&
-      typeof event.timestamp !== 'string' &&
-      typeof event.timestamp !== 'number') {
+    if (!(eventObj.timestamp instanceof Date) &&
+      typeof eventObj.timestamp !== 'string' &&
+      typeof eventObj.timestamp !== 'number') {
       return false
     }
 
@@ -271,7 +220,7 @@ export class EventSerializer {
   /**
    * Calculate event size in bytes (approximate)
    */
-  static getEventSize(event: any): number {
+  static getEventSize(event: unknown): number {
     try {
       return new TextEncoder().encode(this.serialize(event)).length
     } catch {
@@ -305,7 +254,7 @@ export class EventCompressor {
       volume: totalVolume,
       priceChange: last.price - first.price,
       priceChangePercent: first.price > 0 ? ((last.price - first.price) / first.price) * 100 : 0,
-      timeSinceLastTick: last.timestamp.getTime() - first.timestamp.getTime(),
+      timeSinceLastTick: last.timestamp - first.timestamp,
       sequence: last.sequence,
       priority: 'normal',
       source: 'compressed',
@@ -322,7 +271,7 @@ export class EventCompressor {
     const firstEvent = events[0]
     if (!lastEvent || !firstEvent) return false
 
-    const timeSpan = lastEvent.timestamp.getTime() - firstEvent.timestamp.getTime()
+    const timeSpan = lastEvent.timestamp - firstEvent.timestamp
     return timeSpan <= windowMs
   }
 }

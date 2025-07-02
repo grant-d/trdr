@@ -1,3 +1,5 @@
+import type { EpochDate } from '@trdr/shared'
+
 /**
  * Base event type
  */
@@ -7,7 +9,7 @@ export type EventType = string
  * Base event data interface
  */
 export interface EventData {
-  readonly timestamp: Date
+  readonly timestamp: EpochDate
   [key: string]: unknown
 }
 
@@ -31,7 +33,7 @@ export interface EventSubscription {
 export interface BaseEvent<T extends EventData = EventData> {
   readonly id: string
   readonly type: EventType
-  readonly timestamp: Date
+  readonly timestamp: EpochDate
   readonly data: T
 }
 

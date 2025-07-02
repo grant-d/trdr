@@ -1,4 +1,4 @@
-import type { Candle } from '@trdr/shared'
+import { toEpochDate, type Candle } from '@trdr/shared'
 import assert from 'node:assert/strict'
 import { beforeEach, describe, it } from 'node:test'
 import { RSIIndicator } from './rsi'
@@ -9,26 +9,26 @@ describe('RSIIndicator', () => {
   beforeEach(() => {
     // Create test candles with known price movements
     candles = [
-      { timestamp: 1000, open: 44, high: 45, low: 43, close: 44.34, volume: 100 },
-      { timestamp: 2000, open: 44.34, high: 45, low: 44, close: 44.09, volume: 110 },
-      { timestamp: 3000, open: 44.09, high: 44.5, low: 43.5, close: 44.15, volume: 120 },
-      { timestamp: 4000, open: 44.15, high: 44.5, low: 43, close: 43.61, volume: 130 },
-      { timestamp: 5000, open: 43.61, high: 45, low: 43.5, close: 44.33, volume: 140 },
-      { timestamp: 6000, open: 44.33, high: 45, low: 44, close: 44.83, volume: 150 },
-      { timestamp: 7000, open: 44.83, high: 45.5, low: 44.5, close: 45.1, volume: 160 },
-      { timestamp: 8000, open: 45.1, high: 45.5, low: 44.5, close: 45.42, volume: 170 },
-      { timestamp: 9000, open: 45.42, high: 46, low: 45, close: 45.84, volume: 180 },
-      { timestamp: 10000, open: 45.84, high: 46.5, low: 45.5, close: 46.08, volume: 190 },
-      { timestamp: 11000, open: 46.08, high: 46.5, low: 45.5, close: 45.89, volume: 200 },
-      { timestamp: 12000, open: 45.89, high: 46.5, low: 45.5, close: 46.03, volume: 210 },
-      { timestamp: 13000, open: 46.03, high: 47, low: 46, close: 46.41, volume: 220 },
-      { timestamp: 14000, open: 46.41, high: 47, low: 46, close: 46.22, volume: 230 },
-      { timestamp: 15000, open: 46.22, high: 47, low: 46, close: 45.64, volume: 240 },
-      { timestamp: 16000, open: 45.64, high: 46, low: 45, close: 46.21, volume: 250 },
-      { timestamp: 17000, open: 46.21, high: 47, low: 46, close: 46.25, volume: 260 },
-      { timestamp: 18000, open: 46.25, high: 47, low: 46, close: 45.71, volume: 270 },
-      { timestamp: 19000, open: 45.71, high: 46.5, low: 45.5, close: 46.45, volume: 280 },
-      { timestamp: 20000, open: 46.45, high: 47, low: 46, close: 45.96, volume: 290 },
+      { timestamp: toEpochDate(1000), open: 44, high: 45, low: 43, close: 44.34, volume: 100 },
+      { timestamp: toEpochDate(2000), open: 44.34, high: 45, low: 44, close: 44.09, volume: 110 },
+      { timestamp: toEpochDate(3000), open: 44.09, high: 44.5, low: 43.5, close: 44.15, volume: 120 },
+      { timestamp: toEpochDate(4000), open: 44.15, high: 44.5, low: 43, close: 43.61, volume: 130 },
+      { timestamp: toEpochDate(5000), open: 43.61, high: 45, low: 43.5, close: 44.33, volume: 140 },
+      { timestamp: toEpochDate(6000), open: 44.33, high: 45, low: 44, close: 44.83, volume: 150 },
+      { timestamp: toEpochDate(7000), open: 44.83, high: 45.5, low: 44.5, close: 45.1, volume: 160 },
+      { timestamp: toEpochDate(8000), open: 45.1, high: 45.5, low: 44.5, close: 45.42, volume: 170 },
+      { timestamp: toEpochDate(9000), open: 45.42, high: 46, low: 45, close: 45.84, volume: 180 },
+      { timestamp: toEpochDate(10000), open: 45.84, high: 46.5, low: 45.5, close: 46.08, volume: 190 },
+      { timestamp: toEpochDate(11000), open: 46.08, high: 46.5, low: 45.5, close: 45.89, volume: 200 },
+      { timestamp: toEpochDate(12000), open: 45.89, high: 46.5, low: 45.5, close: 46.03, volume: 210 },
+      { timestamp: toEpochDate(13000), open: 46.03, high: 47, low: 46, close: 46.41, volume: 220 },
+      { timestamp: toEpochDate(14000), open: 46.41, high: 47, low: 46, close: 46.22, volume: 230 },
+      { timestamp: toEpochDate(15000), open: 46.22, high: 47, low: 46, close: 45.64, volume: 240 },
+      { timestamp: toEpochDate(16000), open: 45.64, high: 46, low: 45, close: 46.21, volume: 250 },
+      { timestamp: toEpochDate(17000), open: 46.21, high: 47, low: 46, close: 46.25, volume: 260 },
+      { timestamp: toEpochDate(18000), open: 46.25, high: 47, low: 46, close: 45.71, volume: 270 },
+      { timestamp: toEpochDate(19000), open: 45.71, high: 46.5, low: 45.5, close: 46.45, volume: 280 },
+      { timestamp: toEpochDate(20000), open: 46.45, high: 47, low: 46, close: 45.96, volume: 290 },
     ]
   })
 
@@ -90,7 +90,7 @@ describe('RSIIndicator', () => {
       const upCandles: Candle[] = []
       for (let i = 0; i < 20; i++) {
         upCandles.push({
-          timestamp: (i + 1) * 1000,
+          timestamp: toEpochDate((i + 1) * 1000),
           open: 100 + i,
           high: 101 + i,
           low: 99 + i,
@@ -111,7 +111,7 @@ describe('RSIIndicator', () => {
       const downCandles: Candle[] = []
       for (let i = 0; i < 20; i++) {
         downCandles.push({
-          timestamp: (i + 1) * 1000,
+          timestamp: toEpochDate((i + 1) * 1000),
           open: 100 - i,
           high: 101 - i,
           low: 99 - i,
@@ -132,7 +132,7 @@ describe('RSIIndicator', () => {
       const flatCandles: Candle[] = []
       for (let i = 0; i < 20; i++) {
         flatCandles.push({
-          timestamp: (i + 1) * 1000,
+          timestamp: toEpochDate((i + 1) * 1000),
           open: 100,
           high: 100,
           low: 100,
@@ -268,7 +268,7 @@ describe('RSIIndicator', () => {
       for (let i = 0; i < 20; i++) {
         const basePrice = 100 + i * 2 // Strong upward movement
         strongUpCandles.push({
-          timestamp: (i + 1) * 1000,
+          timestamp: toEpochDate((i + 1) * 1000),
           open: basePrice,
           high: basePrice + 1,
           low: basePrice - 0.5,
@@ -291,7 +291,7 @@ describe('RSIIndicator', () => {
       for (let i = 0; i < 20; i++) {
         const basePrice = 100 - i * 2 // Strong downward movement
         strongDownCandles.push({
-          timestamp: (i + 1) * 1000,
+          timestamp: toEpochDate((i + 1) * 1000),
           open: basePrice,
           high: basePrice + 0.5,
           low: basePrice - 1,

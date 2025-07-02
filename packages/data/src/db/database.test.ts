@@ -5,6 +5,7 @@ import { Candle } from '../types/market-data'
 import { Order } from '../types/orders'
 import { AgentSignal } from '../types/agents'
 import { Trade } from '../repositories/trade-repository'
+import { epochDateNow, toEpochDate } from '@trdr/shared'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
@@ -54,9 +55,9 @@ describe('Database Integration', () => {
       const candle: Candle = {
         symbol: 'BTC-USD',
         interval: '1h',
-        openTime: new Date(Date.now() - 3600000),
-        closeTime: new Date(),
-        timestamp: new Date(),
+        openTime: toEpochDate(Date.now() - 3600000),
+        closeTime: epochDateNow(),
+        timestamp: epochDateNow(),
         open: 50000,
         high: 51000,
         low: 49500,
@@ -76,9 +77,9 @@ describe('Database Integration', () => {
       const candles: Candle[] = Array.from({ length: 10 }, (_, i) => ({
         symbol: 'BTC-USD',
         interval: '1h',
-        openTime: new Date(Date.now() - (10 - i) * 3600000),
-        closeTime: new Date(Date.now() - (9 - i) * 3600000),
-        timestamp: new Date(Date.now() - (9 - i) * 3600000),
+        openTime: toEpochDate(Date.now() - (10 - i) * 3600000),
+        closeTime: toEpochDate(Date.now() - (9 - i) * 3600000),
+        timestamp: toEpochDate(Date.now() - (9 - i) * 3600000),
         open: 50000 + i * 100,
         high: 50100 + i * 100,
         low: 49900 + i * 100,
@@ -91,8 +92,8 @@ describe('Database Integration', () => {
       const retrieved = await db.marketData.getCandles(
         'BTC-USD',
         '1h',
-        new Date(Date.now() - 11 * 3600000),
-        new Date(),
+        toEpochDate(Date.now() - 11 * 3600000),
+        epochDateNow(),
       )
 
       assert.equal(retrieved.length, 10)
@@ -109,8 +110,8 @@ describe('Database Integration', () => {
         status: 'pending',
         price: 50000,
         size: 0.1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: epochDateNow(),
+        updatedAt: epochDateNow(),
       }
 
       await db.orders.createOrder(order)
@@ -120,7 +121,7 @@ describe('Database Integration', () => {
         status: 'filled',
         filledSize: 0.1,
         averageFillPrice: 50000,
-        filledAt: new Date(),
+        filledAt: epochDateNow(),
       })
 
       const retrieved = await db.orders.getOrder(order.id)
@@ -139,8 +140,8 @@ describe('Database Integration', () => {
           status: 'pending',
           price: 50000,
           size: 0.1,
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          createdAt: epochDateNow(),
+          updatedAt: epochDateNow(),
         },
         {
           id: 'order-2',
@@ -150,8 +151,8 @@ describe('Database Integration', () => {
           status: 'filled',
           price: 51000,
           size: 0.1,
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          createdAt: epochDateNow(),
+          updatedAt: epochDateNow(),
         },
       ]
 
@@ -177,8 +178,8 @@ describe('Database Integration', () => {
         status: 'filled',
         price: 50000,
         size: 0.1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: epochDateNow(),
+        updatedAt: epochDateNow(),
       })
 
       const trade: Trade = {
@@ -191,7 +192,7 @@ describe('Database Integration', () => {
         fee: 0.001,
         feeCurrency: 'BTC',
         pnl: 100,
-        executedAt: new Date(),
+        executedAt: epochDateNow(),
       }
 
       await db.trades.recordTrade(trade)
@@ -212,8 +213,8 @@ describe('Database Integration', () => {
         status: 'filled',
         price: 50000,
         size: 0.1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: epochDateNow(),
+        updatedAt: epochDateNow(),
       })
 
       await db.orders.createOrder({
@@ -224,8 +225,8 @@ describe('Database Integration', () => {
         status: 'filled',
         price: 51000,
         size: 0.1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: epochDateNow(),
+        updatedAt: epochDateNow(),
       })
 
       const trades: Trade[] = [
@@ -238,7 +239,7 @@ describe('Database Integration', () => {
           size: 0.1,
           fee: 0.001,
           pnl: 100,
-          executedAt: new Date(),
+          executedAt: epochDateNow(),
         },
         {
           id: 'trade-pnl-2',
@@ -249,7 +250,7 @@ describe('Database Integration', () => {
           size: 0.1,
           fee: 0.001,
           pnl: 200,
-          executedAt: new Date(),
+          executedAt: epochDateNow(),
         },
       ]
 
@@ -273,7 +274,7 @@ describe('Database Integration', () => {
         confidence: 0.85,
         trailDistance: 100,
         reasoning: { momentum: 'strong', trend: 'up' },
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
       }
 
       await db.agents.recordDecision(decision)
@@ -312,9 +313,9 @@ describe('Database Integration', () => {
       const oldCandle: Candle = {
         symbol: 'BTC-USD',
         interval: '1h',
-        openTime: new Date(Date.now() - 100 * 24 * 3600000), // 100 days ago
-        closeTime: new Date(Date.now() - 100 * 24 * 3600000 + 3600000),
-        timestamp: new Date(Date.now() - 100 * 24 * 3600000 + 3600000),
+        openTime: toEpochDate(Date.now() - 100 * 24 * 3600000), // 100 days ago
+        closeTime: toEpochDate(Date.now() - 100 * 24 * 3600000 + 3600000),
+        timestamp: toEpochDate(Date.now() - 100 * 24 * 3600000 + 3600000),
         open: 40000,
         high: 41000,
         low: 39000,

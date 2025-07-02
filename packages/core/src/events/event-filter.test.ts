@@ -1,10 +1,11 @@
-import { describe, it } from 'node:test'
+import { epochDateNow, toEpochDate } from '@trdr/shared'
 import assert from 'node:assert/strict'
+import { describe, it } from 'node:test'
 import {
+  FilterBuilder,
   MarketDataFilters,
   SystemFilters,
   TradingFilters,
-  FilterBuilder,
 } from './event-filter'
 
 describe('EventFilter', () => {
@@ -12,48 +13,48 @@ describe('EventFilter', () => {
     it('should filter by symbol', () => {
       const filter = MarketDataFilters.bySymbol(['BTC-USD', 'ETH-USD'])
 
-      assert.equal(filter({ symbol: 'BTC-USD' }), true)
-      assert.equal(filter({ symbol: 'ETH-USD' }), true)
-      assert.equal(filter({ symbol: 'DOGE-USD' }), false)
-      assert.equal(filter({}), true) // No symbol property
+      assert.equal(filter({ symbol: 'BTC-USD', timestamp: epochDateNow() }), true)
+      assert.equal(filter({ symbol: 'ETH-USD', timestamp: epochDateNow() }), true)
+      assert.equal(filter({ symbol: 'DOGE-USD', timestamp: epochDateNow() }), false)
+      assert.equal(filter({ timestamp: epochDateNow() }), true) // No symbol property
     })
 
     it('should filter by price range', () => {
       const filter = MarketDataFilters.byPriceRange(100, 200)
 
-      assert.equal(filter({ price: 150 }), true)
-      assert.equal(filter({ price: 100 }), true)
-      assert.equal(filter({ price: 200 }), true)
-      assert.equal(filter({ price: 50 }), false)
-      assert.equal(filter({ price: 250 }), false)
-      assert.equal(filter({}), true) // No price property
+      assert.equal(filter({ price: 150, timestamp: epochDateNow() }), true)
+      assert.equal(filter({ price: 100, timestamp: epochDateNow() }), true)
+      assert.equal(filter({ price: 200, timestamp: epochDateNow() }), true)
+      assert.equal(filter({ price: 50, timestamp: epochDateNow() }), false)
+      assert.equal(filter({ price: 250, timestamp: epochDateNow() }), false)
+      assert.equal(filter({ timestamp: epochDateNow() }), true) // No price property
     })
 
     it('should filter by volume threshold', () => {
       const filter = MarketDataFilters.byVolumeThreshold(1000)
 
-      assert.equal(filter({ volume: 1500 }), true)
-      assert.equal(filter({ volume: 1000 }), true)
-      assert.equal(filter({ volume: 500 }), false)
-      assert.equal(filter({}), true) // No volume property
+      assert.equal(filter({ volume: 1500, timestamp: epochDateNow() }), true)
+      assert.equal(filter({ volume: 1000, timestamp: epochDateNow() }), true)
+      assert.equal(filter({ volume: 500, timestamp: epochDateNow() }), false)
+      assert.equal(filter({ timestamp: epochDateNow() }), true) // No volume property
     })
 
     it('should filter by time range', () => {
-      const start = new Date('2024-01-01T00:00:00Z')
-      const end = new Date('2024-01-01T12:00:00Z')
+      const start = toEpochDate(new Date('2024-01-01T00:00:00Z'))
+      const end = toEpochDate(new Date('2024-01-01T12:00:00Z'))
       const filter = MarketDataFilters.byTimeRange(start, end)
 
-      const withinRange = new Date('2024-01-01T06:00:00Z')
-      const beforeRange = new Date('2023-12-31T23:00:00Z')
-      const afterRange = new Date('2024-01-01T13:00:00Z')
+      const withinRange = toEpochDate(new Date('2024-01-01T06:00:00Z'))
+      const beforeRange = toEpochDate(new Date('2023-12-31T23:00:00Z'))
+      const afterRange = toEpochDate(new Date('2024-01-01T13:00:00Z'))
 
       assert.equal(filter({ timestamp: withinRange }), true)
       assert.equal(filter({ timestamp: start }), true)
       assert.equal(filter({ timestamp: end }), true)
       assert.equal(filter({ timestamp: beforeRange }), false)
       assert.equal(filter({ timestamp: afterRange }), false)
-      assert.equal(filter({ timestamp: withinRange.toISOString() }), true) // String timestamp
-      assert.equal(filter({}), true) // No timestamp
+      assert.equal(filter({ timestamp: withinRange }), true) // Same timestamp
+      assert.equal(filter({ timestamp: epochDateNow() }), false) // Current timestamp is outside the 2024-01-01 range
     })
 
     it('should filter by price change threshold', () => {
@@ -61,27 +62,27 @@ describe('EventFilter', () => {
       const filter = MarketDataFilters.byPriceChangeThreshold(0.05, lastPrices) // 5% threshold
 
       // First price for symbol - should pass
-      assert.equal(filter({ symbol: 'BTC-USD', price: 100 }), true)
+      assert.equal(filter({ symbol: 'BTC-USD', price: 100, timestamp: epochDateNow() }), true)
       assert.equal(lastPrices.get('BTC-USD'), 100)
 
       // Small change - should not pass
-      assert.equal(filter({ symbol: 'BTC-USD', price: 102 }), false)
+      assert.equal(filter({ symbol: 'BTC-USD', price: 102, timestamp: epochDateNow() }), false)
       assert.equal(lastPrices.get('BTC-USD'), 100) // Price not updated
 
       // Large change - should pass
-      assert.equal(filter({ symbol: 'BTC-USD', price: 110 }), true)
+      assert.equal(filter({ symbol: 'BTC-USD', price: 110, timestamp: epochDateNow() }), true)
       assert.equal(lastPrices.get('BTC-USD'), 110) // Price updated
 
-      assert.equal(filter({}), true) // No symbol or price
+      assert.equal(filter({ timestamp: epochDateNow() }), true) // No symbol or price
     })
 
     it('should filter by interval', () => {
       const filter = MarketDataFilters.byInterval(['1m', '5m', '1h'])
 
-      assert.equal(filter({ interval: '1m' }), true)
-      assert.equal(filter({ interval: '5m' }), true)
-      assert.equal(filter({ interval: '15m' }), false)
-      assert.equal(filter({}), true) // No interval property
+      assert.equal(filter({ interval: '1m', timestamp: epochDateNow() }), true)
+      assert.equal(filter({ interval: '5m', timestamp: epochDateNow() }), true)
+      assert.equal(filter({ interval: '15m', timestamp: epochDateNow() }), false)
+      assert.equal(filter({ timestamp: epochDateNow() }), true) // No interval property
     })
 
     it('should rate limit events', () => {
@@ -89,16 +90,16 @@ describe('EventFilter', () => {
       const filter = MarketDataFilters.rateLimit(2, eventTimes) // 2 events per second max
 
       // First two events should pass
-      assert.equal(filter({ symbol: 'BTC-USD' }), true)
-      assert.equal(filter({ symbol: 'BTC-USD' }), true)
+      assert.equal(filter({ symbol: 'BTC-USD', timestamp: epochDateNow() }), true)
+      assert.equal(filter({ symbol: 'BTC-USD', timestamp: epochDateNow() }), true)
 
       // Third event should fail
-      assert.equal(filter({ symbol: 'BTC-USD' }), false)
+      assert.equal(filter({ symbol: 'BTC-USD', timestamp: epochDateNow() }), false)
 
       // Different symbol should have its own rate limit
-      assert.equal(filter({ symbol: 'ETH-USD' }), true)
-      assert.equal(filter({ symbol: 'ETH-USD' }), true)
-      assert.equal(filter({ symbol: 'ETH-USD' }), false)
+      assert.equal(filter({ symbol: 'ETH-USD', timestamp: epochDateNow() }), true)
+      assert.equal(filter({ symbol: 'ETH-USD', timestamp: epochDateNow() }), true)
+      assert.equal(filter({ symbol: 'ETH-USD', timestamp: epochDateNow() }), false)
     })
   })
 
@@ -106,20 +107,20 @@ describe('EventFilter', () => {
     it('should filter by severity', () => {
       const filter = SystemFilters.bySeverity('high')
 
-      assert.equal(filter({ severity: 'critical' }), true)
-      assert.equal(filter({ severity: 'high' }), true)
-      assert.equal(filter({ severity: 'medium' }), false)
-      assert.equal(filter({ severity: 'low' }), false)
-      assert.equal(filter({}), true) // No severity property
+      assert.equal(filter({ severity: 'critical', timestamp: epochDateNow() }), true)
+      assert.equal(filter({ severity: 'high', timestamp: epochDateNow() }), true)
+      assert.equal(filter({ severity: 'medium', timestamp: epochDateNow() }), false)
+      assert.equal(filter({ severity: 'low', timestamp: epochDateNow() }), false)
+      assert.equal(filter({ timestamp: epochDateNow() }), true) // No severity property
     })
 
     it('should filter by context', () => {
       const filter = SystemFilters.byContext(['trading', 'market-data'])
 
-      assert.equal(filter({ context: 'trading' }), true)
-      assert.equal(filter({ context: 'market-data' }), true)
-      assert.equal(filter({ context: 'portfolio' }), false)
-      assert.equal(filter({}), true) // No context property
+      assert.equal(filter({ context: 'trading', timestamp: epochDateNow() }), true)
+      assert.equal(filter({ context: 'market-data', timestamp: epochDateNow() }), true)
+      assert.equal(filter({ context: 'portfolio', timestamp: epochDateNow() }), false)
+      assert.equal(filter({ timestamp: epochDateNow() }), true) // No context property
     })
   })
 
@@ -127,29 +128,29 @@ describe('EventFilter', () => {
     it('should filter by side', () => {
       const filter = TradingFilters.bySide(['buy'])
 
-      assert.equal(filter({ side: 'buy' }), true)
-      assert.equal(filter({ side: 'sell' }), false)
-      assert.equal(filter({}), true) // No side property
+      assert.equal(filter({ side: 'buy', timestamp: epochDateNow() }), true)
+      assert.equal(filter({ side: 'sell', timestamp: epochDateNow() }), false)
+      assert.equal(filter({ timestamp: epochDateNow() }), true) // No side property
     })
 
     it('should filter by size range', () => {
       const filter = TradingFilters.bySizeRange(0.1, 1.0)
 
-      assert.equal(filter({ size: 0.5 }), true)
-      assert.equal(filter({ size: 0.1 }), true)
-      assert.equal(filter({ size: 1.0 }), true)
-      assert.equal(filter({ size: 0.05 }), false)
-      assert.equal(filter({ size: 1.5 }), false)
-      assert.equal(filter({}), true) // No size property
+      assert.equal(filter({ size: 0.5, timestamp: epochDateNow() }), true)
+      assert.equal(filter({ size: 0.1, timestamp: epochDateNow() }), true)
+      assert.equal(filter({ size: 1.0, timestamp: epochDateNow() }), true)
+      assert.equal(filter({ size: 0.05, timestamp: epochDateNow() }), false)
+      assert.equal(filter({ size: 1.5, timestamp: epochDateNow() }), false)
+      assert.equal(filter({ timestamp: epochDateNow() }), true) // No size property
     })
 
     it('should filter by status', () => {
       const filter = TradingFilters.byStatus(['pending', 'filled'])
 
-      assert.equal(filter({ status: 'pending' }), true)
-      assert.equal(filter({ status: 'filled' }), true)
-      assert.equal(filter({ status: 'cancelled' }), false)
-      assert.equal(filter({}), true) // No status property
+      assert.equal(filter({ status: 'pending', timestamp: epochDateNow() }), true)
+      assert.equal(filter({ status: 'filled', timestamp: epochDateNow() }), true)
+      assert.equal(filter({ status: 'cancelled', timestamp: epochDateNow() }), false)
+      assert.equal(filter({ timestamp: epochDateNow() }), true) // No status property
     })
   })
 
@@ -160,9 +161,9 @@ describe('EventFilter', () => {
         .and(MarketDataFilters.byPriceRange(100, 200))
         .build()
 
-      assert.equal(filter({ symbol: 'BTC-USD', price: 150 }), true)
-      assert.equal(filter({ symbol: 'BTC-USD', price: 250 }), false)
-      assert.equal(filter({ symbol: 'ETH-USD', price: 150 }), false)
+      assert.equal(filter({ symbol: 'BTC-USD', price: 150, timestamp: epochDateNow() }), true)
+      assert.equal(filter({ symbol: 'BTC-USD', price: 250, timestamp: epochDateNow() }), false)
+      assert.equal(filter({ symbol: 'ETH-USD', price: 150, timestamp: epochDateNow() }), false)
     })
 
     it('should build OR filters', () => {
@@ -174,9 +175,9 @@ describe('EventFilter', () => {
 
       const filter = builder1.or(builder2).build()
 
-      assert.equal(filter({ symbol: 'BTC-USD' }), true)
-      assert.equal(filter({ symbol: 'ETH-USD' }), true)
-      assert.equal(filter({ symbol: 'DOGE-USD' }), false)
+      assert.equal(filter({ symbol: 'BTC-USD', timestamp: epochDateNow() }), true)
+      assert.equal(filter({ symbol: 'ETH-USD', timestamp: epochDateNow() }), true)
+      assert.equal(filter({ symbol: 'DOGE-USD', timestamp: epochDateNow() }), false)
     })
 
     it('should build NOT filters', () => {
@@ -185,14 +186,14 @@ describe('EventFilter', () => {
         .not()
         .build()
 
-      assert.equal(filter({ symbol: 'BTC-USD' }), false)
-      assert.equal(filter({ symbol: 'ETH-USD' }), true)
+      assert.equal(filter({ symbol: 'BTC-USD', timestamp: epochDateNow() }), false)
+      assert.equal(filter({ symbol: 'ETH-USD', timestamp: epochDateNow() }), true)
     })
 
     it('should handle empty filter builder', () => {
       const filter = FilterBuilder.create<any>().build()
 
-      assert.equal(filter({ anything: 'value' }), true)
+      assert.equal(filter({ anything: 'value', timestamp: epochDateNow() }), true)
     })
 
     it('should create complex composite filters', () => {
@@ -211,10 +212,10 @@ describe('EventFilter', () => {
         .and(volumeFilter.build())
         .build()
 
-      assert.equal(filter({ symbol: 'BTC-USD', price: 150, volume: 500 }), true)
-      assert.equal(filter({ symbol: 'BTC-USD', price: 150, volume: 1500 }), false)
-      assert.equal(filter({ symbol: 'DOGE-USD', price: 150, volume: 500 }), false)
-      assert.equal(filter({ symbol: 'BTC-USD', price: 50, volume: 500 }), false)
+      assert.equal(filter({ symbol: 'BTC-USD', price: 150, volume: 500, timestamp: epochDateNow() }), true)
+      assert.equal(filter({ symbol: 'BTC-USD', price: 150, volume: 1500, timestamp: epochDateNow() }), false)
+      assert.equal(filter({ symbol: 'DOGE-USD', price: 150, volume: 500, timestamp: epochDateNow() }), false)
+      assert.equal(filter({ symbol: 'BTC-USD', price: 50, volume: 500, timestamp: epochDateNow() }), false)
     })
   })
 })

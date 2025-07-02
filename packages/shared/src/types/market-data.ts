@@ -1,10 +1,12 @@
+import type { EpochDate } from './dates'
+
 /**
  * Represents a single candlestick in OHLCV format.
  * Used for price chart visualization and technical analysis.
  */
 export interface Candle {
   /** Unix timestamp in milliseconds */
-  readonly timestamp: number
+  readonly timestamp: EpochDate
   /** Opening price at the start of the period */
   readonly open: number
   /** Highest price during the period */
@@ -23,7 +25,7 @@ export interface Candle {
  */
 export interface OrderBook {
   /** Unix timestamp in milliseconds when snapshot was taken */
-  readonly timestamp: number
+  readonly timestamp: EpochDate
   /** Buy orders sorted by price (highest first) */
   readonly bids: readonly OrderBookLevel[]
   /** Sell orders sorted by price (lowest first) */
@@ -48,7 +50,7 @@ export interface Trade {
   /** Unique trade identifier from exchange */
   readonly id: string
   /** Unix timestamp in milliseconds */
-  readonly timestamp: number
+  readonly timestamp: EpochDate
   /** Execution price */
   readonly price: number
   /** Trade size/quantity */
@@ -67,7 +69,7 @@ export interface Ticker {
   /** Trading pair symbol (e.g., 'BTC-USD') */
   readonly symbol: string
   /** Unix timestamp in milliseconds */
-  readonly timestamp: number
+  readonly timestamp: EpochDate
   /** Best bid price */
   readonly bid: number
   /** Best ask price */
@@ -86,7 +88,7 @@ export interface MarketDataSnapshot {
   /** Trading pair symbol */
   readonly symbol: string
   /** Unix timestamp in milliseconds */
-  readonly timestamp: number
+  readonly timestamp: EpochDate
   /** Current candle data */
   readonly candle: Candle
   /** Current order book state */
@@ -126,7 +128,7 @@ export interface MarketUpdate {
   /** Trading pair symbol */
   readonly symbol: string
   /** Unix timestamp in milliseconds */
-  readonly timestamp: number
+  readonly timestamp: EpochDate
   /** Actual market data payload */
   readonly data: Candle | Ticker | OrderBook | Trade
 }
@@ -139,7 +141,7 @@ export interface PriceTick {
   /** Trading pair symbol */
   readonly symbol: string
   /** Unix timestamp in milliseconds */
-  readonly timestamp: number
+  readonly timestamp: EpochDate
   /** Current price */
   readonly price: number
   /** Optional volume at this price */
@@ -156,7 +158,7 @@ export interface MarketDataPipeline {
   /** Unsubscribe from market updates */
   unsubscribe(): void
   /** Get historical candle data for a time range */
-  getHistorical(from: Date, to: Date): Promise<Candle[]>
+  getHistorical(from: EpochDate, to: EpochDate): Promise<Candle[]>
   /** Get current market price */
   getCurrentPrice(): Promise<number>
 }

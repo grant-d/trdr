@@ -1,3 +1,5 @@
+import type { EpochDate } from './dates'
+
 /** Order direction - buy (long) or sell (short) */
 export type OrderSide = 'buy' | 'sell'
 
@@ -91,7 +93,7 @@ export interface OrderFill {
   /** Parent order ID */
   readonly orderId: string
   /** Unix timestamp of execution */
-  readonly timestamp: number
+  readonly timestamp: EpochDate
   /** Execution price */
   readonly price: number
   /** Fill size/quantity */
@@ -179,7 +181,7 @@ export interface OrderResult {
   /** Error message if failed */
   readonly error?: string
   /** Unix timestamp of submission attempt */
-  readonly timestamp: number
+  readonly timestamp: EpochDate
 }
 
 /**
@@ -239,15 +241,15 @@ export interface TimeConstraints {
   /** Don't trade during these periods */
   readonly blackoutPeriods?: readonly Period[]
   /** Absolute expiration time */
-  readonly expiresAt?: Date
+  readonly expiresAt?: EpochDate
 }
 
 /**
  * Time period definition
  */
 export interface Period {
-  readonly start: Date
-  readonly end: Date
+  readonly start: EpochDate
+  readonly end: EpochDate
 }
 
 /**
@@ -274,7 +276,7 @@ export interface OrderAgentSignal {
   readonly confidence: number
   readonly weight: number
   readonly reason: string
-  readonly timestamp: Date
+  readonly timestamp: EpochDate
 }
 
 /**
@@ -307,9 +309,9 @@ export interface OrderExecutionMetrics {
   /** Number of partial fills */
   fillCount: number
   /** Timestamp when order was submitted */
-  submittedAt?: Date
+  submittedAt?: EpochDate
   /** Timestamp when order was completed */
-  completedAt?: Date
+  completedAt?: EpochDate
 }
 
 /**
@@ -320,7 +322,7 @@ export interface ManagedOrder extends OrderBase {
   filledSize: number
   averageFillPrice: number
   fees: number
-  lastModified: Date
+  lastModified: EpochDate
   exchangeOrderId?: string
   fills: OrderFill[]
   rejectionReason?: string

@@ -1,9 +1,10 @@
-import { describe, it, beforeEach, afterEach } from 'node:test'
+import { epochDateNow, toEpochDate } from '@trdr/shared'
 import assert from 'node:assert/strict'
-import { TradeRepository } from './trade-repository'
-import { createConnectionManager } from '../db/connection-manager'
+import { afterEach, beforeEach, describe, it } from 'node:test'
 import type { ConnectionManager } from '../db/connection-manager'
+import { createConnectionManager } from '../db/connection-manager'
 import type { Trade } from './trade-repository'
+import { TradeRepository } from './trade-repository'
 
 describe('TradeRepository', () => {
   let repository: TradeRepository
@@ -49,7 +50,7 @@ describe('TradeRepository', () => {
       fee: 0.0001,
       feeCurrency: 'BTC',
       pnl: 0,
-      executedAt: new Date(),
+      executedAt: toEpochDate(new Date()),
     }
 
     it('should record a trade', async () => {
@@ -72,7 +73,7 @@ describe('TradeRepository', () => {
         price: 50000 + i * 100,
         size: 0.1,
         fee: 0.0001,
-        executedAt: new Date(Date.now() - i * 1000),
+        executedAt: toEpochDate(new Date(Date.now() - i * 1000)),
       }))
 
       await repository.recordTradesBatch(trades)
@@ -93,7 +94,7 @@ describe('TradeRepository', () => {
           price: 50000,
           size: 0.05,
           fee: 0.00005,
-          executedAt: new Date(Date.now() - 2000),
+          executedAt: toEpochDate(new Date(Date.now() - 2000)),
         },
         {
           id: 'partial-2',
@@ -103,7 +104,7 @@ describe('TradeRepository', () => {
           price: 50100,
           size: 0.05,
           fee: 0.00005,
-          executedAt: new Date(Date.now() - 1000),
+          executedAt: toEpochDate(new Date(Date.now() - 1000)),
         },
       ]
 
@@ -129,7 +130,7 @@ describe('TradeRepository', () => {
           size: 0.1,
           fee: 0.0001,
           pnl: 0,
-          executedAt: new Date(Date.now() - 7200000),
+          executedAt: toEpochDate(Date.now() - 7200000),
         },
         {
           id: 'history-2',
@@ -140,7 +141,7 @@ describe('TradeRepository', () => {
           size: 0.1,
           fee: 0.0001,
           pnl: 100,
-          executedAt: new Date(Date.now() - 3600000),
+          executedAt: toEpochDate(Date.now() - 3600000),
         },
         {
           id: 'history-3',
@@ -151,7 +152,7 @@ describe('TradeRepository', () => {
           size: 1,
           fee: 0.001,
           pnl: 0,
-          executedAt: new Date(Date.now() - 1800000),
+          executedAt: toEpochDate(Date.now() - 1800000),
         },
       ]
 
@@ -198,7 +199,7 @@ describe('TradeRepository', () => {
           size: 0.1,
           fee: 50,
           pnl: 0,
-          executedAt: new Date(Date.now() - 3600000),
+          executedAt: toEpochDate(Date.now() - 3600000),
         },
         {
           id: 'pnl-2',
@@ -209,7 +210,7 @@ describe('TradeRepository', () => {
           size: 0.1,
           fee: 51,
           pnl: 100,
-          executedAt: new Date(Date.now() - 1800000),
+          executedAt: toEpochDate(Date.now() - 1800000),
         },
         {
           id: 'pnl-3',
@@ -220,7 +221,7 @@ describe('TradeRepository', () => {
           size: 0.1,
           fee: 49,
           pnl: -100,
-          executedAt: new Date(),
+          executedAt: epochDateNow(),
         },
       ]
 
@@ -273,7 +274,7 @@ describe('TradeRepository', () => {
             size: 0.1 + hour * 0.01,
             fee: 1,
             pnl: hour % 2 === 0 ? -10 : 20,
-            executedAt: new Date(Date.now() - day * 86400000 - hour * 3600000),
+            executedAt: toEpochDate(Date.now() - day * 86400000 - hour * 3600000),
           })
         }
       }
@@ -311,7 +312,7 @@ describe('TradeRepository', () => {
           size: 1,
           fee: 10,
           pnl: 5000,
-          executedAt: new Date(Date.now() - 3600000),
+          executedAt: toEpochDate(Date.now() - 3600000),
         },
         {
           id: 'top-size',
@@ -322,7 +323,7 @@ describe('TradeRepository', () => {
           size: 5,
           fee: 50,
           pnl: 0,
-          executedAt: new Date(Date.now() - 7200000),
+          executedAt: toEpochDate(Date.now() - 7200000),
         },
         {
           id: 'recent',
@@ -333,7 +334,7 @@ describe('TradeRepository', () => {
           size: 0.1,
           fee: 5,
           pnl: -50,
-          executedAt: new Date(Date.now() - 60000),
+          executedAt: toEpochDate(Date.now() - 60000),
         },
       ]
 
@@ -375,7 +376,7 @@ describe('TradeRepository', () => {
         price: 40000,
         size: 0.1,
         fee: 4,
-        executedAt: new Date(Date.now() - 400 * 86400000),
+        executedAt: toEpochDate(Date.now() - 400 * 86400000),
       }
 
       const recentTrade: Trade = {
@@ -386,7 +387,7 @@ describe('TradeRepository', () => {
         price: 50000,
         size: 0.1,
         fee: 5,
-        executedAt: new Date(),
+        executedAt: epochDateNow(),
       }
 
       await repository.recordTrade(oldTrade)

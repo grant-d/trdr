@@ -1,4 +1,4 @@
-import type { Candle } from '@trdr/shared'
+import { toEpochDate, type Candle } from '@trdr/shared'
 import assert from 'node:assert/strict'
 import { beforeEach, describe, it } from 'node:test'
 import { EMAIndicator } from './ema'
@@ -9,16 +9,16 @@ describe('EMAIndicator', () => {
   beforeEach(() => {
     // Create test candles with known values
     candles = [
-      { timestamp: 1000, open: 10, high: 12, low: 9, close: 10, volume: 100 },
-      { timestamp: 2000, open: 11, high: 13, low: 10, close: 12, volume: 110 },
-      { timestamp: 3000, open: 12, high: 14, low: 11, close: 14, volume: 120 },
-      { timestamp: 4000, open: 13, high: 15, low: 12, close: 16, volume: 130 },
-      { timestamp: 5000, open: 14, high: 16, low: 13, close: 18, volume: 140 },
-      { timestamp: 6000, open: 15, high: 17, low: 14, close: 16, volume: 150 },
-      { timestamp: 7000, open: 16, high: 18, low: 15, close: 14, volume: 160 },
-      { timestamp: 8000, open: 17, high: 19, low: 16, close: 12, volume: 170 },
-      { timestamp: 9000, open: 18, high: 20, low: 17, close: 10, volume: 180 },
-      { timestamp: 10000, open: 19, high: 21, low: 18, close: 8, volume: 190 },
+      { timestamp: toEpochDate(1000), open: 10, high: 12, low: 9, close: 10, volume: 100 },
+      { timestamp: toEpochDate(2000), open: 11, high: 13, low: 10, close: 12, volume: 110 },
+      { timestamp: toEpochDate(3000), open: 12, high: 14, low: 11, close: 14, volume: 120 },
+      { timestamp: toEpochDate(4000), open: 13, high: 15, low: 12, close: 16, volume: 130 },
+      { timestamp: toEpochDate(5000), open: 14, high: 16, low: 13, close: 18, volume: 140 },
+      { timestamp: toEpochDate(6000), open: 15, high: 17, low: 14, close: 16, volume: 150 },
+      { timestamp: toEpochDate(7000), open: 16, high: 18, low: 15, close: 14, volume: 160 },
+      { timestamp: toEpochDate(8000), open: 17, high: 19, low: 16, close: 12, volume: 170 },
+      { timestamp: toEpochDate(9000), open: 18, high: 20, low: 17, close: 10, volume: 180 },
+      { timestamp: toEpochDate(10000), open: 19, high: 21, low: 18, close: 8, volume: 190 },
     ]
   })
 

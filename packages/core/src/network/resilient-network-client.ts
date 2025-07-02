@@ -1,12 +1,13 @@
+import { epochDateNow } from '@trdr/shared'
+import { EventBus } from '../events/event-bus'
+import { EventTypes } from '../events/types'
 import type {
   NetworkClient,
+  NetworkError,
   NetworkResponse,
   RequestOptions,
   RetryConfig,
-  NetworkError,
 } from '../interfaces/network-client'
-import { EventBus } from '../events/event-bus'
-import { EventTypes } from '../events/types'
 
 /**
  * Default retry configuration
@@ -179,7 +180,7 @@ export class ResilientNetworkClient implements NetworkClient {
    */
   private logRetry(context: string, error: Error, attempt: number, delay: number): void {
     this.eventBus.emit(EventTypes.SYSTEM_INFO, {
-      timestamp: new Date(),
+      timestamp: epochDateNow(),
       message: `${context} failed, retrying in ${delay}ms`,
       context: 'NetworkClient',
       details: {
@@ -195,7 +196,7 @@ export class ResilientNetworkClient implements NetworkClient {
    */
   private logError(context: string, error: Error, attempts: number): void {
     this.eventBus.emit(EventTypes.SYSTEM_ERROR, {
-      timestamp: new Date(),
+      timestamp: epochDateNow(),
       error,
       context: `NetworkClient: ${context}`,
       severity: attempts > 0 ? 'high' : 'medium',

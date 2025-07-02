@@ -1,6 +1,7 @@
+import { eventBus } from '@trdr/core'
+import { epochDateNow } from '@trdr/shared'
 import type { ConnectionManager } from './connection-manager'
 import { getAllSchemaStatements } from './schema'
-import { eventBus } from '@trdr/core'
 
 /**
  * Initialize the database with all required tables and indexes
@@ -25,14 +26,14 @@ export async function initializeDatabase(connectionManager: ConnectionManager): 
         tablesCreated: statements.filter(s => s.includes('CREATE TABLE')).length,
         indexesCreated: statements.filter(s => s.includes('CREATE INDEX')).length,
       },
-      timestamp: new Date(),
+      timestamp: epochDateNow()
     })
   } catch (error) {
     eventBus.emit('system.error', {
       error,
       context: 'Database initialization',
       severity: 'critical',
-      timestamp: new Date(),
+      timestamp: epochDateNow()
     })
     throw error
   }
@@ -69,14 +70,14 @@ export async function dropAllTables(connectionManager: ConnectionManager): Promi
 
     eventBus.emit('system.info', {
       message: 'All database tables dropped successfully',
-      timestamp: new Date(),
+      timestamp: epochDateNow()
     })
   } catch (error) {
     eventBus.emit('system.error', {
       error,
       context: 'Database table drop',
       severity: 'warning',
-      timestamp: new Date(),
+      timestamp: epochDateNow()
     })
     throw error
   }

@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { OrderLifecycleManager } from './order-lifecycle-manager'
-import { EnhancedOrderState } from '@trdr/shared'
+import { EnhancedOrderState, epochDateNow } from '@trdr/shared'
 import type { OrderAgentConsensus, OrderLifecycleConfig } from '@trdr/shared'
 import { EventBus } from '../events/event-bus'
 
@@ -42,7 +42,7 @@ describe('OrderLifecycleManager', () => {
           confidence: 0.8,
           weight: 1.0,
           reason: 'Upward trend detected',
-          timestamp: new Date()
+          timestamp: epochDateNow()
         }
       ]
     }
@@ -218,7 +218,7 @@ describe('OrderLifecycleManager', () => {
       }
 
       // Trigger fill event
-      eventBus.emit('order.fill', { orderId: submittedOrder.id, fill, timestamp: new Date() })
+      eventBus.emit('order.fill', { orderId: submittedOrder.id, fill, timestamp: epochDateNow() })
 
       // Wait for async handling
       await new Promise(resolve => setTimeout(resolve, 10))
@@ -247,7 +247,7 @@ describe('OrderLifecycleManager', () => {
       }
 
       // Trigger partial fill event
-      eventBus.emit('order.fill', { orderId: submittedOrder.id, fill: partialFill, timestamp: new Date() })
+      eventBus.emit('order.fill', { orderId: submittedOrder.id, fill: partialFill, timestamp: epochDateNow() })
 
       // Wait for async handling
       await new Promise(resolve => setTimeout(resolve, 10))

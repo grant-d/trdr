@@ -1,9 +1,9 @@
-import { describe, it, beforeEach, mock } from 'node:test'
-import assert from 'node:assert/strict'
-import { OrderStateMachine } from './order-state-machine'
-import { EnhancedOrderState } from '@trdr/shared'
 import type { ManagedOrder } from '@trdr/shared'
+import { EnhancedOrderState, epochDateNow } from '@trdr/shared'
+import assert from 'node:assert/strict'
+import { beforeEach, describe, it, mock } from 'node:test'
 import { EventBus } from '../events/event-bus'
+import { OrderStateMachine } from './order-state-machine'
 
 describe('OrderStateMachine', () => {
   let stateMachine: OrderStateMachine
@@ -28,7 +28,7 @@ describe('OrderStateMachine', () => {
       filledSize: 0,
       averageFillPrice: 0,
       fees: 0,
-      lastModified: new Date(),
+      lastModified: epochDateNow(),
       fills: []
     }
   })
@@ -61,7 +61,7 @@ describe('OrderStateMachine', () => {
       stateMachine.transition(mockOrder, EnhancedOrderState.SUBMITTED)
 
       assert.equal(mockOrder.state, EnhancedOrderState.SUBMITTED)
-      assert.ok(mockOrder.lastModified instanceof Date)
+      assert.ok(typeof mockOrder.lastModified === 'number')
       assert.equal(eventHandler.mock.calls.length, 1)
       
       const event = eventHandler.mock.calls[0]?.arguments[0]
@@ -95,7 +95,7 @@ describe('OrderStateMachine', () => {
         orderId: mockOrder.id,
         price: 50000,
         size: mockOrder.size,
-        timestamp: Date.now(),
+        timestamp: epochDateNow(),
         fee: 0.1,
         feeCurrency: 'USD'
       }]

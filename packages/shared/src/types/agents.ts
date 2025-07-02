@@ -1,3 +1,4 @@
+import type { EpochDate } from './dates'
 import type { Candle, MarketDataSnapshot } from './market-data'
 import type { Order, Position } from './orders'
 
@@ -42,7 +43,7 @@ export interface TradeResult {
   /** Trade duration in milliseconds */
   readonly duration: number
   /** Unix timestamp of trade completion */
-  readonly timestamp: number
+  readonly timestamp: EpochDate
 }
 
 /**
@@ -132,7 +133,7 @@ export interface AgentVote {
  */
 export interface AgentConsensus {
   /** Unix timestamp of consensus */
-  readonly timestamp: number
+  readonly timestamp: EpochDate
   /** All agent votes */
   readonly votes: readonly AgentVote[]
   /** Final consensus decision */
@@ -236,7 +237,7 @@ export interface AgentContext {
   /** Trading pair symbol */
   readonly symbol: string
   /** Current unix timestamp */
-  readonly timestamp: number
+  readonly timestamp: EpochDate
   /** Current market price */
   readonly currentPrice: number
   /** Historical price candles */

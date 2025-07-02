@@ -1,8 +1,9 @@
-import { describe, it, beforeEach, afterEach, mock } from 'node:test'
+import { epochDateNow, toEpochDate } from '@trdr/shared'
 import assert from 'node:assert/strict'
-import type { DataFeedConfig, HistoricalDataRequest } from '../interfaces/market-data-pipeline'
+import { afterEach, beforeEach, describe, it, mock } from 'node:test'
 import { EventBus } from '../events/event-bus'
 import { EventTypes } from '../events/types'
+import type { DataFeedConfig, HistoricalDataRequest } from '../interfaces/market-data-pipeline'
 
 // Mock the Coinbase Advanced Trade SDK classes
 class MockProductsService {
@@ -127,7 +128,7 @@ class TestCoinbaseDataFeed {
     const eventBus = EventBus.getInstance()
     eventBus.emit(EventTypes.SYSTEM_INFO, {
       message: 'Data feed connected',
-      timestamp: new Date(),
+      timestamp: epochDateNow(),
     })
   }
 
@@ -135,7 +136,7 @@ class TestCoinbaseDataFeed {
     const eventBus = EventBus.getInstance()
     eventBus.emit(EventTypes.SYSTEM_WARNING, {
       message: `Data feed disconnected: ${reason}`,
-      timestamp: new Date(),
+      timestamp: epochDateNow(),
     })
   }
 
@@ -144,7 +145,7 @@ class TestCoinbaseDataFeed {
     eventBus.emit(EventTypes.SYSTEM_ERROR, {
       message: error.message,
       error: error,
-      timestamp: new Date(),
+      timestamp: epochDateNow(),
     })
   }
 
@@ -321,8 +322,8 @@ describe('CoinbaseDataFeed', () => {
 
       const request: HistoricalDataRequest = {
         symbol: 'BTC-USD',
-        start: new Date('2022-01-01'),
-        end: new Date('2022-01-02'),
+        start: toEpochDate(new Date('2022-01-01')),
+        end: toEpochDate(new Date('2022-01-02')),
         interval: '1h',
       }
 
@@ -372,8 +373,8 @@ describe('CoinbaseDataFeed', () => {
 
       const request: HistoricalDataRequest = {
         symbol: 'BTC-USD',
-        start: new Date('2022-01-01'),
-        end: new Date('2022-01-02'),
+        start: toEpochDate(new Date('2022-01-01')),
+        end: toEpochDate(new Date('2022-01-02')),
         interval: '1h',
       }
 

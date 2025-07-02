@@ -1,4 +1,4 @@
-import type { Candle } from '@trdr/shared'
+import { toEpochDate, type Candle } from '@trdr/shared'
 import assert from 'node:assert/strict'
 import { beforeEach, describe, it } from 'node:test'
 import { IndicatorCalculator } from './indicator-calculator'
@@ -24,7 +24,7 @@ describe('IndicatorCalculator', () => {
       const open = i > 0 ? candles[i - 1]!.close : basePrice
 
       candles.push({
-        timestamp: (i + 1) * 60000, // 1 minute intervals
+        timestamp: toEpochDate((i + 1) * 60000), // 1 minute intervals
         open,
         high,
         low,
@@ -381,9 +381,9 @@ describe('IndicatorCalculator', () => {
 
     it('should handle extreme price values', () => {
       const extremeCandles: Candle[] = [
-        { timestamp: 1000, open: 1, high: 10000, low: 0.001, close: 5000, volume: 1000 },
-        { timestamp: 2000, open: 5000, high: 9999, low: 1, close: 100, volume: 1000 },
-        { timestamp: 3000, open: 100, high: 1000, low: 10, close: 500, volume: 1000 },
+        { timestamp: toEpochDate(1000), open: 1, high: 10000, low: 0.001, close: 5000, volume: 1000 },
+        { timestamp: toEpochDate(2000), open: 5000, high: 9999, low: 1, close: 100, volume: 1000 },
+        { timestamp: toEpochDate(3000), open: 100, high: 1000, low: 10, close: 500, volume: 1000 },
       ]
 
       const atr = calculator.atr(extremeCandles, 2)

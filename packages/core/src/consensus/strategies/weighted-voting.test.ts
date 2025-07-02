@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { epochDateNow } from '@trdr/shared'
 import { WeightedVotingStrategy } from './weighted-voting'
 import type { AgentSignal, ConsensusConfig } from '../interfaces'
 
@@ -26,7 +27,7 @@ describe('WeightedVotingStrategy', () => {
           signal: 'buy',
           confidence: 0.8,
           weight: 1.0,
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           reasoning: 'Strong uptrend',
           expectedWinRate: 0.65,
           expectedRiskReward: 2.0,
@@ -38,7 +39,7 @@ describe('WeightedVotingStrategy', () => {
           signal: 'buy',
           confidence: 0.75,
           weight: 1.5,
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           reasoning: 'Momentum positive',
           expectedWinRate: 0.7,
           expectedRiskReward: 1.8,
@@ -50,7 +51,7 @@ describe('WeightedVotingStrategy', () => {
           signal: 'buy',
           confidence: 0.85,
           weight: 1.2,
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           reasoning: 'Volume surge',
           expectedWinRate: 0.72,
           expectedRiskReward: 2.2,
@@ -74,7 +75,7 @@ describe('WeightedVotingStrategy', () => {
           signal: 'sell',
           confidence: 0.7,
           weight: 2.0, // Higher weight
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           reasoning: 'Overbought',
           expectedWinRate: 0.6,
           expectedRiskReward: 1.5,
@@ -86,7 +87,7 @@ describe('WeightedVotingStrategy', () => {
           signal: 'sell',
           confidence: 0.65,
           weight: 1.0,
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           reasoning: 'Resistance hit',
           expectedWinRate: 0.58,
           expectedRiskReward: 1.6,
@@ -98,7 +99,7 @@ describe('WeightedVotingStrategy', () => {
           signal: 'hold',
           confidence: 0.6,
           weight: 0.5, // Lower weight
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           reasoning: 'Unclear signal'
         }
       ]
@@ -117,7 +118,7 @@ describe('WeightedVotingStrategy', () => {
           signal: 'buy',
           confidence: 0.7,
           weight: 1.0,
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           reasoning: 'Bullish pattern',
           expectedWinRate: 0.65,
           expectedRiskReward: 2.0,
@@ -129,7 +130,7 @@ describe('WeightedVotingStrategy', () => {
           signal: 'sell',
           confidence: 0.7,
           weight: 1.0,
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           reasoning: 'Bearish divergence',
           expectedWinRate: 0.65,
           expectedRiskReward: 2.0,
@@ -141,7 +142,7 @@ describe('WeightedVotingStrategy', () => {
           signal: 'hold',
           confidence: 0.8,
           weight: 1.0,
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           reasoning: 'Mixed signals'
         }
       ]
@@ -160,7 +161,7 @@ describe('WeightedVotingStrategy', () => {
           signal: 'buy',
           confidence: 0.9,
           weight: 1.0,
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           reasoning: 'Strong signal',
           expectedWinRate: 0.75,
           expectedRiskReward: 3.0,
@@ -183,7 +184,7 @@ describe('WeightedVotingStrategy', () => {
           signal: 'buy',
           confidence: 0.55, // Below threshold
           weight: 1.0,
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           reasoning: 'Weak buy',
           expectedWinRate: 0.55,
           expectedRiskReward: 1.2,
@@ -195,7 +196,7 @@ describe('WeightedVotingStrategy', () => {
           signal: 'buy',
           confidence: 0.52,
           weight: 1.0,
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           reasoning: 'Uncertain',
           expectedWinRate: 0.54,
           expectedRiskReward: 1.1,
@@ -207,7 +208,7 @@ describe('WeightedVotingStrategy', () => {
           signal: 'hold',
           confidence: 0.7,
           weight: 1.0,
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           reasoning: 'No clear edge'
         }
       ]
@@ -227,7 +228,7 @@ describe('WeightedVotingStrategy', () => {
           signal: 'buy',
           confidence: 0.8,
           weight: 2.0, // Double weight
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           reasoning: 'High conviction',
           expectedWinRate: 0.7,
           expectedRiskReward: 2.5,
@@ -239,7 +240,7 @@ describe('WeightedVotingStrategy', () => {
           signal: 'buy',
           confidence: 0.6,
           weight: 1.0,
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           reasoning: 'Moderate conviction',
           expectedWinRate: 0.6,
           expectedRiskReward: 1.5,
@@ -251,7 +252,7 @@ describe('WeightedVotingStrategy', () => {
           signal: 'buy',
           confidence: 0.7,
           weight: 1.0,
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           reasoning: 'Moderate conviction',
           expectedWinRate: 0.65,
           expectedRiskReward: 1.8,
@@ -284,7 +285,7 @@ describe('WeightedVotingStrategy', () => {
           signal: 'buy',
           confidence: 0.4, // Below threshold
           weight: 1.0,
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           reasoning: 'Weak signal',
           expectedWinRate: 0.5,
           expectedRiskReward: 1.0,
@@ -296,7 +297,7 @@ describe('WeightedVotingStrategy', () => {
           signal: 'buy',
           confidence: 0.8,
           weight: 1.0,
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           reasoning: 'Strong signal',
           expectedWinRate: 0.7,
           expectedRiskReward: 2.0,
@@ -308,7 +309,7 @@ describe('WeightedVotingStrategy', () => {
           signal: 'buy',
           confidence: 0.75,
           weight: 1.0,
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           reasoning: 'Good signal',
           expectedWinRate: 0.68,
           expectedRiskReward: 1.8,
@@ -341,7 +342,7 @@ describe('WeightedVotingStrategy', () => {
           signal: 'buy',
           confidence: 0.8,
           weight: 1.0,
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           reasoning: 'Test'
         },
         {
@@ -350,7 +351,7 @@ describe('WeightedVotingStrategy', () => {
           signal: 'buy',
           confidence: 0.7,
           weight: 1.0,
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           reasoning: 'Test'
         }
       ]

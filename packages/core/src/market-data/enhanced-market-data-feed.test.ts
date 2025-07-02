@@ -1,10 +1,11 @@
-import { describe, it, beforeEach, mock } from 'node:test'
+import type { Candle, EpochDate, PriceTick } from '@trdr/shared'
+import { epochDateNow, toEpochDate } from '@trdr/shared'
 import assert from 'node:assert/strict'
-import type { PriceTick, Candle } from '@trdr/shared'
-import { EnhancedMarketDataFeed, type EnhancedDataFeedConfig } from './enhanced-market-data-feed'
+import { beforeEach, describe, it, mock } from 'node:test'
 import { enhancedEventBus } from '../events/enhanced-event-bus'
 import { EnhancedEventTypes } from '../events/market-data-events'
 import { EventTypes } from '../events/types'
+import { EnhancedMarketDataFeed, type EnhancedDataFeedConfig } from './enhanced-market-data-feed'
 
 // Test implementation of the abstract class
 class TestEnhancedMarketDataFeed extends EnhancedMarketDataFeed {
@@ -42,11 +43,11 @@ class TestEnhancedMarketDataFeed extends EnhancedMarketDataFeed {
   }
 
   // Test methods to trigger enhanced events
-  testEmitTick(tick: PriceTick, sourceTimestamp?: Date): void {
+  testEmitTick(tick: PriceTick, sourceTimestamp?: EpochDate): void {
     this.emitEnhancedTick(tick, sourceTimestamp)
   }
 
-  testEmitCandle(candle: Candle, symbol: string, interval: string, sourceTimestamp?: Date): void {
+  testEmitCandle(candle: Candle, symbol: string, interval: string, sourceTimestamp?: EpochDate): void {
     this.emitEnhancedCandle(candle, symbol, interval, sourceTimestamp)
   }
 
@@ -95,7 +96,7 @@ describe('EnhancedMarketDataFeed', () => {
         symbol: 'BTC-USD',
         price: 50000,
         volume: 100,
-        timestamp: Date.now(),
+        timestamp: epochDateNow(),
       }
 
       // Check that the enhanced feed's lastPrices is empty for this symbol
@@ -126,7 +127,7 @@ describe('EnhancedMarketDataFeed', () => {
         symbol: 'BTC-USD',
         price: 50000,
         volume: 100,
-        timestamp: Date.now(),
+        timestamp: epochDateNow(),
       })
 
       // Second tick with price change
@@ -134,7 +135,7 @@ describe('EnhancedMarketDataFeed', () => {
         symbol: 'BTC-USD',
         price: 51000,
         volume: 150,
-        timestamp: Date.now(),
+        timestamp: epochDateNow(),
       })
 
       assert.equal(handler.mock.calls.length, 2)
@@ -155,7 +156,7 @@ describe('EnhancedMarketDataFeed', () => {
         low: 48500,
         close: 50000,
         volume: 1000,
-        timestamp: Date.now(),
+        timestamp: epochDateNow(),
       }
 
       feed.testEmitCandle(candle, 'BTC-USD', '1m')
@@ -185,7 +186,7 @@ describe('EnhancedMarketDataFeed', () => {
         low: 49000,
         close: 49500,
         volume: 1000,
-        timestamp: Date.now(),
+        timestamp: epochDateNow(),
       }
 
       feed.testEmitCandle(bearishCandle, 'BTC-USD', '1m')
@@ -200,7 +201,7 @@ describe('EnhancedMarketDataFeed', () => {
         low: 48000,
         close: 50050, // Very small body relative to 4000 range
         volume: 1000,
-        timestamp: Date.now(),
+        timestamp: epochDateNow(),
       }
 
       feed.testEmitCandle(dojiCandle, 'BTC-USD', '1m')
@@ -233,8 +234,8 @@ describe('EnhancedMarketDataFeed', () => {
         symbol: 'BTC-USD',
         price: 50000,
         volume: 100,
-        timestamp: Date.now(),
-      }, new Date(Date.now() - 10))
+        timestamp: epochDateNow(),
+      }, toEpochDate(Date.now() - 10))
 
       feed.testEmitCandle({
         open: 49000,
@@ -242,7 +243,7 @@ describe('EnhancedMarketDataFeed', () => {
         low: 48500,
         close: 50000,
         volume: 1000,
-        timestamp: Date.now(),
+        timestamp: epochDateNow(),
       }, 'BTC-USD', '1m')
 
       const stats = feed.getEnhancedStats()
@@ -250,7 +251,7 @@ describe('EnhancedMarketDataFeed', () => {
       assert.equal(stats.events.ticksReceived, 1)
       assert.equal(stats.events.candlesReceived, 1)
       assert.ok(stats.events.avgLatency >= 0)
-      assert.ok(stats.events.lastEventTime instanceof Date)
+      assert.ok(typeof stats.events.lastEventTime === 'number')
       assert.equal(stats.market.currentPrice, 50000)
     })
 
@@ -262,7 +263,7 @@ describe('EnhancedMarketDataFeed', () => {
         low: 47000,
         close: 48500,
         volume: 500,
-        timestamp: Date.now(),
+        timestamp: epochDateNow(),
       }, 'BTC-USD', '1m')
 
       // Second candle
@@ -272,7 +273,7 @@ describe('EnhancedMarketDataFeed', () => {
         low: 48000,
         close: 50000,
         volume: 800,
-        timestamp: Date.now(),
+        timestamp: epochDateNow(),
       }, 'BTC-USD', '1m')
 
       const stats = feed.getEnhancedStats()
@@ -301,7 +302,7 @@ describe('EnhancedMarketDataFeed', () => {
         symbol: 'BTC-USD',
         price: 50000,
         volume: 100,
-        timestamp: Date.now(),
+        timestamp: epochDateNow(),
       })
 
       // Verify the subscription was created
@@ -322,7 +323,7 @@ describe('EnhancedMarketDataFeed', () => {
         symbol: 'BTC-USD',
         price: 50000,
         volume: 100,
-        timestamp: Date.now(),
+        timestamp: epochDateNow(),
       })
 
       // Should not emit enhanced events
@@ -340,7 +341,7 @@ describe('EnhancedMarketDataFeed', () => {
           symbol: 'BTC-USD',
           price: 50000 + i,
           volume: 100,
-          timestamp: Date.now(),
+          timestamp: epochDateNow(),
         })
       }
 
@@ -353,17 +354,25 @@ describe('EnhancedMarketDataFeed', () => {
     it('should export event data', async () => {
       const eventTypes = [EnhancedEventTypes.MARKET_TICK_ENHANCED]
       const timeRange = {
-        start: new Date('2024-01-01T00:00:00Z'),
-        end: new Date('2024-01-01T12:00:00Z'),
+        start: toEpochDate(new Date('2024-01-01T00:00:00Z')),
+        end: toEpochDate(new Date('2024-01-01T12:00:00Z')),
       }
 
-      const exportData = await feed.exportEventData(eventTypes, timeRange)
-      const parsed = JSON.parse(exportData)
+      const exportData = feed.exportEventData(eventTypes, timeRange)
+      const parsed = JSON.parse(exportData) as Partial<{
+        exportTimestamp: EpochDate
+        timeRange: {
+          start: EpochDate
+          end: EpochDate
+        }
+        eventTypes: string[]
+        events: unknown[]
+      }>
 
       assert.ok(parsed.exportTimestamp)
-      // Check that timeRange dates are properly serialized
-      assert.equal(parsed.timeRange.start.value, timeRange.start.toISOString())
-      assert.equal(parsed.timeRange.end.value, timeRange.end.toISOString())
+      // Check that timeRange dates are properly serialized as epoch numbers
+      assert.equal(parsed.timeRange?.start, timeRange.start)
+      assert.equal(parsed.timeRange?.end, timeRange.end)
       assert.deepEqual(parsed.eventTypes, eventTypes)
       assert.ok(Array.isArray(parsed.events))
     })
@@ -420,7 +429,7 @@ describe('EnhancedMarketDataFeed', () => {
           symbol: 'BTC-USD',
           price: 50000 + i,
           volume: 100,
-          timestamp: Date.now(),
+          timestamp: epochDateNow(),
         })
       }
 

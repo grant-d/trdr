@@ -1,7 +1,8 @@
-import { BaseRepository } from './base-repository'
+import type { EpochDate } from '@trdr/shared'
+import { epochDateNow, type IsoDate, isoToEpoch, toIsoDate } from '@trdr/shared'
 import type { ConnectionManager } from '../db/connection-manager'
 import type { Candle, PriceTick } from '../types/market-data'
-import { type IsoDate, toIsoDate } from '@trdr/shared'
+import { BaseRepository } from './base-repository'
 
 /**
  * Database candle dto
@@ -44,7 +45,7 @@ interface PriceTickDto {
 export class MarketDataRepository extends BaseRepository<CandleDto> {
   protected readonly tableName = 'candles'
   private readonly ticksTableName = 'market_ticks'
-  private idCounter = Date.now()
+  private idCounter = epochDateNow()
 
   constructor(connectionManager: ConnectionManager) {
     super(connectionManager)
@@ -100,8 +101,8 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
   async getCandles(
     symbol: string,
     interval: string,
-    startTime: Date,
-    endTime: Date,
+    startTime: EpochDate | Date,
+    endTime: EpochDate | Date,
     limit?: number,
   ): Promise<Candle[]> {
     let sql = `
@@ -117,7 +118,10 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
       sql += ` LIMIT ${limit}`
     }
 
-    const params = [symbol, interval, startTime.toISOString(), endTime.toISOString()]
+    const st = startTime instanceof Date ? toIsoDate(startTime) : toIsoDate(startTime)
+    const et = endTime instanceof Date ? toIsoDate(endTime) : toIsoDate(endTime)
+
+    const params = [symbol, interval, st, et]
     const models = await this.query<CandleDto>(sql, params)
 
     return models.map(model => this.dtoToCandle(model))
@@ -206,8 +210,8 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
    */
   async getTicks(
     symbol: string,
-    startTime: Date,
-    endTime: Date,
+    startTime: EpochDate | Date,
+    endTime: EpochDate | Date,
     limit?: number,
   ): Promise<PriceTick[]> {
     let sql = `
@@ -222,7 +226,10 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
       sql += ` LIMIT ${limit}`
     }
 
-    const params = [symbol, toIsoDate(startTime), toIsoDate(endTime)]
+    const st = startTime instanceof Date ? toIsoDate(startTime) : toIsoDate(startTime)
+    const et = endTime instanceof Date ? toIsoDate(endTime) : toIsoDate(endTime)
+
+    const params = [symbol, st, et]
     const models = await this.query<PriceTickDto>(sql, params)
 
     return models.map(model => this.dtoToTick(model))
@@ -256,8 +263,7 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
     priceRange: { min: number; max: number }
     volatility: number
   }> {
-    const startTime = new Date()
-    startTime.setDate(startTime.getDate() - days)
+    const startTime = epochDateNow() - (days * 24 * 60 * 60 * 1000)
 
     // SQLite doesn't have STDDEV, calculate volatility using variance
     const sql = `
@@ -303,8 +309,7 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
    * Delete old market data
    */
   async cleanup(daysToKeep = 90): Promise<{ candlesDeleted: number; ticksDeleted: number }> {
-    const cutoffDate = new Date()
-    cutoffDate.setDate(cutoffDate.getDate() - daysToKeep)
+    const cutoffDate = epochDateNow() - (daysToKeep * 24 * 60 * 60 * 1000)
 
     // Count before deletion
     const candlesBefore = await this.count()
@@ -338,9 +343,9 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
     return {
       symbol: model.symbol,
       interval: model.interval,
-      timestamp: new Date(model.open_time),
-      openTime: new Date(model.open_time),
-      closeTime: new Date(model.close_time),
+      timestamp: isoToEpoch(model.open_time),
+      openTime: isoToEpoch(model.open_time),
+      closeTime: isoToEpoch(model.close_time),
       open: model.open,
       high: model.high,
       low: model.low,
@@ -359,7 +364,7 @@ export class MarketDataRepository extends BaseRepository<CandleDto> {
       symbol: model.symbol,
       price: model.price,
       volume: model.volume,
-      timestamp: new Date(model.timestamp),
+      timestamp: isoToEpoch(model.timestamp),
       bid: model.bid,
       ask: model.ask,
       bidSize: model.bid_size,

@@ -1,10 +1,11 @@
-import { describe, it, beforeEach, afterEach } from 'node:test'
+import { epochDateNow, toEpochDate } from '@trdr/shared'
 import assert from 'node:assert/strict'
-import { Database, createDatabase } from './index'
-import type { Candle, Order, AgentSignal } from '../types'
-import type { Trade } from '../repositories/trade-repository'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { afterEach, beforeEach, describe, it } from 'node:test'
+import type { Trade } from '../repositories/trade-repository'
+import type { AgentSignal, Candle, Order } from '../types'
+import { Database, createDatabase } from './index'
 
 describe('Database Integration Tests', () => {
   let db: Database
@@ -38,9 +39,9 @@ describe('Database Integration Tests', () => {
       const candle: Candle = {
         symbol: 'BTC-USD',
         interval: '1h',
-        timestamp: new Date(),
-        openTime: new Date(Date.now() - 3600000),
-        closeTime: new Date(),
+        timestamp: epochDateNow(),
+        openTime: toEpochDate(Date.now() - 3600000),
+        closeTime: epochDateNow(),
         open: 50000,
         high: 51000,
         low: 49500,
@@ -60,7 +61,7 @@ describe('Database Integration Tests', () => {
         trailDistance: 0.02,
         reasoning: { momentum: 'strong', trend: 'up' },
         marketContext: { volume: 'high', volatility: 'medium' },
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
       }
 
       await db.agents.recordDecision(agentDecision)
@@ -75,8 +76,8 @@ describe('Database Integration Tests', () => {
         size: 0.1,
         trailPercent: 2,
         agentId: agentDecision.agentId,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: epochDateNow(),
+        updatedAt: epochDateNow(),
       }
 
       await db.orders.createOrder(order)
@@ -86,7 +87,7 @@ describe('Database Integration Tests', () => {
         status: 'filled',
         filledSize: 0.1,
         averageFillPrice: 50000,
-        filledAt: new Date(),
+        filledAt: epochDateNow(),
       })
 
       // 5. Record trade
@@ -100,7 +101,7 @@ describe('Database Integration Tests', () => {
         fee: 0.0001,
         feeCurrency: 'BTC',
         pnl: 0, // Initial trade
-        executedAt: new Date(),
+        executedAt: epochDateNow(),
       }
 
       await db.trades.recordTrade(trade)
@@ -139,7 +140,7 @@ describe('Database Integration Tests', () => {
           trailDistance: 0.02,
           reasoning: { index: i },
           marketContext: { volume: 'medium', volatility: 'low' },
-          timestamp: new Date(Date.now() - (3 - i) * 3600000),
+          timestamp: toEpochDate(Date.now() - (3 - i) * 3600000),
         })
 
         // Create order
@@ -151,8 +152,8 @@ describe('Database Integration Tests', () => {
           status: 'filled' as const,
           size: 0.1,
           agentId: agentId,
-          createdAt: new Date(Date.now() - (3 - i) * 3600000),
-          updatedAt: new Date(),
+          createdAt: toEpochDate(Date.now() - (3 - i) * 3600000),
+          updatedAt: epochDateNow(),
         })
 
         // Record trade
@@ -165,7 +166,7 @@ describe('Database Integration Tests', () => {
           size: 0.1,
           fee: 0.0001,
           pnl: i === 0 ? 0 : (i % 2 === 0 ? -50 : 100),
-          executedAt: new Date(Date.now() - (3 - i) * 3600000),
+          executedAt: toEpochDate(Date.now() - (3 - i) * 3600000),
         })
       }
 
@@ -188,9 +189,9 @@ describe('Database Integration Tests', () => {
       await db.marketData.saveCandle({
         symbol: 'BTC-USD',
         interval: '1h',
-        timestamp: new Date(),
-        openTime: new Date(Date.now() - 3600000),
-        closeTime: new Date(),
+        timestamp: epochDateNow(),
+        openTime: toEpochDate(Date.now() - 3600000),
+        closeTime: epochDateNow(),
         open: 50000,
         high: 51000,
         low: 49500,
@@ -205,8 +206,8 @@ describe('Database Integration Tests', () => {
         type: 'limit',
         status: 'pending',
         size: 0.1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: epochDateNow(),
+        updatedAt: epochDateNow(),
       })
 
       const stats = await db.getStats()
@@ -238,7 +239,7 @@ describe('Database Integration Tests', () => {
           },
         },
         metadata: {
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
         },
       }
 
@@ -295,9 +296,9 @@ describe('Database Integration Tests', () => {
       const candles: Candle[] = Array.from({ length: 24 }, (_, i) => ({
         symbol,
         interval: '1h',
-        timestamp: new Date(now - (24 - i) * 3600000),
-        openTime: new Date(now - (24 - i) * 3600000),
-        closeTime: new Date(now - (23 - i) * 3600000),
+        timestamp: toEpochDate(now - (24 - i) * 3600000),
+        openTime: toEpochDate(now - (24 - i) * 3600000),
+        closeTime: toEpochDate(now - (23 - i) * 3600000),
         open: 3000 + i * 10,
         high: 3010 + i * 10,
         low: 2990 + i * 10,
@@ -317,7 +318,7 @@ describe('Database Integration Tests', () => {
 
       assert.equal(last6Hours.length, 6)
       assert.ok(last6Hours[0])
-      assert.ok(last6Hours[0].openTime.getTime() >= now - 6 * 3600000)
+      assert.ok(last6Hours[0].openTime >= now - 6 * 3600000)
     })
   })
 
@@ -330,9 +331,9 @@ describe('Database Integration Tests', () => {
       await db.marketData.saveCandle({
         symbol: 'BTC-USD',
         interval: '1h',
-        timestamp: new Date(oldDate),
-        openTime: new Date(oldDate),
-        closeTime: new Date(oldDate + 3600000),
+        timestamp: toEpochDate(oldDate),
+        openTime: toEpochDate(oldDate),
+        closeTime: toEpochDate(oldDate + 3600000),
         open: 40000,
         high: 41000,
         low: 39000,
@@ -347,8 +348,8 @@ describe('Database Integration Tests', () => {
         type: 'limit',
         status: 'filled',
         size: 0.1,
-        createdAt: new Date(oldDate),
-        updatedAt: new Date(oldDate),
+        createdAt: toEpochDate(oldDate),
+        updatedAt: toEpochDate(oldDate),
       })
 
       await db.trades.recordTrade({
@@ -359,7 +360,7 @@ describe('Database Integration Tests', () => {
         price: 40000,
         size: 0.1,
         fee: 0.0001,
-        executedAt: new Date(oldDate),
+        executedAt: toEpochDate(oldDate),
       })
 
       await db.agents.recordDecision({
@@ -371,16 +372,16 @@ describe('Database Integration Tests', () => {
         trailDistance: 0,
         reasoning: {},
         marketContext: {},
-        timestamp: new Date(oldDate),
+        timestamp: toEpochDate(oldDate),
       })
 
       // Add recent data
       await db.marketData.saveCandle({
         symbol: 'BTC-USD',
         interval: '1h',
-        timestamp: new Date(recentDate),
-        openTime: new Date(recentDate),
-        closeTime: new Date(recentDate + 3600000),
+        timestamp: toEpochDate(recentDate),
+        openTime: toEpochDate(recentDate),
+        closeTime: toEpochDate(recentDate + 3600000),
         open: 50000,
         high: 51000,
         low: 49000,
@@ -399,7 +400,7 @@ describe('Database Integration Tests', () => {
       // Verify recent data remains
       const recentCandles = await db.marketData.getLatestCandle('BTC-USD', '1h')
       assert.ok(recentCandles)
-      assert.equal(recentCandles.timestamp.getTime(), recentDate)
+      assert.equal(recentCandles.timestamp, recentDate)
     })
   })
 
@@ -412,8 +413,8 @@ describe('Database Integration Tests', () => {
         type: 'limit',
         status: 'pending',
         size: 0.1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: epochDateNow(),
+        updatedAt: epochDateNow(),
       }
 
       await db.orders.createOrder(order)
@@ -433,8 +434,8 @@ describe('Database Integration Tests', () => {
         type: 'limit' as const,
         status: 'pending' as const,
         size: 0.1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: epochDateNow(),
+        updatedAt: epochDateNow(),
       }
 
       await assert.rejects(

@@ -1,9 +1,10 @@
-import { describe, it, beforeEach, afterEach } from 'node:test'
+import { epochDateNow, toEpochDate } from '@trdr/shared'
 import assert from 'node:assert/strict'
-import { BacktestDataFeed, type BacktestConfig } from './backtest-data-feed'
-import type { HistoricalDataRequest } from '../interfaces/market-data-pipeline'
+import { afterEach, beforeEach, describe, it } from 'node:test'
 import { EventBus } from '../events/event-bus'
 import { EventTypes } from '../events/types'
+import type { HistoricalDataRequest } from '../interfaces/market-data-pipeline'
+import { BacktestDataFeed, type BacktestConfig } from './backtest-data-feed'
 
 describe('BacktestDataFeed', () => {
   let feed: BacktestDataFeed
@@ -13,8 +14,8 @@ describe('BacktestDataFeed', () => {
   let subscriptions: Array<{ unsubscribe: () => void }> = []
 
   beforeEach(() => {
-    const startDate = new Date('2023-01-01T00:00:00Z')
-    const endDate = new Date('2023-01-01T01:00:00Z') // 1 hour test period
+    const startDate = toEpochDate(new Date('2023-01-01T00:00:00Z'))
+    const endDate = toEpochDate(new Date('2023-01-01T01:00:00Z')) // 1 hour test period
 
     config = {
       symbol: 'BTC-USD',
@@ -71,7 +72,8 @@ describe('BacktestDataFeed', () => {
 
     it('should have correct initial time settings', () => {
       const currentTime = feed.getCurrentTime()
-      assert.equal(currentTime.getTime(), config.startDate.getTime())
+      const expectedTime = config.startDate
+      assert.equal(currentTime.getTime(), expectedTime)
     })
 
     it('should create feed with default speed', () => {
@@ -79,8 +81,8 @@ describe('BacktestDataFeed', () => {
         symbol: 'ETH-USD',
         feedType: 'backtest',
         dataSource: 'test',
-        startDate: new Date(),
-        endDate: new Date(),
+        startDate: epochDateNow(),
+        endDate: epochDateNow(),
       }
       const defaultFeed = new BacktestDataFeed(defaultConfig)
       assert.ok(defaultFeed)
@@ -235,8 +237,8 @@ describe('BacktestDataFeed', () => {
     })
 
     it('should filter data by date range', async () => {
-      const narrowStart = new Date(config.startDate.getTime() + 10 * 60000) // +10 minutes
-      const narrowEnd = new Date(config.startDate.getTime() + 20 * 60000) // +20 minutes
+      const narrowStart = toEpochDate(config.startDate + 10 * 60000) // +10 minutes
+      const narrowEnd = toEpochDate(config.startDate + 20 * 60000) // +20 minutes
 
       const request: HistoricalDataRequest = {
         symbol: 'BTC-USD',
@@ -248,9 +250,8 @@ describe('BacktestDataFeed', () => {
 
       // All candles should be within the specified range
       candles.forEach(candle => {
-        const candleTime = new Date(candle.timestamp)
-        assert.ok(candleTime >= narrowStart)
-        assert.ok(candleTime <= narrowEnd)
+        assert.ok(candle.timestamp >= narrowStart)
+        assert.ok(candle.timestamp <= narrowEnd)
       })
     })
   })
@@ -277,8 +278,8 @@ describe('BacktestDataFeed', () => {
       // Create a feed with no data
       const emptyFeed = new BacktestDataFeed({
         ...config,
-        startDate: new Date('2030-01-01'),
-        endDate: new Date('2030-01-02'),
+        startDate: toEpochDate(new Date('2030-01-01')),
+        endDate: toEpochDate(new Date('2030-01-02')),
       })
 
       await emptyFeed.start()
@@ -304,20 +305,20 @@ describe('BacktestDataFeed', () => {
     it('should get current backtest time', () => {
       const currentTime = feed.getCurrentTime()
       assert.ok(currentTime instanceof Date)
-      assert.equal(currentTime.getTime(), config.startDate.getTime())
+      assert.equal(currentTime.getTime(), config.startDate)
     })
 
     it('should seek to specific time', async () => {
-      const seekTime = new Date(config.startDate.getTime() + 30 * 60000) // +30 minutes
+      const seekTime = toEpochDate(config.startDate + 30 * 60000) // +30 minutes
 
       await feed.seekToTime(seekTime)
 
       const currentTime = feed.getCurrentTime()
-      assert.equal(currentTime.getTime(), seekTime.getTime())
+      assert.equal(currentTime.getTime(), seekTime)
     })
 
     it('should reject seek outside backtest range', async () => {
-      const outsideTime = new Date(config.endDate.getTime() + 60000) // +1 minute past end
+      const outsideTime = toEpochDate(config.endDate + 60000) // +1 minute past end
 
       await assert.rejects(
         () => feed.seekToTime(outsideTime),
@@ -326,7 +327,7 @@ describe('BacktestDataFeed', () => {
     })
 
     it('should reject seek before backtest start', async () => {
-      const beforeTime = new Date(config.startDate.getTime() - 60000) // -1 minute before start
+      const beforeTime = toEpochDate(config.startDate - 60000) // -1 minute before start
 
       await assert.rejects(
         () => feed.seekToTime(beforeTime),
@@ -412,13 +413,13 @@ describe('BacktestDataFeed', () => {
 
       const stats = feed.getStats()
       assert.ok(stats.messagesReceived > 0)
-      assert.ok(stats.lastMessageTime instanceof Date)
+      assert.ok(typeof stats.lastMessageTime === 'number')
     })
 
     it('should track errors', async () => {
       // Simulate an error by calling a method that will fail
       try {
-        await feed.seekToTime(new Date('2030-01-01'))
+        await feed.seekToTime(toEpochDate(new Date('2030-01-01')))
       } catch (error) {
         // Expected to fail
       }
@@ -433,8 +434,8 @@ describe('BacktestDataFeed', () => {
       // Create feed with date range that has no data
       const emptyConfig: BacktestConfig = {
         ...config,
-        startDate: new Date('2030-01-01'),
-        endDate: new Date('2030-01-02'),
+        startDate: toEpochDate(new Date('2030-01-01')),
+        endDate: toEpochDate(new Date('2030-01-02')),
       }
 
       const emptyFeed = new BacktestDataFeed(emptyConfig)

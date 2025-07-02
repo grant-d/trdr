@@ -1,16 +1,17 @@
-import type {
-  IPositionSizingStrategy,
-  PositionSizingInput,
-  PositionSizingOutput,
-  PositionSizingConfig,
-  MarketConditions,
-  RiskParameters
-} from './interfaces'
-import { KellyCriterionStrategy } from './strategies/kelly-criterion'
-import { FixedFractionalStrategy } from './strategies/fixed-fractional'
-import { VolatilityAdjustedStrategy } from './strategies/volatility-adjusted'
+import { epochDateNow } from '@trdr/shared'
 import { EventBus } from '../events/event-bus'
 import { EventTypes } from '../events/types'
+import type {
+  IPositionSizingStrategy,
+  MarketConditions,
+  PositionSizingConfig,
+  PositionSizingInput,
+  PositionSizingOutput,
+  RiskParameters
+} from './interfaces'
+import { FixedFractionalStrategy } from './strategies/fixed-fractional'
+import { KellyCriterionStrategy } from './strategies/kelly-criterion'
+import { VolatilityAdjustedStrategy } from './strategies/volatility-adjusted'
 
 /**
  * Manages position sizing strategies with pluggable implementations.
@@ -147,7 +148,7 @@ export class PositionSizingManager {
         input: adjustedInput,
         output
       },
-      timestamp: new Date()
+      timestamp: epochDateNow()
     })
     
     return output

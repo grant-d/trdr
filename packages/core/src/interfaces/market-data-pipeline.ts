@@ -1,4 +1,4 @@
-import type { Candle, PriceTick } from '@trdr/shared'
+import type { Candle, PriceTick, EpochDate } from '@trdr/shared'
 
 /**
  * Configuration for market data feed
@@ -46,9 +46,9 @@ export interface HistoricalDataRequest {
   /** Trading symbol */
   readonly symbol: string
   /** Start time for historical data */
-  readonly start: Date
+  readonly start: EpochDate
   /** End time for historical data */
-  readonly end: Date
+  readonly end: EpochDate
   /** Candle interval (e.g., '1m', '5m', '1h') */
   readonly interval?: string
   /** Maximum number of candles to return */
@@ -119,7 +119,7 @@ export interface ConnectionStats {
   /** Last error message if any */
   readonly lastError?: string
   /** Timestamp of last successful message */
-  readonly lastMessageTime?: Date
+  readonly lastMessageTime?: EpochDate
   /** Number of messages received */
   readonly messagesReceived: number
   /** Current subscribed symbols */

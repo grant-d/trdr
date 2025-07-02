@@ -1,8 +1,8 @@
-import { BaseRepository } from './base-repository'
-import type { OrderStatus, OrderType, OrderSide} from '@trdr/shared'
-import { type IsoDate, toIsoDate } from '@trdr/shared'
+import type { EpochDate, OrderSide, OrderStatus, OrderType } from '@trdr/shared'
+import { epochDateNow, type IsoDate, isoDateNow, isoToEpoch, toIsoDate } from '@trdr/shared'
 import type { ConnectionManager } from '../db/connection-manager'
 import type { Order } from '../types/orders'
+import { BaseRepository } from './base-repository'
 
 /**
  * Database order dto
@@ -57,8 +57,8 @@ export class OrderRepository extends BaseRepository<OrderDto> {
       agent_id: order.agentId,
       metadata: order.metadata ? JSON.stringify(order.metadata) : null,
       submitted_at: order.submittedAt ? toIsoDate(order.submittedAt) : undefined,
-      created_at: order.createdAt ? toIsoDate(order.createdAt) : toIsoDate(new Date()),
-      updated_at: order.updatedAt ? toIsoDate(order.updatedAt) : toIsoDate(new Date()),
+      created_at: order.createdAt ? toIsoDate(order.createdAt) : isoDateNow(),
+      updated_at: order.updatedAt ? toIsoDate(order.updatedAt) : isoDateNow(),
     }
 
     await this.insert(model)
@@ -69,7 +69,7 @@ export class OrderRepository extends BaseRepository<OrderDto> {
    */
   async updateOrder(orderId: string, updates: Partial<Order>): Promise<void> {
     const updateData: Partial<OrderDto> = {
-      updated_at: toIsoDate(new Date()),
+      updated_at: isoDateNow(),
     }
 
     if (updates.status !== undefined) updateData.status = updates.status
@@ -141,12 +141,15 @@ export class OrderRepository extends BaseRepository<OrderDto> {
    */
   async getOrderHistory(
     symbol: string,
-    startTime: Date,
-    endTime: Date,
+    startTime: EpochDate | Date,
+    endTime: EpochDate | Date,
     statuses?: OrderStatus[],
   ): Promise<Order[]> {
+    const st = startTime instanceof Date ? toIsoDate(startTime) : toIsoDate(startTime)
+    const et = endTime instanceof Date ? toIsoDate(endTime) : toIsoDate(endTime)
+
     let where = 'symbol = ? AND created_at >= ? AND created_at <= ?'
-    const params: unknown[] = [symbol, toIsoDate(startTime), toIsoDate(endTime)]
+    const params: unknown[] = [symbol, st, et]
 
     if (statuses && statuses.length > 0) {
       where += ` AND status IN (${statuses.map(() => '?').join(', ')})`
@@ -165,7 +168,7 @@ export class OrderRepository extends BaseRepository<OrderDto> {
 
     await this.updateOrder(orderId, {
       status: 'cancelled',
-      cancelledAt: new Date(),
+      cancelledAt: epochDateNow(),
       metadata,
     })
   }
@@ -181,8 +184,7 @@ export class OrderRepository extends BaseRepository<OrderDto> {
     ordersByType: Record<OrderType, number>
     ordersBySide: Record<OrderSide, number>
   }> {
-    const startTime = new Date()
-    startTime.setDate(startTime.getDate() - days)
+    const startTime = epochDateNow() - (days * 24 * 60 * 60 * 1000)
 
     let whereClause = 'created_at >= ?'
     const params: unknown[] = [toIsoDate(startTime)]
@@ -244,8 +246,7 @@ export class OrderRepository extends BaseRepository<OrderDto> {
    * Cleanup old orders
    */
   async cleanup(daysToKeep = 90): Promise<number> {
-    const cutoffDate = new Date()
-    cutoffDate.setDate(cutoffDate.getDate() - daysToKeep)
+    const cutoffDate = epochDateNow() - (daysToKeep * 24 * 60 * 60 * 1000)
 
     const countBefore = await this.count()
 
@@ -277,11 +278,11 @@ export class OrderRepository extends BaseRepository<OrderDto> {
       trailAmount: model.trail_distance,
       agentId: model.agent_id,
       metadata: model.metadata ? JSON.parse(model.metadata as string) as Record<string, unknown> : undefined,
-      createdAt: new Date(model.created_at),
-      updatedAt: new Date(model.updated_at),
-      submittedAt: model.submitted_at ? new Date(model.submitted_at) : undefined,
-      filledAt: model.filled_at ? new Date(model.filled_at) : undefined,
-      cancelledAt: model.cancelled_at ? new Date(model.cancelled_at) : undefined,
+      createdAt: isoToEpoch(model.created_at),
+      updatedAt: isoToEpoch(model.updated_at),
+      submittedAt: model.submitted_at ? isoToEpoch(model.submitted_at) : undefined,
+      filledAt: model.filled_at ? isoToEpoch(model.filled_at) : undefined,
+      cancelledAt: model.cancelled_at ? isoToEpoch(model.cancelled_at) : undefined,
     }
   }
 }

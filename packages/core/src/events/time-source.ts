@@ -1,17 +1,19 @@
+import { epochDateNow, toEpochDate, type EpochDate } from '@trdr/shared'
+
 /**
  * Time source abstraction for consistent time access.
  * Supports both real-time and simulated time for backtesting.
  */
 export interface TimeSource {
   /**
-   * Get current time
+   * Get current time as EpochDate (milliseconds since Unix epoch)
    */
-  now(): Date
+  nowEpoch(): EpochDate
 
   /**
-   * Get current timestamp in milliseconds
+   * Get current time as Date
    */
-  nowMs(): number
+  nowDate(): Date
 
   /**
    * Reset time source (for testing/backtesting)
@@ -23,12 +25,12 @@ export interface TimeSource {
  * Real-time source for live trading
  */
 export class RealTimeSource implements TimeSource {
-  now(): Date {
-    return new Date()
+  nowEpoch(): EpochDate {
+    return epochDateNow()
   }
 
-  nowMs(): number {
-    return Date.now()
+  nowDate(): Date {
+    return new Date()
   }
 }
 
@@ -36,21 +38,21 @@ export class RealTimeSource implements TimeSource {
  * Simulated time source for backtesting
  */
 export class SimulatedTimeSource implements TimeSource {
-  private currentTime: Date
-  private readonly startTime: Date
+  private currentTime: EpochDate
+  private readonly startTime: EpochDate
   private speed = 1 // Speed multiplier
 
-  constructor(startTime: Date = new Date()) {
+  constructor(startTime: EpochDate = epochDateNow()) {
     this.startTime = startTime
-    this.currentTime = new Date(startTime)
+    this.currentTime = startTime
   }
 
-  now(): Date {
+  nowEpoch(): EpochDate {
+    return this.currentTime
+  }
+
+  nowDate(): Date {
     return new Date(this.currentTime)
-  }
-
-  nowMs(): number {
-    return this.currentTime.getTime()
   }
 
   /**
@@ -58,17 +60,18 @@ export class SimulatedTimeSource implements TimeSource {
    */
   advance(milliseconds: number): void {
     const advance = milliseconds * this.speed
-    this.currentTime = new Date(this.currentTime.getTime() + advance)
+    this.currentTime = (this.currentTime + advance) as EpochDate
   }
 
   /**
    * Advance time to specific date
    */
-  advanceTo(date: Date): void {
-    if (date < this.currentTime) {
+  advanceTo(date: EpochDate | Date): void {
+    const ms = date instanceof Date ? toEpochDate(date) : date
+    if (ms < this.currentTime) {
       throw new Error('Cannot move time backwards')
     }
-    this.currentTime = new Date(date)
+    this.currentTime = ms
   }
 
   /**
@@ -85,7 +88,7 @@ export class SimulatedTimeSource implements TimeSource {
    * Reset to start time
    */
   reset(): void {
-    this.currentTime = new Date(this.startTime)
+    this.currentTime = this.startTime
     this.speed = 1
   }
 
@@ -93,7 +96,7 @@ export class SimulatedTimeSource implements TimeSource {
    * Get elapsed time since start
    */
   getElapsed(): number {
-    return this.currentTime.getTime() - this.startTime.getTime()
+    return this.currentTime - this.startTime
   }
 }
 
@@ -130,17 +133,17 @@ export class TimeSourceManager {
   }
 
   /**
-   * Convenience method to get current time
+   * Get current time as EpochDate (milliseconds since Unix epoch)
    */
-  now(): Date {
-    return this.timeSource.now()
+  nowEpoch(): EpochDate {
+    return this.timeSource.nowEpoch()
   }
 
   /**
-   * Convenience method to get current timestamp
+   * Get current time as Date
    */
-  nowMs(): number {
-    return this.timeSource.nowMs()
+  nowDate(): Date {
+    return this.timeSource.nowDate()
   }
 
   /**
@@ -153,7 +156,7 @@ export class TimeSourceManager {
   /**
    * Switch to simulated time
    */
-  useSimulatedTime(startTime?: Date): SimulatedTimeSource {
+  useSimulatedTime(startTime?: EpochDate): SimulatedTimeSource {
     const simulated = new SimulatedTimeSource(startTime)
     this.timeSource = simulated
     return simulated

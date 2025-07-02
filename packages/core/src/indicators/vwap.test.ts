@@ -1,4 +1,4 @@
-import type { Candle } from '@trdr/shared'
+import { toEpochDate, type Candle } from '@trdr/shared'
 import assert from 'node:assert/strict'
 import { beforeEach, describe, it } from 'node:test'
 import { VWAPIndicator } from './vwap'
@@ -13,7 +13,7 @@ describe('VWAPIndicator', () => {
     // Day 1 - timestamps 0-23 hours
     for (let i = 0; i < 8; i++) {
       candles.push({
-        timestamp: Date.UTC(2024, 0, 1, i + 9, 0, 0), // 9 AM - 4 PM
+        timestamp: toEpochDate(Date.UTC(2024, 0, 1, i + 9, 0, 0)), // 9 AM - 4 PM
         open: 100 + i,
         high: 102 + i,
         low: 99 + i,
@@ -25,7 +25,7 @@ describe('VWAPIndicator', () => {
     // Day 2
     for (let i = 0; i < 8; i++) {
       candles.push({
-        timestamp: Date.UTC(2024, 0, 2, i + 9, 0, 0),
+        timestamp: toEpochDate(Date.UTC(2024, 0, 2, i + 9, 0, 0)),
         open: 105 + i,
         high: 107 + i,
         low: 104 + i,
@@ -37,7 +37,7 @@ describe('VWAPIndicator', () => {
     // Day 3
     for (let i = 0; i < 8; i++) {
       candles.push({
-        timestamp: Date.UTC(2024, 0, 3, i + 9, 0, 0),
+        timestamp: toEpochDate(Date.UTC(2024, 0, 3, i + 9, 0, 0)),
         open: 110 + i,
         high: 112 + i,
         low: 109 + i,
@@ -200,7 +200,7 @@ describe('VWAPIndicator', () => {
       for (let day = 0; day < 7; day++) {
         for (let hour = 0; hour < 8; hour++) {
           weekCandles.push({
-            timestamp: Date.UTC(2024, 0, day + 1, hour + 9, 0, 0),
+            timestamp: toEpochDate(Date.UTC(2024, 0, day + 1, hour + 9, 0, 0)),
             open: 100,
             high: 102,
             low: 99,
@@ -214,7 +214,7 @@ describe('VWAPIndicator', () => {
       for (let day = 0; day < 7; day++) {
         for (let hour = 0; hour < 8; hour++) {
           weekCandles.push({
-            timestamp: Date.UTC(2024, 0, day + 8, hour + 9, 0, 0),
+            timestamp: toEpochDate(Date.UTC(2024, 0, day + 8, hour + 9, 0, 0)),
             open: 110,
             high: 112,
             low: 109,
@@ -246,7 +246,7 @@ describe('VWAPIndicator', () => {
       // Month 1 (January)
       for (let day = 0; day < 20; day++) {
         monthCandles.push({
-          timestamp: Date.UTC(2024, 0, day + 1, 12, 0, 0),
+          timestamp: toEpochDate(Date.UTC(2024, 0, day + 1, 12, 0, 0)),
           open: 100,
           high: 102,
           low: 99,
@@ -258,7 +258,7 @@ describe('VWAPIndicator', () => {
       // Month 2 (February)
       for (let day = 0; day < 20; day++) {
         monthCandles.push({
-          timestamp: Date.UTC(2024, 1, day + 1, 12, 0, 0),
+          timestamp: toEpochDate(Date.UTC(2024, 1, day + 1, 12, 0, 0)),
           open: 110,
           high: 112,
           low: 109,
@@ -351,7 +351,7 @@ describe('VWAPIndicator', () => {
       // Create candles with gaps
       const gappedCandles: Candle[] = [
         {
-          timestamp: Date.UTC(2024, 0, 1, 9, 0, 0),
+          timestamp: toEpochDate(Date.UTC(2024, 0, 1, 9, 0, 0)),
           open: 100,
           high: 102,
           low: 99,
@@ -360,7 +360,7 @@ describe('VWAPIndicator', () => {
         },
         // Skip several hours
         {
-          timestamp: Date.UTC(2024, 0, 1, 14, 0, 0),
+          timestamp: toEpochDate(Date.UTC(2024, 0, 1, 14, 0, 0)),
           open: 105,
           high: 107,
           low: 104,
@@ -369,7 +369,7 @@ describe('VWAPIndicator', () => {
         },
         // Next day
         {
-          timestamp: Date.UTC(2024, 0, 2, 10, 0, 0),
+          timestamp: toEpochDate(Date.UTC(2024, 0, 2, 10, 0, 0)),
           open: 110,
           high: 112,
           low: 109,

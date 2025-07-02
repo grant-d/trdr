@@ -1,3 +1,4 @@
+import { toEpochDate, type EpochDate } from '@trdr/shared'
 import type { EventData, EventType } from './types'
 
 /**
@@ -54,12 +55,14 @@ export class MarketDataFilters {
   /**
    * Filter events by time range
    */
-  static byTimeRange(startTime: Date, endTime: Date): EventFilter<EventData> {
+  static byTimeRange(startTime: Date | EpochDate, endTime: Date | EpochDate): EventFilter<EventData> {
+    const start: EpochDate = startTime instanceof Date ? toEpochDate(startTime) : startTime
+    const end: EpochDate = endTime instanceof Date ? toEpochDate(endTime) : endTime
+
     return (data) => {
       const timestamp = data.timestamp
       if (!timestamp) return true
-      const eventTime = timestamp instanceof Date ? timestamp : new Date(timestamp)
-      return eventTime >= startTime && eventTime <= endTime
+      return timestamp >= start && timestamp <= end
     }
   }
 

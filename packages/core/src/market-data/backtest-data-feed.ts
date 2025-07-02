@@ -1,10 +1,11 @@
-import type { Candle } from '@trdr/shared'
+import type { Candle, EpochDate } from '@trdr/shared'
+import { epochDateNow, toEpochDate, toIsoDate } from '@trdr/shared'
+import { EventTypes } from '../events/types'
 import type {
-  HistoricalDataRequest,
   ConnectionStats,
+  HistoricalDataRequest,
 } from '../interfaces/market-data-pipeline'
 import { EnhancedMarketDataFeed, type EnhancedDataFeedConfig } from './enhanced-market-data-feed'
-import { EventTypes } from '../events/types'
 
 /**
  * Configuration specific to backtest data feed with enhanced event capabilities
@@ -15,9 +16,9 @@ export interface BacktestConfig extends EnhancedDataFeedConfig {
   /** Replay speed multiplier (1 = real-time, 1000 = 1000x speed) */
   readonly speed?: number
   /** Start date for backtest */
-  readonly startDate: Date
+  readonly startDate: EpochDate
   /** End date for backtest */
-  readonly endDate: Date
+  readonly endDate: EpochDate
   /** Simulate network delays (in milliseconds) */
   readonly networkDelay?: number
   /** Simulate random failures (probability 0-1) */
@@ -38,9 +39,9 @@ export class BacktestDataFeed extends EnhancedMarketDataFeed {
   private speed: number
   private readonly networkDelay: number
   private readonly failureRate: number
-  private currentTime: Date
-  private readonly startDate: Date
-  private readonly endDate: Date
+  private currentTime: EpochDate
+  private readonly startDate: EpochDate
+  private readonly endDate: EpochDate
   private readonly dataSource: string
 
   constructor(config: BacktestConfig) {
@@ -52,7 +53,7 @@ export class BacktestDataFeed extends EnhancedMarketDataFeed {
     // TODO: Implement batch loading when SQLite integration is added
     this.startDate = config.startDate
     this.endDate = config.endDate
-    this.currentTime = new Date(config.startDate)
+    this.currentTime = config.startDate
     this.dataSource = config.dataSource
   }
 
@@ -67,12 +68,12 @@ export class BacktestDataFeed extends EnhancedMarketDataFeed {
       await this.loadHistoricalData()
 
       this.connected = true
-      this.startTime = new Date()
-      this.currentTime = new Date(this.startDate)
+      this.startTime = epochDateNow()
+      this.currentTime = toEpochDate(this.startDate)
 
       this.emitConnected()
       this.emitConnectionStatus('connected')
-      this.debug(`Backtest data feed started. Speed: ${this.speed}x, Period: ${this.startDate.toISOString()} to ${this.endDate.toISOString()}`)
+      this.debug(`Backtest data feed started. Speed: ${this.speed}x, Period: ${toIsoDate(this.startDate)} to ${toIsoDate(this.endDate)}`)
     } catch (error) {
       this.debug('Failed to start backtest data feed', error)
       this.emitError(error as Error)
@@ -155,8 +156,9 @@ export class BacktestDataFeed extends EnhancedMarketDataFeed {
 
     // Filter data by date range
     const filtered = symbolData.filter(candle => {
-      const candleTime = new Date(candle.timestamp)
-      return candleTime >= request.start && candleTime <= request.end
+      const startEpoch = request.start
+      const endEpoch = request.end
+      return candle.timestamp >= startEpoch && candle.timestamp <= endEpoch
     })
 
     // Apply limit if specified
@@ -193,7 +195,7 @@ export class BacktestDataFeed extends EnhancedMarketDataFeed {
   getStats(): ConnectionStats {
     return {
       connected: this.connected,
-      uptime: this.startTime ? Date.now() - this.startTime.getTime() : 0,
+      uptime: this.startTime ? Date.now() - this.startTime : 0,
       reconnectAttempts: this.reconnectAttempts,
       lastError: this.lastError,
       lastMessageTime: this.lastMessageTime,
@@ -227,23 +229,23 @@ export class BacktestDataFeed extends EnhancedMarketDataFeed {
   /**
    * Seek to specific time in backtest
    */
-  async seekToTime(time: Date): Promise<void> {
+  async seekToTime(time: EpochDate): Promise<void> {
     if (time < this.startDate || time > this.endDate) {
       throw new Error('Seek time outside of backtest range')
     }
 
-    this.currentTime = new Date(time)
+    this.currentTime = time
 
     // Update all symbol indices to match the seek time
     this.subscribedSymbols.forEach(symbol => {
       const symbolData = this.data.get(symbol)
       if (symbolData) {
-        const index = symbolData.findIndex(candle => new Date(candle.timestamp) >= time)
+        const index = symbolData.findIndex(candle => candle.timestamp >= time)
         this.currentIndices.set(symbol, Math.max(0, index === -1 ? symbolData.length : index))
       }
     })
 
-    this.debug(`Seeked to time: ${time.toISOString()}`)
+    this.debug(`Seeked to time: ${toIsoDate(time)}`)
     await Promise.resolve()
   }
 
@@ -262,9 +264,9 @@ export class BacktestDataFeed extends EnhancedMarketDataFeed {
     const symbols = ['BTC-USD', 'ETH-USD'] // Default symbols for testing
 
     // Only generate data if there's a meaningful time range and it's not far in the future
-    const timeRange = this.endDate.getTime() - this.startDate.getTime()
-    const now = new Date().getTime()
-    const isHistoricalData = this.startDate.getTime() < now
+    const timeRange = this.endDate - this.startDate
+    const now = epochDateNow()
+    const isHistoricalData = this.startDate < now
 
     if (timeRange > 0 && isHistoricalData) {
       for (const symbol of symbols) {
@@ -284,8 +286,8 @@ export class BacktestDataFeed extends EnhancedMarketDataFeed {
    */
   private generateSampleData(_symbol: string): Candle[] {
     const candles: Candle[] = []
-    const startTime = this.startDate.getTime()
-    const endTime = this.endDate.getTime()
+    const startTime = this.startDate
+    const endTime = this.endDate
     const interval = 60000 // 1 minute intervals
 
     // Return empty array if invalid time range
@@ -295,7 +297,7 @@ export class BacktestDataFeed extends EnhancedMarketDataFeed {
 
     let price = 50000 // Starting price
 
-    for (let time = startTime; time <= endTime; time += interval) {
+    for (let time = startTime as number; time <= endTime; time += interval) {
       // Simple random walk for price simulation
       const change = (Math.random() - 0.5) * 100
       price = Math.max(1000, price + change)
@@ -307,7 +309,7 @@ export class BacktestDataFeed extends EnhancedMarketDataFeed {
       const volume = Math.random() * 1000
 
       candles.push({
-        timestamp: time,
+        timestamp: time as EpochDate,
         open,
         high: Math.max(open, close, high),
         low: Math.min(open, close, low),
@@ -353,7 +355,7 @@ export class BacktestDataFeed extends EnhancedMarketDataFeed {
         if (!candle) continue
 
         // Check if this candle is at or before current time
-        if (new Date(candle.timestamp) <= this.currentTime) {
+        if (candle.timestamp <= this.currentTime) {
           // Emit enhanced candle event
           this.emitEnhancedCandle(candle, symbol, '1m')
 
@@ -368,7 +370,7 @@ export class BacktestDataFeed extends EnhancedMarketDataFeed {
           // Update index
           this.currentIndices.set(symbol, currentIndex + 1)
           this.messagesReceived++
-          this.lastMessageTime = new Date()
+          this.lastMessageTime = epochDateNow()
         }
 
         // Check if there's more data
@@ -379,19 +381,21 @@ export class BacktestDataFeed extends EnhancedMarketDataFeed {
     }
 
     // Advance time
-    this.currentTime = new Date(this.currentTime.getTime() + 60000) // 1 minute step
+    this.currentTime = toEpochDate(this.currentTime + 60000) // 1 minute step
 
     // Schedule next replay if there's more data and we haven't reached end time
     if (hasMoreData && this.currentTime <= this.endDate) {
       const delay = Math.max(1, 60000 / this.speed) // Adjust delay based on speed
-      this.replayTimer = setTimeout(() => this.replayNextCandles(), delay)
+      this.replayTimer = setTimeout(() => {
+        void this.replayNextCandles()
+      }, delay)
     } else {
       // Backtest completed
       this.isReplaying = false
       this.debug('Backtest replay completed')
       this.eventBus.emit(EventTypes.SYSTEM_INFO, {
         message: 'Backtest completed',
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
       })
     }
     await Promise.resolve()

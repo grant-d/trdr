@@ -2,6 +2,7 @@ import { describe, it, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { BaseMarketDataFeed } from './base-market-data-feed'
 import type { Candle, PriceTick } from '@trdr/shared'
+import { epochDateNow, toEpochDate } from '@trdr/shared'
 import type { DataFeedConfig, HistoricalDataRequest } from '../interfaces/market-data-pipeline'
 import { EventBus } from '../events/event-bus'
 import { EventTypes } from '../events/types'
@@ -19,7 +20,7 @@ class TestMarketDataFeed extends BaseMarketDataFeed {
   async getHistorical(request: HistoricalDataRequest): Promise<Candle[]> {
     // Mock implementation
     return [{
-      timestamp: request.start.getTime(),
+      timestamp: request.start,
       open: 100,
       high: 110,
       low: 90,
@@ -38,7 +39,7 @@ class TestMarketDataFeed extends BaseMarketDataFeed {
     // Emit a tick to establish lastMessageTime for health check
     this.testEmitTick({
       symbol: this.config.symbol,
-      timestamp: Date.now(),
+      timestamp: epochDateNow(),
       price: 100,
       volume: 1,
     })
@@ -174,7 +175,7 @@ describe('BaseMarketDataFeed', () => {
       await feed.start()
 
       const candle: Candle = {
-        timestamp: Date.now(),
+        timestamp: epochDateNow(),
         open: 50000,
         high: 51000,
         low: 49000,
@@ -199,7 +200,7 @@ describe('BaseMarketDataFeed', () => {
 
       const tick: PriceTick = {
         symbol: 'BTC-USD',
-        timestamp: Date.now(),
+        timestamp: epochDateNow(),
         price: 50250,
         volume: 0.5,
       }
@@ -253,7 +254,7 @@ describe('BaseMarketDataFeed', () => {
       // Emit some events
       feed.testEmitTick({
         symbol: 'BTC-USD',
-        timestamp: Date.now(),
+        timestamp: epochDateNow(),
         price: 50000,
         volume: 1,
       })
@@ -303,8 +304,8 @@ describe('BaseMarketDataFeed', () => {
     it('should fetch historical data', async () => {
       const request: HistoricalDataRequest = {
         symbol: 'BTC-USD',
-        start: new Date('2024-01-01'),
-        end: new Date('2024-01-02'),
+        start: toEpochDate(new Date('2024-01-01')),
+        end: toEpochDate(new Date('2024-01-02')),
         interval: '1h',
       }
 

@@ -1,4 +1,5 @@
 import { eventBus } from '@trdr/core'
+import { epochDateNow } from '@trdr/shared'
 import { AgentRepository } from '../repositories/agent-repository'
 import { MarketDataRepository } from '../repositories/market-data-repository'
 import { OrderRepository } from '../repositories/order-repository'
@@ -48,14 +49,14 @@ export class Database {
 
       eventBus.emit('system.info', {
         message: 'Database initialized successfully',
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
       })
     } catch (error) {
       eventBus.emit('system.error', {
         error: error instanceof Error ? error : new Error(String(error)),
         context: 'Database initialization',
         severity: 'critical',
-        timestamp: new Date(),
+        timestamp: epochDateNow(),
       })
       throw error
     }
@@ -102,12 +103,12 @@ export class Database {
         needsMigration: migrationStatus.pendingMigrations.length > 0,
       },
       repositories: {
-        candles: connectionStats.rowCounts?.candles || 0,
-        ticks: connectionStats.rowCounts?.market_ticks || 0,
-        orders: connectionStats.rowCounts?.orders || 0,
-        trades: connectionStats.rowCounts?.trades || 0,
-        decisions: connectionStats.rowCounts?.agent_decisions || 0,
-        checkpoints: connectionStats.rowCounts?.checkpoints || 0,
+        candles: connectionStats.rowCounts.candles || 0,
+        ticks: connectionStats.rowCounts.market_ticks || 0,
+        orders: connectionStats.rowCounts.orders || 0,
+        trades: connectionStats.rowCounts.trades || 0,
+        decisions: connectionStats.rowCounts.agent_decisions || 0,
+        checkpoints: connectionStats.rowCounts.checkpoints || 0,
       },
     }
   }

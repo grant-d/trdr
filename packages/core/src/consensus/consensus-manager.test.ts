@@ -5,6 +5,7 @@ import { WeightedVotingStrategy } from './strategies/weighted-voting'
 import type { ConsensusConfig, AgentSignal, SignalRequest } from './interfaces'
 import { EventBus } from '../events/event-bus'
 import { EventTypes } from '../events/types'
+import { epochDateNow } from '@trdr/shared'
 
 describe('ConsensusManager', () => {
   let manager: ConsensusManager
@@ -36,7 +37,7 @@ describe('ConsensusManager', () => {
         requestId: 'test-123',
         symbol: 'BTC-USD',
         currentPrice: 50000,
-        timestamp: new Date()
+        timestamp: epochDateNow()
       }
 
       const expectedAgents = ['agent1', 'agent2', 'agent3']
@@ -54,10 +55,10 @@ describe('ConsensusManager', () => {
             expectedWinRate: 0.65,
             expectedRiskReward: 2.5,
             reasoning: 'Strong upward momentum',
-            timestamp: new Date(),
+            timestamp: epochDateNow(),
             weight: 1.2
           },
-          timestamp: new Date()
+          timestamp: epochDateNow()
         })
 
         eventBus.emit(EventTypes.AGENT_SIGNAL, {
@@ -71,10 +72,10 @@ describe('ConsensusManager', () => {
             expectedWinRate: 0.6,
             expectedRiskReward: 2.0,
             reasoning: 'Low volatility favorable',
-            timestamp: new Date(),
+            timestamp: epochDateNow(),
             weight: 1.0
           },
-          timestamp: new Date()
+          timestamp: epochDateNow()
         })
 
         eventBus.emit(EventTypes.AGENT_SIGNAL, {
@@ -85,10 +86,10 @@ describe('ConsensusManager', () => {
             signal: 'hold',
             confidence: 0.6,
             reasoning: 'Volume too low',
-            timestamp: new Date(),
+            timestamp: epochDateNow(),
             weight: 0.8
           },
-          timestamp: new Date()
+          timestamp: epochDateNow()
         })
       }, 50)
 
@@ -110,7 +111,7 @@ describe('ConsensusManager', () => {
         requestId: 'test-timeout',
         symbol: 'BTC-USD',
         currentPrice: 50000,
-        timestamp: new Date()
+        timestamp: epochDateNow()
       }
 
       const expectedAgents = ['agent1', 'agent2', 'agent3']
@@ -126,9 +127,9 @@ describe('ConsensusManager', () => {
             confidence: 0.75,
             trailDistance: 3.0,
             reasoning: 'Momentum turning negative',
-            timestamp: new Date()
+            timestamp: epochDateNow()
           },
-          timestamp: new Date()
+          timestamp: epochDateNow()
         })
 
         eventBus.emit(EventTypes.AGENT_SIGNAL, {
@@ -140,9 +141,9 @@ describe('ConsensusManager', () => {
             confidence: 0.65,
             trailDistance: 3.5,
             reasoning: 'Volatility spike detected',
-            timestamp: new Date()
+            timestamp: epochDateNow()
           },
-          timestamp: new Date()
+          timestamp: epochDateNow()
         })
       }, 50)
 
@@ -166,7 +167,7 @@ describe('ConsensusManager', () => {
         requestId: 'test-fallback',
         symbol: 'BTC-USD',
         currentPrice: 50000,
-        timestamp: new Date()
+        timestamp: epochDateNow()
       }
 
       // Send conflicting signals
@@ -179,9 +180,9 @@ describe('ConsensusManager', () => {
             signal: 'buy',
             confidence: 0.9,
             reasoning: 'Strong buy signal',
-            timestamp: new Date()
+            timestamp: epochDateNow()
           },
-          timestamp: new Date()
+          timestamp: epochDateNow()
         })
 
         eventBus.emit(EventTypes.AGENT_SIGNAL, {
@@ -192,9 +193,9 @@ describe('ConsensusManager', () => {
             signal: 'sell',
             confidence: 0.85,
             reasoning: 'Risk too high',
-            timestamp: new Date()
+            timestamp: epochDateNow()
           },
-          timestamp: new Date()
+          timestamp: epochDateNow()
         })
 
         eventBus.emit(EventTypes.AGENT_SIGNAL, {
@@ -205,9 +206,9 @@ describe('ConsensusManager', () => {
             signal: 'hold',
             confidence: 0.7,
             reasoning: 'Neutral conditions',
-            timestamp: new Date()
+            timestamp: epochDateNow()
           },
-          timestamp: new Date()
+          timestamp: epochDateNow()
         })
       }, 50)
 
@@ -230,7 +231,7 @@ describe('ConsensusManager', () => {
         requestId: 'test-insufficient',
         symbol: 'BTC-USD',
         currentPrice: 50000,
-        timestamp: new Date()
+        timestamp: epochDateNow()
       }
 
       setTimeout(() => {
@@ -242,9 +243,9 @@ describe('ConsensusManager', () => {
             signal: 'buy',
             confidence: 0.9,
             reasoning: 'Buy signal',
-            timestamp: new Date()
+            timestamp: epochDateNow()
           },
-          timestamp: new Date()
+          timestamp: epochDateNow()
         })
       }, 50)
 
@@ -301,7 +302,7 @@ describe('ConsensusManager', () => {
         requestId: 'test-adaptive',
         symbol: 'BTC-USD',
         currentPrice: 50000,
-        timestamp: new Date()
+        timestamp: epochDateNow()
       }
 
       setTimeout(() => {
@@ -313,9 +314,9 @@ describe('ConsensusManager', () => {
             signal: 'buy',
             confidence: 0.8,
             reasoning: 'Buy signal',
-            timestamp: new Date()
+            timestamp: epochDateNow()
           },
-          timestamp: new Date()
+          timestamp: epochDateNow()
         })
 
         eventBus.emit(EventTypes.AGENT_SIGNAL, {
@@ -326,9 +327,9 @@ describe('ConsensusManager', () => {
             signal: 'sell',
             confidence: 0.9,
             reasoning: 'Sell signal',
-            timestamp: new Date()
+            timestamp: epochDateNow()
           },
-          timestamp: new Date()
+          timestamp: epochDateNow()
         })
       }, 50)
 
@@ -363,7 +364,7 @@ describe('ConsensusManager', () => {
           signal: 'buy',
           confidence: 0.8,
           reasoning: 'test',
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           weight: 2.0
         },
         {
@@ -372,7 +373,7 @@ describe('ConsensusManager', () => {
           signal: 'buy',
           confidence: 0.7,
           reasoning: 'test',
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           weight: 1.0
         },
         {
@@ -381,7 +382,7 @@ describe('ConsensusManager', () => {
           signal: 'sell',
           confidence: 0.9,
           reasoning: 'test',
-          timestamp: new Date(),
+          timestamp: epochDateNow(),
           weight: 1.0
         }
       ]
@@ -420,7 +421,7 @@ describe('ConsensusManager', () => {
             signal: 'buy' as const,
             confidence: 0.8,
             reasoning: 'test',
-            timestamp: new Date(),
+            timestamp: epochDateNow(),
             weight: 1.5
           }
         ],
@@ -428,7 +429,7 @@ describe('ConsensusManager', () => {
         dissentLevel: 0.2,
         usedFallback: false,
         processingTimeMs: 100,
-        timestamp: new Date()
+        timestamp: epochDateNow()
       }
 
       const orderConsensus = ConsensusManager.toOrderAgentConsensus(consensusResult, 'BTC-USD')
@@ -454,7 +455,7 @@ describe('ConsensusManager', () => {
         dissentLevel: 1,
         usedFallback: true,
         processingTimeMs: 100,
-        timestamp: new Date()
+        timestamp: epochDateNow()
       }
 
       const orderConsensus = ConsensusManager.toOrderAgentConsensus(consensusResult)

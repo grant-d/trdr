@@ -1,4 +1,5 @@
 import type { AgentConfig } from './agents'
+import type { EpochDate } from './dates'
 
 /** Risk tolerance levels for position sizing and strategy */
 export type RiskTolerance = 'conservative' | 'moderate' | 'aggressive'
@@ -83,10 +84,10 @@ export interface ExchangeConfig {
  * Defines parameters for historical testing.
  */
 export interface BacktestConfig {
-  /** Backtest start date */
-  readonly startDate: Date
-  /** Backtest end date */
-  readonly endDate: Date
+  /** Unix timestamp of backtest start */
+  readonly startDate: EpochDate
+  /** Unix timestamp of backtest end */
+  readonly endDate: EpochDate
   /** Starting capital for backtest */
   readonly initialCapital: number
   /** Trading fee rate (e.g., 0.001 for 0.1%) */

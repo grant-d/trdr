@@ -1,4 +1,4 @@
-import type { Candle } from '@trdr/shared'
+import { toEpochDate, type Candle } from '@trdr/shared'
 import assert from 'node:assert/strict'
 import { beforeEach, describe, it } from 'node:test'
 import { MACDIndicator } from './macd'
@@ -14,7 +14,7 @@ describe('MACDIndicator', () => {
     ]
 
     candles = prices.map((close, i) => ({
-      timestamp: (i + 1) * 1000,
+      timestamp: toEpochDate((i + 1) * 1000),
       open: close - 0.5,
       high: close + 1,
       low: close - 1,
@@ -185,7 +185,7 @@ describe('MACDIndicator', () => {
       const uptrendCandles: Candle[] = []
       for (let i = 0; i < 50; i++) {
         uptrendCandles.push({
-          timestamp: i * 1000,
+          timestamp: toEpochDate(i * 1000),
           open: 100 + i * 0.8,
           high: 100 + i * 0.8 + 1,
           low: 100 + i * 0.8 - 0.5,
@@ -207,7 +207,7 @@ describe('MACDIndicator', () => {
       const downtrendCandles: Candle[] = []
       for (let i = 0; i < 50; i++) {
         downtrendCandles.push({
-          timestamp: i * 1000,
+          timestamp: toEpochDate(i * 1000),
           open: 100 - i * 0.8,
           high: 100 - i * 0.8 + 0.5,
           low: 100 - i * 0.8 - 1,
