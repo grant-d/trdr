@@ -1,0 +1,269 @@
+{
+	"meta": {
+		"generatedAt": "2025-07-02T02:26:38.033Z",
+		"tasksAnalyzed": 32,
+		"totalTasks": 32,
+		"analysisCount": 32,
+		"thresholdScore": 5,
+		"projectName": "Taskmaster",
+		"usedResearch": false
+	},
+	"complexityAnalysis": [
+		{
+			"taskId": 1,
+			"taskTitle": "Setup Project Repository and Structure",
+			"complexityScore": 4,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Break down the repository setup task into subtasks covering: 1) initializing the monorepo with npm workspaces, 2) setting up TypeScript configuration, 3) configuring ESLint and Prettier, 4) setting up the Node.js test runner, and 5) creating the directory structure with initial package.json files for each workspace.",
+			"reasoning": "This task involves standard project setup procedures with moderate complexity due to the monorepo structure. It requires configuration of multiple tools (npm workspaces, TypeScript, ESLint, Prettier, test runner) but follows established patterns."
+		},
+		{
+			"taskId": 2,
+			"taskTitle": "Implement Core Data Models and Types",
+			"complexityScore": 5,
+			"recommendedSubtasks": 4,
+			"expansionPrompt": "Break down the core data models implementation into subtasks for each major type category: 1) market data types (Candle, MarketUpdate, etc.), 2) order types (Order, OrderResult, etc.), 3) agent types (ITradeAgent, AgentSignal, etc.), and 4) configuration interfaces. Each subtask should include type definitions and unit tests.",
+			"reasoning": "This task requires careful design of the core type system that will be used throughout the application. The complexity comes from ensuring the types are comprehensive, properly structured, and match the requirements in the PRD. Each category of types deserves focused attention."
+		},
+		{
+			"taskId": 3,
+			"taskTitle": "Implement Event Bus Architecture",
+			"complexityScore": 7,
+			"recommendedSubtasks": 6,
+			"expansionPrompt": "Break down the event bus implementation into subtasks covering: 1) core EventBus class with registration and emission, 2) typed event definitions, 3) TimeSource abstraction for consistent time access, 4) synchronous and asynchronous handler support, 5) error handling for event processing, and 6) event logging for debugging and replay.",
+			"reasoning": "This task has higher complexity as it involves creating a foundational communication system for the entire application. It requires careful design for type safety, error handling, and support for both sync and async operations. The TimeSource abstraction adds complexity for supporting both live and backtest modes."
+		},
+		{
+			"taskId": 4,
+			"taskTitle": "Setup DuckDB Integration",
+			"complexityScore": 6,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Break down the DuckDB integration into subtasks covering: 1) connection manager implementation, 2) schema definition and migration scripts, 3) repository classes for candles and market data, 4) repository classes for orders and trades, and 5) repository classes for agent decisions and checkpoints.",
+			"reasoning": "Setting up the database layer involves moderate to high complexity due to the need to design an efficient schema, implement migrations, and create repository classes for multiple entity types. DuckDB has specific optimization considerations that need to be addressed."
+		},
+		{
+			"taskId": 5,
+			"taskTitle": "Implement Market Data Pipeline",
+			"complexityScore": 8,
+			"recommendedSubtasks": 6,
+			"expansionPrompt": "Break down the market data pipeline implementation into subtasks covering: 1) MarketDataPipeline interface definition, 2) CoinbaseDataFeed implementation with WebSocket and REST, 3) BacktestDataFeed implementation, 4) PaperTradingFeed implementation, 5) ResilientNetworkClient with retry logic, and 6) integration with the event bus system.",
+			"reasoning": "This task has high complexity due to the need to handle real-time data streams, implement fallback mechanisms, and create multiple feed implementations. The network resilience requirements add significant complexity, as does the need to simulate market data for backtesting."
+		},
+		{
+			"taskId": 6,
+			"taskTitle": "Implement Historical Data Manager",
+			"complexityScore": 7,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Break down the historical data manager implementation into subtasks covering: 1) HistoricalDataManager class with core methods, 2) data backfilling logic, 3) live data collection integration, 4) data validation for gaps and outliers, and 5) data compression for storage optimization.",
+			"reasoning": "Managing historical data involves complex operations like backfilling missing data, validating data quality, and optimizing storage. The need to handle large datasets and ensure data integrity adds to the complexity."
+		},
+		{
+			"taskId": 7,
+			"taskTitle": "Implement Order Management System",
+			"complexityScore": 8,
+			"recommendedSubtasks": 6,
+			"expansionPrompt": "Break down the order management system implementation into subtasks covering: 1) OrderLifecycleManager class with core methods, 2) OrderStateMachine for state transitions, 3) agent consensus processing, 4) dynamic position sizing, 5) order monitoring and improvement logic, and 6) integration with the event bus system.",
+			"reasoning": "The order management system is a critical component with high complexity. It involves state machine implementation, complex business logic for position sizing, and integration with multiple system components. The validation requirements for state transitions add additional complexity."
+		},
+		{
+			"taskId": 8,
+			"taskTitle": "Implement Trailing Order System",
+			"complexityScore": 7,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Break down the trailing order system implementation into subtasks covering: 1) TrailingOrderManager class with core methods, 2) trailing buy order logic, 3) trailing sell order logic, 4) trigger price calculation and updates, and 5) integration with the order management system.",
+			"reasoning": "Implementing trailing orders involves complex price tracking logic and careful trigger management. The system needs to handle both buy and sell scenarios with different triggering conditions, and must integrate with the broader order management system."
+		},
+		{
+			"taskId": 9,
+			"taskTitle": "Implement Grid Management System",
+			"complexityScore": 8,
+			"recommendedSubtasks": 6,
+			"expansionPrompt": "Break down the grid management system implementation into subtasks covering: 1) GridManager class with core methods, 2) optimal spacing calculation based on volatility, 3) grid level generation, 4) trailing order activation at grid levels, 5) self-tuning grid spacing, and 6) grid state persistence.",
+			"reasoning": "The grid management system has high complexity due to the need for dynamic grid spacing based on market conditions, integration with trailing orders, and self-tuning capabilities. The persistence requirements add additional complexity."
+		},
+		{
+			"taskId": 10,
+			"taskTitle": "Implement Paper Trading Executor",
+			"complexityScore": 6,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Break down the paper trading executor implementation into subtasks covering: 1) PaperOrderExecutor class with core methods, 2) spread and fee simulation, 3) partial fill simulation, 4) slippage simulation based on order size and volatility, and 5) time-based fill probability implementation.",
+			"reasoning": "Creating a realistic paper trading system requires simulating various market conditions and behaviors. The complexity comes from making the simulation realistic while maintaining the same interfaces as live trading."
+		},
+		{
+			"taskId": 11,
+			"taskTitle": "Implement Risk Management System",
+			"complexityScore": 7,
+			"recommendedSubtasks": 6,
+			"expansionPrompt": "Break down the risk management system implementation into subtasks covering: 1) RiskManager class with core validation methods, 2) drawdown monitoring, 3) position size validation, 4) concurrent trade limiting, 5) daily loss limit implementation, and 6) circuit breakers for unusual market conditions.",
+			"reasoning": "Risk management is critical and complex, requiring careful implementation of various risk controls. The adaptive position sizing and circuit breaker functionality add significant complexity to this system."
+		},
+		{
+			"taskId": 12,
+			"taskTitle": "Implement Technical Indicators",
+			"complexityScore": 6,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Break down the technical indicators implementation into subtasks covering: 1) trend indicators (SMA, EMA, MACD), 2) volatility indicators (ATR, Bollinger Bands), 3) momentum indicators (RSI), 4) volume indicators (VWAP), and 5) swing high/low detection. Include optimization and caching in each subtask.",
+			"reasoning": "Implementing technical indicators requires mathematical precision and performance optimization. The complexity comes from ensuring accuracy, implementing caching for performance, and handling edge cases in the calculations."
+		},
+		{
+			"taskId": 13,
+			"taskTitle": "Implement Agent Framework",
+			"complexityScore": 8,
+			"recommendedSubtasks": 6,
+			"expansionPrompt": "Break down the agent framework implementation into subtasks covering: 1) ITradeAgent interface implementation, 2) AgentOrchestrator with consensus methods, 3) timeout protection for agent execution, 4) weighted consensus calculation, 5) agent lifecycle management, and 6) performance tracking for weight adjustment.",
+			"reasoning": "The agent framework is a core architectural component with high complexity. It requires sophisticated orchestration of multiple agents, timeout handling, weighted consensus calculation, and performance tracking for adaptive weighting."
+		},
+		{
+			"taskId": 14,
+			"taskTitle": "Implement Core Trading Agents",
+			"complexityScore": 9,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Break down the core trading agents implementation into subtasks, one for each agent: 1) VolatilityAgent using ATR for trail distance, 2) MomentumAgent using RSI/MACD for divergence detection, 3) VolumeProfileAgent for analyzing volume spikes, 4) MarketStructureAgent for support/resistance identification, and 5) RegimeAgent for market condition classification.",
+			"reasoning": "Implementing the core trading agents involves complex trading logic and market analysis. Each agent requires specialized knowledge of different market aspects and must provide meaningful signals with confidence levels. The algorithmic complexity is high."
+		},
+		{
+			"taskId": 15,
+			"taskTitle": "Implement Slippage Minimization Strategy",
+			"complexityScore": 7,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Break down the slippage minimization strategy implementation into subtasks covering: 1) SlippageMinimizer class with core methods, 2) optimal trail distance calculation, 3) order type selection based on spread, 4) stop hunting avoidance, and 5) optimal execution timing.",
+			"reasoning": "Minimizing slippage requires sophisticated market analysis and order placement strategies. The complexity comes from the need to adapt to different market conditions and avoid common pitfalls like stop hunting."
+		},
+		{
+			"taskId": 16,
+			"taskTitle": "Implement Self-Tuning Parameter System",
+			"complexityScore": 8,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Break down the self-tuning parameter system implementation into subtasks covering: 1) SelfTuningSystem class with core methods, 2) minimal config to internal parameter conversion, 3) parameter variation generation, 4) variation simulation and evaluation, and 5) AdaptiveParameters class for learning from outcomes.",
+			"reasoning": "Creating a self-tuning system involves complex optimization algorithms and parameter space exploration. The system needs to intelligently adjust multiple parameters based on performance feedback, which adds significant complexity."
+		},
+		{
+			"taskId": 17,
+			"taskTitle": "Implement Backtesting Engine",
+			"complexityScore": 9,
+			"recommendedSubtasks": 6,
+			"expansionPrompt": "Break down the backtesting engine implementation into subtasks covering: 1) BacktestingPipeline class with session management, 2) backtest execution with progress tracking, 3) session comparison functionality, 4) Monte Carlo simulation, 5) walk-forward analysis, and 6) report generation.",
+			"reasoning": "The backtesting engine is highly complex, requiring accurate simulation of market conditions, order execution, and performance analysis. The advanced analysis features like Monte Carlo simulation and walk-forward analysis add significant complexity."
+		},
+		{
+			"taskId": 18,
+			"taskTitle": "Implement Parameter Version Control",
+			"complexityScore": 6,
+			"recommendedSubtasks": 4,
+			"expansionPrompt": "Break down the parameter version control implementation into subtasks covering: 1) ParameterVersionControl class with core methods, 2) parameter storage and retrieval, 3) branching and merging functionality, and 4) performance tracking for parameter sets.",
+			"reasoning": "Implementing a Git-like version control system for parameters involves moderate complexity. The branching and merging functionality adds complexity, but the scope is limited to parameter management."
+		},
+		{
+			"taskId": 19,
+			"taskTitle": "Implement Coinbase API Integration",
+			"complexityScore": 7,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Break down the Coinbase API integration into subtasks covering: 1) CoinbaseClient class with authentication, 2) WebSocket connection for real-time data, 3) REST API methods for order management, 4) rate limiting and quota management, and 5) CoinbaseOrderExecutor for order translation.",
+			"reasoning": "Integrating with an external API involves handling authentication, WebSocket connections, rate limiting, and error handling. The complexity is increased by the need for idempotent order submission and proper error recovery."
+		},
+		{
+			"taskId": 20,
+			"taskTitle": "Implement Secure Credential Management",
+			"complexityScore": 6,
+			"recommendedSubtasks": 4,
+			"expansionPrompt": "Break down the secure credential management implementation into subtasks covering: 1) SecureCredentialManager class with core methods, 2) encrypted credential loading from environment variables, 3) API key rotation functionality, and 4) secure memory handling to prevent credential leakage.",
+			"reasoning": "Security-focused tasks require careful implementation to avoid vulnerabilities. The encryption, key rotation, and secure memory handling add complexity to what might otherwise be a simpler task."
+		},
+		{
+			"taskId": 21,
+			"taskTitle": "Implement REST API",
+			"complexityScore": 6,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Break down the REST API implementation into subtasks covering: 1) Express server setup, 2) health and trading control endpoints, 3) configuration endpoints, 4) analytics endpoints, 5) backtesting endpoints. Include authentication, rate limiting, and error handling in each subtask.",
+			"reasoning": "Implementing a REST API involves setting up multiple endpoint categories with proper authentication, validation, and error handling. The complexity comes from ensuring security, proper response formats, and integration with various system components."
+		},
+		{
+			"taskId": 22,
+			"taskTitle": "Implement WebSocket Server",
+			"complexityScore": 6,
+			"recommendedSubtasks": 4,
+			"expansionPrompt": "Break down the WebSocket server implementation into subtasks covering: 1) Socket.io server setup, 2) event type implementation (price, order, trade, etc.), 3) channel subscription management, and 4) client message handlers for commands.",
+			"reasoning": "Setting up a WebSocket server involves handling real-time connections, event emission, and subscription management. The authentication requirements and client command handling add complexity."
+		},
+		{
+			"taskId": 23,
+			"taskTitle": "Implement Structured Logging",
+			"complexityScore": 5,
+			"recommendedSubtasks": 4,
+			"expansionPrompt": "Break down the structured logging implementation into subtasks covering: 1) StructuredLogger class with core methods, 2) Winston configuration for JSON logging, 3) multiple transport setup for different log levels, and 4) context enrichment for log entries.",
+			"reasoning": "Implementing a structured logging system has moderate complexity. It requires configuring multiple transports, ensuring proper context information, and integrating with various system components."
+		},
+		{
+			"taskId": 24,
+			"taskTitle": "Implement Metrics Collection",
+			"complexityScore": 6,
+			"recommendedSubtasks": 4,
+			"expansionPrompt": "Break down the metrics collection implementation into subtasks covering: 1) MetricsCollector class for different metric types, 2) performance metrics calculation, 3) system health monitoring, and 4) Prometheus integration for metrics exposure.",
+			"reasoning": "Metrics collection involves tracking various aspects of system performance and trading outcomes. The complexity comes from calculating trading-specific metrics and integrating with Prometheus for exposure."
+		},
+		{
+			"taskId": 25,
+			"taskTitle": "Implement Debug Tools",
+			"complexityScore": 6,
+			"recommendedSubtasks": 4,
+			"expansionPrompt": "Break down the debug tools implementation into subtasks covering: 1) DebugInspector class with core methods, 2) agent decision inspection, 3) order flow tracing, and 4) agent performance profiling.",
+			"reasoning": "Creating debugging tools requires deep integration with various system components to expose internal state. The complexity comes from providing useful insights without impacting system performance."
+		},
+		{
+			"taskId": 26,
+			"taskTitle": "Setup React Frontend",
+			"complexityScore": 5,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Break down the React frontend setup into subtasks covering: 1) Vite application initialization, 2) TypeScript configuration, 3) routing setup with React Router, 4) state management implementation, and 5) WebSocket client integration.",
+			"reasoning": "Setting up a React frontend involves standard procedures with moderate complexity. The TypeScript integration and WebSocket client setup add some complexity to an otherwise straightforward task."
+		},
+		{
+			"taskId": 27,
+			"taskTitle": "Implement Trading Dashboard UI",
+			"complexityScore": 6,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Break down the trading dashboard UI implementation into subtasks covering: 1) header and system status components, 2) trading control components, 3) position and order management panels, 4) configuration panel, and 5) performance summary components.",
+			"reasoning": "Creating a trading dashboard involves building multiple UI components with real-time updates. The complexity comes from ensuring responsive design and proper integration with the WebSocket for live updates."
+		},
+		{
+			"taskId": 28,
+			"taskTitle": "Implement Chart Visualization",
+			"complexityScore": 7,
+			"recommendedSubtasks": 4,
+			"expansionPrompt": "Break down the chart visualization implementation into subtasks covering: 1) candlestick chart with price action and volume, 2) grid heatmap for performance visualization, 3) performance dashboard with equity curve, and 4) zoom and pan functionality for historical analysis.",
+			"reasoning": "Chart visualization involves complex rendering and interaction logic. Using canvas-based charting with real-time updates adds significant complexity, as does implementing zoom and pan functionality."
+		},
+		{
+			"taskId": 29,
+			"taskTitle": "Implement AI Integration",
+			"complexityScore": 7,
+			"recommendedSubtasks": 4,
+			"expansionPrompt": "Break down the AI integration implementation into subtasks covering: 1) AIAnalysisEngine class with core methods, 2) chart image generation for Claude analysis, 3) structured prompt building and response parsing, and 4) AIResourceManager for API usage control.",
+			"reasoning": "Integrating with Claude AI involves complex prompt engineering, image generation, and response parsing. The resource management requirements add complexity to ensure cost control."
+		},
+		{
+			"taskId": 30,
+			"taskTitle": "Implement Advanced Agents",
+			"complexityScore": 9,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Break down the advanced agents implementation into subtasks, one for each agent: 1) AIPatternAgent with Claude integration, 2) TimeDecayAgent for stale price handling, 3) MicrostructureAgent for spread analysis, 4) CorrelationAgent for cross-asset signals, and 5) SentimentAgent for contrarian signals.",
+			"reasoning": "The advanced agents involve sophisticated trading strategies and complex market analysis. The AI integration and cross-asset correlation add significant complexity to these specialized agents."
+		},
+		{
+			"taskId": 31,
+			"taskTitle": "Implement Evolutionary Optimization",
+			"complexityScore": 8,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Break down the evolutionary optimization implementation into subtasks covering: 1) EvolutionaryOptimizer class with core methods, 2) genetic representation of trading strategies, 3) population evaluation through backtesting, 4) selection and genetic operations, and 5) fitness tracking across generations.",
+			"reasoning": "Evolutionary optimization involves complex genetic algorithms and fitness evaluation. The need to represent trading strategies genetically and evaluate them through backtesting adds significant complexity."
+		},
+		{
+			"taskId": 32,
+			"taskTitle": "Implement Production Deployment",
+			"complexityScore": 6,
+			"recommendedSubtasks": 6,
+			"expansionPrompt": "Break down the production deployment implementation into subtasks covering: 1) PM2 configuration for process management, 2) startup and shutdown scripts, 3) health check endpoints, 4) monitoring and alerting setup, 5) backup and recovery procedures, and 6) production checklist creation.",
+			"reasoning": "Setting up production deployment involves multiple components for process management, monitoring, and recovery. The comprehensive checklist and security considerations add complexity to ensure reliable operation."
+		}
+	]
+}

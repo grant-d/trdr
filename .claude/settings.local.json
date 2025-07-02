@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(yarn init:*)",
+      "Bash(mkdir:*)",
+      "Bash(yarn install)",
+      "Bash(yarn --version)",
+      "Bash(touch:*)",
+      "Bash(yarn:*)",
+      "Bash(rm:*)",
+      "Bash(ls:*)",
+      "mcp__taskmaster-ai__get_tasks",
+      "mcp__taskmaster-ai__initialize_project",
+      "Bash(cp:*)",
+      "mcp__taskmaster-ai__parse_prd",
+      "mcp__taskmaster-ai__analyze_project_complexity",
+      "mcp__taskmaster-ai__complexity_report",
+      "mcp__taskmaster-ai__expand_task",
+      "mcp__taskmaster-ai__next_task",
+      "Bash(find:*)"
+    ],
+    "deny": []
+  }
+}

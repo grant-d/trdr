@@ -1,0 +1,1017 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Setup Project Repository and Structure",
+        "description": "Initialize the monorepo structure with npm workspaces for the grid trading bot as specified in the architecture section.",
+        "details": "Create the following directory structure:\n- packages/core\n- packages/data\n- packages/api\n- packages/web\n- packages/shared\n- config\n- scripts\n- docs\n\nInitialize package.json with workspaces configuration. Set up TypeScript configuration with strict type checking. Configure ESLint and Prettier for code quality. Set up Node.js built-in test runner (node:test).",
+        "testStrategy": "Verify that the repository structure matches the PRD specifications. Ensure all packages can be built without errors. Run a simple test to verify the test runner is working correctly.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 2,
+        "title": "Implement Core Data Models and Types",
+        "description": "Define shared TypeScript interfaces and types for the entire system in the shared package.",
+        "details": "Create the following type definition files in packages/shared/src/types:\n- market-data.ts: Define Candle, MarketUpdate, and MarketData interfaces\n- orders.ts: Define Order, OrderResult, OrderUpdate, and related types\n- agents.ts: Define ITradeAgent interface, AgentSignal, AgentContext, and AgentState\n- config.ts: Define configuration interfaces\n\nEnsure all interfaces match the requirements in the PRD, particularly the ITradeAgent interface which is critical for the multi-agent system.",
+        "testStrategy": "Write unit tests to verify type compatibility. Create sample objects of each type to ensure they can be properly instantiated with the required properties.",
+        "priority": "high",
+        "dependencies": [
+          1
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 3,
+        "title": "Implement Event Bus Architecture",
+        "description": "Create a unified event system for communication between components of the trading bot.",
+        "details": "Implement an EventBus class that supports:\n- Event registration with on(eventType, handler)\n- Event emission with emit(eventType, data)\n- Typed events with proper TypeScript definitions\n- Support for synchronous and asynchronous handlers\n- Error handling for event processing\n\nCreate a TimeSource abstraction that provides consistent time access for both live trading and backtesting modes. Implement event logging for debugging and replay capability.",
+        "testStrategy": "Test event registration and emission. Verify that events are properly delivered to registered handlers. Test error handling by throwing exceptions in handlers. Verify that the TimeSource abstraction works in both live and backtest modes.",
+        "priority": "high",
+        "dependencies": [
+          2
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 4,
+        "title": "Setup DuckDB Integration",
+        "description": "Implement the data layer using DuckDB as specified in the architecture section.",
+        "details": "Create a DuckDB connection manager in packages/data/src/db. Implement the database schema as defined in section 4.1 of the PRD, including tables for candles, orders, agent_decisions, trades, and checkpoints. Create migration scripts for schema creation and updates. Implement repository classes for each entity type with CRUD operations. Add query builders for common data access patterns.",
+        "testStrategy": "Test database connection and initialization. Verify schema creation with all required tables. Test CRUD operations for each entity type. Benchmark query performance for typical data access patterns.",
+        "priority": "high",
+        "dependencies": [
+          1
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 5,
+        "title": "Implement Market Data Pipeline",
+        "description": "Create the data pipeline for market data as specified in section 3.1 of the PRD.",
+        "details": "Implement the MarketDataPipeline interface with methods for subscribe, unsubscribe, getHistorical, and getCurrentPrice. Create concrete implementations:\n- CoinbaseDataFeed: Uses WebSocket for real-time data with REST fallback\n- BacktestDataFeed: Simulates market data from historical records\n- PaperTradingFeed: Uses live data but simulates execution\n\nImplement the ResilientNetworkClient class with retry logic, exponential backoff, and jitter as specified in the PRD.",
+        "testStrategy": "Test WebSocket connection and data reception. Verify fallback to REST API when WebSocket fails. Test retry logic with simulated network failures. Verify historical data retrieval. Test backtest data feed with different speed settings.",
+        "priority": "high",
+        "dependencies": [
+          3,
+          4
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Define MarketDataPipeline Interface",
+            "description": "Create a comprehensive interface that defines the contract for all market data feed implementations",
+            "dependencies": [],
+            "details": "Design the MarketDataPipeline interface with methods for subscribing to market data streams, handling connection lifecycle, error handling, and data transformation. Include clear documentation for each method and define the data models for market events (ticks, candles, order book updates, etc.). Ensure the interface supports both synchronous and asynchronous operations.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Implement CoinbaseDataFeed",
+            "description": "Develop a Coinbase-specific implementation of the MarketDataPipeline interface using both WebSocket and REST APIs",
+            "dependencies": [
+              1
+            ],
+            "details": "Create a CoinbaseDataFeed class that implements the MarketDataPipeline interface. Implement WebSocket connection for real-time data with automatic reconnection logic. Add REST API fallback for when WebSocket is unavailable. Handle rate limiting, authentication, and data normalization to the system's standard format. Include comprehensive error handling and logging.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Implement ResilientNetworkClient",
+            "description": "Create a network client with retry logic, circuit breaking, and fallback mechanisms",
+            "dependencies": [
+              1
+            ],
+            "details": "Develop a ResilientNetworkClient class that handles network failures gracefully with exponential backoff retry logic. Implement circuit breaker pattern to prevent cascading failures. Add connection pooling for REST API calls. Create monitoring hooks for network performance metrics. Ensure proper resource cleanup and timeout handling.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Implement BacktestDataFeed",
+            "description": "Create a data feed implementation for historical backtesting scenarios",
+            "dependencies": [
+              1
+            ],
+            "details": "Develop a BacktestDataFeed class that implements the MarketDataPipeline interface for historical data replay. Implement data loading from various sources (files, databases). Add time manipulation capabilities to control replay speed. Create mechanisms to simulate network delays and failures for robust testing. Ensure accurate timestamp handling and event sequencing.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Implement PaperTradingFeed",
+            "description": "Create a simulated market data feed for paper trading that mimics real market behavior",
+            "dependencies": [
+              1,
+              4
+            ],
+            "details": "Develop a PaperTradingFeed class that combines real market data with simulated execution capabilities. Implement realistic slippage and execution delay models. Create mechanisms to inject custom market scenarios. Add support for simulated liquidity constraints. Ensure the feed can switch between real-time and accelerated time modes.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "Integrate with Event Bus System",
+            "description": "Connect all market data feed implementations with the application's event bus",
+            "dependencies": [
+              2,
+              3,
+              4,
+              5
+            ],
+            "details": "Implement event publishing mechanisms in all data feed implementations. Create appropriate event types and serialization for market data. Add filtering capabilities to reduce unnecessary event traffic. Implement priority handling for critical market events. Create comprehensive documentation on the event schema and expected consumer behavior.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Implement Historical Data Manager",
+        "description": "Create a system to manage historical market data for backtesting and analysis.",
+        "details": "Implement the HistoricalDataManager class with methods for:\n- initializeDataCollection: Check existing data and backfill as needed\n- startLiveDataCollection: Continuously store incoming market data\n- backfillHistoricalData: Fetch and store missing historical data\n- fetchHistoricalCandles: Get data from Coinbase API\n\nAdd data validation to detect and handle gaps, outliers, and other data quality issues. Implement data compression for older data to optimize storage.",
+        "testStrategy": "Test data backfilling with sample gaps. Verify data validation correctly identifies issues. Test live data collection with simulated market data. Verify data compression reduces storage while maintaining necessary information.",
+        "priority": "medium",
+        "dependencies": [
+          4,
+          5
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 7,
+        "title": "Implement Order Management System",
+        "description": "Create the order lifecycle management system as specified in section 3.3.1 of the PRD.",
+        "details": "Implement the OrderLifecycleManager class with methods for:\n- processAgentConsensus: Convert agent signals to order decisions\n- calculateOrderSize: Dynamic position sizing based on confidence and risk\n- monitorOrder: Track order status and updates\n- improveOrder: Optimize order parameters based on market conditions\n\nImplement the OrderStateMachine to manage order state transitions between PENDING, SUBMITTED, PARTIAL, FILLED, CANCELLED, REJECTED, and EXPIRED states. Add validation for state transitions.",
+        "testStrategy": "Test order creation from agent consensus. Verify position sizing calculations. Test order state transitions with validation. Verify order monitoring and improvement logic.",
+        "priority": "high",
+        "dependencies": [
+          2,
+          3
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement OrderLifecycleManager Core Class",
+            "description": "Create the OrderLifecycleManager class with core methods for order creation, submission, cancellation, and modification.",
+            "dependencies": [],
+            "details": "Implement the OrderLifecycleManager class with methods including createOrder(), submitOrder(), cancelOrder(), and modifyOrder(). Include proper validation logic, error handling, and logging. Define clear interfaces for interaction with other system components. Ensure thread safety for concurrent order operations.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Develop OrderStateMachine for State Transitions",
+            "description": "Create the OrderStateMachine class to handle all possible order state transitions with validation rules.",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement the OrderStateMachine with states including CREATED, PENDING, SUBMITTED, PARTIALLY_FILLED, FILLED, CANCELED, and REJECTED. Define valid state transitions with appropriate validation rules. Implement transition methods with pre and post-condition checks. Create event triggers for state changes to notify other system components.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Implement Agent Consensus Processing",
+            "description": "Develop the logic for processing agent consensus before order execution.",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Create a consensus mechanism that collects and evaluates recommendations from multiple trading agents. Implement voting or weighted decision algorithms based on agent confidence levels. Add timeout handling for consensus gathering. Develop fallback strategies when consensus cannot be reached. Include configuration options for consensus thresholds.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Implement Dynamic Position Sizing Logic",
+            "description": "Create position sizing algorithms that dynamically adjust order sizes based on risk parameters and market conditions.",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement risk-based position sizing algorithms including Kelly criterion, fixed fractional, and volatility-adjusted methods. Create interfaces for pluggable position sizing strategies. Add risk limit enforcement and validation. Implement market condition assessment for dynamic adjustments. Include backtesting capabilities for position sizing strategies.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Develop Order Monitoring and Improvement Logic",
+            "description": "Create systems to monitor order execution quality and implement improvement strategies.",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Implement real-time monitoring of order execution metrics including slippage, fill rates, and execution time. Create adaptive algorithms for order type selection (market, limit, etc.) based on historical performance. Develop logic for order splitting and timing optimization. Implement circuit breakers for adverse market conditions. Add reporting capabilities for execution quality analysis.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "Integrate with Event Bus System",
+            "description": "Connect the order management system with the application's event bus for communication with other components.",
+            "dependencies": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "details": "Implement event publishers for order lifecycle events (creation, state changes, execution, etc.). Create event subscribers for market data, risk alerts, and system status changes. Add message serialization and deserialization for event transmission. Implement retry logic for failed event publishing. Create comprehensive event documentation for other system components.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Implement Trailing Order System",
+        "description": "Create the trailing order implementation as specified in section 3.3.4 of the PRD.",
+        "details": "Implement the TrailingOrderManager class with methods for:\n- createTrailingOrder: Initialize a new trailing order\n- calculateInitialTrigger: Set the initial trigger price based on trail percentage\n- onPriceUpdate: Update best price and trigger price based on market movements\n- executeOrder: Execute the order when trigger conditions are met\n\nImplement logic for both trailing buy (triggers when price rises X% from lowest point) and trailing sell (triggers when price falls X% from highest point) orders.",
+        "testStrategy": "Test trailing buy orders with rising and falling prices. Test trailing sell orders with rising and falling prices. Verify trigger price calculations. Test order execution when trigger conditions are met.",
+        "priority": "high",
+        "dependencies": [
+          7
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 9,
+        "title": "Implement Grid Management System",
+        "description": "Create the grid management system as specified in section 3.3.2 of the PRD.",
+        "details": "Implement the GridManager class with methods for:\n- initializeGrid: Set up grid levels based on current price and optimal spacing\n- calculateOptimalSpacing: Determine grid spacing based on market volatility\n- generateGridLevels: Create grid levels around a center price\n- activateNearbyGrids: Set up trailing orders at nearby grid levels\n\nImplement self-tuning grid spacing that adapts to market conditions. Add persistence for grid state to recover after restarts.",
+        "testStrategy": "Test grid initialization with different market conditions. Verify optimal spacing calculations. Test grid level generation. Verify activation of nearby grid levels with trailing orders.",
+        "priority": "high",
+        "dependencies": [
+          8
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement GridManager Core Class",
+            "description": "Create the foundational GridManager class with essential methods for grid trading",
+            "dependencies": [],
+            "details": "Develop the GridManager class with initialization parameters (symbol, base amount, quote amount, risk level). Implement core methods including createGrid(), placeOrders(), updateGrid(), and cancelGrid(). Include basic event handling for order fills and market changes. Define interfaces for grid level representation and order tracking.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Develop Volatility-Based Grid Spacing Algorithm",
+            "description": "Create algorithm to calculate optimal grid spacing based on market volatility",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement volatility measurement using standard deviation or ATR. Create spacing calculation that widens during high volatility and narrows during low volatility. Include configurable risk parameters to adjust spacing sensitivity. Develop backtesting framework to validate spacing effectiveness across different market conditions.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Implement Grid Level Generation",
+            "description": "Build system to generate and manage grid price levels",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Create methods to generate grid levels above and below current price. Implement dynamic level count based on available capital and spacing. Develop logic to ensure proper distribution of capital across levels. Include validation to prevent invalid grid configurations (too tight spacing, insufficient funds).",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Integrate Trailing Orders at Grid Levels",
+            "description": "Implement trailing order functionality at each grid level",
+            "dependencies": [
+              3
+            ],
+            "details": "Develop trailing order logic that activates when price approaches grid levels. Implement configurable trailing parameters (distance, activation threshold). Create monitoring system to track and update trailing orders as price moves. Include fallback mechanism for direct execution if trailing fails.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Implement Self-Tuning Grid Spacing",
+            "description": "Create adaptive system that optimizes grid spacing based on performance",
+            "dependencies": [
+              2,
+              3,
+              4
+            ],
+            "details": "Develop performance metrics to evaluate grid effectiveness (profit per grid, fill rate, etc). Implement machine learning or statistical methods to analyze historical performance. Create adjustment mechanism that modifies spacing parameters based on analysis. Include safeguards to prevent extreme adjustments.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "Develop Grid State Persistence",
+            "description": "Implement system to save and restore grid trading state",
+            "dependencies": [
+              1,
+              3,
+              4
+            ],
+            "details": "Create data structures to represent complete grid state (levels, orders, parameters). Implement serialization/deserialization to JSON or database format. Develop recovery mechanisms to handle application restarts or crashes. Include validation to ensure state integrity when loading. Add periodic state saving to prevent data loss.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Implement Paper Trading Executor",
+        "description": "Create a simulated order execution system for paper trading mode.",
+        "details": "Implement the PaperOrderExecutor class that simulates order execution with realistic market conditions:\n- Add configurable spread simulation (default 0.1%)\n- Implement fee calculation (default 0.05%)\n- Simulate partial fills for larger orders\n- Add random slippage based on order size and market volatility\n- Implement time-based fill probability (not all orders execute instantly)\n\nEnsure the paper trading mode uses the same interfaces as live trading for seamless transition.",
+        "testStrategy": "Test order execution with various market conditions. Verify fee calculations match Coinbase's fee structure. Test partial fills with large orders. Verify slippage simulation is realistic based on order size.",
+        "priority": "medium",
+        "dependencies": [
+          7,
+          8
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 11,
+        "title": "Implement Risk Management System",
+        "description": "Create the risk management system as specified in section 3.6 of the PRD.",
+        "details": "Implement the RiskManager class with methods for:\n- validateOrder: Check if an order meets risk criteria\n- checkDrawdown: Ensure current drawdown is within limits\n- checkPositionSize: Verify order size is appropriate\n- checkConcurrentTrades: Limit the number of simultaneous positions\n- checkDailyLoss: Implement daily loss limits\n\nImplement adaptive position sizing based on account equity, volatility, and confidence levels. Add circuit breakers for unusual market conditions.",
+        "testStrategy": "Test order validation with various risk scenarios. Verify drawdown calculations and limits. Test position sizing with different account sizes. Verify concurrent trade limits are enforced.",
+        "priority": "high",
+        "dependencies": [
+          7
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 12,
+        "title": "Implement Technical Indicators",
+        "description": "Create the required technical indicators as specified in section 15 of the PRD.",
+        "details": "Implement the IndicatorCalculator class with methods for calculating:\n- ATR (Average True Range)\n- Swing High/Low Detection\n- RSI (Relative Strength Index)\n- MACD (Moving Average Convergence Divergence)\n- SMA (Simple Moving Average)\n- EMA (Exponential Moving Average)\n- Bollinger Bands\n- VWAP (Volume Weighted Average Price)\n\nOptimize calculations for performance using typed arrays where appropriate. Implement caching for expensive calculations.",
+        "testStrategy": "Test each indicator against known values. Verify performance with large datasets. Test caching mechanism for repeated calculations. Compare results with established libraries to ensure accuracy.",
+        "priority": "medium",
+        "dependencies": [
+          2
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 13,
+        "title": "Implement Agent Framework",
+        "description": "Create the multi-agent system framework as specified in section 3.2 of the PRD.",
+        "details": "Implement the ITradeAgent interface as defined in the PRD. Create the AgentOrchestrator class with methods for:\n- getConsensus: Aggregate signals from multiple agents\n- executeWithTimeout: Run agents with timeout protection\n- calculateWeightedConsensus: Combine agent signals based on weights\n- hasHighDisagreement: Detect when agents strongly disagree\n\nImplement agent lifecycle management (initialization, execution, shutdown). Add performance tracking for agents to adjust weights over time.",
+        "testStrategy": "Test agent execution with timeout. Verify consensus calculation with various agent signals. Test weight adjustment based on performance. Verify handling of agent failures.",
+        "priority": "high",
+        "dependencies": [
+          3,
+          12
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement ITradeAgent Interface",
+            "description": "Define and implement the ITradeAgent interface that all trading agents must implement",
+            "dependencies": [],
+            "details": "Create the ITradeAgent interface with methods for market analysis, trade recommendation, confidence scoring, and agent metadata. Include methods for initialization, execution, and result retrieval. Implement base abstract classes that provide common functionality for different agent types.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Develop AgentOrchestrator with Consensus Methods",
+            "description": "Create the orchestration layer that manages multiple agents and implements consensus algorithms",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement the AgentOrchestrator class that can register, manage, and execute multiple ITradeAgent instances. Develop methods for collecting agent outputs and applying consensus algorithms. Include configuration options for different consensus strategies (majority voting, weighted average, etc.).",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Implement Timeout Protection",
+            "description": "Add timeout protection mechanisms for agent execution to prevent system hangs",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Implement asynchronous execution with configurable timeouts for each agent. Create fallback mechanisms when agents exceed their time allocation. Add logging and monitoring for timeout events. Ensure the orchestrator can continue functioning even if individual agents fail or timeout.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Develop Weighted Consensus Calculation",
+            "description": "Implement algorithms for calculating weighted consensus from multiple agent outputs",
+            "dependencies": [
+              2
+            ],
+            "details": "Create mathematical models for weighted consensus calculation. Implement different weighting strategies (fixed weights, dynamic weights, performance-based weights). Add normalization methods for combining heterogeneous agent outputs. Include confidence interval calculations for consensus results.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Implement Agent Lifecycle Management",
+            "description": "Create systems for managing the complete lifecycle of agents from initialization to retirement",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Implement agent initialization, warm-up, active operation, cooldown, and retirement phases. Add state management for tracking agent status. Create methods for graceful agent replacement and version upgrades. Include configuration persistence and recovery mechanisms.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "Develop Performance Tracking for Weight Adjustment",
+            "description": "Create a system to track agent performance and dynamically adjust consensus weights",
+            "dependencies": [
+              4,
+              5
+            ],
+            "details": "Implement performance metrics collection for each agent. Create historical performance databases with time-decay factors. Develop algorithms for automatic weight adjustment based on recent performance. Add visualization tools for monitoring agent performance and weight changes over time.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 14,
+        "title": "Implement Core Trading Agents",
+        "description": "Implement the five core trading agents as specified in section 3.2.2 of the PRD.",
+        "details": "Create the following agent implementations:\n1. VolatilityAgent: Uses ATR for trail distance, widens trails in calm periods\n2. MomentumAgent: Uses RSI/MACD for divergence and multi-timeframe exhaustion detection\n3. VolumeProfileAgent: Analyzes volume spikes and detects whale activity\n4. MarketStructureAgent: Identifies support/resistance and structure breaks\n5. RegimeAgent: Classifies market conditions and adapts strategy accordingly\n\nEnsure each agent implements the ITradeAgent interface and provides meaningful signals with confidence levels.",
+        "testStrategy": "Test each agent with various market conditions. Verify signal generation and confidence calculations. Test agent performance with historical data. Verify agents adapt to changing market conditions.",
+        "priority": "high",
+        "dependencies": [
+          12,
+          13
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement VolatilityAgent",
+            "description": "Create the VolatilityAgent class that uses Average True Range (ATR) to determine trailing stop distances",
+            "dependencies": [],
+            "details": "Develop a VolatilityAgent that: 1) Calculates ATR over configurable periods, 2) Determines appropriate trailing stop distances based on volatility, 3) Provides volatility-based risk metrics, 4) Outputs confidence levels for its signals, 5) Implements proper error handling and logging",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Implement MomentumAgent",
+            "description": "Create the MomentumAgent class that uses RSI and MACD to detect divergences and momentum shifts",
+            "dependencies": [],
+            "details": "Develop a MomentumAgent that: 1) Calculates RSI and MACD indicators, 2) Detects bullish and bearish divergences, 3) Identifies overbought/oversold conditions, 4) Provides confidence levels for momentum signals, 5) Implements proper error handling and logging",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Implement VolumeProfileAgent",
+            "description": "Create the VolumeProfileAgent class that analyzes volume spikes and distribution patterns",
+            "dependencies": [],
+            "details": "Develop a VolumeProfileAgent that: 1) Identifies significant volume spikes, 2) Analyzes volume distribution across price levels, 3) Detects volume-based support/resistance zones, 4) Provides confidence levels for volume signals, 5) Implements proper error handling and logging",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Implement MarketStructureAgent",
+            "description": "Create the MarketStructureAgent class that identifies support/resistance levels and market structure patterns",
+            "dependencies": [],
+            "details": "Develop a MarketStructureAgent that: 1) Identifies key support and resistance levels, 2) Detects market structure patterns (higher highs/lows, lower highs/lows), 3) Recognizes chart patterns, 4) Provides confidence levels for structure-based signals, 5) Implements proper error handling and logging",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Implement RegimeAgent",
+            "description": "Create the RegimeAgent class that classifies market conditions and trading regimes",
+            "dependencies": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "details": "Develop a RegimeAgent that: 1) Classifies market conditions (trending, ranging, volatile), 2) Integrates signals from other agents, 3) Determines appropriate trading strategies for current regime, 4) Provides confidence levels for regime classification, 5) Implements proper error handling and logging",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 15,
+        "title": "Implement Slippage Minimization Strategy",
+        "description": "Create the slippage minimization system as specified in section 3.4 of the PRD.",
+        "details": "Implement the SlippageMinimizer class with methods for:\n- calculateOptimalTrailDistance: Adjust trail distance based on volatility and liquidity\n- placeOrderWithMinimalSlippage: Choose between market and limit orders based on spread\n- adjustTrailForStopHunting: Move trail prices away from common stop clusters\n- selectOptimalExecutionTime: Avoid high-volatility periods\n\nImplement anti-slippage trail configuration with different settings for volatile, normal, and calm market conditions.",
+        "testStrategy": "Test trail distance calculations with different market conditions. Verify order placement strategy based on spread. Test stop hunting avoidance. Verify execution timing optimization.",
+        "priority": "medium",
+        "dependencies": [
+          8,
+          14
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 16,
+        "title": "Implement Self-Tuning Parameter System",
+        "description": "Create the self-tuning parameter system as specified in section 3.5 of the PRD.",
+        "details": "Implement the SelfTuningSystem class with methods for:\n- initializeFromMinimalConfig: Convert minimal user config to internal parameters\n- startOptimizationLoop: Continuously optimize parameters\n- generateParameterVariations: Create parameter variations for testing\n- simulateVariations: Test different parameter sets\n- selectBest: Choose the best performing parameters\n\nImplement the AdaptiveParameters class for learning from outcomes. Create intelligent defaults that improve over time.",
+        "testStrategy": "Test parameter initialization from minimal config. Verify optimization loop improves parameters. Test parameter variation generation. Verify learning from outcomes.",
+        "priority": "medium",
+        "dependencies": [
+          9,
+          14
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement SelfTuningSystem Core Class",
+            "description": "Create the foundational SelfTuningSystem class with core methods for initialization, parameter management, and tuning lifecycle.",
+            "dependencies": [],
+            "details": "Implement a class with methods for: initialize(), runTuningCycle(), getCurrentParameters(), setFeedback(), and reset(). Include internal data structures to track parameter history and performance metrics. Define clear interfaces for other components to interact with this core system.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Develop Configuration Parser",
+            "description": "Create a system to convert minimal user configuration into internal parameter representations with constraints and metadata.",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement a parser that takes user-friendly configuration (JSON/YAML) and converts it to internal parameter objects with properties like range, step size, weight, and dependencies. Include validation logic to ensure parameters are within acceptable bounds and follow defined constraints.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Implement Parameter Variation Generator",
+            "description": "Build a component that intelligently generates parameter variations for testing based on current state and history.",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Create algorithms to explore the parameter space efficiently, using strategies like gradient descent, simulated annealing, or genetic algorithms. Implement methods to generate variations that balance exploration vs. exploitation based on previous results. Include logic to avoid redundant testing of similar configurations.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Create Simulation and Evaluation System",
+            "description": "Develop a framework to test parameter variations and evaluate their performance against objectives.",
+            "dependencies": [
+              3
+            ],
+            "details": "Implement a system to run simulations with different parameter sets, collect performance metrics, and score results against defined objectives. Include support for parallel evaluation when possible and mechanisms to handle failed simulations. Create standardized evaluation criteria that can be customized per use case.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Implement AdaptiveParameters Class",
+            "description": "Create a class that learns from simulation outcomes to improve parameter selection over time.",
+            "dependencies": [
+              1,
+              4
+            ],
+            "details": "Develop the AdaptiveParameters class with methods to analyze performance data, identify trends, and update internal models of parameter relationships. Implement learning algorithms that improve with more data and can adapt to changing conditions. Include methods to export learned insights and provide recommendations for future parameter adjustments.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 17,
+        "title": "Implement Backtesting Engine",
+        "description": "Create a comprehensive backtesting system as specified in section 13 of the PRD.",
+        "details": "Implement the BacktestingPipeline class with methods for:\n- createSession: Initialize a named backtest session with parameters\n- runBacktest: Execute backtest with progress tracking\n- compareSessions: Compare results from multiple backtest sessions\n\nImplement the BacktestAnalyzer with methods for Monte Carlo simulation, walk-forward analysis, and report generation. Create the OptimizationTracker to record and analyze parameter optimization runs.",
+        "testStrategy": "Test backtest execution with historical data. Verify results calculation and statistics. Test Monte Carlo simulation. Verify walk-forward analysis. Test report generation with various backtest results.",
+        "priority": "high",
+        "dependencies": [
+          5,
+          7,
+          9,
+          14
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement BacktestingPipeline Class",
+            "description": "Create the core BacktestingPipeline class with session management functionality",
+            "dependencies": [],
+            "details": "Develop the BacktestingPipeline class that will serve as the main entry point for the backtesting engine. Implement session management capabilities including creating, saving, loading, and managing backtest sessions. Include configuration validation, parameter management, and the ability to track multiple backtest runs within a session.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Implement Backtest Execution Engine",
+            "description": "Build the core execution engine with progress tracking",
+            "dependencies": [
+              1
+            ],
+            "details": "Develop the execution engine that processes historical data, simulates trading strategy execution, and tracks orders/positions. Implement realistic order execution with slippage and commission models. Add progress tracking functionality with callbacks to report completion percentage and estimated time remaining. Ensure proper handling of different timeframes and data sources.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Develop Session Comparison Functionality",
+            "description": "Create tools to compare multiple backtest sessions",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Implement functionality to compare results across multiple backtest sessions. Create metrics for performance comparison including risk-adjusted returns, drawdowns, win rates, and profit factors. Build visualization tools to overlay equity curves and other key performance indicators. Include statistical significance testing for strategy comparison.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Implement Monte Carlo Simulation",
+            "description": "Add Monte Carlo simulation capabilities for risk assessment",
+            "dependencies": [
+              2
+            ],
+            "details": "Develop Monte Carlo simulation functionality to assess strategy robustness. Implement methods for randomizing trade sequences, returns, and/or market conditions. Create confidence interval calculations for key metrics like maximum drawdown and expected returns. Include visualization of simulation results with probability distributions and confidence bands.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Build Walk-Forward Analysis Framework",
+            "description": "Implement walk-forward optimization and analysis",
+            "dependencies": [
+              2
+            ],
+            "details": "Create a walk-forward analysis framework to test strategy robustness across different time periods. Implement functionality for parameter optimization within in-sample periods and validation on out-of-sample periods. Add metrics for measuring optimization robustness and parameter stability. Include visualization of walk-forward results and performance consistency.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "Develop Comprehensive Report Generation",
+            "description": "Create detailed report generation for backtest results",
+            "dependencies": [
+              2,
+              3,
+              4,
+              5
+            ],
+            "details": "Implement comprehensive report generation capabilities that compile all backtest results into readable formats. Create exportable reports in multiple formats (HTML, PDF, JSON). Include detailed performance metrics, trade lists, drawdown analysis, and risk metrics. Add visualization components for equity curves, drawdowns, monthly/yearly returns, and other key performance indicators.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 18,
+        "title": "Implement Parameter Version Control",
+        "description": "Create a system to manage and version trading parameters as specified in section 13.2 of the PRD.",
+        "details": "Implement the ParameterVersionControl class with methods for:\n- saveParameterSet: Store parameters with metadata\n- loadParameterSet: Retrieve parameters by ID, name, or tag\n- branchParameters: Create a new branch from existing parameters\n- mergeParameters: Combine parameters from different branches\n\nImplement Git-like versioning with commit messages, tags, and branches. Add performance tracking for each parameter set.",
+        "testStrategy": "Test parameter saving and loading. Verify branching and merging functionality. Test retrieval by different identifiers. Verify performance tracking for parameter sets.",
+        "priority": "low",
+        "dependencies": [
+          16,
+          17
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 19,
+        "title": "Implement Coinbase API Integration",
+        "description": "Create the integration with Coinbase Advanced Trade API for live trading.",
+        "details": "Implement the CoinbaseClient class with methods for:\n- Authentication with API keys\n- WebSocket connection for real-time data\n- REST API methods for order management\n- Rate limiting and quota management\n- Error handling and retry logic\n\nImplement the CoinbaseOrderExecutor that translates internal order objects to Coinbase API format. Add idempotency for order submission to prevent duplicates.",
+        "testStrategy": "Test authentication with API keys. Verify WebSocket connection and data reception. Test order submission, modification, and cancellation. Verify rate limiting prevents API quota exhaustion.",
+        "priority": "high",
+        "dependencies": [
+          5,
+          7
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 20,
+        "title": "Implement Secure Credential Management",
+        "description": "Create a secure system for managing API keys and credentials as specified in section 7.1 of the PRD.",
+        "details": "Implement the SecureCredentialManager class with methods for:\n- loadCredentials: Load encrypted credentials from environment variables\n- getApiKey: Retrieve decrypted API key for a specific exchange\n- rotateKeys: Periodically rotate API keys for security\n\nUse encryption for storing sensitive data. Implement key rotation scheduling. Add secure memory handling to prevent credential leakage.",
+        "testStrategy": "Test credential loading and decryption. Verify API key retrieval. Test key rotation. Verify secure memory handling prevents credential exposure in logs or error messages.",
+        "priority": "high",
+        "dependencies": [
+          19
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 21,
+        "title": "Implement REST API",
+        "description": "Create the REST API as specified in section 5.1 of the PRD.",
+        "details": "Set up an Express server in packages/api/src. Implement the following endpoint categories:\n- Health & Status: /api/health, /api/status\n- Trading Control: /api/trading/start, /api/trading/stop, /api/trading/pause\n- Configuration: /api/config, /api/agents\n- Analytics: /api/performance, /api/trades\n- Backtesting: /api/backtest/run, /api/backtest/:id/results\n\nAdd authentication and rate limiting for API security. Implement proper error handling and validation for all endpoints.",
+        "testStrategy": "Test each endpoint with valid and invalid requests. Verify authentication and rate limiting. Test error handling with various error conditions. Verify response formats match the API specification.",
+        "priority": "medium",
+        "dependencies": [
+          3,
+          7,
+          17
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 22,
+        "title": "Implement WebSocket Server",
+        "description": "Create the WebSocket server for real-time updates as specified in section 5.2 of the PRD.",
+        "details": "Set up a Socket.io server in packages/api/src. Implement the following event types:\n- price: Real-time price updates\n- order: Order status changes\n- trade: Completed trades\n- agent: Agent signals\n- performance: Performance metrics\n- alert: System alerts\n\nImplement channel subscription management. Add authentication for WebSocket connections. Create client message handlers for commands.",
+        "testStrategy": "Test WebSocket connection and event emission. Verify subscription management. Test authentication. Verify client commands are properly handled.",
+        "priority": "medium",
+        "dependencies": [
+          3,
+          21
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 23,
+        "title": "Implement Structured Logging",
+        "description": "Create the logging system as specified in section 6.1 of the PRD.",
+        "details": "Implement the StructuredLogger class with methods for:\n- debug: Conditional debug logging\n- logPerformance: Record performance metrics\n- logTrade: Log trade execution details\n- error: Log errors with stack traces\n\nUse Winston for structured JSON logging. Configure multiple transports for different log levels. Add context information to all log entries.",
+        "testStrategy": "Test logging at different levels. Verify structured JSON format. Test performance logging. Verify error logging includes stack traces.",
+        "priority": "medium",
+        "dependencies": [
+          3
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 24,
+        "title": "Implement Metrics Collection",
+        "description": "Create the metrics collection system as specified in section 6.3 of the PRD.",
+        "details": "Implement the MetricsCollector class to track:\n- Performance metrics: PnL, win rate, Sharpe ratio, drawdown\n- Execution quality: Slippage, fill time, failed orders\n- System health: Uptime, memory usage, CPU usage, WebSocket reconnects\n- Agent performance: Success rate, confidence, execution time\n\nSet up Prometheus integration for metrics exposure. Create custom metrics for trading-specific measurements.",
+        "testStrategy": "Test metrics collection with simulated trading activity. Verify Prometheus endpoint exposes metrics correctly. Test custom metrics for trading performance.",
+        "priority": "low",
+        "dependencies": [
+          7,
+          14,
+          23
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 25,
+        "title": "Implement Debug Tools",
+        "description": "Create debugging tools as specified in section 6.2 of the PRD.",
+        "details": "Implement the DebugInspector class with methods for:\n- inspectAgentDecisions: View real-time agent decisions\n- traceOrder: Debug order flow and state changes\n- profileAgent: Analyze agent performance and resource usage\n\nCreate a debug dashboard for visualizing system state. Add detailed logging for debugging sessions. Implement performance profiling for identifying bottlenecks.",
+        "testStrategy": "Test agent inspection with various agent states. Verify order tracing provides complete history. Test agent profiling with performance metrics.",
+        "priority": "low",
+        "dependencies": [
+          13,
+          14,
+          23
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 26,
+        "title": "Setup React Frontend",
+        "description": "Initialize the React frontend as specified in the architecture section.",
+        "details": "Set up a React application with Vite in packages/web. Configure TypeScript integration. Set up routing with React Router. Implement state management with React Context or Redux. Create a component library for reusable UI elements. Set up WebSocket client for real-time updates.",
+        "testStrategy": "Test application initialization and routing. Verify TypeScript integration. Test state management with various actions. Verify WebSocket connection and event handling.",
+        "priority": "medium",
+        "dependencies": [
+          21,
+          22
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 27,
+        "title": "Implement Trading Dashboard UI",
+        "description": "Create the main trading dashboard interface for the web frontend.",
+        "details": "Implement the following components:\n- Header with system status and mode selector\n- Trading controls (start, stop, pause)\n- Position display showing current holdings\n- Order management panel for viewing and canceling orders\n- Configuration panel for adjusting parameters\n- Performance summary with key metrics\n\nEnsure responsive design for different screen sizes. Implement real-time updates via WebSocket.",
+        "testStrategy": "Test UI rendering with various data states. Verify responsive design on different screen sizes. Test real-time updates with simulated WebSocket events. Verify trading controls function correctly.",
+        "priority": "medium",
+        "dependencies": [
+          26
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 28,
+        "title": "Implement Chart Visualization",
+        "description": "Create the chart visualization components as specified in section 16 of the PRD.",
+        "details": "Implement the following chart types:\n- Candlestick chart with price action and volume\n- Grid heatmap showing performance by grid level\n- Performance dashboard with equity curve and drawdown\n\nUse a lightweight canvas-based charting library for performance. Implement real-time updates without full redraw. Add zoom and pan functionality for historical analysis.",
+        "testStrategy": "Test chart rendering with various data sets. Verify real-time updates. Test zoom and pan functionality. Verify performance with large datasets.",
+        "priority": "medium",
+        "dependencies": [
+          26
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 29,
+        "title": "Implement AI Integration",
+        "description": "Create the AI integration with Claude as specified in section 12.1 of the PRD.",
+        "details": "Implement the AIAnalysisEngine class with methods for:\n- analyzeChart: Send chart image to Claude for pattern recognition\n- buildAnalysisPrompt: Create structured prompts for consistent analysis\n- parseStructuredResponse: Extract actionable insights from AI responses\n\nImplement the AIResourceManager to control API usage and costs. Add caching for similar requests to reduce API calls.",
+        "testStrategy": "Test chart generation for AI analysis. Verify prompt construction. Test response parsing. Verify cost management prevents budget overruns.",
+        "priority": "low",
+        "dependencies": [
+          14,
+          28
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 30,
+        "title": "Implement Advanced Agents",
+        "description": "Create the advanced trading agents as specified in section 3.2.2 of the PRD.",
+        "details": "Implement the following advanced agents:\n1. AIPatternAgent: Claude-powered pattern recognition\n2. TimeDecayAgent: Tightens trails on 'stale' prices\n3. MicrostructureAgent: Spread analysis for retail traders\n4. CorrelationAgent: Cross-asset correlation signals\n5. SentimentAgent: Contrarian signals at maximum pain points\n\nEnsure each agent implements the ITradeAgent interface and integrates with the agent orchestrator.",
+        "testStrategy": "Test each agent with various market conditions. Verify signal generation and confidence calculations. Test integration with the agent orchestrator. Verify performance improvement over core agents.",
+        "priority": "low",
+        "dependencies": [
+          14,
+          29
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement AIPatternAgent with Claude Integration",
+            "description": "Develop an agent that leverages Claude AI to identify complex market patterns and generate trading signals",
+            "dependencies": [],
+            "details": "Create a specialized agent that connects to Claude API, processes market data into suitable prompts, interprets Claude's responses into actionable trading signals, implements proper error handling for API failures, and includes a feedback mechanism to improve pattern recognition over time",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Implement TimeDecayAgent for Stale Price Handling",
+            "description": "Build an agent that adjusts confidence in signals based on the age of price data",
+            "dependencies": [],
+            "details": "Develop logic to track timestamp of price data, implement configurable decay functions (linear, exponential, etc.), create mechanisms to reduce position sizes or exit positions when data becomes too stale, and include monitoring for data feed issues",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Implement MicrostructureAgent for Spread Analysis",
+            "description": "Create an agent that analyzes bid-ask spreads and order book dynamics to optimize trade execution",
+            "dependencies": [],
+            "details": "Build functionality to monitor spread widening/narrowing patterns, detect liquidity imbalances in the order book, implement adaptive execution algorithms based on microstructure signals, and include visualization tools for spread analysis",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Implement CorrelationAgent for Cross-Asset Signals",
+            "description": "Develop an agent that identifies and exploits correlations between different assets or markets",
+            "dependencies": [
+              1,
+              3
+            ],
+            "details": "Create dynamic correlation matrix calculation, implement statistical significance testing for correlations, develop lead-lag relationship detection, build signal generation based on correlation breakdowns or confirmations, and include correlation visualization tools",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Implement SentimentAgent for Contrarian Signals",
+            "description": "Build an agent that analyzes market sentiment and generates contrarian trading signals",
+            "dependencies": [
+              1,
+              4
+            ],
+            "details": "Implement sentiment data collection from various sources (social media, news, etc.), develop sentiment scoring algorithms, create contrarian signal logic based on extreme sentiment readings, include backtesting framework for sentiment strategies, and build sentiment visualization dashboard",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 31,
+        "title": "Implement Evolutionary Optimization",
+        "description": "Create the evolutionary optimization system as specified in section 12.2 of the PRD.",
+        "details": "Implement the EvolutionaryOptimizer class with methods for:\n- evolveStrategies: Evolve trading strategies over multiple generations\n- createInitialPopulation: Generate random initial strategies\n- evaluatePopulation: Backtest each strategy\n- tournamentSelection: Select parents based on fitness\n- crossoverAndMutate: Create offspring with genetic operations\n\nImplement genetic representation of trading strategies with parameters for agents, grid spacing, trail distance, and risk management.",
+        "testStrategy": "Test strategy evolution over multiple generations. Verify fitness improvement over time. Test genetic operations (crossover, mutation). Verify selection favors better-performing strategies.",
+        "priority": "low",
+        "dependencies": [
+          16,
+          17
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement EvolutionaryOptimizer class structure",
+            "description": "Create the core EvolutionaryOptimizer class with initialization parameters, main optimization loop, and essential methods for the evolutionary process.",
+            "dependencies": [],
+            "details": "Implement a class that handles: initialization with population size, generations, mutation rate, and crossover rate; a main optimization method that runs the evolutionary process for the specified number of generations; methods to start, pause, and resume optimization; configuration options for different selection methods and genetic operators; proper logging of the optimization process.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Develop genetic representation of trading strategies",
+            "description": "Create a genetic encoding scheme that can represent trading strategies as chromosomes for evolutionary optimization.",
+            "dependencies": [
+              1
+            ],
+            "details": "Design a chromosome structure that encodes trading strategy parameters (entry/exit conditions, position sizing, etc.); implement methods to convert between strategy objects and their genetic representation; ensure the representation supports variable-length strategies if needed; create initialization methods to generate diverse random strategies; implement validation to ensure genetic representations translate to valid strategies.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Implement population evaluation through backtesting",
+            "description": "Create a system to evaluate the fitness of each strategy in the population by running it through historical backtests.",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Integrate with the backtesting engine to evaluate strategies; implement parallel processing for faster population evaluation; create fitness calculation methods that consider multiple objectives (profit, drawdown, Sharpe ratio, etc.); handle edge cases like strategies that generate no trades; implement caching to avoid re-evaluating identical strategies.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Implement selection and genetic operations",
+            "description": "Create methods for selecting parent strategies and applying genetic operations (crossover and mutation) to create the next generation.",
+            "dependencies": [
+              2,
+              3
+            ],
+            "details": "Implement multiple selection methods (tournament, roulette wheel, rank-based); create crossover operations appropriate for trading strategy chromosomes; implement mutation operators that can modify strategy parameters; ensure elitism to preserve the best strategies across generations; add diversity preservation mechanisms to prevent premature convergence.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Develop fitness tracking and visualization across generations",
+            "description": "Create a system to track and visualize the evolution of population fitness across generations.",
+            "dependencies": [
+              3,
+              4
+            ],
+            "details": "Implement data structures to store fitness metrics for each generation; create methods to calculate population statistics (best, average, worst fitness); develop visualization tools to show fitness progression over generations; implement export functionality for optimization results; add early stopping criteria based on fitness convergence or performance thresholds.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 32,
+        "title": "Implement Production Deployment",
+        "description": "Create the production deployment system as specified in section 10 of the PRD.",
+        "details": "Implement the following deployment components:\n- PM2 configuration for process management\n- Startup and shutdown scripts\n- Health check endpoints\n- Monitoring and alerting setup\n- Backup and recovery procedures\n- Graceful shutdown handling\n\nCreate a comprehensive production checklist covering environment variables, API keys, database backups, monitoring alerts, rate limits, error handling, and security audit.",
+        "testStrategy": "Test deployment on a staging environment. Verify process management with PM2. Test graceful shutdown and restart. Verify monitoring and alerting. Test backup and recovery procedures.",
+        "priority": "medium",
+        "dependencies": [
+          19,
+          20,
+          21,
+          22,
+          23,
+          24
+        ],
+        "status": "pending",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "created": "2025-07-02T02:22:35.312Z",
+      "updated": "2025-07-02T02:22:35.312Z",
+      "description": "Tasks for master context"
+    }
+  }
+}

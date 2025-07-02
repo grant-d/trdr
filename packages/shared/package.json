@@ -1,0 +1,16 @@
+{
+  "name": "@trdr/shared",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Shared types and utilities for TRDR",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rimraf dist *.tsbuildinfo",
+    "test": "node --test",
+    "lint": "eslint src --ext .ts"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

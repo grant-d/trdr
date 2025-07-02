@@ -1,0 +1,41 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "composite": true,
+    "incremental": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "allowSyntheticDefaultImports": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "baseUrl": ".",
+    "paths": {
+      "@trdr/shared/*": ["packages/shared/src/*"],
+      "@trdr/core/*": ["packages/core/src/*"],
+      "@trdr/data/*": ["packages/data/src/*"],
+      "@trdr/api/*": ["packages/api/src/*"],
+      "@trdr/web/*": ["packages/web/src/*"]
+    }
+  },
+  "references": [
+    { "path": "./packages/shared" },
+    { "path": "./packages/core" },
+    { "path": "./packages/data" },
+    { "path": "./packages/api" },
+    { "path": "./packages/web" }
+  ],
+  "exclude": ["node_modules", "dist", "build", "coverage"]
+}
