@@ -1,6 +1,6 @@
 import type { AgentConfig } from './agents'
 import type { EpochDate } from './dates'
-import { StockSymbol } from './orders'
+import { StockSymbol, type OrderSide } from './orders'
 
 /** Risk tolerance levels for position sizing and strategy */
 export type RiskTolerance = 'conservative' | 'moderate' | 'aggressive'
@@ -40,6 +40,109 @@ export interface GridConfig {
   readonly maxOrderSize: number
   /** Threshold for grid rebalancing */
   readonly rebalanceThreshold: number
+  /** Advanced trailing order configuration */
+  readonly trailingOrderConfig?: GridTrailingOrderConfig
+}
+
+/**
+ * Advanced trailing order configuration for grid levels.
+ * Controls when and how trailing orders are activated.
+ */
+export interface GridTrailingOrderConfig {
+  /** Distance from level price to activate trailing (percentage) */
+  readonly activationThreshold: number
+  /** Enable proximity-based activation */
+  readonly enableProximityActivation: boolean
+  /** Direct execution fallback if trailing fails */
+  readonly enableDirectFallback: boolean
+  /** Timeout for trailing order activation (ms) */
+  readonly activationTimeoutMs: number
+  /** Maximum trail adjustment frequency (ms) */
+  readonly trailUpdateThrottleMs: number
+  /** Advanced activation strategy */
+  readonly activationStrategy: 'proximity' | 'price_approach' | 'volume_spike' | 'combined'
+}
+
+/**
+ * Represents an individual grid level with its state
+ */
+export interface GridLevel {
+  /** Unique identifier for this grid level */
+  readonly id: string
+  /** Target price for this grid level */
+  readonly price: number
+  /** Order side for this level (buy or sell) */
+  readonly side: OrderSide
+  /** Order size for this level */
+  readonly size: number
+  /** Whether this level is currently active */
+  readonly isActive: boolean
+  /** Order ID if an order is placed at this level */
+  readonly orderId?: string
+  /** Timestamp when this level was created */
+  readonly createdAt: EpochDate
+  /** Timestamp when this level was last updated */
+  readonly updatedAt: EpochDate
+  /** Number of times this level has been filled */
+  readonly fillCount: number
+  /** Total profit/loss from this level */
+  readonly pnl: number
+  /** Advanced trailing order state */
+  readonly trailingState?: GridLevelTrailingState
+}
+
+/**
+ * Trailing order state for a grid level
+ */
+export interface GridLevelTrailingState {
+  /** Current activation status */
+  readonly status: 'pending' | 'approaching' | 'active' | 'triggered' | 'failed'
+  /** Price when level became active for trailing */
+  readonly activationPrice?: number
+  /** Timestamp when trailing was activated */
+  readonly activatedAt?: EpochDate
+  /** Last price that triggered an update */
+  readonly lastUpdatePrice?: number
+  /** Last update timestamp */
+  readonly lastUpdatedAt?: EpochDate
+  /** Number of trail adjustments made */
+  readonly adjustmentCount: number
+  /** Whether direct fallback has been attempted */
+  readonly fallbackAttempted: boolean
+  /** Reason for failure if status is 'failed' */
+  readonly failureReason?: string
+}
+
+/**
+ * Overall state of the grid trading system
+ */
+export interface GridState {
+  /** Grid configuration being used */
+  readonly config: GridConfig
+  /** Symbol being traded */
+  readonly symbol: StockSymbol
+  /** All grid levels (active and inactive) */
+  readonly levels: readonly GridLevel[]
+  /** Center price around which grid is built */
+  readonly centerPrice: number
+  /** Current grid spacing being used */
+  readonly currentSpacing: number
+  /** Total capital allocated to grid */
+  readonly allocatedCapital: number
+  /** Available capital for new orders */
+  readonly availableCapital: number
+  /** Current position in the symbol */
+  readonly currentPosition: number
+  /** Total realized PnL from grid trading */
+  readonly realizedPnl: number
+  /** Total unrealized PnL from grid trading */
+  readonly unrealizedPnl: number
+  /** Timestamp when grid was initialized */
+  readonly initializedAt: EpochDate
+  /** Timestamp of last grid update */
+  readonly lastUpdatedAt: EpochDate
+  /** Whether grid is currently active */
+  readonly isActive: boolean
 }
 
 /**

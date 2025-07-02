@@ -17,6 +17,9 @@ export * from './network'
 // Database
 export { createDatabaseWithEventBus } from './database/database-factory'
 
+// Grid Trading
+export * from './grid'
+
 // Re-export shared types for convenience
 export type {
   // Market data types
