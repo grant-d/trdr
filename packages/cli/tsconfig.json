@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
+  },
+  "include": [
+    "./src/**/*.ts"
+  ],
+  "references": [
+    { "path": "../core" },
+    { "path": "../data" },
+    { "path": "../shared" },
+    { "path": "../types" }
+  ]
+}

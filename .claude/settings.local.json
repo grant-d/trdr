@@ -41,7 +41,9 @@
       "Bash(pnpm test:*)",
       "Bash(timeout 60s npm test:*)",
       "Bash(gtimeout 60s npm test)",
-      "Bash(timeout 30s node --test:*)"
+      "Bash(timeout 30s node --test:*)",
+      "Bash(npx tsx:*)",
+      "Bash(mv:*)"
     ],
     "deny": []
   }

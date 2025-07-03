@@ -32,6 +32,7 @@
     }
   },
   "references": [
+    { "path": "./packages/cli" },
     { "path": "./packages/types" },
     { "path": "./packages/shared" },
     { "path": "./packages/core" },

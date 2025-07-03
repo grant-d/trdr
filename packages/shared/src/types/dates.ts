@@ -44,11 +44,13 @@ export function isoDateNow(): IsoDate {
  * // From seconds timestamp
  * const isoDate = toIsoDate(1705321845, 's') // '2024-01-15T12:30:45.000Z'
  */
-export function toIsoDate(value: Date): IsoDate
+export function toIsoDate(value: string | Date): IsoDate
 export function toIsoDate(value: number | EpochDate, precision?: 'ms' | 's'): IsoDate
-export function toIsoDate(value: Date | number | EpochDate, precision?: 'ms' | 's'): IsoDate {
+export function toIsoDate(value: string | Date | number | EpochDate, precision?: 'ms' | 's'): IsoDate {
   if (typeof value === 'number') {
     value = new Date(precision === 's' ? value * 1000 : value)
+  } else if (typeof value === 'string') {
+    value = new Date(value)
   }
   return value.toISOString() as IsoDate
 }
@@ -100,11 +102,13 @@ export function epochDateNow(): EpochDate {
  * // From seconds timestamp
  * const epoch = toEpochDate(1705321845, 's') // 1705321845000
  */
-export function toEpochDate(value: Date): EpochDate
+export function toEpochDate(value: string | Date): EpochDate
 export function toEpochDate(value: number, precision?: 'ms' | 's'): EpochDate
-export function toEpochDate(value: Date | number, precision?: 'ms' | 's'): EpochDate {
+export function toEpochDate(value: string | Date | number, precision?: 'ms' | 's'): EpochDate {
   if (typeof value === 'number') {
     return (precision === 's' ? value * 1000 : value) as EpochDate
+  } else if (typeof value === 'string') {
+    value = new Date(value)
   }
   return value.getTime() as EpochDate
 }

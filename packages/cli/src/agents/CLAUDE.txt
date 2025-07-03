@@ -1,0 +1,21 @@
+More details in /Users/grantdickinson/repos/trdr/.taskmaster/docs/prd.txt
+
+All content to use telegraph imperative voice, be concise, avoid unnecessary words.
+But don't lose fidelity, clarity, or intent.
+
+Agents are adaptive (no manual dials)
+
+TODO:
+1) implement all agents, integrate into run-demo
+2) add unit tests for ALL agents, ensure high coverage
+3) fix ALL units
+4) typecheck
+5) optimize code in ALL agents, ensure doc-comments, use common patterns, share code, avoid `any`
+6) deferred: allow laddering & DCA (self tuning based on risk/reward)
+7) repeat until all agents are implemented and working and ALL tests pass with NO lint issues
+8) done: Check sharpe calculation, it seems to always be 0
+
+9) Try beat sharpe -1.37, sortino -1.10, roi -170% for `yarn demo --verbose --adaptive --liquidate ./csv/BTCUSD-feed.csv -s BTC`
+
+10) deferred: An agent that uses matrix profile (ie a cheap version of stumpy)
+11) deferred: An agent that uses prime numbers, riemann, golden ratio, fib, etc

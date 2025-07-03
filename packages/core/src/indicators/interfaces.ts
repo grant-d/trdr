@@ -85,7 +85,7 @@ export interface RSIConfig extends IndicatorConfig {
  */
 export interface BollingerBandsConfig extends IndicatorConfig {
   readonly period?: number
-  readonly standardDeviations?: number
+  readonly stdDev?: number
   readonly stdDevMultiplier?: number
 }
 

@@ -3599,3 +3599,39 @@ All files use kebab-case:
 - Phase 10-11: Production-ready with AI
 
 Provides comprehensive blueprint for building production-ready grid trading bot. Architecture designed for maintainability, scalability, and profitability while keeping complexity manageable for retail trading context.
+
+# Other ideas
+
+The user wants me to create an entirely unique and innovative agent type that is:
+  1. Not just a combination of obvious indicators
+  2. Practical and not silly
+  3. Creative and "rich" in concept
+
+  Let me think about unique market phenomena that aren't typically captured by standard indicators:
+
+  1. Market Microstructure Agent - Analyzes bid-ask spread patterns, order flow imbalance
+  2. Sentiment Echo Agent - Tracks how price movements create cascading sentiment shifts
+  3. Liquidity Vacuum Agent - Identifies areas where liquidity dries up before major moves
+  4. Market Memory Agent - Uses pattern recognition on price "memories" at specific levels
+  5. Harmonic Resonance Agent - Finds natural oscillation frequencies in price movement
+  6. Order Book Pressure Agent - Simulates hidden order book dynamics
+  7. Price Gravity Agent - Models price as having gravitational attraction to certain levels
+  8. Market Breathing Agent - Tracks expansion/contraction cycles like breathing
+  9. Emotional Contagion Agent - Models how fear/greed spreads through the market
+  10. Fractal Flow Agent - Identifies self-similar patterns across timeframes
+
+  I think I'll go with a Market Memory Agent that tracks how the market "remembers" previous price interactions at specific 
+  levels, creating a unique memory-based trading system. This is innovative because it goes beyond simple support/resistance 
+  to model actual market psychology and memory decay over time.
+
+  Key concepts:
+  - Price levels have "memories" that decay over time
+  - Strong emotional events (high volume, volatility) create stronger memories
+  - Markets tend to "replay" behavior when returning to memorable levels
+  - Memory strength affects how price will react at that level
+  - Recent memories are stronger than old ones
+  - Multiple overlapping memories create confluence zones
+
+  This is practical because it models real market psychology - traders do remember what happened at certain price levels and 
+  tend to react similarly when price returns there.
+  

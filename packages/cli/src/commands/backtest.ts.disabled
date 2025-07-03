@@ -1,0 +1,381 @@
+import { parse } from 'csv-parse'
+import { createReadStream } from 'fs'
+import chalk from 'chalk'
+import ora from 'ora'
+import { table } from 'table'
+import path from 'path'
+import { 
+  EventBus, 
+  BacktestDataFeed,
+  GridManager,
+  TrailingOrderManager,
+  AgentOrchestrator,
+  PositionSizingManager,
+  OrderLifecycleManager,
+  IndicatorCalculator
+} from '@trdr/core'
+import { RSIAgent } from '../agents/rsi-agent'
+import { MACDAgent } from '../agents/macd-agent'
+import { BollingerBandsAgent } from '../agents/bollinger-agent'
+import { 
+  type Candle, 
+  type StockSymbol, 
+  toStockSymbol
+} from '@trdr/shared'
+import { EventTypes } from '@trdr/core/dist/events/types'
+
+interface BacktestOptions {
+  file: string
+  symbol: string
+  capital: string
+  gridSpacing: string
+  gridLevels: string
+  agents: string
+  startDate?: string
+  endDate?: string
+  verbose: boolean
+}
+
+interface CSVRow {
+  timestamp: string
+  date?: string
+  time?: string
+  open: string
+  high: string
+  low: string
+  close: string
+  volume: string
+}
+
+export async function runBacktest(options: BacktestOptions): Promise<void> {
+  const spinner = ora('Setting up backtest environment...').start()
+  
+  try {
+    // Parse options
+    const symbol = toStockSymbol(options.symbol)
+    const initialCapital = parseFloat(options.capital)
+    const gridSpacing = parseFloat(options.gridSpacing)
+    const gridLevels = parseInt(options.gridLevels)
+    const agentTypes = options.agents.split(',').map(a => a.trim())
+    
+    // Load CSV data
+    spinner.text = 'Loading price data from CSV...'
+    const candles = await loadCandlesFromCSV(options.file, symbol)
+    
+    if (candles.length === 0) {
+      throw new Error('No valid price data found in CSV')
+    }
+    
+    spinner.text = `Loaded ${candles.length} candles from ${new Date(candles[0].timestamp).toISOString()} to ${new Date(candles[candles.length - 1].timestamp).toISOString()}`
+    
+    // Filter by date range if specified
+    let filteredCandles = candles
+    if (options.startDate || options.endDate) {
+      const startTime = options.startDate ? new Date(options.startDate).getTime() : 0
+      const endTime = options.endDate ? new Date(options.endDate).getTime() : Infinity
+      filteredCandles = candles.filter(c => c.timestamp >= startTime && c.timestamp <= endTime)
+    }
+    
+    // Initialize event bus
+    spinner.text = 'Initializing event system...'
+    const eventBus = EventBus.getInstance()
+    Object.values(EventTypes).forEach(eventType => {
+      eventBus.registerEvent(eventType)
+    })
+    
+    // Create backtest data feed
+    const dataFeed = new BacktestDataFeed(filteredCandles, {
+      replaySpeed: 0, // Run as fast as possible
+      initialDelay: 0
+    })
+    
+    // Initialize core components
+    spinner.text = 'Initializing trading components...'
+    
+    const indicatorCalculator = new IndicatorCalculator()
+    const trailingOrderManager = new TrailingOrderManager(eventBus)
+    const orderLifecycleManager = new OrderLifecycleManager(eventBus)
+    const positionSizingManager = new PositionSizingManager({
+      maxPositionSize: initialCapital * 0.1, // Max 10% per position
+      defaultRiskPerTrade: 0.02, // 2% risk per trade
+      useKellyCriterion: true
+    })
+    
+    // Initialize grid manager
+    const gridManager = new GridManager(
+      eventBus,
+      trailingOrderManager,
+      {
+        // Volatility spacing config
+        enableVolatilityAdjustment: true,
+        minSpacing: 0.5,
+        maxSpacing: 10,
+        volatilityWindow: 20
+      },
+      {
+        // Self-tuning config
+        enabled: true,
+        minHistorySize: 50,
+        performanceWindow: 100
+      }
+    )
+    
+    // Initialize agents
+    spinner.text = 'Initializing trading agents...'
+    const agentOrchestrator = new AgentOrchestrator(eventBus)
+    
+    if (agentTypes.includes('rsi')) {
+      const rsiAgent = new RSIAgent({
+        id: 'rsi-agent',
+        name: 'RSI Agent',
+        version: '1.0.0',
+        description: 'RSI-based trading signals',
+        type: 'momentum'
+      })
+      await agentOrchestrator.registerAgent(rsiAgent, 1.0)
+    }
+    
+    if (agentTypes.includes('macd')) {
+      const macdAgent = new MACDAgent({
+        id: 'macd-agent',
+        name: 'MACD Agent',
+        version: '1.0.0',
+        description: 'MACD-based trading signals',
+        type: 'momentum'
+      })
+      await agentOrchestrator.registerAgent(macdAgent, 1.0)
+    }
+    
+    if (agentTypes.includes('bollinger')) {
+      const bollingerAgent = new BollingerBandsAgent({
+        id: 'bollinger-agent',
+        name: 'Bollinger Bands Agent',
+        version: '1.0.0',
+        description: 'Bollinger Bands trading signals',
+        type: 'volatility'
+      })
+      await agentOrchestrator.registerAgent(bollingerAgent, 1.0)
+    }
+    
+    // Track performance metrics
+    let totalTrades = 0
+    let winningTrades = 0
+    let totalPnL = 0
+    let currentCapital = initialCapital
+    const trades: any[] = []
+    
+    // Subscribe to events
+    eventBus.subscribe(EventTypes.ORDER_FILLED, (event) => {
+      totalTrades++
+      const pnl = event.order.side === 'sell' 
+        ? (event.order.filledPrice - event.order.price) * event.order.filledSize
+        : (event.order.price - event.order.filledPrice) * event.order.filledSize
+      
+      if (pnl > 0) winningTrades++
+      totalPnL += pnl
+      currentCapital += pnl
+      
+      trades.push({
+        time: new Date(event.timestamp),
+        side: event.order.side,
+        price: event.order.filledPrice,
+        size: event.order.filledSize,
+        pnl
+      })
+      
+      if (options.verbose) {
+        console.log(chalk.blue(`[TRADE] ${event.order.side.toUpperCase()} ${event.order.filledSize} @ ${event.order.filledPrice} | PnL: ${pnl > 0 ? chalk.green(`+${pnl.toFixed(2)}`) : chalk.red(pnl.toFixed(2))}`))
+      }
+    })
+    
+    // Create initial grid
+    spinner.text = 'Creating trading grid...'
+    const gridConfig = {
+      gridSpacing,
+      gridLevels,
+      trailPercent: 0.5,
+      minOrderSize: 0.001,
+      maxOrderSize: currentCapital * 0.05 / filteredCandles[0].close, // Max 5% per order
+      rebalanceThreshold: 0.1
+    }
+    
+    const gridParams = {
+      symbol,
+      allocatedCapital: currentCapital * 0.8, // Use 80% for grid
+      baseAmount: 0,
+      quoteAmount: currentCapital * 0.8,
+      riskLevel: 0.5
+    }
+    
+    const grid = await gridManager.createGrid(gridConfig, gridParams)
+    await gridManager.activateNearbyGrids(grid.gridId, filteredCandles[0].close)
+    
+    spinner.succeed('Backtest environment ready')
+    
+    // Run backtest
+    console.log(chalk.yellow('\nRunning backtest...'))
+    const progressBar = ora('Processing candles...').start()
+    
+    let processedCandles = 0
+    const startTime = Date.now()
+    
+    // Subscribe to market data
+    dataFeed.subscribe(symbol, async (candle) => {
+      processedCandles++
+      progressBar.text = `Processing candle ${processedCandles}/${filteredCandles.length} (${((processedCandles/filteredCandles.length) * 100).toFixed(1)}%)`
+      
+      // Update indicators
+      await indicatorCalculator.updateCandle(symbol, candle)
+      
+      // Get agent consensus
+      const marketContext = {
+        symbol,
+        currentPrice: candle.close,
+        candles: await indicatorCalculator.getRecentCandles(symbol, 100)
+      }
+      
+      const consensus = await agentOrchestrator.getConsensus(marketContext)
+      
+      // Update grid with new price
+      await gridManager.updateGrid(grid.gridId, candle.close)
+      await gridManager.processMarketUpdate(grid.gridId, candle.close, candle.volume)
+      
+      // Process trailing orders
+      await trailingOrderManager.processMarketUpdate({
+        symbol,
+        price: candle.close,
+        volume: candle.volume,
+        timestamp: candle.timestamp
+      })
+    })
+    
+    // Start data feed
+    await dataFeed.start()
+    
+    // Wait for completion
+    await new Promise(resolve => {
+      const checkInterval = setInterval(() => {
+        if (processedCandles >= filteredCandles.length) {
+          clearInterval(checkInterval)
+          resolve(undefined)
+        }
+      }, 100)
+    })
+    
+    progressBar.succeed('Backtest completed')
+    
+    // Calculate statistics
+    const endTime = Date.now()
+    const duration = (endTime - startTime) / 1000
+    const winRate = totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0
+    const avgTrade = totalTrades > 0 ? totalPnL / totalTrades : 0
+    const roi = ((currentCapital - initialCapital) / initialCapital) * 100
+    
+    // Display results
+    console.log(chalk.cyan('\n=== Backtest Results ===\n'))
+    
+    const summaryData = [
+      ['Metric', 'Value'],
+      ['Initial Capital', `$${initialCapital.toFixed(2)}`],
+      ['Final Capital', `$${currentCapital.toFixed(2)}`],
+      ['Total P&L', totalPnL >= 0 ? chalk.green(`+$${totalPnL.toFixed(2)}`) : chalk.red(`-$${Math.abs(totalPnL).toFixed(2)}`)],
+      ['ROI', roi >= 0 ? chalk.green(`+${roi.toFixed(2)}%`) : chalk.red(`${roi.toFixed(2)}%`)],
+      ['Total Trades', totalTrades.toString()],
+      ['Winning Trades', winningTrades.toString()],
+      ['Win Rate', `${winRate.toFixed(2)}%`],
+      ['Avg Trade P&L', avgTrade >= 0 ? chalk.green(`+$${avgTrade.toFixed(2)}`) : chalk.red(`-$${Math.abs(avgTrade).toFixed(2)}`)],
+      ['Duration', `${duration.toFixed(1)}s`],
+      ['Candles/sec', `${(filteredCandles.length / duration).toFixed(0)}`]
+    ]
+    
+    console.log(table(summaryData))
+    
+    // Show top trades if verbose
+    if (options.verbose && trades.length > 0) {
+      console.log(chalk.cyan('\n=== Top 5 Trades ===\n'))
+      const topTrades = trades
+        .sort((a, b) => b.pnl - a.pnl)
+        .slice(0, 5)
+        .map((t, i) => [
+          (i + 1).toString(),
+          t.time.toISOString(),
+          t.side.toUpperCase(),
+          `$${t.price.toFixed(2)}`,
+          t.size.toFixed(4),
+          t.pnl >= 0 ? chalk.green(`+$${t.pnl.toFixed(2)}`) : chalk.red(`-$${Math.abs(t.pnl).toFixed(2)}`)
+        ])
+      
+      console.log(table([
+        ['#', 'Time', 'Side', 'Price', 'Size', 'P&L'],
+        ...topTrades
+      ]))
+    }
+    
+    // Cleanup
+    await dataFeed.stop()
+    await gridManager.shutdown()
+    await agentOrchestrator.shutdown()
+    
+  } catch (error) {
+    spinner.fail('Backtest failed')
+    console.error(chalk.red('\nError:'), error)
+    process.exit(1)
+  }
+}
+
+async function loadCandlesFromCSV(filePath: string, symbol: StockSymbol): Promise<Candle[]> {
+  const candles: Candle[] = []
+  const absolutePath = path.resolve(filePath)
+  
+  return new Promise((resolve, reject) => {
+    const parser = parse({
+      columns: true,
+      skip_empty_lines: true,
+      cast: true,
+      cast_date: true
+    })
+    
+    parser.on('data', (row: CSVRow) => {
+      try {
+        // Handle different timestamp formats
+        let timestamp: number
+        if (row.timestamp) {
+          timestamp = new Date(row.timestamp).getTime()
+        } else if (row.date && row.time) {
+          timestamp = new Date(`${row.date} ${row.time}`).getTime()
+        } else if (row.date) {
+          timestamp = new Date(row.date).getTime()
+        } else {
+          throw new Error('No valid timestamp field found')
+        }
+        
+        const candle: Candle = {
+          timestamp: timestamp as any, // Type assertion for epoch time
+          open: parseFloat(row.open),
+          high: parseFloat(row.high),
+          low: parseFloat(row.low),
+          close: parseFloat(row.close),
+          volume: parseFloat(row.volume)
+        }
+        
+        // Validate candle data
+        if (isNaN(candle.open) || isNaN(candle.close) || isNaN(candle.high) || isNaN(candle.low)) {
+          throw new Error('Invalid price data')
+        }
+        
+        candles.push(candle)
+      } catch (error) {
+        console.warn(`Skipping invalid row: ${error}`)
+      }
+    })
+    
+    parser.on('error', reject)
+    parser.on('end', () => {
+      // Sort candles by timestamp
+      candles.sort((a, b) => a.timestamp - b.timestamp)
+      resolve(candles)
+    })
+    
+    createReadStream(absolutePath).pipe(parser)
+  })
+}

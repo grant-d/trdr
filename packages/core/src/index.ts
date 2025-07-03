@@ -23,6 +23,15 @@ export * from './grid'
 // Agents
 export * from './agents'
 
+// Indicators
+export * from './indicators'
+
+// Orders
+export * from './orders'
+
+// Position Sizing
+export * from './position-sizing'
+
 // Re-export shared types for convenience
 export type {
   // Market data types
