@@ -166,11 +166,6 @@ export const EventTypes = {
   TRADE_EXECUTED: 'trade.executed',
   TRADE_CLOSED: 'trade.closed',
 
-  // Agents
-  AGENT_SIGNAL: 'agent.signal',
-  AGENT_CONSENSUS: 'agent.consensus',
-  AGENT_ERROR: 'agent.error',
-
   // System
   SYSTEM_START: 'system.start',
   SYSTEM_STOP: 'system.stop',
@@ -209,6 +204,23 @@ export const EventTypes = {
   HISTORICAL_DATA_VALIDATED: 'historical.data.validated',
   BACKFILL_COMPLETED: 'backfill.completed',
   BACKFILL_FAILED: 'backfill.failed',
+  
+  // Grid events
+  GRID_CREATED: 'grid.created',
+  GRID_UPDATED: 'grid.updated',
+  GRID_CANCELLED: 'grid.cancelled',
+  
+  // Agent events
+  AGENT_SIGNAL: 'agent.signal',
+  AGENT_CONSENSUS: 'agent.consensus',
+  AGENT_ERROR: 'agent.error',
+  AGENT_REGISTERED: 'agent.registered',
+  AGENT_UNREGISTERED: 'agent.unregistered',
+  AGENT_LIFECYCLE_CHANGED: 'agent.lifecycle.changed',
+  AGENT_REPLACED: 'agent.replaced',
+  AGENT_RETIRED: 'agent.retired',
+  AGENT_PERFORMANCE_UPDATED: 'agent.performance.updated',
+  CONSENSUS_REACHED: 'consensus.reached',
 } as const
 
 export type EventTypeKeys = keyof typeof EventTypes

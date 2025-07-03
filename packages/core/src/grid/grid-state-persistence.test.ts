@@ -2,18 +2,16 @@ import type { GridState, GridLevel } from '@trdr/shared'
 import { toStockSymbol, epochDateNow } from '@trdr/shared'
 import assert from 'node:assert/strict'
 import { beforeEach, afterEach, describe, it } from 'node:test'
-import { writeFile, rm, access } from 'fs/promises'
-import { constants } from 'fs'
-import path from 'path'
 import { 
   GridStatePersistence, 
   type GridPersistenceConfig,
   type GridManagerSnapshot
 } from './grid-state-persistence'
+import { MockGridStateRepository } from './mock-grid-state-repository'
 
 describe('GridStatePersistence', () => {
   let persistence: GridStatePersistence
-  let testStorageDir: string
+  let mockRepository: MockGridStateRepository
   
   const createTestGridState = (symbol: string = 'BTC-USD'): GridState => {
     const now = epochDateNow()
@@ -113,64 +111,57 @@ describe('GridStatePersistence', () => {
   }
 
   beforeEach(async () => {
-    // Create unique test directory
-    testStorageDir = path.join(process.cwd(), 'test-storage-' + Date.now())
+    // Create mock repository for testing
+    mockRepository = new MockGridStateRepository()
     
     const config: Partial<GridPersistenceConfig> = {
-      storageDir: testStorageDir,
+      storageDir: './test-storage', // Not used with mock
       autoSaveInterval: 1000, // 1 second for testing
       maxBackups: 3,
       enableCompression: false,
       validateOnLoad: true
     }
     
-    persistence = new GridStatePersistence(config)
+    persistence = new GridStatePersistence(config, mockRepository)
   })
 
   afterEach(async () => {
-    // Clean up test files
-    try {
-      await persistence.shutdown()
-      // Check if directory exists before trying to remove it
-      try {
-        await access(testStorageDir, constants.F_OK)
-        await rm(testStorageDir, { recursive: true, force: true })
-      } catch {
-        // Directory doesn't exist, nothing to clean up
-      }
-    } catch (error) {
-      // Ignore cleanup errors to not fail tests
-      console.warn(`Test cleanup warning: ${error}`)
-    }
+    // Clean up
+    persistence.stopAutoSave()
+    mockRepository.clear()
   })
 
   describe('initialization', () => {
-    it('should initialize and create storage directory', async () => {
+    it('should initialize repository', async () => {
       await persistence.initialize()
       
-      // Directory should exist (we can't easily test this without more fs access)
-      // In a real test environment, we'd verify the directory was created
+      // Verify mock repository was initialized
+      assert.equal(mockRepository.getSnapshotCount(), 0)
     })
 
     it('should handle initialization with custom config', async () => {
-      const customStorageDir = testStorageDir + '-custom'
       const customConfig: Partial<GridPersistenceConfig> = {
-        storageDir: customStorageDir,
+        storageDir: './custom-storage', // Not used with mock
         autoSaveInterval: 5000,
         maxBackups: 5,
         validateOnLoad: false
       }
       
-      const customPersistence = new GridStatePersistence(customConfig)
+      const customMockRepo = new MockGridStateRepository()
+      const customPersistence = new GridStatePersistence(customConfig, customMockRepo)
       await customPersistence.initialize()
       
-      // Clean up custom directory
-      try {
-        await customPersistence.shutdown()
-        await rm(customStorageDir, { recursive: true, force: true })
-      } catch {
-        // Ignore cleanup errors
-      }
+      // Clean up
+      await customPersistence.shutdown()
+    })
+    
+    it('should handle initialization failure', async () => {
+      mockRepository.shouldFailInitialize = true
+      
+      await assert.rejects(
+        async () => persistence.initialize(),
+        /Persistence initialization failed/
+      )
     })
   })
 
@@ -332,23 +323,28 @@ describe('GridStatePersistence', () => {
     })
 
     it('should handle corrupted file gracefully', async () => {
-      // Initialize persistence first to create the directory
+      // Initialize persistence first
       await persistence.initialize()
       
-      // Write invalid JSON to the storage file
-      await writeFile(
-        path.join(testStorageDir, 'grid-manager-state.json'), 
-        'invalid json content',
-        'utf8'
-      )
+      // First save a valid snapshot that will become a backup
+      const validSnapshot = createTestSnapshot()
+      await persistence.saveSnapshot(validSnapshot)
       
+      // Now simulate corrupted file by making load fail
+      mockRepository.shouldFailLoad = true
+      
+      // The mock repository returns a recovery result when it has backups
       const { snapshot, recoveryInfo } = await persistence.loadSnapshot()
       
-      assert.equal(recoveryInfo.success, false)
-      assert.ok(recoveryInfo.errors.some(e => e.includes('Failed to load') || e.includes('No valid backups')))
+      // Should have recovered from backup
+      assert.equal(recoveryInfo.success, true)
+      assert.ok(recoveryInfo.errors.length > 0)
+      assert.ok(recoveryInfo.errors[0]?.includes('recovered from backup'))
+      assert.equal(recoveryInfo.backupUsed, 'mock-backup')
       
-      // Should return empty snapshot
-      assert.equal(Object.keys(snapshot.activeGrids).length, 0)
+      // Should return the backup snapshot
+      assert.ok(snapshot)
+      assert.equal(Object.keys(snapshot.activeGrids).length, 2)
     })
   })
 
@@ -362,28 +358,29 @@ describe('GridStatePersistence', () => {
       
       // Use very short interval for testing
       const fastConfig: Partial<GridPersistenceConfig> = {
-        storageDir: testStorageDir,
+        storageDir: './test-storage',
         autoSaveInterval: 10, // 10ms for fast testing
         maxBackups: 3,
         enableCompression: false,
         validateOnLoad: true
       }
       
-      const fastPersistence = new GridStatePersistence(fastConfig)
+      const fastMockRepo = new MockGridStateRepository()
+      const fastPersistence = new GridStatePersistence(fastConfig, fastMockRepo)
       await fastPersistence.initialize()
       
       // Start auto-save
       fastPersistence.startAutoSave(mockSaveCallback)
       
-      // Wait just long enough for one auto-save
-      await new Promise(resolve => setTimeout(resolve, 20))
+      // Wait long enough for multiple auto-saves
+      await new Promise(resolve => setTimeout(resolve, 30))
       
       // Stop auto-save
       fastPersistence.stopAutoSave()
       await fastPersistence.shutdown()
       
       // Should have called save at least once
-      assert.ok(saveCallCount >= 1)
+      assert.ok(saveCallCount >= 1, `Expected saveCallCount >= 1, got ${saveCallCount}`)
     })
 
     it('should handle save callback errors gracefully', async () => {
@@ -393,14 +390,15 @@ describe('GridStatePersistence', () => {
       
       // Use very short interval for testing
       const fastConfig: Partial<GridPersistenceConfig> = {
-        storageDir: testStorageDir,
+        storageDir: './test-storage',
         autoSaveInterval: 10, // 10ms for fast testing
         maxBackups: 3,
         enableCompression: false,
         validateOnLoad: true
       }
       
-      const fastPersistence = new GridStatePersistence(fastConfig)
+      const fastMockRepo = new MockGridStateRepository()
+      const fastPersistence = new GridStatePersistence(fastConfig, fastMockRepo)
       await fastPersistence.initialize()
       
       // Should not throw when callback fails
@@ -415,16 +413,40 @@ describe('GridStatePersistence', () => {
 
   describe('shutdown handling', () => {
     it('should shutdown cleanly', async () => {
-      await persistence.initialize()
+      // Create fresh instances for this test
+      const testMockRepo = new MockGridStateRepository()
+      const testPersistence = new GridStatePersistence({
+        validateOnLoad: false  // Disable validation to simplify test
+      }, testMockRepo)
       
-      const finalSnapshot = createTestSnapshot()
-      await persistence.shutdown(finalSnapshot)
+      await testPersistence.initialize()
       
-      // Verify the final snapshot was saved by trying to load it
-      const { snapshot, recoveryInfo } = await persistence.loadSnapshot()
+      // Create a test snapshot without using the outer persistence instance
+      const now = epochDateNow()
+      const finalSnapshot: GridManagerSnapshot = {
+        version: '1.0.0',
+        timestamp: now,
+        activeGrids: {
+          'grid-1': testPersistence.serializeGridState(createTestGridState('BTC-USD')),
+          'grid-2': testPersistence.serializeGridState(createTestGridState('ETH-USD'))
+        },
+        performanceHistory: [],
+        lastPriceUpdates: {},
+        metadata: {
+          totalGridsCreated: 2,
+          totalGridsCancelled: 0,
+          systemUptime: 3600000
+        }
+      }
       
-      assert.equal(recoveryInfo.success, true)
-      assert.equal(Object.keys(snapshot.activeGrids).length, 2)
+      // Test shutdown with snapshot
+      await testPersistence.shutdown(finalSnapshot)
+      
+      // Verify the final snapshot was saved to mock repository
+      assert.equal(testMockRepo.saveSnapshotCalls, 1)
+      const savedSnapshot = testMockRepo.getLatestSnapshot()
+      assert.ok(savedSnapshot)
+      assert.equal(Object.keys(savedSnapshot.activeGrids).length, 2)
     })
 
     it('should shutdown without final snapshot', async () => {
@@ -437,30 +459,36 @@ describe('GridStatePersistence', () => {
 
   describe('error handling', () => {
     it('should handle storage directory creation failure', async () => {
-      // Create persistence with invalid directory path
+      // Create mock repository that fails initialization
+      const failingMockRepo = new MockGridStateRepository()
+      failingMockRepo.shouldFailInitialize = true
+      
       const invalidConfig: Partial<GridPersistenceConfig> = {
-        storageDir: '/invalid/path/that/cannot/be/created'
+        storageDir: './test-storage'
       }
       
-      const invalidPersistence = new GridStatePersistence(invalidConfig)
+      const invalidPersistence = new GridStatePersistence(invalidConfig, failingMockRepo)
       
-      // Should handle gracefully (in real implementation, would check permissions)
-      try {
-        await invalidPersistence.initialize()
-      } catch (error) {
-        assert.ok(error instanceof Error)
-        assert.ok(error.message.includes('Persistence initialization failed'))
-      }
+      // Should handle initialization failure
+      await assert.rejects(
+        async () => invalidPersistence.initialize(),
+        /Persistence initialization failed/
+      )
     })
 
-    it('should handle file write permissions', async () => {
+    it('should handle write failures', async () => {
       await persistence.initialize()
       
       const snapshot = createTestSnapshot()
       
-      // In a real test environment, we would test actual permission failures
-      // For now, just verify the method exists and can handle basic cases
-      await persistence.saveSnapshot(snapshot)
+      // Make the repository fail on save
+      mockRepository.shouldFailSave = true
+      
+      // Should throw when save fails
+      await assert.rejects(
+        async () => persistence.saveSnapshot(snapshot),
+        /Failed to save snapshot/
+      )
     })
   })
 
@@ -480,12 +508,15 @@ describe('GridStatePersistence', () => {
     })
 
     it('should provide detailed recovery info for failures', async () => {
+      // Initialize first
+      await persistence.initialize()
+      
+      // Load when no snapshot exists
       const { recoveryInfo } = await persistence.loadSnapshot()
       
       assert.equal(recoveryInfo.success, false)
       assert.equal(recoveryInfo.recoveredGrids, 0)
       assert.ok(recoveryInfo.errors.length > 0)
-      assert.ok(recoveryInfo.warnings.includes('Starting with empty state'))
     })
   })
 

@@ -19,7 +19,7 @@ describe('ConsensusManager', () => {
     config = {
       minConfidenceThreshold: 0.6,
       minAgentsRequired: 2,
-      consensusTimeoutMs: 1000,
+      consensusTimeoutMs: 500,
       fallbackStrategy: 'use-majority',
       useWeightedVoting: true,
       minAgreementThreshold: 0.5,

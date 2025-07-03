@@ -9,7 +9,7 @@ describe('WeightedVotingStrategy', () => {
   const config: ConsensusConfig = {
     minConfidenceThreshold: 0.6,
     minAgentsRequired: 3,
-    consensusTimeoutMs: 5000,
+    consensusTimeoutMs: 500,
     fallbackStrategy: 'hold',
     useWeightedVoting: true,
     minAgreementThreshold: 0.6,

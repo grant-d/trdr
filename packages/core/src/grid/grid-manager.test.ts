@@ -1,15 +1,17 @@
 import type { GridConfig, GridTrailingOrderConfig, Candle } from '@trdr/shared'
 import { toStockSymbol, epochDateNow } from '@trdr/shared'
 import assert from 'node:assert/strict'
-import { beforeEach, describe, it, mock } from 'node:test'
+import { beforeEach, afterEach, describe, it, mock } from 'node:test'
 import { EventBus } from '../events/event-bus'
 import { EventTypes } from '../events/types'
 import type { TrailingOrderManager } from '../orders/trailing-order-manager'
 import { GridManager, type GridInitializationParams } from './grid-manager'
+import { MockGridStateRepository } from './mock-grid-state-repository'
 
 describe('GridManager', () => {
   let gridManager: GridManager
   let mockTrailingOrderManager: TrailingOrderManager
+  let mockRepository: MockGridStateRepository
   let eventBus: EventBus
 
   const createMockTrailingOrderManager = (): TrailingOrderManager => ({
@@ -50,7 +52,20 @@ describe('GridManager', () => {
     })
 
     mockTrailingOrderManager = createMockTrailingOrderManager()
-    gridManager = new GridManager(eventBus, mockTrailingOrderManager, {}, {}, {})
+    mockRepository = new MockGridStateRepository()
+    gridManager = new GridManager(
+      eventBus, 
+      mockTrailingOrderManager, 
+      {}, // volatility config
+      {}, // self-tuning config
+      {}, // persistence config
+      mockRepository
+    )
+  })
+
+  afterEach(async () => {
+    // Clean up grid manager to prevent hanging timers
+    await gridManager.shutdown()
   })
 
   describe('createGrid', () => {
@@ -911,8 +926,31 @@ describe('GridManager', () => {
   })
 
   describe('persistence integration', () => {
+    // Use a separate grid manager instance for persistence tests
+    // to avoid afterEach cleanup interfering with state tracking
+    let persistenceGridManager: GridManager
+    
+    beforeEach(async () => {
+      const persistenceMockRepo = new MockGridStateRepository()
+      persistenceGridManager = new GridManager(
+        eventBus, 
+        mockTrailingOrderManager, 
+        {}, // volatility config
+        {}, // self-tuning config
+        {}, // persistence config
+        persistenceMockRepo
+      )
+      // Initialize persistence for these tests
+      await persistenceGridManager.initializePersistence()
+    })
+    
+    afterEach(async () => {
+      // Clean up the persistence-specific grid manager
+      await persistenceGridManager.shutdown()
+    })
+    
     it('should provide persistence statistics', () => {
-      const stats = gridManager.getPersistenceStats()
+      const stats = persistenceGridManager.getPersistenceStats()
       
       assert.ok(typeof stats.activeGrids === 'number')
       assert.ok(typeof stats.totalCreated === 'number')
@@ -942,17 +980,17 @@ describe('GridManager', () => {
       }
 
       // Create a grid
-      const result = await gridManager.createGrid(config, params)
+      const result = await persistenceGridManager.createGrid(config, params)
       
-      let stats = gridManager.getPersistenceStats()
+      let stats = persistenceGridManager.getPersistenceStats()
       assert.equal(stats.activeGrids, 1)
       assert.equal(stats.totalCreated, 1)
       assert.equal(stats.totalCancelled, 0)
 
       // Cancel the grid
-      await gridManager.cancelGrid(result.gridId, 'Test cancellation')
+      await persistenceGridManager.cancelGrid(result.gridId, 'Test cancellation')
       
-      stats = gridManager.getPersistenceStats()
+      stats = persistenceGridManager.getPersistenceStats()
       assert.equal(stats.activeGrids, 0) // Grid is deactivated but not removed
       assert.equal(stats.totalCreated, 1)
       assert.equal(stats.totalCancelled, 1)
@@ -977,10 +1015,10 @@ describe('GridManager', () => {
       }
 
       // Create a grid
-      const result = await gridManager.createGrid(config, params)
+      const result = await persistenceGridManager.createGrid(config, params)
       
       // Create a snapshot
-      const snapshot = await gridManager.createSnapshot()
+      const snapshot = await persistenceGridManager.createSnapshot()
       
       assert.equal(snapshot.version, '1.0.0')
       assert.ok(snapshot.timestamp > 0)
@@ -999,7 +1037,7 @@ describe('GridManager', () => {
 
     it('should handle manual state saving', async () => {
       // Should not throw even with no grids
-      await gridManager.saveState()
+      await persistenceGridManager.saveState()
       
       // Create a grid and save again
       const config: GridConfig = {
@@ -1019,13 +1057,25 @@ describe('GridManager', () => {
         riskLevel: 0.3
       }
 
-      await gridManager.createGrid(config, params)
+      await persistenceGridManager.createGrid(config, params)
       
       // Should save successfully
-      await gridManager.saveState()
+      await persistenceGridManager.saveState()
     })
 
     it('should support clean shutdown', async () => {
+      // Create a new instance for this test to avoid state conflicts
+      const shutdownMockRepo = new MockGridStateRepository()
+      const shutdownGridManager = new GridManager(
+        eventBus, 
+        mockTrailingOrderManager, 
+        {}, // volatility config
+        {}, // self-tuning config
+        {}, // persistence config
+        shutdownMockRepo
+      )
+      await shutdownGridManager.initializePersistence()
+      
       const config: GridConfig = {
         gridSpacing: 2,
         gridLevels: 4,
@@ -1044,24 +1094,24 @@ describe('GridManager', () => {
       }
 
       // Create a grid
-      const result = await gridManager.createGrid(config, params)
+      const result = await shutdownGridManager.createGrid(config, params)
       
       // Shutdown should cancel all grids and save state
-      await gridManager.shutdown()
+      await shutdownGridManager.shutdown()
       
       // Grid should be cancelled
-      const gridState = gridManager.getGridState(result.gridId)
+      const gridState = shutdownGridManager.getGridState(result.gridId)
       assert.ok(gridState)
       assert.equal(gridState.isActive, false)
       
       // Stats should reflect cancellation
-      const stats = gridManager.getPersistenceStats()
+      const stats = shutdownGridManager.getPersistenceStats()
       assert.equal(stats.totalCancelled, 1)
     })
 
     it('should handle persistence initialization', async () => {
       // Should be able to initialize persistence
-      const recoveryInfo = await gridManager.initializePersistence()
+      const recoveryInfo = await persistenceGridManager.initializePersistence()
       
       // Should return recovery info (likely empty for new system)
       assert.ok(typeof recoveryInfo.success === 'boolean')

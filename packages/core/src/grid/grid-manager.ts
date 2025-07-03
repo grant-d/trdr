@@ -1,11 +1,11 @@
 import type {
+  Candle,
   GridConfig,
   GridLevel,
+  GridLevelTrailingState,
   GridState,
-  StockSymbol,
-  Candle,
   GridTrailingOrderConfig,
-  GridLevelTrailingState
+  StockSymbol
 } from '@trdr/shared'
 import { epochDateNow } from '@trdr/shared'
 import type { Logger } from '@trdr/types'
@@ -14,16 +14,17 @@ import { v4 as uuidv4 } from 'uuid'
 import type { EventBus } from '../events/event-bus'
 import { EventTypes } from '../events/types'
 import type { TrailingOrderManager } from '../orders/trailing-order-manager'
-import type { VolatilitySpacingConfig } from './volatility-grid-spacing'
-import { SelfTuningGridSpacing, type SelfTuningConfig } from './self-tuning-grid-spacing'
-import { 
-  GridStatePersistence, 
-  type GridPersistenceConfig, 
+import {
+  GridStatePersistence,
   type GridManagerSnapshot,
-  type StateRecoveryInfo,
+  type GridPersistenceConfig,
+  type GridStateRepository,
+  type PerformanceHistoryRecord,
   type SerializableGridState,
-  type PerformanceHistoryRecord
+  type StateRecoveryInfo
 } from './grid-state-persistence'
+import { SelfTuningGridSpacing, type SelfTuningConfig } from './self-tuning-grid-spacing'
+import type { VolatilitySpacingConfig } from './volatility-grid-spacing'
 
 /**
  * Parameters for initializing a grid
@@ -89,13 +90,14 @@ export class GridManager extends EventEmitter {
     volatilitySpacingConfig?: Partial<VolatilitySpacingConfig>,
     selfTuningConfig?: Partial<SelfTuningConfig>,
     persistenceConfig?: Partial<GridPersistenceConfig>,
+    repository?: GridStateRepository,
     logger?: Logger
   ) {
     super()
     this.eventBus = eventBus
     this.trailingOrderManager = trailingOrderManager
     this.spacingCalculator = new SelfTuningGridSpacing(volatilitySpacingConfig, selfTuningConfig, logger)
-    this.persistence = new GridStatePersistence(persistenceConfig, undefined, logger)
+    this.persistence = new GridStatePersistence(persistenceConfig, repository, logger)
     this.logger = logger
 
     this.setupEventHandlers()
@@ -1407,8 +1409,12 @@ export class GridManager extends EventEmitter {
     systemUptime: number
     lastSaveTime?: number
   } {
+    // Count only grids where isActive is true
+    const activeCount = Array.from(this.activeGrids.values())
+      .filter(grid => grid.isActive).length
+    
     return {
-      activeGrids: this.activeGrids.size,
+      activeGrids: activeCount,
       totalCreated: this.totalGridsCreated,
       totalCancelled: this.totalGridsCancelled,
       systemUptime: epochDateNow() - this.systemStartTime

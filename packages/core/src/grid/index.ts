@@ -7,21 +7,16 @@
 
 export { GridManager } from './grid-manager'
 export type {
-  GridInitializationParams,
-  GridInitializationResult,
-  GridEvents
+  GridEvents, GridInitializationParams,
+  GridInitializationResult
 } from './grid-manager'
 
+export { FileGridStateRepository, GridStatePersistence } from './grid-state-persistence'
+export type {
+  GridManagerSnapshot, GridPersistenceConfig, GridStateRepository, PerformanceHistoryRecord, SerializableGridLevel, SerializableGridState, StateRecoveryInfo
+} from './grid-state-persistence'
+export { MockGridStateRepository } from './mock-grid-state-repository'
 export { VolatilityGridSpacing } from './volatility-grid-spacing'
 export type {
-  VolatilitySpacingConfig,
-  VolatilityMetrics,
-  SpacingCalculationResult
+  SpacingCalculationResult, VolatilityMetrics, VolatilitySpacingConfig
 } from './volatility-grid-spacing'
-
-// Re-export grid-related types from shared
-export type {
-  GridConfig,
-  GridLevel,
-  GridState
-} from '@trdr/shared'
