@@ -17,8 +17,6 @@ export * from './network'
 // Database
 export { createDatabaseWithEventBus } from './database/database-factory'
 
-// Grid Trading
-export * from './grid'
 
 // Agents
 export * from './agents'
@@ -63,7 +61,6 @@ export type {
   // Config types
   SystemConfig,
   TradingConfig,
-  GridConfig,
   RiskConfig,
   MinimalConfig,
 } from '@trdr/shared'

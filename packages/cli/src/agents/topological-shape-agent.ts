@@ -72,7 +72,6 @@ export class TopologicalShapeAgent extends BaseAgent {
   private persistenceDiagram: PersistenceDiagram | null = null
   private priceVoids: PriceVoid[] = []
   private priceCloud: { price: number, volume: number, time: number }[] = []
-  private featureHistory: TopologicalFeature[] = []
   
   constructor(metadata: any, logger?: any, config?: TopologicalConfig) {
     super(metadata, logger)
@@ -82,7 +81,7 @@ export class TopologicalShapeAgent extends BaseAgent {
       priceResolution: config?.priceResolution ?? 0.001, // 0.1% price steps
       timeWindow: config?.timeWindow ?? 1440, // 24 hours
       persistenceThreshold: config?.persistenceThreshold ?? 0.02, // 2% price movement (more sensitive)
-      samplePoints: config?.samplePoints ?? 100 // Points in point cloud
+      samplePoints: config?.samplePoints ?? 20 // Points in point cloud - reduced for smaller datasets
     }
   }
   
@@ -94,8 +93,8 @@ export class TopologicalShapeAgent extends BaseAgent {
     const { currentPrice, candles } = context
     
     // Need sufficient data for topological analysis
-    if (candles.length < this.config.samplePoints) {
-      return this.createSignal('hold', 0.3, 'Insufficient data for topological analysis')
+    if (candles.length < 10) {
+      return this.createSignal('hold', 0.25, 'Insufficient data')
     }
     
     // Build point cloud from price/volume data
@@ -107,8 +106,10 @@ export class TopologicalShapeAgent extends BaseAgent {
     // Extract price voids
     const newVoids = this.extractPriceVoids(this.persistenceDiagram)
     
-    // Update void history
-    this.priceVoids = [...this.priceVoids, ...newVoids].slice(-20) // Keep last 20 voids
+    // Update void history with new voids
+    if (newVoids.length > 0) {
+      this.priceVoids = [...this.priceVoids, ...newVoids].slice(-20) // Keep last 20 voids
+    }
     
     // Check void proximity
     const voidProximity = this.checkVoidProximity(currentPrice, this.priceVoids)
@@ -116,14 +117,15 @@ export class TopologicalShapeAgent extends BaseAgent {
     // Generate signal from topological features
     if (voidProximity.nearVoid && voidProximity.void) {
       const action = voidProximity.voidType === 'below' ? 'buy' : 
-                     voidProximity.voidType === 'above' ? 'sell' : 'hold'
+                     voidProximity.voidType === 'above' ? 'sell' : 
+                     voidProximity.voidType === 'inside' ? 'buy' : 'hold'
       
-      const confidence = Math.min(0.95, 0.65 + (1 / voidProximity.distance) * 0.15 + voidProximity.void.persistence * 0.25)
+      const confidence = Math.min(0.95, 0.6 + (1 / Math.max(0.1, voidProximity.distance)) * 0.1 + voidProximity.void.persistence * 0.2)
       
       const signal = this.createSignal(
         action,
         confidence,
-        `Price approaching ${voidProximity.voidType} void at ${voidProximity.void.centerPrice.toFixed(2)}, distance: ${(voidProximity.distance * 100).toFixed(1)}%`
+        `Price ${voidProximity.voidType === 'inside' ? 'inside' : 'approaching'} void at ${voidProximity.void.centerPrice.toFixed(2)}, distance: ${(voidProximity.distance * 100).toFixed(1)}%`
       )
       
       return enforceNoShorting(signal, context)
@@ -362,7 +364,7 @@ export class TopologicalShapeAgent extends BaseAgent {
   /**
    * Extract price voids from topological features
    */
-  private extractPriceVoids(diagram: PersistenceDiagram): PriceVoid[] {
+  private extractPriceVoids(_diagram: PersistenceDiagram): PriceVoid[] {
     const voids: PriceVoid[] = []
     
     // Look for gaps in price coverage (simplified approach)
@@ -372,7 +374,8 @@ export class TopologicalShapeAgent extends BaseAgent {
       const gap = pricePoints[i + 1]! - pricePoints[i]!
       const avgPrice = (pricePoints[i]! + pricePoints[i + 1]!) / 2
       
-      if (gap > avgPrice * this.config.persistenceThreshold) {
+      // Lower threshold to detect more voids - use 1% gap
+      if (gap > avgPrice * 0.01) {
         // Found a void
         const voidVolume = this.priceCloud
           .filter(p => Math.abs(p.price - avgPrice) < gap / 2)
@@ -422,8 +425,8 @@ export class TopologicalShapeAgent extends BaseAgent {
       }
     }
     
-    // Consider "near" if within 2% of void edge
-    const nearVoid = nearestVoid !== null && minDistance < 0.02 + nearestVoid.radius / nearestVoid.centerPrice
+    // Consider "near" if within 3% of void edge (more sensitive)
+    const nearVoid = nearestVoid !== null && minDistance < 0.03 + nearestVoid.radius / nearestVoid.centerPrice
     
     return { nearVoid, voidType, distance: minDistance, void: nearestVoid }
   }
@@ -454,6 +457,5 @@ export class TopologicalShapeAgent extends BaseAgent {
     this.persistenceDiagram = null
     this.priceVoids = []
     this.priceCloud = []
-    this.featureHistory = []
   }
 }

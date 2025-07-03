@@ -16,12 +16,12 @@ describe('TimeDecayAgent', () => {
 
   beforeEach(async () => {
     agent = new TimeDecayAgent(metadata, undefined, {
-      decayHalfLife: 3600000, // 1 hour
-      staleThreshold: 7200000, // 2 hours
-      gridLevels: 20,
-      minTimeAtLevel: 300000, // 5 minutes
-      trailTightenRate: 0.8,
-      volumeWeight: 0.3
+      initialTrailDistance: 0.02, // 2%
+      minTrailDistance: 0.005, // 0.5%
+      staleThreshold: 120, // 2 hours in minutes
+      decayRate: 0.1, // 10% decay per interval
+      decayInterval: 30, // 30 minutes
+      breakoutBoost: 1.5 // 50% confidence boost
     })
     await agent.initialize()
   })

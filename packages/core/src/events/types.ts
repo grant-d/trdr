@@ -173,10 +173,6 @@ export const EventTypes = {
   SYSTEM_WARNING: 'system.warning',
   SYSTEM_INFO: 'system.info',
 
-  // Grid
-  GRID_LEVEL_ACTIVATED: 'grid.level_activated',
-  GRID_LEVEL_FILLED: 'grid.level_filled',
-  GRID_REBALANCE: 'grid.rebalance',
 
   // Monitoring
   ORDER_EXECUTION_METRICS: 'order.execution.metrics',
@@ -205,10 +201,6 @@ export const EventTypes = {
   BACKFILL_COMPLETED: 'backfill.completed',
   BACKFILL_FAILED: 'backfill.failed',
   
-  // Grid events
-  GRID_CREATED: 'grid.created',
-  GRID_UPDATED: 'grid.updated',
-  GRID_CANCELLED: 'grid.cancelled',
   
   // Agent events
   AGENT_SIGNAL: 'agent.signal',

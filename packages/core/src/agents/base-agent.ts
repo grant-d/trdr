@@ -306,7 +306,9 @@ export abstract class BaseAgent implements ITradeAgent {
     analysis?: string,
     priceTarget?: number,
     stopLoss?: number,
-    positionSize?: number
+    positionSize?: number,
+    limitPrice?: number,
+    stopPrice?: number
   ): AgentSignal {
     return {
       action,
@@ -316,6 +318,8 @@ export abstract class BaseAgent implements ITradeAgent {
       priceTarget,
       stopLoss,
       positionSize,
+      limitPrice,
+      stopPrice,
       timestamp: epochDateNow()
     }
   }

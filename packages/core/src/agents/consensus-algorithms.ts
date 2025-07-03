@@ -1,5 +1,6 @@
 import { epochDateNow } from '@trdr/shared'
 import type { AgentSignal, ConsensusStrategy } from './types'
+import { enhanceConsensusWithPriceLevels } from './statistical-consensus'
 
 /**
  * Calculate confidence intervals for consensus results
@@ -77,7 +78,7 @@ export function normalizeSignals(
  */
 export const performanceWeightedConsensus: ConsensusStrategy = {
   name: 'performance-weighted',
-  calculateConsensus: (signals, weights, agents) => {
+  calculateConsensus: (signals, weights, agents, _priors, currentPrice) => {
     const scores = new Map<string, number>()
     let totalWeight = 0
     
@@ -110,7 +111,7 @@ export const performanceWeightedConsensus: ConsensusStrategy = {
     }
     
     // Find winning action
-    let bestAction: string = 'hold'
+    let bestAction = 'hold'
     let bestScore = 0
     for (const [action, score] of scores) {
       if (score > bestScore) {
@@ -135,7 +136,7 @@ export const performanceWeightedConsensus: ConsensusStrategy = {
       agentSignalsMap[agentId] = signal
     }
     
-    return {
+    const baseConsensus = {
       action: bestAction as AgentSignal['action'],
       confidence: agreement,
       reason: reasons.join('; '),
@@ -145,6 +146,11 @@ export const performanceWeightedConsensus: ConsensusStrategy = {
       timestamp: epochDateNow(),
       confidenceInterval: interval
     }
+    
+    // Enhance with statistical price levels if current price is available
+    return currentPrice 
+      ? enhanceConsensusWithPriceLevels(baseConsensus, signals, adjustedWeights, currentPrice)
+      : baseConsensus
   }
 }
 
@@ -153,7 +159,7 @@ export const performanceWeightedConsensus: ConsensusStrategy = {
  */
 export const exponentialWeightedConsensus: ConsensusStrategy = {
   name: 'exponential-weighted',
-  calculateConsensus: (signals, weights) => {
+  calculateConsensus: (signals, weights, _agents, _priors, currentPrice) => {
     const scores = new Map<string, number>()
     let totalWeight = 0
     const now = epochDateNow()
@@ -181,7 +187,7 @@ export const exponentialWeightedConsensus: ConsensusStrategy = {
     }
     
     // Find winning action
-    let bestAction: string = 'hold'
+    let bestAction = 'hold'
     let bestScore = 0
     for (const [action, score] of scores) {
       if (score > bestScore) {
@@ -202,7 +208,7 @@ export const exponentialWeightedConsensus: ConsensusStrategy = {
       agentSignalsMap[agentId] = signal
     }
     
-    return {
+    const baseConsensus = {
       action: bestAction as AgentSignal['action'],
       confidence: agreement,
       reason: reasons.join('; '),
@@ -211,6 +217,11 @@ export const exponentialWeightedConsensus: ConsensusStrategy = {
       participatingAgents: signals.size,
       timestamp: epochDateNow()
     }
+    
+    // Enhance with statistical price levels if current price is available
+    return currentPrice 
+      ? enhanceConsensusWithPriceLevels(baseConsensus, signals, adjustedWeights, currentPrice)
+      : baseConsensus
   }
 }
 
@@ -219,7 +230,7 @@ export const exponentialWeightedConsensus: ConsensusStrategy = {
  */
 export const confidenceWeightedConsensus: ConsensusStrategy = {
   name: 'confidence-weighted',
-  calculateConsensus: (signals, weights) => {
+  calculateConsensus: (signals, weights, _agents, _priors, currentPrice) => {
     const scores = new Map<string, number>()
     let totalWeight = 0
     
@@ -237,7 +248,7 @@ export const confidenceWeightedConsensus: ConsensusStrategy = {
     }
     
     // Find winning action
-    let bestAction: string = 'hold'
+    let bestAction = 'hold'
     let bestScore = 0
     for (const [action, score] of scores) {
       if (score > bestScore) {
@@ -263,7 +274,7 @@ export const confidenceWeightedConsensus: ConsensusStrategy = {
       agentSignalsMap[agentId] = signal
     }
     
-    return {
+    const baseConsensus = {
       action: bestAction as AgentSignal['action'],
       confidence: agreement,
       reason: reasons.join('; '),
@@ -272,6 +283,11 @@ export const confidenceWeightedConsensus: ConsensusStrategy = {
       participatingAgents: signals.size,
       timestamp: epochDateNow()
     }
+    
+    // Enhance with statistical price levels if current price is available
+    return currentPrice 
+      ? enhanceConsensusWithPriceLevels(baseConsensus, signals, weights, currentPrice)
+      : baseConsensus
   }
 }
 
@@ -280,7 +296,7 @@ export const confidenceWeightedConsensus: ConsensusStrategy = {
  */
 export const bayesianConsensus: ConsensusStrategy = {
   name: 'bayesian',
-  calculateConsensus: (signals, weights, _, priors = { buy: 0.33, sell: 0.33, hold: 0.34 }) => {
+  calculateConsensus: (signals, weights, _, priors = { buy: 0.33, sell: 0.33, hold: 0.34 }, currentPrice) => {
     // Calculate likelihood for each action
     const likelihoods = new Map<string, number>()
     
@@ -320,7 +336,7 @@ export const bayesianConsensus: ConsensusStrategy = {
     }
     
     // Find action with highest posterior
-    let bestAction: string = 'hold'
+    let bestAction = 'hold'
     let bestPosterior = 0
     for (const [action, posterior] of posteriors) {
       if (posterior > bestPosterior) {
@@ -339,7 +355,7 @@ export const bayesianConsensus: ConsensusStrategy = {
       agentSignalsMap[agentId] = signal
     }
     
-    return {
+    const baseConsensus = {
       action: bestAction as AgentSignal['action'],
       confidence: bestPosterior,
       reason: `Bayesian posterior: ${(bestPosterior * 100).toFixed(1)}%. ${reasons.join('; ')}`,
@@ -349,6 +365,11 @@ export const bayesianConsensus: ConsensusStrategy = {
       timestamp: epochDateNow(),
       posteriorProbabilities: Object.fromEntries(posteriors)
     }
+    
+    // Enhance with statistical price levels if current price is available
+    return currentPrice 
+      ? enhanceConsensusWithPriceLevels(baseConsensus, signals, weights, currentPrice)
+      : baseConsensus
   }
 }
 
@@ -357,7 +378,7 @@ export const bayesianConsensus: ConsensusStrategy = {
  */
 export const vetoConsensus: ConsensusStrategy = {
   name: 'veto-consensus',
-  calculateConsensus: (signals, weights) => {
+  calculateConsensus: (signals, weights, _agents, _priors, currentPrice) => {
     // First check for any high-confidence vetos
     const vetoThreshold = 0.9
     const vetoSignals: Array<[string, AgentSignal]> = []
@@ -378,7 +399,7 @@ export const vetoConsensus: ConsensusStrategy = {
         agentSignalsMap[agentId] = signal
       }
       
-      return {
+      const baseConsensus = {
         action: vetoSignal.action,
         confidence: vetoSignal.confidence,
         reason: `VETO by ${vetoAgentId}: ${vetoSignal.reason}`,
@@ -388,6 +409,11 @@ export const vetoConsensus: ConsensusStrategy = {
         timestamp: epochDateNow(),
         vetoApplied: true
       }
+      
+      // Enhance with statistical price levels if current price is available
+      return currentPrice 
+        ? enhanceConsensusWithPriceLevels(baseConsensus, signals, weights, currentPrice)
+        : baseConsensus
     }
     
     // Otherwise, use weighted voting
@@ -401,7 +427,7 @@ export const vetoConsensus: ConsensusStrategy = {
       totalWeight += weight
     }
     
-    let bestAction: string = 'hold'
+    let bestAction = 'hold'
     let bestScore = 0
     for (const [action, score] of scores) {
       if (score > bestScore) {
@@ -421,7 +447,7 @@ export const vetoConsensus: ConsensusStrategy = {
       agentSignalsMap[agentId] = signal
     }
     
-    return {
+    const baseConsensus = {
       action: bestAction as AgentSignal['action'],
       confidence: agreement,
       reason: reasons.join('; '),
@@ -431,5 +457,10 @@ export const vetoConsensus: ConsensusStrategy = {
       timestamp: epochDateNow(),
       vetoApplied: false
     }
+    
+    // Enhance with statistical price levels if current price is available
+    return currentPrice 
+      ? enhanceConsensusWithPriceLevels(baseConsensus, signals, weights, currentPrice)
+      : baseConsensus
   }
 }

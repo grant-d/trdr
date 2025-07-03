@@ -1,5 +1,6 @@
 import { IndicatorCalculator } from '@trdr/core'
-import type { AgentSignal, MarketContext } from '@trdr/core/dist/agents/types'
+import type { AgentSignal, MarketContext, AgentMetadata } from '@trdr/core/dist/agents/types'
+import type { Logger } from '@trdr/types'
 import { AdaptiveBaseAgent } from './adaptive-base-agent'
 import type { MarketRegime } from './market-regime-detector'
 
@@ -66,7 +67,7 @@ export class AdaptiveRsiAgent extends AdaptiveBaseAgent {
   private priceHistory: number[] = []
   private readonly historyLength = 20
   
-  constructor(metadata: any, logger?: any, config?: AdaptiveRsiConfig) {
+  constructor(metadata: AgentMetadata, logger?: Logger, config?: AdaptiveRsiConfig) {
     super(metadata, logger, {
       adaptationRate: 0.15,
       regimeMemory: 10,
@@ -154,10 +155,7 @@ export class AdaptiveRsiAgent extends AdaptiveBaseAgent {
     })
   }
   
-  protected async performAdaptiveAnalysis(
-    context: MarketContext,
-    regime: MarketRegime
-  ): Promise<AgentSignal> {
+  protected async performAdaptiveAnalysis(context: MarketContext, regime: MarketRegime): Promise<AgentSignal> {
     const { candles, currentPrice } = context
     
     if (candles.length < this.rsiPeriod) {
@@ -266,8 +264,8 @@ export class AdaptiveRsiAgent extends AdaptiveBaseAgent {
   
   private generateRangingSignal(
     rsi: number,
-    rsiTrend: string,
-    momentum: string
+    _rsiTrend: string, // unused - for future trend analysis
+    _momentum: string  // unused - for future momentum analysis
   ): AgentSignal {
     // Classic overbought/oversold in ranging markets
     if (rsi < this.oversoldLevel) {
@@ -293,8 +291,8 @@ export class AdaptiveRsiAgent extends AdaptiveBaseAgent {
   
   private generateBreakoutSignal(
     rsi: number,
-    rsiTrend: string,
-    momentum: string,
+    _rsiTrend: string, // unused - for future trend analysis
+    _momentum: string,  // unused - for future momentum analysis
     regime: MarketRegime
   ): AgentSignal {
     // During breakouts, extreme RSI can continue
@@ -319,7 +317,7 @@ export class AdaptiveRsiAgent extends AdaptiveBaseAgent {
   
   private generateReversalSignal(
     rsi: number,
-    rsiTrend: string,
+    _rsiTrend: string,
     momentum: string
   ): AgentSignal {
     // Look for extreme readings with momentum loss
@@ -344,8 +342,8 @@ export class AdaptiveRsiAgent extends AdaptiveBaseAgent {
   
   private generateDefaultSignal(
     rsi: number,
-    rsiTrend: string,
-    momentum: string
+    _rsiTrend: string, // unused - for future trend analysis
+    _momentum: string  // unused - for future momentum analysis
   ): AgentSignal {
     // Standard RSI logic
     if (rsi < this.oversoldLevel) {

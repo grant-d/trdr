@@ -1,5 +1,6 @@
 import { BaseAgent, IndicatorCalculator } from '@trdr/core'
 import type { AgentSignal, MarketContext } from '@trdr/core/dist/agents/types'
+import { enforceNoShorting } from './helpers/position-aware'
 
 export class RsiAgent extends BaseAgent {
   private readonly calculator = new IndicatorCalculator()
@@ -19,6 +20,11 @@ export class RsiAgent extends BaseAgent {
   }
   
   protected async performAnalysis(context: MarketContext): Promise<AgentSignal> {
+    const signal = await this.performRsiAnalysis(context)
+    return enforceNoShorting(signal, context)
+  }
+
+  private async performRsiAnalysis(context: MarketContext): Promise<AgentSignal> {
     const { candles, currentPrice } = context
     
     if (candles.length < this.rsiPeriod) {
@@ -28,7 +34,7 @@ export class RsiAgent extends BaseAgent {
     // Calculate RSI
     const rsi = this.calculator.rsi(candles, this.rsiPeriod)
     
-    if (!rsi || rsi.value === 0) {
+    if (!rsi || rsi.value === null || rsi.value === undefined || isNaN(rsi.value)) {
       return this.createSignal('hold', 0.3, 'RSI not available')
     }
     
@@ -64,10 +70,27 @@ export class RsiAgent extends BaseAgent {
         confidence = 0.9
       }
       
+      // Calculate stop loss and limit price based on divergence strength and RSI level
+      const stopLossPercent = 0.02 + (1 - confidence) * 0.02 // 2-4% based on confidence
+      const stopLoss = direction === 'buy' 
+        ? currentPrice * (1 - stopLossPercent)
+        : currentPrice * (1 + stopLossPercent)
+      
+      // For divergence signals, use a slightly aggressive limit price
+      const limitSlippage = 0.001 // 0.1% slippage tolerance
+      const limitPrice = direction === 'buy'
+        ? currentPrice * (1 + limitSlippage)
+        : currentPrice * (1 - limitSlippage)
+      
       return this.createSignal(
         direction,
         confidence,
-        `${divergence.type} divergence detected (RSI: ${latestRSI.toFixed(1)}, momentum: ${momentum})`
+        `${divergence.type} divergence detected (RSI: ${latestRSI.toFixed(1)}, momentum: ${momentum})`,
+        undefined, // analysis
+        undefined, // priceTarget
+        stopLoss,
+        undefined, // positionSize
+        limitPrice
       )
     }
     
@@ -82,10 +105,22 @@ export class RsiAgent extends BaseAgent {
         confidence = Math.max(0.5, confidence - 0.2)
       }
       
+      // Calculate stop loss and limit price for oversold condition
+      const stopLossPercent = 0.025 + (1 - confidence) * 0.015 // 2.5-4% based on confidence
+      const stopLoss = currentPrice * (1 - stopLossPercent)
+      
+      // Conservative limit price for oversold bounce
+      const limitPrice = currentPrice * 1.002 // 0.2% above current for quick fill
+      
       return this.createSignal(
         'buy',
         confidence,
-        `RSI oversold (${latestRSI.toFixed(1)}, trend: ${rsiTrend}, momentum: ${momentum})`
+        `RSI oversold (${latestRSI.toFixed(1)}, trend: ${rsiTrend}, momentum: ${momentum})`,
+        undefined, // analysis
+        undefined, // priceTarget
+        stopLoss,
+        undefined, // positionSize
+        limitPrice
       )
     }
     
@@ -100,10 +135,22 @@ export class RsiAgent extends BaseAgent {
         confidence = Math.max(0.5, confidence - 0.2)
       }
       
+      // Calculate stop loss and limit price for overbought condition
+      const stopLossPercent = 0.025 + (1 - confidence) * 0.015 // 2.5-4% based on confidence
+      const stopLoss = currentPrice * (1 + stopLossPercent)
+      
+      // Conservative limit price for overbought reversal
+      const limitPrice = currentPrice * 0.998 // 0.2% below current for quick fill
+      
       return this.createSignal(
         'sell',
         confidence,
-        `RSI overbought (${latestRSI.toFixed(1)}, trend: ${rsiTrend}, momentum: ${momentum})`
+        `RSI overbought (${latestRSI.toFixed(1)}, trend: ${rsiTrend}, momentum: ${momentum})`,
+        undefined, // analysis
+        undefined, // priceTarget
+        stopLoss,
+        undefined, // positionSize
+        limitPrice
       )
     }
     

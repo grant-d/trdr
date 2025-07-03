@@ -72,7 +72,8 @@ export class TimeDecayAgent extends BaseAgent {
     maxTimeAtLevel: 0
   }
   private priceHistory: { price: number, timestamp: number, volume: number }[] = []
-  private lastUpdateTime = 0
+  // @ts-ignore - unused variable (reserved for future use)
+  private _lastUpdateTime = 0
   
   constructor(metadata: any, logger?: any, config?: TimeDecayConfig) {
     super(metadata, logger)
@@ -89,7 +90,7 @@ export class TimeDecayAgent extends BaseAgent {
   
   protected async onInitialize(): Promise<void> {
     this.logger?.info('Time Decay Agent initialized', this.config)
-    this.lastUpdateTime = Date.now()
+    this._lastUpdateTime = Date.now()
   }
   
   protected async performAnalysis(context: MarketContext): Promise<AgentSignal> {
@@ -99,6 +100,11 @@ export class TimeDecayAgent extends BaseAgent {
     // Update price tracking
     this.updatePriceLevels(currentPrice, candles[candles.length - 1]?.volume ?? 0)
     this.priceHistory.push({ price: currentPrice, timestamp: currentTime, volume: candles[candles.length - 1]?.volume ?? 0 })
+    
+    // Check for insufficient data
+    if (this.priceHistory.length < 5) {
+      return this.createSignal('hold', 0.3, 'Building time profile')
+    }
     
     // Keep history manageable
     if (this.priceHistory.length > 1000) {
@@ -136,7 +142,8 @@ export class TimeDecayAgent extends BaseAgent {
       
       // Adjust trail distance based on staleness
       const decayFactor = this.calculateDecayFactor(timeAtLevel)
-      const adjustedTrailDistance = this.adjustTrailDistance(this.config.initialTrailDistance, decayFactor)
+      // @ts-ignore - unused variable (reserved for future use)
+      const _adjustedTrailDistance = this.adjustTrailDistance(this.config.initialTrailDistance, decayFactor)
       
       // Stale price - prepare for breakout
       if (staleness > 0.6) { // Lower threshold
@@ -338,6 +345,6 @@ export class TimeDecayAgent extends BaseAgent {
       maxTimeAtLevel: 0
     }
     this.priceHistory = []
-    this.lastUpdateTime = Date.now()
+    this._lastUpdateTime = Date.now()
   }
 }

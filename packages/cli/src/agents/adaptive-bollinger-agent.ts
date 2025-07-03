@@ -1,5 +1,6 @@
 import { IndicatorCalculator } from '@trdr/core'
-import type { AgentSignal, MarketContext } from '@trdr/core/dist/agents/types'
+import type { AgentSignal, MarketContext, AgentMetadata } from '@trdr/core/dist/agents/types'
+import type { Logger } from '@trdr/types'
 import { AdaptiveBaseAgent } from './adaptive-base-agent'
 import type { MarketRegime } from './market-regime-detector'
 
@@ -82,7 +83,7 @@ export class AdaptiveBollingerBandsAgent extends AdaptiveBaseAgent {
   private priceHistory: number[] = []
   private readonly historyLength = 20
   
-  constructor(metadata: any, logger?: any, config?: AdaptiveBollingerConfig) {
+  constructor(metadata: AgentMetadata, logger?: Logger, config?: AdaptiveBollingerConfig) {
     super(metadata, logger, {
       adaptationRate: 0.15,
       regimeMemory: 10,
@@ -168,10 +169,7 @@ export class AdaptiveBollingerBandsAgent extends AdaptiveBaseAgent {
     })
   }
   
-  protected async performAdaptiveAnalysis(
-    context: MarketContext,
-    regime: MarketRegime
-  ): Promise<AgentSignal> {
+  protected async performAdaptiveAnalysis(context: MarketContext, regime: MarketRegime): Promise<AgentSignal> {
     const { candles, currentPrice } = context
     
     if (candles.length < this.period) {
@@ -238,7 +236,7 @@ export class AdaptiveBollingerBandsAgent extends AdaptiveBaseAgent {
     bandwidth: number,
     squeeze: boolean,
     bandTrend: string,
-    pricePosition: string,
+    _pricePosition: string, // unused - for future implementation
     squeezeSignal: string,
     regime: MarketRegime
   ): AgentSignal {
@@ -263,7 +261,7 @@ export class AdaptiveBollingerBandsAgent extends AdaptiveBaseAgent {
     middle: number,
     lower: number,
     percentB: number,
-    bandwidth: number,
+    _bandwidth: number, // unused - for future bandwidth analysis
     regime: MarketRegime
   ): AgentSignal {
     // In trending markets, use bands differently
@@ -309,10 +307,10 @@ export class AdaptiveBollingerBandsAgent extends AdaptiveBaseAgent {
   private generateRangingSignal(
     price: number,
     upper: number,
-    middle: number,
+    _middle: number, // unused - for future middle band analysis
     lower: number,
     percentB: number,
-    squeeze: boolean
+    _squeeze: boolean // unused - for future squeeze detection
   ): AgentSignal {
     // Classic mean reversion in ranging markets
     if (price > upper) {
@@ -357,7 +355,7 @@ export class AdaptiveBollingerBandsAgent extends AdaptiveBaseAgent {
     middle: number,
     lower: number,
     percentB: number,
-    squeeze: boolean,
+    _squeeze: boolean, // unused - squeezeSignal used instead
     squeezeSignal: string,
     regime: MarketRegime
   ): AgentSignal {
@@ -402,9 +400,9 @@ export class AdaptiveBollingerBandsAgent extends AdaptiveBaseAgent {
   private generateReversalSignal(
     price: number,
     upper: number,
-    middle: number,
+    _middle: number, // unused - for future middle band analysis
     lower: number,
-    percentB: number,
+    _percentB: number, // unused - for future signal refinement
     bandTrend: string
   ): AgentSignal {
     // Look for band touches with expansion
@@ -430,9 +428,9 @@ export class AdaptiveBollingerBandsAgent extends AdaptiveBaseAgent {
   private generateDefaultSignal(
     price: number,
     upper: number,
-    middle: number,
+    _middle: number, // unused - for future middle band analysis
     lower: number,
-    percentB: number
+    _percentB: number // unused - for future signal refinement
   ): AgentSignal {
     // Standard Bollinger logic
     if (price > upper) {

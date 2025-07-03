@@ -1,5 +1,6 @@
-import { BaseAgent, IndicatorCalculator } from '@trdr/core'
+import { BaseAgent } from '@trdr/core'
 import type { AgentSignal, MarketContext } from '@trdr/core/dist/agents/types'
+import type { Candle } from '@trdr/shared/src/types/market-data'
 
 interface VolumeProfileConfig {
   volumeThreshold?: number // Multiplier for average volume to detect spikes
@@ -32,13 +33,10 @@ interface SupportResistance {
 }
 
 export class VolumeProfileAgent extends BaseAgent {
-  private readonly calculator = new IndicatorCalculator()
-  
   // Configuration
   protected readonly config: Required<VolumeProfileConfig>
   
   // Volume tracking
-  private volumeHistory: number[] = []
   private priceHistory: number[] = []
   private readonly volumeProfile = new Map<number, number>()
   private readonly historyLength = 100 // Keep last 100 price points for touch analysis
@@ -83,10 +81,10 @@ export class VolumeProfileAgent extends BaseAgent {
       }
       
       // Build volume profile
-      const volumeProfile = this.buildVolumeProfile(candles)
+      const volumeProfile = this.buildVolumeProfile(candles as Candle[])
       
       // Detect volume spikes
-      const volumeSpike = this.detectVolumeSpike(candles)
+      const volumeSpike = this.detectVolumeSpike(candles as Candle[])
       
       // Identify support/resistance levels
       const supportResistance = this.identifySupportResistance(volumeProfile, currentPrice)
@@ -98,8 +96,13 @@ export class VolumeProfileAgent extends BaseAgent {
       }
       
       // Calculate average volume
-      const recentCandles = candles.slice(-this.config.spikeDetectionPeriod)
-      const averageVolume = recentCandles.reduce((sum, c) => sum + c.volume, 0) / recentCandles.length
+      const recentCandles = (candles as Candle[]).slice(-this.config.spikeDetectionPeriod)
+      const averageVolume = recentCandles.reduce((sum, c) => sum + (isNaN(c.volume) ? 0 : c.volume), 0) / recentCandles.length
+      
+      // Check for invalid average volume
+      if (isNaN(averageVolume) || averageVolume === 0) {
+        throw new Error('Invalid volume data - all volumes are NaN or zero')
+      }
       
       // Cache analysis - convert Map to array format
       const profileArray = Array.from(volumeProfile.entries()).map(([price, data]) => ({
@@ -130,7 +133,7 @@ export class VolumeProfileAgent extends BaseAgent {
   /**
    * Build volume profile from candle data
    */
-  private buildVolumeProfile(candles: readonly any[]): Map<number, {volume: number, percentage: number, type: 'poc' | 'high' | 'low' | 'normal'}> {
+  private buildVolumeProfile(candles: readonly Candle[]): Map<number, {volume: number, percentage: number, type: 'poc' | 'high' | 'low' | 'normal'}> {
     const lookback = candles.slice(-this.config.lookbackPeriod)
     
     // Find price range
@@ -206,7 +209,7 @@ export class VolumeProfileAgent extends BaseAgent {
   /**
    * Detect significant volume spikes
    */
-  private detectVolumeSpike(candles: readonly any[]): VolumeSpike | null {
+  private detectVolumeSpike(candles: readonly Candle[]): VolumeSpike | null {
     if (candles.length < this.config.spikeDetectionPeriod + 1) return null
     
     const currentCandle = candles[candles.length - 1]!
@@ -421,7 +424,6 @@ export class VolumeProfileAgent extends BaseAgent {
    * Reset agent state
    */
   protected async onReset(): Promise<void> {
-    this.volumeHistory = []
     this.priceHistory = []
     this.volumeProfile.clear()
     this.lastAnalysis = null

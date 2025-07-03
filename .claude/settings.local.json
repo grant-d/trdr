@@ -43,7 +43,12 @@
       "Bash(gtimeout 60s npm test)",
       "Bash(timeout 30s node --test:*)",
       "Bash(npx tsx:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(/dev/null)",
+      "Bash(NODE_ENV=test npx tsx --test src/agents/adaptive-macd-agent.test.ts --test-reporter=spec)",
+      "Bash(cat:*)",
+      "Bash(tsx --test:*)",
+      "Bash(ANTHROPIC_API_KEY=\"\" npx tsx --test src/agents/claude-pattern-agent.test.ts)"
     ],
     "deny": []
   }

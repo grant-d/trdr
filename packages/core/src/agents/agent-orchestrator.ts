@@ -36,7 +36,7 @@ export class AgentOrchestrator {
   private readonly agents = new Map<string, ITradeAgent>()
   private readonly agentWeights = new Map<string, number>()
   private readonly config: AgentOrchestratorConfig
-  private consensusStrategies = new Map<string, ConsensusStrategy>()
+  private readonly consensusStrategies = new Map<string, ConsensusStrategy>()
   private currentStrategy: ConsensusStrategy | null = null
   private tradeCount = 0
   
@@ -377,7 +377,7 @@ export class AgentOrchestrator {
         }
         
         // Find winning action
-        let bestAction: string = 'hold'
+        let bestAction = 'hold'
         let bestScore = 0
         for (const [action, score] of scores) {
           if (score > bestScore) {
@@ -424,7 +424,7 @@ export class AgentOrchestrator {
         }
         
         // Find majority action
-        let bestAction: string = 'hold'
+        let bestAction = 'hold'
         let maxVotes = 0
         for (const [action, count] of votes) {
           if (count > maxVotes) {

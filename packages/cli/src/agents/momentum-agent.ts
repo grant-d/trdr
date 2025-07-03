@@ -1,5 +1,7 @@
 import { BaseAgent, IndicatorCalculator } from '@trdr/core'
 import type { AgentSignal, MarketContext } from '@trdr/core/dist/agents/types'
+import { momentumPrices } from './agent-price-utils'
+import { enforceNoShorting } from './helpers/position-aware'
 
 interface MomentumConfig {
   rsiPeriod?: number
@@ -132,7 +134,10 @@ export class MomentumAgent extends BaseAgent {
       }
       
       // Generate final signal with confidence
-      return this.synthesizeSignal(rsi, macd, divergence, momentumCondition, momentumSignal)
+      const signal = this.synthesizeSignal(rsi, macd, divergence, momentumCondition, momentumSignal, currentPrice)
+      
+      // Apply position constraints
+      return enforceNoShorting(signal, context)
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -222,7 +227,7 @@ export class MomentumAgent extends BaseAgent {
   /**
    * Track price highs and lows for divergence analysis
    */
-  private updatePivotPoints(price: number): void {
+  private updatePivotPoints(_price: number): void {
     const lookback = 3 // periods to look back for pivot confirmation
     
     if (this.priceHistory.length < lookback * 2 + 1) return
@@ -447,15 +452,22 @@ export class MomentumAgent extends BaseAgent {
     macd: {line: number, signal: number, histogram: number},
     divergence: DivergenceAnalysis,
     condition: MomentumCondition,
-    momentum: MomentumSignal
+    momentum: MomentumSignal,
+    currentPrice: number
   ): AgentSignal {
     // High priority: Strong divergences
     if (divergence.type !== 'none' && divergence.confidence > 0.8) {
       const action = divergence.type === 'bullish' ? 'buy' : 'sell'
+      const prices = momentumPrices(currentPrice, action, divergence.confidence)
       return this.createSignal(
         action,
         divergence.confidence,
-        `Strong ${divergence.type} divergence detected (${divergence.indicator.toUpperCase()}, RSI: ${rsi.toFixed(1)}, MACD: ${macd.histogram.toFixed(4)})`
+        `Strong ${divergence.type} divergence detected (${divergence.indicator.toUpperCase()}, RSI: ${rsi.toFixed(1)}, MACD: ${macd.histogram.toFixed(4)})`,
+        undefined, // analysis
+        undefined, // priceTarget
+        prices.stopLoss,
+        prices.positionSize,
+        prices.limitPrice
       )
     }
     
@@ -470,20 +482,32 @@ export class MomentumAgent extends BaseAgent {
         confidence = Math.min(0.95, confidence + 0.15)
       }
       
+      const prices = momentumPrices(currentPrice, action, confidence)
       return this.createSignal(
         action,
         confidence,
-        `Extreme ${condition.type} (RSI: ${rsi.toFixed(1)}, momentum: ${momentum.direction})`
+        `Extreme ${condition.type} (RSI: ${rsi.toFixed(1)}, momentum: ${momentum.direction})`,
+        undefined, // analysis
+        undefined, // priceTarget
+        prices.stopLoss,
+        prices.positionSize,
+        prices.limitPrice
       )
     }
     
     // Strong momentum with confluence
     if (momentum.strength === 'strong' && momentum.confluence > 0.75) {
       const action = momentum.direction === 'bullish' ? 'buy' : 'sell'
+      const prices = momentumPrices(currentPrice, action, momentum.confidence)
       return this.createSignal(
         action,
         momentum.confidence,
-        `Strong ${momentum.direction} momentum (confluence: ${(momentum.confluence * 100).toFixed(0)}%, RSI: ${rsi.toFixed(1)})`
+        `Strong ${momentum.direction} momentum (confluence: ${(momentum.confluence * 100).toFixed(0)}%, RSI: ${rsi.toFixed(1)})`,
+        undefined, // analysis
+        undefined, // priceTarget
+        prices.stopLoss,
+        prices.positionSize,
+        prices.limitPrice
       )
     }
     

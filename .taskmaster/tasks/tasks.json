@@ -1357,6 +1357,17 @@
         ],
         "status": "pending",
         "subtasks": []
+      },
+      {
+        "id": 33,
+        "title": "Implement Grid-Based Agent (Self-Tuning)",
+        "description": "Develop a trading agent that uses a dynamic grid of buy and sell levels, with trailing stop/limit logic, DCA/laddering, slippage handling, and self-tuning (no manual configuration).",
+        "details": "Create a GridAgent that operates independently of the platform architecture. Core features:\n- Dynamically places buy levels below and sell levels above current price, based on recent volatility and market structure.\n- When price falls sufficiently, places a trailing buy order just above the low; when price rises sufficiently, places a trailing sell just below the high.\n- Each level acts as a trailing stop/limit, adapting to price movement.\n- Implements DCA (dollar-cost averaging) and laddering logic for partial fills and scaling in/out.\n- Includes logic to avoid getting stopped out in choppy markets (e.g., minimum distance, volatility filter, or time-based hold).\n- Handles slippage by adjusting order placement and execution logic.\n- All parameters are self-tuning based on market conditions and agent performance; no manual knobs or user configuration.\n- Integrates with the agent orchestrator and consensus system.\n- Provides confidence scores and reasoning for each action.\n- Includes robust error handling and logging.",
+        "testStrategy": "Test agent in simulated choppy, trending, and volatile markets. Verify correct placement and adjustment of grid levels. Test trailing logic for both buy and sell. Validate DCA/laddering behavior. Ensure agent adapts to changing market conditions without manual tuning. Check slippage handling and order execution quality.",
+        "priority": "medium",
+        "dependencies": [14],
+        "status": "pending",
+        "subtasks": []
       }
     ],
     "metadata": {

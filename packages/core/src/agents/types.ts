@@ -28,6 +28,12 @@ export interface AgentSignal {
   /** Suggested stop loss level */
   readonly stopLoss?: number
   
+  /** Suggested limit price for order execution */
+  readonly limitPrice?: number
+  
+  /** Suggested stop trigger price (for stop-limit orders) */
+  readonly stopPrice?: number
+  
   /** Suggested position size (as percentage of capital) */
   readonly positionSize?: number
   
@@ -262,6 +268,25 @@ export interface ConsensusResult {
   
   /** Whether a veto was applied */
   readonly vetoApplied?: boolean
+  
+  /** Statistically calculated stop loss level */
+  readonly stopLoss?: number
+  
+  /** Statistically calculated limit price */
+  readonly limitPrice?: number
+  
+  /** Statistically calculated stop trigger price */
+  readonly stopPrice?: number
+  
+  /** Consensus position size */
+  readonly positionSize?: number
+  
+  /** Statistical confidence for price levels */
+  readonly priceConfidence?: {
+    stopLoss: { mean: number; stdDev: number; confidence: number }
+    limitPrice: { mean: number; stdDev: number; confidence: number }
+    stopPrice?: { mean: number; stdDev: number; confidence: number }
+  }
 }
 
 /**
@@ -277,12 +302,14 @@ export interface ConsensusStrategy {
    * @param weights Map of agent ID to weight
    * @param agents Optional map of agents for performance-based strategies
    * @param priors Optional prior probabilities for Bayesian strategies
+   * @param currentPrice Current market price for price level calculations
    * @returns Consensus result
    */
   calculateConsensus(
     signals: Map<string, AgentSignal>,
     weights: Map<string, number>,
     agents?: Map<string, ITradeAgent>,
-    priors?: Record<string, number>
+    priors?: Record<string, number>,
+    currentPrice?: number
   ): ConsensusResult
 }

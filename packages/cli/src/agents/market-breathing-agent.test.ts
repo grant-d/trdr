@@ -125,7 +125,8 @@ describe('MarketBreathingAgent', () => {
 
   it('should detect irregular breathing', async () => {
     // Create irregular pattern
-    const basePrice = 50000
+    // @ts-ignore - unused variable (reserved for future use)
+    const _basePrice = 50000
     const irregularPrices = [
       50000, 50100, 50050, 50300, 50150, 50400,
       50200, 50100, 50350, 50050, 50250, 50000

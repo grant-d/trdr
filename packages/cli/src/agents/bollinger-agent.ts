@@ -1,5 +1,7 @@
 import { BaseAgent, IndicatorCalculator } from '@trdr/core'
 import type { AgentSignal, MarketContext } from '@trdr/core/dist/agents/types'
+import { calculateStopLoss, calculateLimitPrice, calculatePositionSize } from './agent-price-utils'
+import { enforceNoShorting } from './helpers/position-aware'
 
 export class BollingerBandsAgent extends BaseAgent {
   private readonly calculator = new IndicatorCalculator()
@@ -17,6 +19,11 @@ export class BollingerBandsAgent extends BaseAgent {
   }
   
   protected async performAnalysis(context: MarketContext): Promise<AgentSignal> {
+    const signal = await this.performBollingerAnalysis(context)
+    return enforceNoShorting(signal, context)
+  }
+
+  private async performBollingerAnalysis(context: MarketContext): Promise<AgentSignal> {
     const { currentPrice, candles } = context
     
     if (candles.length < this.period) {
@@ -64,10 +71,34 @@ export class BollingerBandsAgent extends BaseAgent {
     if (squeezeRelease) {
       const direction = percentBTrend === 'bullish' ? 'buy' : percentBTrend === 'bearish' ? 'sell' : (currentPrice > middle ? 'buy' : 'sell')
       const confidence = percentBTrend !== 'neutral' ? 0.85 : 0.7
+      // Calculate prices for squeeze release (volatility breakout)
+      const volatility = bandwidth // Use bandwidth as volatility proxy
+      const stopLoss = calculateStopLoss({
+        currentPrice,
+        direction,
+        confidence,
+        agentType: 'volatility',
+        volatility,
+        riskMultiplier: 1.2 // Wider stops for breakouts
+      })
+      const limitPrice = calculateLimitPrice({
+        currentPrice,
+        direction,
+        confidence,
+        agentType: 'volatility',
+        volatility
+      })
+      const positionSize = calculatePositionSize(confidence, 0.06) // Larger size for high conviction
+      
       return this.createSignal(
         direction,
         confidence,
-        `Bollinger squeeze release detected - ${direction === 'buy' ? 'upward' : 'downward'} breakout (bandwidth: ${(bandwidth * 100).toFixed(2)}%)`
+        `Bollinger squeeze release detected - ${direction === 'buy' ? 'upward' : 'downward'} breakout (bandwidth: ${(bandwidth * 100).toFixed(2)}%)`,
+        undefined, // analysis
+        undefined, // priceTarget
+        stopLoss,
+        positionSize,
+        limitPrice
       )
     }
     
@@ -79,10 +110,32 @@ export class BollingerBandsAgent extends BaseAgent {
       // Boost confidence if %B trend is turning bullish
       if (percentBTrend === 'bullish') confidence = Math.min(0.95, confidence + 0.1)
       
+      // Calculate prices for band reversal
+      const stopLoss = calculateStopLoss({
+        currentPrice,
+        direction: 'buy',
+        confidence,
+        agentType: 'reversal',
+        volatility: bandwidth
+      })
+      const limitPrice = calculateLimitPrice({
+        currentPrice,
+        direction: 'buy',
+        confidence,
+        agentType: 'reversal',
+        volatility: bandwidth
+      })
+      const positionSize = calculatePositionSize(confidence, 0.04)
+      
       return this.createSignal(
         'buy',
         confidence,
-        `Price below lower band (%B: ${(percentB * 100).toFixed(1)}%, trend: ${percentBTrend})`
+        `Price below lower band (%B: ${(percentB * 100).toFixed(1)}%, trend: ${percentBTrend})`,
+        undefined, // analysis
+        undefined, // priceTarget
+        stopLoss,
+        positionSize,
+        limitPrice
       )
     } else if (percentB >= 1) { // Above upper band
       const penetration = percentB - 1
@@ -91,10 +144,32 @@ export class BollingerBandsAgent extends BaseAgent {
       // Boost confidence if %B trend is turning bearish
       if (percentBTrend === 'bearish') confidence = Math.min(0.95, confidence + 0.1)
       
+      // Calculate prices for band reversal
+      const stopLoss = calculateStopLoss({
+        currentPrice,
+        direction: 'sell',
+        confidence,
+        agentType: 'reversal',
+        volatility: bandwidth
+      })
+      const limitPrice = calculateLimitPrice({
+        currentPrice,
+        direction: 'sell',
+        confidence,
+        agentType: 'reversal',
+        volatility: bandwidth
+      })
+      const positionSize = calculatePositionSize(confidence, 0.04)
+      
       return this.createSignal(
         'sell',
         confidence,
-        `Price above upper band (%B: ${(percentB * 100).toFixed(1)}%, trend: ${percentBTrend})`
+        `Price above upper band (%B: ${(percentB * 100).toFixed(1)}%, trend: ${percentBTrend})`,
+        undefined, // analysis
+        undefined, // priceTarget
+        stopLoss,
+        positionSize,
+        limitPrice
       )
     }
     
@@ -103,10 +178,33 @@ export class BollingerBandsAgent extends BaseAgent {
       const direction = percentB > 0.5 ? 'buy' : 'sell'
       const confidence = 0.65 + (Math.abs(percentB - 0.5) * 0.3) // Higher confidence when %B is more extreme
       
+      // Calculate prices for squeeze setup (anticipating breakout)
+      const stopLoss = calculateStopLoss({
+        currentPrice,
+        direction,
+        confidence,
+        agentType: 'volatility',
+        volatility: bandwidth,
+        riskMultiplier: 0.8 // Tighter stops in low volatility
+      })
+      const limitPrice = calculateLimitPrice({
+        currentPrice,
+        direction,
+        confidence,
+        agentType: 'volatility',
+        volatility: bandwidth
+      })
+      const positionSize = calculatePositionSize(confidence, 0.03) // Smaller size for setup
+      
       return this.createSignal(
         direction,
         confidence,
-        `Bollinger squeeze - low volatility setup (%B: ${(percentB * 100).toFixed(1)}%, bandwidth: ${(bandwidth * 100).toFixed(2)}%)`
+        `Bollinger squeeze - low volatility setup (%B: ${(percentB * 100).toFixed(1)}%, bandwidth: ${(bandwidth * 100).toFixed(2)}%)`,
+        undefined, // analysis
+        undefined, // priceTarget
+        stopLoss,
+        positionSize,
+        limitPrice
       )
     }
     
@@ -124,10 +222,32 @@ export class BollingerBandsAgent extends BaseAgent {
         confidence = Math.max(0.4, confidence - 0.15)
       }
       
+      // Calculate prices for mean reversion
+      const stopLoss = calculateStopLoss({
+        currentPrice,
+        direction,
+        confidence,
+        agentType: 'reversal',
+        volatility: bandwidth
+      })
+      const limitPrice = calculateLimitPrice({
+        currentPrice,
+        direction,
+        confidence,
+        agentType: 'reversal',
+        volatility: bandwidth
+      })
+      const positionSize = calculatePositionSize(confidence)
+      
       return this.createSignal(
         direction,
         confidence,
-        `Mean reversion signal (%B: ${(percentB * 100).toFixed(1)}%, trend: ${percentBTrend})`
+        `Mean reversion signal (%B: ${(percentB * 100).toFixed(1)}%, trend: ${percentBTrend})`,
+        undefined, // analysis
+        undefined, // priceTarget
+        stopLoss,
+        positionSize,
+        limitPrice
       )
     }
     

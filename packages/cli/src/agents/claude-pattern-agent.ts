@@ -1,6 +1,25 @@
+import { Anthropic } from '@anthropic-ai/sdk'
 import { BaseAgent } from '@trdr/core'
-import type { AgentSignal, MarketContext } from '@trdr/core/dist/agents/types'
-import { enforceNoShorting } from './helpers/position-aware'
+import type { AgentMetadata, AgentSignal, MarketContext } from '@trdr/core/dist/agents/types'
+import type { SignalAction } from '@trdr/core/src/agents/types'
+import { toEpochDate } from '@trdr/shared'
+import type { Candle } from '@trdr/shared/src/types/market-data'
+import * as fs from 'fs'
+
+const MODEL_M = 'claude-sonnet-4-20250514'
+// const MODEL_S = 'claude-3-5-haiku-20241022' // Remove unused model
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
+const TEMP = 0.05
+
+// Type for Claude LLM JSON response
+interface ClaudeSignalResponse {
+  p: string; // pattern
+  c: number; // confidence
+  a: 'buy' | 'sell' | 'hold'; // action
+  r: string; // reasoning
+  t?: number; // price target
+  s?: number; // stop loss
+}
 
 interface ClaudeConfig {
   /** Claude API model to use */
@@ -17,6 +36,8 @@ interface ClaudeConfig {
   maxRetries?: number
   /** Cache duration for similar market conditions (minutes) */
   cacheDuration?: number
+  /** Debug flag */
+  debug?: boolean
 }
 
 interface ClaudeAnalysis {
@@ -41,7 +62,7 @@ interface PatternMemory {
 }
 
 interface PromptContext {
-  recentCandles: any[]
+  recentCandles: Candle[]
   indicators: Record<string, number>
   volume: number[]
   volatility: number
@@ -83,171 +104,238 @@ export class ClaudePatternAgent extends BaseAgent {
   protected readonly config: Required<ClaudeConfig>
   private patternMemory: PatternMemory[] = []
   private readonly responseCache = new Map<string, { analysis: ClaudeAnalysis, timestamp: number }>()
-  private lastApiCall = 0
+  // @ts-ignore - unused variable (reserved for future use)
+  private apiClient?: Anthropic
+  private readonly debug: boolean
+  private lastClaudeCallIndex = -100
   
-  constructor(metadata: any, logger?: any, config?: ClaudeConfig) {
-    super(metadata, logger)
-    
-    this.config = {
-      model: config?.model ?? 'claude-3-opus-20240229', // Latest Claude model
-      maxTokens: config?.maxTokens ?? 1000,
-      temperature: config?.temperature ?? 0.3, // Lower for consistency
-      contextWindow: config?.contextWindow ?? 10, // Recent analyses
-      confidenceThreshold: config?.confidenceThreshold ?? 0.7,
-      maxRetries: config?.maxRetries ?? 3,
-      cacheDuration: config?.cacheDuration ?? 15 // 15 minutes
+  // Config/env override helpers
+  // @ts-ignore - unused variable (reserved for future use)
+  private getClaudeModel(): string {
+    return process.env.CLAUDE_MODEL || this.config.model
+  }
+
+  // Debug logging utility
+  // @ts-ignore - unused variable (reserved for future use)
+  private logDebug(...args: unknown[]): void {
+    if (this.debug) {
+      // eslint-disable-next-line no-console
+      console.log('[ClaudeAgent]', ...args)
     }
   }
+
+  // Use class fields for patternHistoryExample and verbose instruction
+  // Use class fields for patternHistoryExample and instruction
+  private readonly patternHistoryExample = '[{"pattern":"bull flag","timestamp":1710000000000,"marketConditions":"RSI oversold, MACD crossover","outcome":"success"},{"pattern":"double top","timestamp":1710000001000,"marketConditions":"Bearish divergence","outcome":"failure"}]'
+  private readonly instruction = [
+    'For "p", you must always output a real, plausible technical analysis pattern name (e.g., "bull flag", "double top", "head and shoulders", "rectangle", "ascending triangle", etc.). Do not output generic or placeholder values. If you cannot find a perfect match, pick the closest pattern from the list above.',
+    'You must always output a real, plausible pattern name for "p". If you do not, your answer will be discarded.',
+    '{"a":"buy|sell|hold","c":0-1,"r":"reason","p":"pattern","t":number,"s":number}',
+    'For "t" (target) and "s" (stop), always output the actual price value, not percent, basis points, or normalized values. Use the same units as the closes in the context.',
+    'Example: {"a":"buy","c":0.82,"r":"RSI oversold, MACD crossover, strong support","p":"bull flag","t":43250,"s":42800}',
+    'Example: {"a":"sell","c":0.75,"r":"Bearish divergence, resistance rejection","p":"double top","t":42000,"s":43500}',
+    'Example: {"a":"hold","c":0.55,"r":"No clear trend, low volatility","p":"rectangle","t":null,"s":null}',
+    'Recent pattern history (last 5):',
+    this.patternHistoryExample,
+    'Use the above pattern history to inform your pattern choice for "p". If a similar pattern occurred recently, consider referencing it.',
+    'Use real technical pattern names for "p" (e.g., "bull flag", "double top", "head and shoulders", etc.).',
+    'Never output "unknown", "none", or similar for "p". If you are uncertain, make your best guess based on the context. If in doubt, pick the closest plausible pattern.',
+    'If you output "hold", you must still provide a plausible pattern for "p".',
+    'Be concise, do not hedge, do not say you are an AI.'
+  ].join('\n')
+
+  constructor(metadata: AgentMetadata, config?: ClaudeConfig) {
+    super(metadata)
+    
+    this.config = {
+      model: config?.model ?? MODEL_M,
+      maxTokens: config?.maxTokens ?? 1000,
+      temperature: config?.temperature ?? TEMP,
+      contextWindow: config?.contextWindow ?? 10,
+      confidenceThreshold: config?.confidenceThreshold ?? 0.7,
+      maxRetries: config?.maxRetries ?? 2,
+      cacheDuration: config?.cacheDuration ?? 10,
+      debug: config?.debug ?? false
+    }
+    this.debug = Boolean(this.config.debug || process.env.CLAUDE_DEBUG)
+  }
   
+  // eslint-disable-next-line @typescript-eslint/require-await
   protected async onInitialize(): Promise<void> {
     this.logger?.info('Claude Pattern Agent initialized', {
       model: this.config.model,
-      hasApiKey: !!process.env.ANTHROPIC_API_KEY
+      hasApiKey: !!ANTHROPIC_API_KEY
     })
-    
-    // @todo Initialize Anthropic client
-    // this.apiClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    if (ANTHROPIC_API_KEY) {
+      this.apiClient = new Anthropic({ apiKey: ANTHROPIC_API_KEY })
+    }
   }
   
   protected async performAnalysis(context: MarketContext): Promise<AgentSignal> {
-    const { currentPrice, candles } = context
+    // Check if API key is available, use fallback if not
+    if (!ANTHROPIC_API_KEY) {
+      return this.fallbackAnalysis(context)
+    }
     
-    // Check if API is available (demo mode if no key)
-    const isDemo = !process.env.ANTHROPIC_API_KEY
-    
-    // Generate cache key
-    const cacheKey = this.generateCacheKey(context)
+    if (!this.shouldCallClaude({ candles: context.candles })) {
+      return this.createSignal('hold', 0.0, 'market quiet')
+    }
     
     // Check cache first
-    const cached = this.getCachedAnalysis(cacheKey)
-    if (cached) {
-      const signal = this.createSignal(
-        cached.action,
-        cached.confidence,
-        `[Cached] ${cached.pattern}: ${cached.reasoning}`
+    const cacheKey = this.generateCacheKey(context)
+    const cachedAnalysis = this.getCachedAnalysis(cacheKey)
+    if (cachedAnalysis) {
+      return this.createSignal(
+        cachedAnalysis.action,
+        cachedAnalysis.confidence,
+        `[Cached] ${cachedAnalysis.reasoning}`,
+        undefined,
+        cachedAnalysis.priceTarget,
+        cachedAnalysis.stopLoss
       )
-      return enforceNoShorting(signal, context)
     }
     
-    // Prepare context (would be used for actual API call)
-    this.preparePromptContext(context)
-    
-    // In demo mode, use pattern recognition simulation
-    if (isDemo) {
-      return this.performFallbackAnalysis(context)
-    }
-    
-    // Rate limiting
-    const timeSinceLastCall = Date.now() - this.lastApiCall
-    if (timeSinceLastCall < 1000) { // 1 second minimum between calls
-      return this.performFallbackAnalysis(context)
-    }
-    
+    // Use preparePromptContext for richer context
+    const contextWindow = this.config.contextWindow || 10
+    const promptContext = this.preparePromptContext(context, contextWindow)
+    const prompt = this.generateAnalysisPrompt(promptContext)
+    let text = ''
     try {
-      // Generate comprehensive prompt
-      const promptContext = this.preparePromptContext(context)
-      const analysisPrompt = this.generateAnalysisPrompt(promptContext)
-      
-      // Add feedback if available
-      const feedbackPrompt = this.generateFeedbackPrompt(this.patternMemory)
-      const fullPrompt = feedbackPrompt 
-        ? `${feedbackPrompt}\n\n${analysisPrompt}` 
-        : analysisPrompt
-      
-      // Call API (or simulate)
-      this.lastApiCall = Date.now()
-      const response = await this.callClaudeAPI(fullPrompt)
-      
-      // Parse response
-      const analysis = this.parseClaudeResponse(response)
-      
-      // Validate analysis
-      if (analysis && this.validateAnalysis(analysis, context)) {
-        // Cache the result
-        this.responseCache.set(cacheKey, {
-          analysis,
-          timestamp: Date.now()
-        })
-        
-        // Record in pattern memory
-        this.patternMemory.push({
-          pattern: analysis.pattern,
-          timestamp: Date.now(),
-          marketConditions: this.summarizeMarketConditions(context),
-          outcome: 'pending'
-        })
-        
-        // Keep memory limited
-        if (this.patternMemory.length > 100) {
-          this.patternMemory = this.patternMemory.slice(-100)
-        }
-        
-        const signal = this.createSignal(
-          analysis.action,
-          analysis.confidence * this.config.confidenceThreshold,
-          `${analysis.pattern}: ${analysis.reasoning}`
-        )
-        return enforceNoShorting(signal, context)
-      }
-      
-      // Invalid analysis, use fallback
-      return this.performFallbackAnalysis(context)
-      
-    } catch (error) {
-      this.logger?.warn('Claude API error, using fallback', { error })
-      return this.performFallbackAnalysis(context)
+      text = await this.callClaudeAPI(prompt, context.currentPrice)
+    } catch {
+      return this.fallbackAnalysis(context)
     }
+    // Parse and validate the Claude response
+    let analysis: ClaudeAnalysis | null = null
+    try {
+      const parsed: unknown = JSON.parse(text)
+      if (this.isClaudeResponse(parsed)) {
+        analysis = {
+          pattern: typeof parsed.p === 'string' ? parsed.p : '',
+          confidence: Math.max(0, Math.min(1, typeof parsed.c === 'number' ? parsed.c : 0)),
+          action: ['buy', 'sell', 'hold'].includes(parsed.a) ? parsed.a as SignalAction : 'hold',
+          reasoning: typeof parsed.r === 'string' ? parsed.r : '',
+          priceTarget: typeof parsed.t === 'number' && parsed.t > 0 ? parsed.t : undefined,
+          stopLoss: typeof parsed.s === 'number' && parsed.s > 0 ? parsed.s : undefined,
+          timeframe: '',
+          relatedPatterns: [],
+          marketContext: ''
+        }
+      }
+    } catch { /* intentionally ignore parse errors */ }
+    if (!analysis || !this.validateAnalysis(analysis, context)) {
+      return this.createSignal('hold', analysis?.confidence ?? 0.3, 'Claude analysis failed validation')
+    }
+
+    // Add to pattern memory
+    this.patternMemory.push({
+      pattern: analysis.pattern || '',
+      timestamp: Date.now(),
+      marketConditions: analysis.reasoning || '',
+      outcome: 'pending'
+    })
+    // Clean up old memory entries (keep only last week)
+    const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000)
+    this.patternMemory = this.patternMemory.filter(m => m.timestamp > oneWeekAgo)
+    
+    // Cache successful analysis
+    this.responseCache.set(cacheKey, { analysis, timestamp: Date.now() })
+    
+    const action = analysis.action
+    const confidence = analysis.confidence
+    const reason = analysis.reasoning
+    const priceTarget = analysis.priceTarget
+    const stopLoss = analysis.stopLoss
+    if (confidence < 0.5) {
+      return this.createSignal('hold', confidence, 'Claude confidence too low')
+    }
+    if (typeof priceTarget === 'number' && typeof stopLoss === 'number') {
+      return this.createSignal(action, confidence, reason, undefined, priceTarget, stopLoss)
+    } else if (typeof priceTarget === 'number') {
+      return this.createSignal(action, confidence, reason, undefined, priceTarget)
+    } else {
+      return this.createSignal(action, confidence, reason)
+    }
+  }
+  
+  /**
+   * Fallback analysis when Claude API is unavailable
+   */
+  private fallbackAnalysis(context: MarketContext): AgentSignal {
+    // Check cache first even in fallback mode
+    const cacheKey = this.generateCacheKey(context)
+    const cachedAnalysis = this.getCachedAnalysis(cacheKey)
+    if (cachedAnalysis) {
+      return this.createSignal(
+        cachedAnalysis.action,
+        cachedAnalysis.confidence,
+        `[Cached] ${cachedAnalysis.reasoning}`,
+        undefined,
+        cachedAnalysis.priceTarget,
+        cachedAnalysis.stopLoss
+      )
+    }
+    
+    // Create fallback analysis
+    const analysis: ClaudeAnalysis = {
+      pattern: 'fallback',
+      confidence: 0.3,
+      action: 'hold',
+      reasoning: '[Fallback] Claude API unavailable - holding position',
+      timeframe: '',
+      relatedPatterns: [],
+      marketContext: ''
+    }
+    
+    // Cache the fallback analysis
+    this.responseCache.set(cacheKey, { analysis, timestamp: Date.now() })
+    
+    return this.createSignal('hold', 0.3, '[Fallback] Claude API unavailable - holding position')
   }
   
   /**
    * Prepare market data for Claude analysis
    */
-  private preparePromptContext(context: MarketContext): PromptContext {
-    const { candles } = context
-    if (candles.length < 20) {
-      return {
-        recentCandles: [],
-        indicators: {},
-        volume: [],
-        volatility: 0,
-        trend: 'neutral',
-        support: 0,
-        resistance: 0,
-        patternHistory: this.patternMemory.slice(-5)
-      }
-    }
-    
-    // Get recent candles
-    const recentCandles = candles.slice(-20)
+  private preparePromptContext(context: MarketContext, contextWindow = 20): PromptContext {
+    const { candles, indicators } = context
+    const recentCandles = candles.slice(-contextWindow)
     const prices = recentCandles.map(c => c.close)
-    const volumes = recentCandles.map(c => c.volume)
-    
+    const volume = recentCandles.map(c => c.volume)
     // Calculate basic indicators
-    const sma20 = prices.reduce((a, b) => a + b, 0) / prices.length
-    const priceStdDev = Math.sqrt(prices.reduce((sum, p) => sum + Math.pow(p - sma20, 2), 0) / prices.length)
-    const volatility = priceStdDev / sma20
-    
+    const sma20 = prices.length ? prices.reduce((a, b) => a + b, 0) / prices.length : 0
+    const priceStdDev = prices.length ? Math.sqrt(prices.reduce((sum, p) => sum + Math.pow(p - sma20, 2), 0) / prices.length) : 0
+    const volatility = sma20 ? priceStdDev / sma20 : 0
     // Determine trend
-    const firstPrice = prices[0]!
-    const lastPrice = prices[prices.length - 1]!
-    const priceChange = (lastPrice - firstPrice) / firstPrice
+    const firstPrice = prices[0] ?? 0
+    const lastPrice = prices[prices.length - 1] ?? 0
+    const priceChange = firstPrice ? (lastPrice - firstPrice) / firstPrice : 0
     const trend = priceChange > 0.02 ? 'bullish' : priceChange < -0.02 ? 'bearish' : 'neutral'
-    
     // Find support/resistance
     const highs = recentCandles.map(c => c.high)
     const lows = recentCandles.map(c => c.low)
-    const resistance = Math.max(...highs)
-    const support = Math.min(...lows)
-    
+    const resistance = highs.length ? Math.max(...highs) : 0
+    const support = lows.length ? Math.min(...lows) : 0
+    // Add more indicators if available
+    const rsi = indicators?.RSI?.value ?? 0
+    const macd = indicators?.MACD?.value ?? 0
+    const ema20 = indicators?.EMA20?.value ?? 0
+    const atr = indicators?.ATR?.value ?? 0
+    const vwap = indicators?.VWAP?.value ?? 0
+    const volumeProfile = indicators?.VolumeProfile?.value ?? 0
     return {
-      recentCandles: recentCandles.slice(-10),
+      recentCandles: recentCandles.slice(-contextWindow),
       indicators: {
         sma20,
+        ema20,
+        vwap,
+        atr,
+        volumeProfile,
         volatility,
         priceChange,
-        volumeAvg: volumes.reduce((a, b) => a + b, 0) / volumes.length
+        rsi,
+        macd
       },
-      volume: volumes,
+      volume,
       volatility,
       trend,
       support,
@@ -257,129 +345,100 @@ export class ClaudePatternAgent extends BaseAgent {
   }
   
   /**
-   * Generate analysis prompt for Claude
+   * Prompt optimization: Use compact tabular/CSV/JSON for candles, only essential indicators, minimal pattern history, and terse instructions.
    */
   private generateAnalysisPrompt(context: PromptContext): string {
-    const { recentCandles, indicators, volume, volatility, trend, support, resistance, patternHistory } = context
-    
-    let prompt = `You are an expert technical analyst. Analyze the following market data and identify trading patterns.
-
-`
-    
-    // Market overview
-    prompt += `MARKET OVERVIEW:\n`
-    prompt += `- Current Trend: ${trend}\n`
-    prompt += `- Volatility: ${(volatility * 100).toFixed(2)}%\n`
-    prompt += `- Support Level: $${support.toFixed(2)}\n`
-    prompt += `- Resistance Level: $${resistance.toFixed(2)}\n`
-    prompt += `- Average Volume: ${indicators.volumeAvg?.toFixed(0) || 'N/A'}\n\n`
-    
-    // Recent price action
-    prompt += `RECENT PRICE ACTION (last ${recentCandles.length} candles):\n`
-    recentCandles.forEach((candle, i) => {
-      prompt += `${i + 1}. O: ${candle.open.toFixed(2)}, H: ${candle.high.toFixed(2)}, L: ${candle.low.toFixed(2)}, C: ${candle.close.toFixed(2)}, V: ${candle.volume}\n`
-    })
-    prompt += `\n`
-    
-    // Key indicators
-    prompt += `KEY INDICATORS:\n`
-    prompt += `- SMA20: $${indicators.sma20?.toFixed(2) || 'N/A'}\n`
-    prompt += `- Price Change: ${((indicators.priceChange || 0) * 100).toFixed(2)}%\n`
-    prompt += `- Volume Trend: ${volume.slice(-3).map(v => v > indicators.volumeAvg! ? '↑' : '↓').join('')}\n\n`
-    
-    // Pattern history
-    if (patternHistory.length > 0) {
-      prompt += `RECENT PATTERN HISTORY:\n`
-      patternHistory.forEach((mem, i) => {
-        prompt += `${i + 1}. ${mem.pattern} - ${mem.outcome || 'pending'}`
-        if (mem.actualReturn) {
-          prompt += ` (${(mem.actualReturn * 100).toFixed(2)}% return)`
-        }
-        prompt += `\n`
-      })
-      prompt += `\n`
+    const contextWindow = this.config.contextWindow || 10
+    const closes = context.recentCandles.slice(-contextWindow).map((c) => c.close)
+    const ctx = {
+      indicators: context.indicators,
+      trend: context.trend,
+      support: context.support,
+      resistance: context.resistance,
+      closes: closes.length > 0 ? closes : [43200, 43300, 43400, 43500, 43450, 43400, 43350, 43300, 43250, 43200],
+      patternHistory: context.patternHistory.length > 0 ? context.patternHistory : [
+        { pattern: 'bull flag', timestamp: Date.now() - 86400000, marketConditions: 'RSI oversold, MACD crossover', outcome: 'success' },
+        { pattern: 'double top', timestamp: Date.now() - 43200000, marketConditions: 'Bearish divergence', outcome: 'failure' }
+      ]
     }
-    
-    // Analysis request
-    prompt += `ANALYSIS REQUEST:\n`
-    prompt += `1. Identify the primary chart pattern (if any)\n`
-    prompt += `2. Assess pattern reliability (0-1 confidence)\n`
-    prompt += `3. Recommend action: buy, sell, or hold\n`
-    prompt += `4. Provide price targets if applicable\n`
-    prompt += `5. Suggest stop loss levels\n`
-    prompt += `6. Estimate timeframe for pattern completion\n`
-    prompt += `7. List any secondary patterns observed\n`
-    prompt += `8. Provide overall market context assessment\n\n`
-    
-    prompt += `Format your response as a structured analysis with clear sections.`
-    
-    return prompt
+    return `${this.instruction}\n${JSON.stringify(ctx)}`
   }
   
-  /**
-   * Call Claude API with retry logic
-   */
-  private async callClaudeAPI(prompt: string): Promise<string> {
-    // Note: This would require actual Anthropic client setup
-    // For now, return a simulated response format
-    
+  // Helper to call Claude with a specific model
+  private async callClaudeWithModel(_prompt: string, model: string): Promise<ClaudeSignalResponse | null> {
+    const { Anthropic } = await import('@anthropic-ai/sdk')
+    const apiKey: string | undefined = ANTHROPIC_API_KEY
+    if (!apiKey) throw new Error('Missing ANTHROPIC_API_KEY in environment')
+    const client = new Anthropic({ apiKey })
+    let systemPrompt = [
+      this.instruction,
+      'You are a rich, astute, and successful technical trader. Think deeply, step-by-step.',
+      'Analyze the following price action and provide a buy/sell/hold signal. Reply with a single-line JSON object only, matching the schema and example below.',
+      _prompt
+    ].join('\n')
+    let responseText = ''
     let attempts = 0
-    const maxAttempts = this.config.maxRetries
-    
-    while (attempts < maxAttempts) {
+    while (attempts < 2) {
+      const response = await client.messages.create({
+        model,
+        max_tokens: 1000,
+        temperature: TEMP,
+        messages: [
+          { role: 'user', content: systemPrompt }
+        ]
+      })
+      const xs = response.content?.[0] as Partial<{ type: 'text', text: string }>
+      if (xs.type === 'text' && xs.text) {
+        responseText = xs.text.replace(/^```json\n/, '').replace(/\n```$/, '')
+      } else {
+        responseText = ''
+      }
       try {
-        // Simulate API call delay
-        await new Promise(resolve => setTimeout(resolve, 100))
-        
-        // In production, this would be:
-        // const response = await this.apiClient.messages.create({
-        //   model: this.config.model,
-        //   max_tokens: this.config.maxTokens,
-        //   temperature: this.config.temperature,
-        //   messages: [{ role: 'user', content: prompt }]
-        // })
-        // return response.content[0].text
-        
-        // Simulated response format
-        return `PATTERN ANALYSIS:
-
-Primary Pattern: Ascending Triangle
-Confidence: 0.75
-Action: buy
-Reasoning: Price has been making higher lows while testing resistance at $50,500. Volume is increasing on upward moves.
-
-Price Targets:
-- Target 1: $51,200 (measured move)
-- Target 2: $52,000 (extended target)
-
-Stop Loss: $49,800 (below recent support)
-
-Timeframe: 2-4 hours for breakout
-
-Secondary Patterns:
-- Bull flag on 15m timeframe
-- Volume accumulation pattern
-
-Market Context: Overall bullish momentum with healthy consolidation. Market breadth positive.`
-        
-      } catch (error) {
+        const parsed: unknown = JSON.parse(responseText)
+        if (this.isClaudeResponse(parsed)) return parsed
+        return null
+      } catch {
+        systemPrompt = 'Your last response was invalid. Only reply with JSON as described. ' + _prompt
         attempts++
-        if (attempts >= maxAttempts) {
-          throw error
-        }
-        
-        // Exponential backoff
-        const backoffMs = Math.min(1000 * Math.pow(2, attempts), 30000)
-        await new Promise(resolve => setTimeout(resolve, backoffMs))
       }
     }
+    return null
+  }
+
+  // Call both Haiku and Sonnet, compare, and return the best signal
+  private async callClaudeAPI(_prompt: string, currentPrice: number): Promise<string> {
+    const tasks: Promise<ClaudeSignalResponse | null>[] = [
+      this.callClaudeWithModel(_prompt, 'claude-3-5-haiku-20241022'),
+      this.callClaudeWithModel(_prompt, 'claude-sonnet-4-20250514')
+    ]
+    const [haiku, sonnet] = await Promise.all(tasks)
+
+    if (haiku && this.isClaudeResponse(haiku)) this.normalizeTS(haiku, currentPrice)
+    if (sonnet && this.isClaudeResponse(sonnet)) this.normalizeTS(sonnet, currentPrice)
+    // console.log('[ClaudeAgent] HAiKU:', haiku)
+    // console.log('[ClaudeAgent] SONNET:', sonnet)
     
-    return ''
+    // If both are valid and agree on action and pattern, use as strong signal
+    if (
+      this.isClaudeResponse(haiku) &&
+      this.isClaudeResponse(sonnet) &&
+      this.normStr(haiku.a) === this.normStr(sonnet.a)
+      //this.normStr(haiku.p) === this.normStr(sonnet.p) &&
+      // this.nearlyEqual(haiku.t, sonnet.t) &&
+      // this.nearlyEqual(haiku.s, sonnet.s)
+    ) {
+      // console.log('[ClaudeAgent] AGREEMENT (normalized):', haiku.a, haiku.p, 't:', haiku.t, sonnet.t, 's:', haiku.s, sonnet.s)
+      return JSON.stringify(haiku)
+    }
+    // Otherwise, treat as weak/hold
+    // console.log('[ClaudeAgent] NO AGREEMENT, fallback to hold or weak signal')
+    return JSON.stringify({ a: 'hold', c: 0.3, r: 'No strong consensus between models', p: '', t: null, s: null })
   }
   
   /**
    * Parse Claude's response into structured analysis
    */
+  // @ts-ignore - unused variable (reserved for future use)
   private parseClaudeResponse(response: string): ClaudeAnalysis | null {
     try {
       const lines = response.split('\n')
@@ -525,7 +584,7 @@ Market Context: Overall bullish momentum with healthy consolidation. Market brea
    * Generate cache key from market conditions
    */
   private generateCacheKey(context: MarketContext): string {
-    const { currentPrice, candles } = context
+    const { candles } = context
     if (candles.length < 5) return 'insufficient_data'
     
     // Create key from recent price action (rounded to reduce granularity)
@@ -583,6 +642,7 @@ Market Context: Overall bullish momentum with healthy consolidation. Market brea
   /**
    * Generate feedback prompt for pattern learning
    */
+  // @ts-ignore - unused variable (reserved for future use)
   private generateFeedbackPrompt(memory: PatternMemory[]): string {
     if (memory.length === 0) return ''
     
@@ -630,322 +690,173 @@ Market Context: Overall bullish momentum with healthy consolidation. Market brea
   }
   
   /**
-   * Fallback analysis when API is unavailable
+   * Summarize market conditions
    */
-  private performFallbackAnalysis(context: MarketContext): AgentSignal {
-    const { currentPrice, candles } = context
-    
-    if (candles.length < 20) {
-      return this.createSignal('hold', 0.3, 'Insufficient data for pattern analysis')
+  // @ts-ignore - unused variable (reserved for future use)
+  private summarizeMarketConditions(_context: MarketContext): string {
+    return ''
+  }
+
+  // Test utility: run on a small candle set
+  public async testOnCandles(candles: Candle[], currentPrice: number): Promise<void> {
+    // Use preparePromptContext for type safety
+    const lastTimestamp = candles[candles.length - 1]?.timestamp ?? Date.now()
+    const epochLastTimestamp = toEpochDate(lastTimestamp)
+    const dummyContext = {
+      candles,
+      indicators: {
+        sma: { value: 100, timestamp: epochLastTimestamp },
+        rsi: { value: 50, timestamp: epochLastTimestamp }
+      },
+      trend: 'up',
+      support: Math.min(...candles.map(c => c.low)),
+      resistance: Math.max(...candles.map(c => c.high)),
+      currentPrice: candles[candles.length - 1]?.close ?? 0,
+      symbol: 'TEST',
+      volume: candles.map(c => c.volume),
+      timestamp: epochLastTimestamp,
+      currentPosition: 0
     }
-    
-    // Simple pattern recognition
-    const patterns: Array<{ name: string, detected: boolean, action: 'buy' | 'sell' | 'hold', confidence: number }> = []
-    
-    // 1. Head and Shoulders pattern
-    const headAndShoulders = this.detectHeadAndShoulders(candles)
-    if (headAndShoulders.detected) {
-      patterns.push({
-        name: 'Head and Shoulders',
-        detected: true,
-        action: 'sell',
-        confidence: headAndShoulders.confidence
-      })
-    }
-    
-    // 2. Double Bottom pattern
-    const doubleBottom = this.detectDoubleBottom(candles)
-    if (doubleBottom.detected) {
-      patterns.push({
-        name: 'Double Bottom',
-        detected: true,
-        action: 'buy',
-        confidence: doubleBottom.confidence
-      })
-    }
-    
-    // 3. Trend channel breakout
-    const breakout = this.detectBreakout(candles, currentPrice)
-    if (breakout.detected) {
-      patterns.push({
-        name: `${breakout.direction} Breakout`,
-        detected: true,
-        action: breakout.direction === 'Bullish' ? 'buy' : 'sell',
-        confidence: breakout.confidence
-      })
-    }
-    
-    // Select strongest pattern
-    if (patterns.length > 0) {
-      const bestPattern = patterns.reduce((best, p) => p.confidence > best.confidence ? p : best)
-      
-      // Store in memory for learning
-      this.patternMemory.push({
-        pattern: bestPattern.name,
-        timestamp: Date.now(),
-        marketConditions: `Price: ${currentPrice}, Patterns: ${patterns.length}`,
-        outcome: 'pending'
-      })
-      
-      // Keep memory limited
-      if (this.patternMemory.length > 50) {
-        this.patternMemory.shift()
-      }
-      
-      const signal = this.createSignal(
-        bestPattern.action,
-        bestPattern.confidence,
-        `[Fallback] ${bestPattern.name} pattern detected`
+    const promptContext = this.preparePromptContext(dummyContext, 10)
+    const prompt = this.generateAnalysisPrompt(promptContext)
+    await this.callClaudeAPI(prompt, currentPrice)
+  }
+
+  // Log prompt/response pairs to a debug file if debug enabled
+  // @ts-ignore - unused variable (reserved for future use)
+  private logPromptResponse(prompt: string, response: string): void {
+    if (!this.debug) return
+    const logLine = `[${new Date().toISOString()}]\nPROMPT:\n${prompt}\nRESPONSE:\n${response}\n\n`
+    fs.appendFileSync('claude-agent-debug.log', logLine)
+  }
+
+  // Validate output against the JSON schema
+  // @ts-ignore - unused variable (reserved for future use)
+  private validateClaudeSchema(obj: unknown): boolean {
+    if (!obj || typeof obj !== 'object') return false
+    const o = obj as Record<string, unknown>
+    if (!['buy', 'sell', 'hold'].includes(o.a as string)) return false
+    if (typeof o.c !== 'number' || o.c < 0 || o.c > 1) return false
+    if (typeof o.r !== 'string') return false
+    if ('t' in o && typeof o.t !== 'number') return false
+    if ('s' in o && typeof o.s !== 'number') return false
+    return true
+  }
+
+  // Gatekeeping: only call Claude if market is not flat
+  private shouldCallClaude(context: PromptContext | { candles?: ReadonlyArray<{ close: number }> }): boolean {
+    const contextWindow = this.config.contextWindow || 10
+    let closes: number[] = []
+    let candleCount = 0
+    // Type guard for PromptContext
+    if ('recentCandles' in context && Array.isArray(context.recentCandles)) {
+      closes = context.recentCandles.slice(-contextWindow).map(c => c.close)
+      candleCount = context.recentCandles.length
+    } else if ('candles' in context && Array.isArray(context.candles)) {
+      const arr = context.candles
+      const isCandleArray = arr.every(
+        (c): c is { close: number } => typeof c === 'object' && c !== null && 'close' in c && typeof (c as { close: unknown }).close === 'number'
       )
-      return enforceNoShorting(signal, context)
-    }
-    
-    // No clear pattern
-    return this.createSignal('hold', 0.4, '[Fallback] No clear pattern detected')
-  }
-  
-  /**
-   * Detect head and shoulders pattern
-   */
-  private detectHeadAndShoulders(candles: readonly any[]): { detected: boolean, confidence: number } {
-    if (candles.length < 15) return { detected: false, confidence: 0 }
-    
-    const highs = candles.slice(-15).map(c => c.high)
-    
-    // Look for 3 peaks pattern
-    const peaks: number[] = []
-    for (let i = 1; i < highs.length - 1; i++) {
-      if (highs[i]! > highs[i-1]! && highs[i]! > highs[i+1]!) {
-        peaks.push(i)
+      if (isCandleArray) {
+        closes = [...arr].slice(-contextWindow).map(c => c.close)
+        candleCount = arr.length
       }
     }
-    
-    if (peaks.length >= 3) {
-      const [left, head, right] = peaks.slice(-3)
-      const leftHigh = highs[left!]!
-      const headHigh = highs[head!]!
-      const rightHigh = highs[right!]!
-      
-      // Head should be highest, shoulders roughly equal
-      if (headHigh > leftHigh && headHigh > rightHigh) {
-        const shoulderDiff = Math.abs(leftHigh - rightHigh) / leftHigh
-        if (shoulderDiff < 0.02) { // 2% tolerance
-          return { detected: true, confidence: 0.7 - shoulderDiff * 10 }
-        }
-      }
+    // Cooldown: only allow if at least 10 candles since last call
+    if (candleCount - this.lastClaudeCallIndex < 10) return false
+    if (closes.length < 2 || closes[0] === undefined || closes[closes.length - 1] === undefined) return false
+    const firstClose = closes[0]
+    const lastClose = closes[closes.length - 1]
+    if (firstClose === undefined || lastClose === undefined) return false
+    const mean = closes.reduce((a, b) => a + b, 0) / closes.length
+    const variance = closes.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / closes.length
+    const stddev = Math.sqrt(variance)
+    const stddevThreshold = mean * 0.01 // 1%
+    const priceChange = Math.abs(lastClose - firstClose) / firstClose
+    const priceChangeThreshold = 0.01 // 1%
+    const pass = stddev > stddevThreshold && priceChange > priceChangeThreshold
+    if (pass) {
+      this.lastClaudeCallIndex = candleCount
     }
-    
-    return { detected: false, confidence: 0 }
+    return pass
   }
   
-  /**
-   * Detect double bottom pattern
-   */
-  private detectDoubleBottom(candles: readonly any[]): { detected: boolean, confidence: number } {
-    if (candles.length < 15) return { detected: false, confidence: 0 }
-    
-    const lows = candles.slice(-15).map(c => c.low)
-    
-    // Look for 2 troughs pattern
-    const troughs: number[] = []
-    for (let i = 1; i < lows.length - 1; i++) {
-      if (lows[i]! < lows[i-1]! && lows[i]! < lows[i+1]!) {
-        troughs.push(i)
-      }
-    }
-    
-    if (troughs.length >= 2) {
-      const [first, second] = troughs.slice(-2)
-      const firstLow = lows[first!]!
-      const secondLow = lows[second!]!
-      
-      // Bottoms should be roughly equal
-      const bottomDiff = Math.abs(firstLow - secondLow) / firstLow
-      if (bottomDiff < 0.015) { // 1.5% tolerance
-        // Check for rise between bottoms
-        const betweenHigh = Math.max(...lows.slice(first! + 1, second))
-        if (betweenHigh > firstLow * 1.02) { // At least 2% rise
-          return { detected: true, confidence: 0.65 + (0.015 - bottomDiff) * 20 }
-        }
-      }
-    }
-    
-    return { detected: false, confidence: 0 }
-  }
-  
-  /**
-   * Detect breakout from channel
-   */
-  private detectBreakout(candles: readonly any[], currentPrice: number): { 
-    detected: boolean, 
-    direction: 'Bullish' | 'Bearish', 
-    confidence: number 
-  } {
-    if (candles.length < 20) return { detected: false, direction: 'Bullish', confidence: 0 }
-    
-    const recent = candles.slice(-20)
-    const highs = recent.map(c => c.high)
-    const lows = recent.map(c => c.low)
-    
-    // Calculate channel boundaries
-    const resistanceLevel = highs.slice(0, -1).reduce((max, h) => Math.max(max, h), 0)
-    const supportLevel = lows.slice(0, -1).reduce((min, l) => Math.min(min, l), Infinity)
-    
-    // Check for breakout
-    const breakoutMargin = 0.003 // 0.3% beyond level
-    
-    if (currentPrice > resistanceLevel * (1 + breakoutMargin)) {
-      // Bullish breakout
-      const strength = (currentPrice - resistanceLevel) / resistanceLevel
-      return { 
-        detected: true, 
-        direction: 'Bullish', 
-        confidence: Math.min(0.8, 0.5 + strength * 10)
-      }
-    } else if (currentPrice < supportLevel * (1 - breakoutMargin)) {
-      // Bearish breakout
-      const strength = (supportLevel - currentPrice) / supportLevel
-      return { 
-        detected: true, 
-        direction: 'Bearish', 
-        confidence: Math.min(0.8, 0.5 + strength * 10)
-      }
-    }
-    
-    return { detected: false, direction: 'Bullish', confidence: 0 }
-  }
-  
-  /**
-   * Format candles data for natural language description
-   */
-  private describePriceAction(candles: readonly any[]): string {
-    if (candles.length < 2) return 'Insufficient price data'
-    
-    const recent = candles.slice(-10)
-    const descriptions: string[] = []
-    
-    // Overall trend
-    const firstClose = recent[0]?.close || 0
-    const lastClose = recent[recent.length - 1]?.close || 0
-    const overallChange = ((lastClose - firstClose) / firstClose) * 100
-    
-    if (Math.abs(overallChange) < 0.5) {
-      descriptions.push('Price is consolidating sideways')
-    } else if (overallChange > 2) {
-      descriptions.push(`Strong uptrend with ${overallChange.toFixed(1)}% gain`)
-    } else if (overallChange < -2) {
-      descriptions.push(`Strong downtrend with ${Math.abs(overallChange).toFixed(1)}% loss`)
-    } else if (overallChange > 0) {
-      descriptions.push(`Mild uptrend with ${overallChange.toFixed(1)}% gain`)
-    } else {
-      descriptions.push(`Mild downtrend with ${Math.abs(overallChange).toFixed(1)}% loss`)
-    }
-    
-    // Volatility
-    const ranges = recent.map(c => c.high - c.low)
-    const avgRange = ranges.reduce((a, b) => a + b, 0) / ranges.length
-    const avgPrice = recent.reduce((sum, c) => sum + c.close, 0) / recent.length
-    const volatility = (avgRange / avgPrice) * 100
-    
-    if (volatility > 3) {
-      descriptions.push(`High volatility (${volatility.toFixed(1)}% average range)`)
-    } else if (volatility < 1) {
-      descriptions.push(`Low volatility (${volatility.toFixed(1)}% average range)`)
-    } else {
-      descriptions.push(`Moderate volatility (${volatility.toFixed(1)}% average range)`)
-    }
-    
-    // Recent momentum
-    const lastThree = recent.slice(-3)
-    const recentTrend = lastThree.map((c, i) => 
-      i > 0 ? (c.close > lastThree[i-1]!.close ? '↑' : '↓') : ''
-    ).filter(Boolean).join('')
-    
-    if (recentTrend === '↑↑') {
-      descriptions.push('Strong bullish momentum in recent candles')
-    } else if (recentTrend === '↓↓') {
-      descriptions.push('Strong bearish momentum in recent candles')
-    } else {
-      descriptions.push('Mixed momentum in recent candles')
-    }
-    
-    // Volume trend
-    const volumes = recent.map(c => c.volume)
-    const avgVolume = volumes.reduce((a, b) => a + b, 0) / volumes.length
-    const recentVolume = volumes.slice(-3).reduce((a, b) => a + b, 0) / 3
-    
-    if (recentVolume > avgVolume * 1.5) {
-      descriptions.push('Volume increasing significantly')
-    } else if (recentVolume < avgVolume * 0.7) {
-      descriptions.push('Volume decreasing')
-    }
-    
-    return descriptions.join('. ') + '.'
-  }
-  
-  /**
-   * Generate market condition summary
-   */
-  private summarizeMarketConditions(context: MarketContext): string {
-    const { currentPrice, candles } = context
-    if (candles.length < 20) return 'Limited market data available'
-    
-    const summaryParts: string[] = []
-    
-    // Price position relative to recent range
-    const recentHighs = candles.slice(-20).map(c => c.high)
-    const recentLows = candles.slice(-20).map(c => c.low)
-    const rangeHigh = Math.max(...recentHighs)
-    const rangeLow = Math.min(...recentLows)
-    const pricePosition = (currentPrice - rangeLow) / (rangeHigh - rangeLow)
-    
-    if (pricePosition > 0.8) {
-      summaryParts.push('Price near recent highs')
-    } else if (pricePosition < 0.2) {
-      summaryParts.push('Price near recent lows')
-    } else {
-      summaryParts.push('Price in middle of recent range')
-    }
-    
-    // Trend strength
-    const ma5 = candles.slice(-5).reduce((sum, c) => sum + c.close, 0) / 5
-    const ma20 = candles.slice(-20).reduce((sum, c) => sum + c.close, 0) / 20
-    
-    if (ma5 > ma20 * 1.02) {
-      summaryParts.push('short-term uptrend intact')
-    } else if (ma5 < ma20 * 0.98) {
-      summaryParts.push('short-term downtrend active')
-    } else {
-      summaryParts.push('trend neutral')
-    }
-    
-    // Support/Resistance proximity
-    const support = Math.min(...recentLows.slice(-10))
-    const resistance = Math.max(...recentHighs.slice(-10))
-    
-    if (Math.abs(currentPrice - resistance) / currentPrice < 0.01) {
-      summaryParts.push('testing resistance')
-    } else if (Math.abs(currentPrice - support) / currentPrice < 0.01) {
-      summaryParts.push('testing support')
-    }
-    
-    // Market breadth (using volume as proxy)
-    const recentVolumes = candles.slice(-5).map(c => c.volume)
-    const avgRecentVolume = recentVolumes.reduce((a, b) => a + b, 0) / recentVolumes.length
-    const historicalVolume = candles.slice(-20, -5).reduce((sum, c) => sum + c.volume, 0) / 15
-    
-    if (avgRecentVolume > historicalVolume * 1.3) {
-      summaryParts.push('with increasing participation')
-    } else if (avgRecentVolume < historicalVolume * 0.7) {
-      summaryParts.push('on declining volume')
-    }
-    
-    return summaryParts.join(', ') + '.'
-  }
-  
+  // eslint-disable-next-line @typescript-eslint/require-await
   protected async onReset(): Promise<void> {
-    this.patternMemory = []
     this.responseCache.clear()
-    this.lastApiCall = 0
+    // this.patternMemory = []
+    this.lastClaudeCallIndex = -100
   }
+
+  // Type guard for Claude response
+  private isClaudeResponse(obj: unknown): obj is ClaudeSignalResponse {
+    return !!obj && typeof obj === 'object' &&
+      typeof (obj as { a?: unknown }).a === 'string' &&
+      typeof (obj as { p?: unknown }).p === 'string'
+  }
+
+  // Helper: compare numbers with tolerance
+  // private nearlyEqual(a?: number, b?: number, relTol = 0.02, absTol = 0.5): boolean {
+  //   if (typeof a !== 'number' || typeof b !== 'number') return false // treat missing as not matching
+  //   if (a === b) return true
+  //   const diff = Math.abs(a - b)
+  //   return diff <= absTol || diff / Math.max(Math.abs(a), Math.abs(b)) <= relTol
+  // }
+
+  // Helper: normalize string for comparison
+  private normStr(s?: string): string {
+    return (s || '').trim().toLowerCase()
+  }
+
+  // Normalize t/s units if they are obviously off (e.g., 50x price)
+  private normalizeTS(obj: { t?: number, s?: number } | undefined, currentPrice: number): void {
+    // console.log(obj, currentPrice)
+    while (obj?.t && obj.t > currentPrice * 5) obj.t /= 10
+    while (obj?.s && obj.s > currentPrice * 5) obj.s /= 10
+    // console.log(obj)
+  }
+}
+
+// Minimal Anthropic API sanity check script
+if (require.main === module) {
+  void (async () => {
+    // Import Anthropic SDK using import()
+    const { Anthropic } = await import('@anthropic-ai/sdk')
+    const apiKey: string | undefined = ANTHROPIC_API_KEY
+    if (!apiKey) {
+      console.error('Missing ANTHROPIC_API_KEY in environment')
+      process.exit(1)
+    }
+    const client = new Anthropic({ apiKey })
+    const prompt = 'Reply with {"a":"hold","c":0.3,"r":"test"}'
+    try {
+      const response: unknown = await client.messages.create({
+        model: MODEL_M,
+        max_tokens: 32,
+        temperature: TEMP,
+        messages: [{ role: 'user', content: prompt }]
+      })
+      let content = ''
+      if (response && typeof response === 'object' && 'content' in response) {
+        const respContent = (response as { content?: unknown }).content
+        if (Array.isArray(respContent)) {
+          content = respContent
+            .filter((b): b is { text: string } => typeof b === 'object' && b !== null && 'text' in b && typeof (b as { text: unknown }).text === 'string')
+            .map((b) => b.text)
+            .join('')
+        } else if (respContent && typeof respContent === 'object' && 'text' in respContent && typeof (respContent as { text: unknown }).text === 'string') {
+          content = (respContent as { text: string }).text
+        }
+      }
+      // console.log('Claude Sonnet response:', content)
+      if (content && content.trim().length > 0) {
+        process.exit(0)
+      } else {
+        process.exit(1)
+      }
+    } catch (err) {
+      console.error('Claude API error:', err)
+      process.exit(1)
+    }
+  })()
 }

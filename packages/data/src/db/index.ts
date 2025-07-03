@@ -24,7 +24,7 @@ export class Database {
   readonly orders: OrderRepository
   readonly trades: TradeRepository
   readonly agents: AgentRepository
-  private eventBus?: EventBus
+  private readonly eventBus?: EventBus
 
   constructor(config: Partial<SQLiteConfig> = {}, eventBus?: EventBus) {
     this.connectionManager = createConnectionManager(config)

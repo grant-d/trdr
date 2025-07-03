@@ -1,13 +1,13 @@
-# Product Requirements Document: Grid Trading Bot with Multi-Agent Trailing Orders
+# Product Requirements Document: Multi-Agent Trailing Order Trading Bot
 
 ## Executive Summary
 
-Build sophisticated yet maintainable grid trading bot for retail traders on Coinbase. Uses multi-agent architecture with trailing orders. Optimized for swing trading (days not minutes). Key differentiators: self-tuning parameters, AI-enhanced decision making, realistic paper trading mode.
+Build sophisticated yet maintainable trading bot for retail traders on Coinbase. Uses multi-agent architecture with trailing orders. Optimized for swing trading (days not minutes). Key differentiators: self-tuning parameters, AI-enhanced decision making, realistic paper trading mode.
 
 ## 1. System Overview
 
 ### 1.1 Core Objectives
-- **Primary Goal**: Generate consistent profits through automated grid trading with trailing orders
+- **Primary Goal**: Generate consistent profits through automated trading with trailing orders
 - **Target Users**: Retail traders with $1,000-$100,000 capital
 - **Trading Style**: Swing trading (holding periods: hours to days)
 - **Exchange**: Coinbase Advanced Trade API (spot trading only)
@@ -15,7 +15,7 @@ Build sophisticated yet maintainable grid trading bot for retail traders on Coin
 
 ### 1.2 Key Features
 1. Multi-agent decision system with pluggable architecture
-2. Trailing buy/sell orders instead of fixed grid levels
+2. Trailing buy/sell orders
 3. Self-tuning parameters (minimal configuration)
 4. Three operational modes: Live, Paper, Backtest
 5. AI integration for complex pattern recognition
@@ -37,8 +37,8 @@ Build sophisticated yet maintainable grid trading bot for retail traders on Coin
 │  │Data Pipeline│  │Agent System  │  │Order Management  │   │
 │  │            │  │              │  │                  │   │
 │  │-Coinbase WS│  │-10+ Agents   │  │-Trailing Orders  │   │
-│  │-REST Backup│  │-Orchestrator │  │-Grid Management  │   │
-│  │-Unified API│  │-Competition  │  │-Risk Control     │   │
+│  │-REST Backup│  │-Orchestrator │  │-Risk Control     │   │
+│  │-Unified API│  │-Competition  │  │                  │   │
 │  └─────────────┘  └──────────────┘  └──────────────────┘   │
 ├─────────────────────────────────────────────────────────────┤
 │                      Data Layer (Sqlite)                      │
@@ -64,7 +64,6 @@ trdr/
 │   │   │   ├── agents/       # Trading agents
 │   │   │   ├── engine/       # Main trading loop
 │   │   │   ├── orders/       # Order management
-│   │   │   ├── grid/         # Grid calculations
 │   │   │   └── utils/        # Shared utilities
 │   │   └── tests/
 │   ├── data/                 # Data layer
@@ -330,7 +329,6 @@ class ResilientOrderManager {
       `Modify order ${orderId}`
     );
   }
-}
 }
 ```
 
@@ -3637,3 +3635,27 @@ The user wants me to create an entirely unique and innovative agent type that is
   This is practical because it models real market psychology - traders do remember what happened at certain price levels and 
   tend to react similarly when price returns there.
   
+
+innovative Lorentzian Momentum Field indicator that treats the market as a relativistic field in phase space. Here's what makes it unique:
+Core Innovation: Market as a Momentum Field
+The indicator creates a "field" around the current price and measures how momentum propagates through this field using Lorentzian distance. Think of it like gravity or electromagnetic fields in physics.
+Key Concepts:
+
+Field Points: Creates 20 virtual points above and below current price
+Field Vectors: Each point has a momentum vector influenced by price distance
+Field Distortion: Measures irregularities in the field using Lorentzian distance between adjacent vectors
+Field Strength: Total momentum-field alignment (like magnetic field alignment)
+Field Convergence/Divergence: Detects when the field is contracting or expanding
+
+How Lorentzian Distance is Used:
+
+Field Decay: Field strength decreases with Lorentzian distance from price
+Distortion Measurement: Compares adjacent field vectors using Lorentzian distance
+Pattern Matching: Finds similar historical field states in Lorentzian space
+Relativistic Momentum: Applies special relativity concepts to momentum
+
+Signals Generated When:
+
+Critical Field: Momentum-field alignment exceeds threshold
+Field Reversal: Convergence with negative momentum or divergence with positive
+Pattern Confirmation: Similar field states historically led to profitable moves

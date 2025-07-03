@@ -124,7 +124,8 @@ describe('MarketMemoryAgent', () => {
 
   it('should track time-based patterns', async () => {
     // Simulate daily pattern (e.g., always drops at certain time)
-    const baseTime = Date.now()
+    // @ts-ignore - unused variable (reserved for future use)
+    const _baseTime = Date.now()
     
     // Pattern: drops every "hour" (simulated)
     for (let day = 0; day < 3; day++) {

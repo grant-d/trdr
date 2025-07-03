@@ -3,9 +3,9 @@
 import {
   AgentOrchestrator,
   EventBus,
-  GridManager,
   TrailingOrderManager
 } from '@trdr/core'
+import type { ConsensusResult } from '@trdr/core/dist/agents/types'
 import { EventTypes } from '@trdr/core/dist/events/types'
 import {
   type Candle,
@@ -17,24 +17,31 @@ import { parse } from 'csv-parse'
 import { createReadStream } from 'fs'
 import path from 'path'
 import { table } from 'table'
-import { BollingerBandsAgent } from './agents/bollinger-agent'
-import { MacdAgent } from './agents/macd-agent'
-import { MomentumAgent } from './agents/momentum-agent'
-import { RsiAgent } from './agents/rsi-agent'
-import { AdaptiveRsiAgent } from './agents/adaptive-rsi-agent'
-import { AdaptiveMacdAgent } from './agents/adaptive-macd-agent'
 import { AdaptiveBollingerBandsAgent } from './agents/adaptive-bollinger-agent'
+import { AdaptiveMacdAgent } from './agents/adaptive-macd-agent'
 import { AdaptiveMomentumAgent } from './agents/adaptive-momentum-agent'
-import { VolumeProfileAgent } from './agents/volume-profile-agent'
+import { AdaptiveRsiAgent } from './agents/adaptive-rsi-agent'
 import { AdaptiveVolumeProfileAgent } from './agents/adaptive-volume-profile-agent'
-import { MarketMemoryAgent } from './agents/market-memory-agent'
-import { QuantumSuperpositionAgent } from './agents/quantum-superposition-agent'
-import { TopologicalShapeAgent } from './agents/topological-shape-agent'
-import { TimeDecayAgent } from './agents/time-decay-agent'
-import { MarketBreathingAgent } from './agents/market-breathing-agent'
-import { SwarmIntelligenceAgent } from './agents/swarm-intelligence-agent'
+import { BollingerBandsAgent } from './agents/bollinger-agent'
 import { ClaudePatternAgent } from './agents/claude-pattern-agent'
-import { LorentzianDistanceAgent } from './agents/lorentzian-distance-agent'
+// import { LorentzianDistanceAgent } from './agents/lorentzian-distance-agent'
+import { LorentzianFixedAgent } from './agents/lorentzian-fixed-agent'
+import { MacdAgent } from './agents/macd-agent'
+import { MarketBreathingAgent } from './agents/market-breathing-agent'
+import { MarketMemoryAgent } from './agents/market-memory-agent'
+import { MathematicalHarmonyAgent } from './agents/mathematical-harmony-agent'
+import { MatrixProfileAgent } from './agents/matrix-profile-agent'
+import { MomentumAgent } from './agents/momentum-agent'
+import { QuantumSuperpositionAgent } from './agents/quantum-superposition-agent'
+import { RelativisticFieldAgent } from './agents/relativistic-field-agent'
+import { RsiAgent } from './agents/rsi-agent'
+import { SwarmIntelligenceAgent } from './agents/swarm-intelligence-agent'
+import { TimeDecayAgent } from './agents/time-decay-agent'
+import { TopologicalShapeAgent } from './agents/topological-shape-agent'
+import { VolumeProfileAgent } from './agents/volume-profile-agent'
+import { SelfTuningRelativisticAgent } from './agents/self-tuning-relativistic-agent'
+
+const CANDLE_COUNT = 5000
 
 async function runDemo() {
   console.log(chalk.cyan('TRDR Trading System Demo\n'))
@@ -49,22 +56,23 @@ async function runDemo() {
     console.log(chalk.yellow('Arguments:'))
     console.log('  csv-file        Path to CSV data file [default: btc-usd.csv]\n')
     console.log(chalk.yellow('Options:'))
-    console.log('  --symbol, -s       Trading symbol (e.g., BTC-USD, AAPL, SOL-USD) [default: BTC-USD]')
-    console.log('  --duration         Demo duration in milliseconds [default: 5000]')
-    console.log('  --grid-spacing, -g Grid spacing percentage (e.g., 0.5, 2.0) [default: auto-tuned]')
-    console.log('  --grid-levels, -l  Number of grid levels [default: auto-tuned]')
-    console.log('  --trail-percent, -t Trail percentage for orders [default: auto-tuned]')
-    console.log('  --risk-profile, -r Risk profile: conservative, moderate, aggressive [default: moderate]')
-    console.log('  --agents           Enable trading agents (rsi,macd,bollinger,momentum,volume,memory,quantum,topological,timedecay,breathing,swarm,claude,lorentzian) [default: all]')
-    console.log('  --adaptive, -a     Use adaptive agents that adjust to market conditions')
-    console.log('  --verbose          Show detailed order information')
-    console.log('  --liquidate        Liquidate all positions at end')
-    console.log('  --help, -h         Show this help\n')
+    console.log('  --symbol, -s        Trading symbol (e.g., BTC-USD, AAPL, SOL-USD) [default: BTC-USD]')
+    console.log('  --duration          Demo duration in milliseconds [default: 5000]')
+    console.log('  --trail-percent, -t Trail percentage for stop-loss orders [default: auto-tuned]')
+    console.log('  --risk-profile, -r  Risk profile: conservative, moderate, aggressive [default: moderate]')
+    console.log('  --agents            Enable trading agents (rsi,macd,bollinger,momentum,volume,memory,quantum,topological,timedecay,breathing,swarm,claude,lorentzian,mathematical,relativistic,matrix) [default: all]')
+    console.log('  --adaptive, -a      Use adaptive agents that adjust to market conditions')
+    console.log('  --self-tuning, -st  Use self-tuning agents that optimize their parameters')
+    console.log(`  --candles, -c       Number of candles to process [default: ${CANDLE_COUNT}]`)
+    console.log('  --verbose           Show detailed order information')
+    console.log('  --liquidate         Liquidate all positions at end')
+    console.log('  --help, -h          Show this help\n')
     console.log(chalk.yellow('Examples:'))
     console.log('  yarn demo csv/aapl-sample.csv --symbol AAPL --liquidate')
     console.log('  yarn demo csv/solana-sample.csv --symbol SOL-USD --duration 3000')
     console.log('  yarn demo --symbol ETH-USD --verbose --liquidate')
     console.log('  yarn demo csv/btc-usd.csv --adaptive --agents=rsi,macd,bollinger')
+    console.log('  yarn demo --candles 500 --agents relativistic,matrix --verbose')
     return
   }
   const csvFile = args.find(arg => !arg.startsWith('--') && !arg.startsWith('-')) || '/Users/grantdickinson/repos/trdr/csv/btc-usd.csv'
@@ -103,16 +111,17 @@ async function runDemo() {
   const riskFreeRate = 0.05 // 5% annual risk-free rate (Treasury bills)
   
   // Get tuning parameters
-  const gridSpacingArg = getArgValue('grid-spacing', 'g')
-  const gridLevelsArg = getArgValue('grid-levels', 'l')
   const trailPercentArg = getArgValue('trail-percent', 't')
   const riskProfileArg = getArgValue('risk-profile', 'r', 'moderate')
-  const agentsArg = getArgValue('agents', '', 'rsi,macd,bollinger,momentum,volume,memory,quantum,topological,timedecay,breathing,swarm,claude,lorentzian')
+  const agentsArg = getArgValue('agents', '', 'rsi,macd,bollinger,momentum,volume,memory,quantum,topological,timedecay,breathing,swarm,lorentzian,mathematical,relativistic,matrix') // Not claude
   const useAdaptive = args.includes('--adaptive') || args.includes('-a')
-  
+  const useSelfTuning = args.includes('--self-tuning') || args.includes('-st')
+  const candleCountArg = getArgValue('candles', 'c', `${CANDLE_COUNT}`)
+  const candleCount = parseInt(candleCountArg) || CANDLE_COUNT
+
   // Adaptive tuning that updates parameters as new data arrives
   class AdaptiveTuner {
-    private readonly recentCandles: any[] = []
+    private readonly recentCandles: Candle[] = []
     private readonly windowSize = 20 // Rolling window for volatility calculation
     private readonly symbol: string
     private readonly riskProfile: string
@@ -122,7 +131,7 @@ async function runDemo() {
       this.riskProfile = riskProfile
     }
     
-    addCandle(candle: any) {
+    addCandle(candle: Candle) {
       this.recentCandles.push(candle)
       if (this.recentCandles.length > this.windowSize) {
         this.recentCandles.shift() // Keep only recent candles
@@ -142,55 +151,18 @@ async function runDemo() {
       const isCrypto = this.symbol.includes('BTC') || this.symbol.includes('ETH') || this.symbol.includes('SOL')
       
       // Base parameters by asset type
-      let baseSpacing = isCrypto ? 0.02 : 0.005  // 2% for crypto, 0.5% for stocks
-      const baseLevels = isCrypto ? 10 : 20        // Fewer levels for crypto (higher spacing)
       const baseTrail = isCrypto ? 0.005 : 0.002   // 0.5% for crypto, 0.2% for stocks
-      
-      // Adjust for current volatility (higher volatility = wider spacing)
-      const volatilityMultiplier = Math.max(0.5, Math.min(3.0, marketMetrics.volatility / 0.01))
-      baseSpacing *= volatilityMultiplier
-      
-      // Adjust levels based on market behavior
-      let levelMultiplier = 1.0
-      
-      if (marketMetrics.marketType === 'ranging') {
-        // Ranging markets: more levels, tighter spacing for better mean reversion
-        levelMultiplier = 1.5
-        baseSpacing *= 0.8
-      } else if (marketMetrics.marketType === 'trending') {
-        // Trending markets: fewer levels, wider spacing to avoid whipsaws
-        levelMultiplier = 0.7
-        baseSpacing *= 1.2
-      } else if (marketMetrics.marketType === 'choppy') {
-        // Choppy markets: moderate levels, adaptive spacing
-        levelMultiplier = 1.2
-        baseSpacing *= 1.1
-      }
-      
-      // Adjust for mean reversion tendency
-      if (marketMetrics.meanReversionStrength > 0.6) {
-        // Strong mean reversion: more levels
-        levelMultiplier *= 1.3
-      } else if (marketMetrics.meanReversionStrength < 0.3) {
-        // Weak mean reversion: fewer levels
-        levelMultiplier *= 0.8
-      }
       
       // Risk profile adjustments
       const riskProfiles = {
-        conservative: { spacingMult: 1.5, levelsMult: 0.7, trailMult: 1.5 },
-        moderate: { spacingMult: 1.0, levelsMult: 1.0, trailMult: 1.0 },
-        aggressive: { spacingMult: 0.7, levelsMult: 1.3, trailMult: 0.7 }
+        conservative: { trailMult: 1.5 },
+        moderate: { trailMult: 1.0 },
+        aggressive: { trailMult: 0.7 }
       }
       
       const profile = riskProfiles[this.riskProfile as keyof typeof riskProfiles] || riskProfiles.moderate
       
-      // Apply all multipliers
-      const finalLevels = Math.round(baseLevels * levelMultiplier * profile.levelsMult)
-      
       return {
-        gridSpacing: (baseSpacing * profile.spacingMult * 100), // Convert to percentage
-        gridLevels: Math.max(5, Math.min(50, finalLevels)), // Clamp between 5-50 levels
         trailPercent: baseTrail * profile.trailMult * 100, // Convert to percentage
         volatility: marketMetrics.volatility,
         assetType: isCrypto ? 'crypto' : 'stock',
@@ -211,8 +183,8 @@ async function runDemo() {
         }
       }
       
-      const prices = this.recentCandles.map(c => c.close)
-      const returns = prices.slice(1).map((price, i) => (price - prices[i]) / prices[i])
+      const prices = this.recentCandles.map((c: Candle) => c?.close ?? 0)
+      const returns = prices.slice(1).map((price, i) => (price - prices[i]!) / (prices[i]! ?? 1))
       
       // Calculate volatility
       const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length
@@ -224,7 +196,7 @@ async function runDemo() {
       const x = Array.from({length: n}, (_, i) => i)
       const sumX = x.reduce((a, b) => a + b, 0)
       const sumY = prices.reduce((a, b) => a + b, 0)
-      const sumXY = x.reduce((sum, xi, i) => sum + xi * prices[i], 0)
+      const sumXY = x.reduce((sum, xi, i) => sum + xi * prices[i]!, 0)
       const sumXX = x.reduce((sum, xi) => sum + xi * xi, 0)
       
       const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX)
@@ -262,16 +234,14 @@ async function runDemo() {
       const isCrypto = this.symbol.includes('BTC') || this.symbol.includes('ETH') || this.symbol.includes('SOL')
       
       const riskProfiles = {
-        conservative: { spacingMult: 1.5, levelsMult: 0.7, trailMult: 1.5 },
-        moderate: { spacingMult: 1.0, levelsMult: 1.0, trailMult: 1.0 },
-        aggressive: { spacingMult: 0.7, levelsMult: 1.3, trailMult: 0.7 }
+        conservative: { trailMult: 1.5 },
+        moderate: { trailMult: 1.0 },
+        aggressive: { trailMult: 0.7 }
       }
       
       const profile = riskProfiles[this.riskProfile as keyof typeof riskProfiles] || riskProfiles.moderate
       
       return {
-        gridSpacing: (isCrypto ? 2.0 : 0.5) * profile.spacingMult,
-        gridLevels: Math.round((isCrypto ? 10 : 20) * profile.levelsMult),
         trailPercent: (isCrypto ? 0.5 : 0.2) * profile.trailMult,
         volatility: 0,
         assetType: isCrypto ? 'crypto' : 'stock',
@@ -288,7 +258,9 @@ async function runDemo() {
   console.log(chalk.gray(`- Symbol: ${symbol}`))
   console.log(chalk.gray(`- Initial Capital: $${initialCapital}`))
   console.log(chalk.gray(`- Demo Duration: ${duration}ms`))
+  console.log(chalk.gray(`- Candles to Process: ${candleCount}`))
   console.log(chalk.gray(`- Adaptive Agents: ${useAdaptive ? 'ON' : 'OFF'}`))
+  console.log(chalk.gray(`- Self-Tuning Agents: ${useSelfTuning ? 'ON' : 'OFF'}`))
   console.log(chalk.gray(`- Verbose Mode: ${verbose ? 'ON' : 'OFF'}`))
   console.log(chalk.gray(`- Liquidate at End: ${liquidateAtEnd ? 'ON' : 'OFF'}\n`))
   
@@ -309,8 +281,6 @@ async function runDemo() {
     const currentParams = adaptiveTuner.getCurrentParameters()
     
     // Use manual overrides if provided, otherwise use adaptive values
-    const gridSpacing = gridSpacingArg ? parseFloat(gridSpacingArg) : currentParams.gridSpacing
-    const gridLevels = gridLevelsArg ? parseInt(gridLevelsArg) : currentParams.gridLevels
     const trailPercent = trailPercentArg ? parseFloat(trailPercentArg) : currentParams.trailPercent
     
     // Show data range
@@ -327,8 +297,6 @@ async function runDemo() {
     console.log(chalk.gray('\nAdaptive Tuning Parameters:'))
     console.log(chalk.gray(`- Asset Type: ${currentParams.assetType}`))
     console.log(chalk.gray(`- Initial Volatility: ${currentParams.sampleSize > 0 ? (currentParams.volatility * 100).toFixed(3) : 'N/A'}%`))
-    console.log(chalk.gray(`- Grid Spacing: ${gridSpacing.toFixed(3)}% ${gridSpacingArg ? '(manual)' : '(auto)'}`))
-    console.log(chalk.gray(`- Grid Levels: ${gridLevels} ${gridLevelsArg ? '(manual)' : '(auto)'}`))
     console.log(chalk.gray(`- Trail Percent: ${trailPercent.toFixed(3)}% ${trailPercentArg ? '(manual)' : '(auto)'}`))
     console.log(chalk.gray(`- Risk Profile: ${riskProfileArg}\n`))
     
@@ -341,11 +309,18 @@ async function runDemo() {
     
     // Create components  
     const trailingOrderManager = new TrailingOrderManager(eventBus)
-    const gridManager = new GridManager(eventBus, trailingOrderManager)
     
-    // Initialize agents
+    // Initialize agents with custom consensus config
     console.log(chalk.yellow('Initializing trading agents...'))
-    const agentOrchestrator = new AgentOrchestrator(eventBus)
+    const agentOrchestrator = new AgentOrchestrator(eventBus, {
+      minConfidence: 0.2, // Lower threshold to allow more signals through
+      useAdaptiveWeights: true,
+      weightUpdateFrequency: 10 // Update more frequently
+    })
+    
+    // Use confidence-weighted consensus for better signal aggregation
+    agentOrchestrator.setConsensusStrategy('confidence-weighted')
+    
     const enabledAgents = agentsArg.split(',').map(a => a.trim().toLowerCase())
     
     if (enabledAgents.includes('rsi')) {
@@ -581,24 +556,80 @@ async function runDemo() {
         description: 'Connects to Claude API for advanced pattern recognition',
         type: 'ai',
         defaultConfig: {}
-      })
+      }, { debug: true })
       await claudeAgent.initialize()
       await agentOrchestrator.registerAgent(claudeAgent, 1.0)
       console.log(chalk.green('✓ Claude Pattern Agent initialized'))
     }
     
     if (enabledAgents.includes('lorentzian')) {
-      const lorentzianAgent = new LorentzianDistanceAgent({
+      const lorentzianAgent = new LorentzianFixedAgent({
         id: 'lorentzian-agent',
-        name: 'Lorentzian Distance Agent',
+        name: 'Lorentzian Fixed Agent',
         version: '1.0.0',
-        description: 'Uses Lorentzian distance metrics with complex numbers',
+        description: 'Fixed Lorentzian distance pattern matching',
         type: 'custom',
         defaultConfig: {}
       })
       await lorentzianAgent.initialize()
       await agentOrchestrator.registerAgent(lorentzianAgent, 1.0)
-      console.log(chalk.green('✓ Lorentzian Distance Agent initialized'))
+      console.log(chalk.green('✓ Lorentzian Fixed Agent initialized'))
+    }
+    
+    if (enabledAgents.includes('mathematical')) {
+      const mathematicalAgent = new MathematicalHarmonyAgent({
+        id: 'mathematical-agent',
+        name: 'Mathematical Harmony Agent',
+        version: '1.0.0',
+        description: 'Uses prime numbers, golden ratio, Fibonacci, and Riemann zeta function for pattern analysis',
+        type: 'custom',
+        defaultConfig: {}
+      })
+      await mathematicalAgent.initialize()
+      await agentOrchestrator.registerAgent(mathematicalAgent, 1.0)
+      console.log(chalk.green('✓ Mathematical Harmony Agent initialized'))
+    }
+    
+    if (enabledAgents.includes('relativistic')) {
+      if (useSelfTuning) {
+        const selfTuningRelativisticAgent = new SelfTuningRelativisticAgent({
+          id: 'relativistic-agent',
+          name: 'Self-Tuning Relativistic Field Agent',
+          version: '1.0.0',
+          description: 'Self-tuning relativistic momentum field analysis with adaptive parameters',
+          type: 'custom',
+          defaultConfig: {}
+        })
+        await selfTuningRelativisticAgent.initialize()
+        await agentOrchestrator.registerAgent(selfTuningRelativisticAgent, 1.0)
+        console.log(chalk.green('✓ Self-Tuning Relativistic Field Agent initialized'))
+      } else {
+        const relativisticAgent = new RelativisticFieldAgent({
+          id: 'relativistic-agent',
+          name: 'Relativistic Field Agent',
+          version: '1.0.0',
+          description: 'Treats market as relativistic momentum field using Lorentzian distance metrics',
+          type: 'custom',
+          defaultConfig: {}
+        })
+        await relativisticAgent.initialize()
+        await agentOrchestrator.registerAgent(relativisticAgent, 1.0)
+        console.log(chalk.green('✓ Relativistic Field Agent initialized'))
+      }
+    }
+    
+    if (enabledAgents.includes('matrix')) {
+      const matrixAgent = new MatrixProfileAgent({
+        id: 'matrix-agent',
+        name: 'Matrix Profile Agent',
+        version: '1.0.0',
+        description: 'Time series pattern discovery using matrix profile algorithm',
+        type: 'custom',
+        defaultConfig: {}
+      })
+      await matrixAgent.initialize()
+      await agentOrchestrator.registerAgent(matrixAgent, 1.0)
+      console.log(chalk.green('✓ Matrix Profile Agent initialized'))
     }
     
     console.log(chalk.green(`✓ ${enabledAgents.length} agents ready\n`))
@@ -606,42 +637,66 @@ async function runDemo() {
     // Track performance
     let orderCount = 0
     let filledCount = 0
-    let buyVolume = 0
+    let buyVolume = 0 // Will be set when grid is created
     let sellVolume = 0
-    let totalBuyValue = 0
+    let totalBuyValue = 0 // Will be set when grid is created
     let totalSellValue = 0
     const activeOrders = new Map()
     const trades: Array<{side: string, price: number, size: number, timestamp: number, consensus?: any}> = []
     
-    // Agent performance tracking
+    // Agent performance tracking with proper types
+    interface TrackedSignal {
+      consensus: ConsensusResult
+      entryPrice: number
+      timestamp: number
+      lookAheadPeriod: number
+    }
+    
     const agentPerformanceTracker = {
-      signals: new Map<string, Array<{
-        consensus: any,
-        entryPrice: number,
-        timestamp: number,
-        lookAheadPeriod: number
-      }>>(),
+      signals: new Map<string, TrackedSignal[]>(),
       
       // Track individual agent vote usefulness (0-1 score)
-      trackSignalOutcome(agentId: string, consensus: any, entryPrice: number, currentPrice: number, lookAheadPeriod: number): number {
+      trackSignalOutcome(agentId: string, consensus: ConsensusResult, entryPrice: number, currentPrice: number, _lookAheadPeriod: number): number {
         const signal = consensus.agentSignals[agentId]
-        if (!signal || signal.action === 'hold') return 0.5 // Neutral for hold signals
+        if (!signal) return 0.5
+        
+        // For hold signals, check if holding was the right decision
+        if (signal.action === 'hold') {
+          const priceChange = Math.abs((currentPrice - entryPrice) / entryPrice)
+          // More lenient scoring for hold signals
+          if (priceChange < 0.005) return 0.9      // Excellent hold (< 0.5%)
+          if (priceChange < 0.015) return 0.7      // Good hold (< 1.5%)
+          if (priceChange < 0.025) return 0.5      // Okay hold (< 2.5%)
+          return 0.4                                // Price moved significantly
+        }
         
         const priceChange = (currentPrice - entryPrice) / entryPrice
         const expectedDirection = signal.action === 'buy' ? 1 : -1
         const actualDirection = Math.sign(priceChange)
         
         // Calculate usefulness score based on:
-        // 1. Direction correctness (0-0.7)
-        // 2. Magnitude alignment with confidence (0-0.3)
-        const directionScore = actualDirection === expectedDirection ? 0.7 : 0.0
-        const magnitudeScore = Math.min(0.3, Math.abs(priceChange) * signal.confidence * 10)
+        // 1. Direction correctness
+        // 2. Magnitude alignment with confidence
+        // 3. Partial credit for reasonable decisions
         
-        return Math.max(0, Math.min(1, directionScore + magnitudeScore))
+        // More nuanced direction scoring
+        let directionScore = 0.5 // Base score
+        if (actualDirection === expectedDirection) {
+          directionScore = 0.7 + Math.min(0.2, Math.abs(priceChange) * 10) // 0.7-0.9
+        } else if (Math.abs(priceChange) < 0.01) {
+          directionScore = 0.5 // Neutral if price barely moved
+        } else {
+          directionScore = 0.3 // Wrong direction but still some credit
+        }
+        
+        // Confidence alignment bonus
+        const confidenceBonus = signal.confidence > 0.7 && actualDirection === expectedDirection ? 0.1 : 0
+        
+        return Math.max(0.1, Math.min(1, directionScore + confidenceBonus))
       },
       
       // Update agent weights based on recent performance
-      updateAgentWeights(agentOrchestrator: any, currentPrice: number) {
+      updateAgentWeights(agentOrchestrator: AgentOrchestrator, _currentPrice: number) {
         const performanceWindow = 15 // Use last 15 signals for weight calculation (rolling window)
         
         for (const [agentId, signals] of this.signals) {
@@ -652,7 +707,7 @@ async function runDemo() {
             // Calculate recent performance scores
             const recentScores = evaluableSignals
               .slice(-performanceWindow)
-              .map(s => this.trackSignalOutcome(agentId, s.consensus, s.entryPrice, currentPrice, s.lookAheadPeriod))
+              .map(s => this.trackSignalOutcome(agentId, s.consensus, s.entryPrice, _currentPrice, s.lookAheadPeriod))
             
             const avgScore = recentScores.reduce((sum, score) => sum + score, 0) / recentScores.length
             const consistency = 1 - (recentScores.reduce((sum, score) => sum + Math.pow(score - avgScore, 2), 0) / recentScores.length)
@@ -678,7 +733,7 @@ async function runDemo() {
       },
       
       // Record a new consensus signal for tracking
-      recordSignal(consensus: any, entryPrice: number, timestamp: number) {
+      recordSignal(consensus: ConsensusResult, entryPrice: number, timestamp: number) {
         const lookAheadPeriod = 3 // Will evaluate after 3 candles
         
         for (const agentId in consensus.agentSignals) {
@@ -762,57 +817,47 @@ async function runDemo() {
       }
     })
     
-    eventBus.subscribe(EventTypes.GRID_CREATED, (data: any) => {
-      console.log(chalk.blue(`[GRID] Created with ID: ${data.gridId}`))
-    })
-    
-    // Prepare grid configuration but don't create yet
-    console.log(chalk.yellow('\nPreparing trading grid...'))
+    // Prepare for trading
+    console.log(chalk.yellow('\nPreparing trading system...'))
     const currentPrice = candles[0]!.close
     
-    const gridConfig = {
-      gridSpacing,
-      gridLevels,
-      trailPercent,
-      minOrderSize: 0.001,
-      maxOrderSize: 0.1,
-      rebalanceThreshold: 0.1
-    }
+    // Start with 50/50 allocation to avoid short selling
+    const halfCapital = initialCapital * 0.4 // Use 80% total (40% each)
+    const startingBtc = halfCapital / currentPrice
     
-    const gridParams = {
+    const tradingParams = {
       symbol,
       allocatedCapital: initialCapital * 0.8,
-      baseAmount: 0,
-      quoteAmount: initialCapital * 0.8,
+      baseAmount: startingBtc, // Start with BTC to enable selling
+      quoteAmount: halfCapital, // And matching USD
       riskLevel: 0.5,
-      centerPrice: currentPrice // Center grid around actual market price
+      centerPrice: currentPrice // Start trading around actual market price
     }
     
-    console.log(chalk.gray(`✓ Grid configuration ready`))
-    console.log(chalk.gray(`  - Center Price: $${currentPrice.toFixed(2)} (actual market price)`))
-    console.log(chalk.gray(`  - Levels: ${gridLevels}`))
-    console.log(chalk.gray(`  - Spacing: ${gridSpacing.toFixed(2)}%`))
-    console.log(chalk.yellow(`  - Grid will activate after agents build history (20 candles)\n`))
+    console.log(chalk.gray(`✓ Trading configuration ready`))
+    console.log(chalk.gray(`  - Start Price: $${currentPrice.toFixed(2)} (actual market price)`))
+    console.log(chalk.gray(`  - Trail Percent: ${trailPercent.toFixed(2)}%`))
+    console.log(chalk.yellow(`  - Trading will activate after agents build history (20 candles)\n`))
     
     // Process market data directly from our CSV instead of using BacktestDataFeed
     console.log(chalk.yellow('Processing market data...'))
     
     // Use a subset of our real data for the demo
-    const demoCandles = candles.slice(0, Math.min(100, candles.length))
+    const demoCandles = candles.slice(0, Math.min(candleCount, candles.length))
     let processedCandles = 0
-    let grid: any = null // Will be created after 20 candles
+    let tradingActive = false // Will activate after 20 candles
     
     for (const candle of demoCandles) {
       // Add candle to adaptive tuner (no future data leak)
       adaptiveTuner.addCandle(candle)
       
       // Update parameters every 10 candles (adaptive rebalancing)
-      if (processedCandles > 0 && processedCandles % 10 === 0 && !gridSpacingArg && !gridLevelsArg && !trailPercentArg) {
+      if (processedCandles > 0 && processedCandles % 10 === 0 && !trailPercentArg) {
         const newParams = adaptiveTuner.getCurrentParameters()
         if (verbose) {
-          console.log(chalk.yellow(`[ADAPT] ${newParams.marketType?.toUpperCase()} | Vol: ${(newParams.volatility * 100).toFixed(2)}% | Levels: ${newParams.gridLevels} | Spacing: ${newParams.gridSpacing.toFixed(2)}% | MeanRev: ${(newParams.meanReversionStrength * 100).toFixed(0)}%`))
+          console.log(chalk.yellow(`[ADAPT] ${newParams.marketType?.toUpperCase()} | Vol: ${(newParams.volatility * 100).toFixed(2)}% | Trail: ${newParams.trailPercent.toFixed(2)}% | MeanRev: ${(newParams.meanReversionStrength * 100).toFixed(0)}%`))
         }
-        // Note: In a real system, you'd recreate the grid with new parameters
+        // Note: In a real system, you'd update trading parameters
         // For this demo, we'll just track the parameter evolution
       }
       
@@ -820,21 +865,21 @@ async function runDemo() {
         console.log(chalk.blue(`[CANDLE] Price: $${candle.close.toFixed(2)}, Volume: ${candle.volume.toFixed(0)}`))
       }
       
-      // Create and activate grid after building enough history for agents
-      if (processedCandles === 20 && !grid) {
-        console.log(chalk.green('\n✓ Sufficient history built - Creating and activating trading grid...'))
+      // Start active trading after building enough history for agents
+      if (processedCandles === 20) {
+        console.log(chalk.green('\n✓ Sufficient history built - Activating trading system...'))
         
-        // Update grid center price to current market price
-        gridParams.centerPrice = candle.close
+        // Update trading center price to current market price
+        tradingParams.centerPrice = candle.close
+        // console.log(chalk.gray(`  - Center Price: $${candle.close.toFixed(2)} (current market price)`))
+        // console.log(chalk.gray(`  - Levels: ${grid.totalLevels}`))
+        console.log(chalk.gray(`  - Starting BTC: ${startingBtc.toFixed(4)}`))
+        console.log(chalk.gray(`  - Starting USD: $${halfCapital.toFixed(2)}\n`))
         
-        grid = await gridManager.createGrid(gridConfig, gridParams)
-        console.log(chalk.green(`✓ Grid created: ${grid.gridId}`))
-        console.log(chalk.gray(`  - Center Price: $${candle.close.toFixed(2)} (current market price)`))
-        console.log(chalk.gray(`  - Levels: ${grid.totalLevels}`))
-        console.log(chalk.gray(`  - Spacing: ${grid.spacing}%\n`))
-        
-        // Activate grid at current price
-        await gridManager.activateNearbyGrids(grid.gridId, candle.close)
+        // Set initial position tracking
+        buyVolume = startingBtc
+        totalBuyValue = halfCapital
+        tradingActive = true
       }
       
       // Get agent consensus using recent candles (build up history gradually)
@@ -891,6 +936,54 @@ async function runDemo() {
               console.log(chalk.magenta(`[AGENTS] Consensus: ${consensus.action.toUpperCase()} (${(consensus.confidence * 100).toFixed(0)}%) | ${signalSummary}`))
             }
           }
+          
+          // Create orders based on consensus
+          if (tradingActive && consensus.action !== 'hold' && consensus.confidence >= 0.3) {
+            // Calculate order size based on position and risk
+            const currentNetPosition = buyVolume - sellVolume
+            const maxPositionSize = startingBtc * 2 // Max 2x initial position
+            
+            let orderSize = 0
+            if (consensus.action === 'buy' && currentNetPosition < maxPositionSize) {
+              // Buy if not at max position
+              orderSize = Math.min(startingBtc * 0.1, maxPositionSize - currentNetPosition)
+            } else if (consensus.action === 'sell' && currentNetPosition > 0) {
+              // Sell only if we have position (no shorting)
+              orderSize = Math.min(startingBtc * 0.1, currentNetPosition)
+            }
+            
+            if (orderSize > 0.0001) { // Minimum order size
+              const orderId = `order-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+              const order = {
+                id: orderId,
+                side: consensus.action as 'buy' | 'sell',
+                size: orderSize,
+                price: candle.close,
+                type: 'market',
+                status: 'pending',
+                timestamp: Date.now()
+              }
+              
+              // Emit order created event
+              eventBus.emit(EventTypes.ORDER_CREATED, {
+                timestamp: toEpochDate(Date.now()),
+                order
+              })
+              
+              // Immediately fill market orders at current price
+              setTimeout(() => {
+                eventBus.emit(EventTypes.ORDER_FILLED, {
+                  timestamp: toEpochDate(Date.now()),
+                  order: {
+                    ...order,
+                    filledPrice: candle.close,
+                    filledSize: orderSize,
+                    status: 'filled'
+                  }
+                })
+              }, 10)
+            }
+          }
         } catch (error) {
           // Agent errors shouldn't stop the demo
           if (verbose) {
@@ -899,8 +992,8 @@ async function runDemo() {
         }
       }
       
-      // Only process orders after grid is created
-      if (grid) {
+      // Only process orders after trading is active
+      if (tradingActive) {
         // Simple order execution: check if any active orders should be filled
         for (const [, order] of activeOrders.entries()) {
           // Get the execution price based on order type
@@ -931,8 +1024,8 @@ async function runDemo() {
         }
         
         // Update grid with real market data
-        await gridManager.updateGrid(grid.gridId, candle.close)
-        await gridManager.processMarketUpdate(grid.gridId, candle.close, candle.volume)
+        // await gridManager.updateGrid(grid.gridId, candle.close)
+        // await gridManager.processMarketUpdate(grid.gridId, candle.close, candle.volume)
         
         // Process trailing orders
         await trailingOrderManager.processMarketUpdate(symbol, candle.close)
@@ -951,8 +1044,8 @@ async function runDemo() {
         await new Promise(resolve => setTimeout(resolve, 50))
       }
       
-      // Break after duration for time-based demos
-      if (processedCandles * 50 >= duration) break
+      // Break when we've processed all requested candles
+      if (processedCandles >= demoCandles.length) break
     }
     
     console.log(chalk.green('\n✓ Demo completed!\n'))
@@ -1053,37 +1146,63 @@ async function runDemo() {
     const dailyReturns: number[] = []
     let previousValue = initialCapital
     let currentValue = initialCapital
-    let btcBalance = 0
-    let cashBalance = initialCapital
+    let btcBalance = startingBtc // Start with initial BTC position
+    let cashBalance = halfCapital // Start with initial cash
     
-    // Reconstruct portfolio value over time
-    for (const trade of trades) {
-      const tradeValue = trade.price * trade.size
-      
-      if (trade.side === 'buy') {
-        btcBalance += trade.size
-        cashBalance -= tradeValue
-      } else if (trade.side === 'sell') {
-        btcBalance -= trade.size
-        cashBalance += tradeValue
-      }
-      
-      // Calculate current portfolio value
-      currentValue = cashBalance + (btcBalance * trade.price)
-      const dailyReturn = (currentValue - previousValue) / previousValue
-      if (!isNaN(dailyReturn) && isFinite(dailyReturn)) {
-        dailyReturns.push(dailyReturn)
-      }
-      previousValue = currentValue
+    if (verbose) {
+      console.log(chalk.gray(`\nPortfolio Debug:`));
+      console.log(chalk.gray(`  Starting BTC: ${btcBalance.toFixed(4)}`));
+      console.log(chalk.gray(`  Starting Cash: $${cashBalance.toFixed(2)}`));
+      console.log(chalk.gray(`  Total Trades: ${trades.length}`));
     }
     
-    // Add final position value
-    if (btcBalance > 0 && candles.length > 0) {
-      const finalPrice = candles[Math.min(processedCandles - 1, candles.length - 1)]?.close || 0
-      currentValue = cashBalance + (btcBalance * finalPrice)
-      const finalReturn = (currentValue - previousValue) / previousValue
-      if (!isNaN(finalReturn) && isFinite(finalReturn)) {
-        dailyReturns.push(finalReturn)
+    // If we have trades, use them to reconstruct portfolio
+    if (trades.length > 0) {
+      for (const trade of trades) {
+        const tradeValue = trade.price * trade.size
+        
+        if (trade.side === 'buy') {
+          btcBalance += trade.size
+          cashBalance -= tradeValue
+        } else if (trade.side === 'sell') {
+          btcBalance -= trade.size
+          cashBalance += tradeValue
+        }
+        
+        // Calculate current portfolio value
+        currentValue = cashBalance + (btcBalance * trade.price)
+        const dailyReturn = (currentValue - previousValue) / previousValue
+        if (!isNaN(dailyReturn) && isFinite(dailyReturn)) {
+          dailyReturns.push(dailyReturn)
+        }
+        previousValue = currentValue
+      }
+    }
+    
+    // Always calculate returns based on daily price movements for the held position
+    // This ensures we have enough data points for Sharpe/Sortino even with few trades
+    if (dailyReturns.length < 2 && demoCandles.length > 20) {
+      // Calculate returns from candle data
+      const startIdx = Math.max(0, Math.min(20, demoCandles.length - 1)) // Start after agents activate
+      const endIdx = Math.min(processedCandles, demoCandles.length)
+      
+      // Reset to calculate from candles
+      dailyReturns.length = 0
+      btcBalance = startingBtc
+      cashBalance = halfCapital
+      
+      for (let i = startIdx + 1; i < endIdx; i++) {
+        const prevPrice = demoCandles[i - 1]!.close
+        const currPrice = demoCandles[i]!.close
+        
+        // Portfolio value = cash + btc * price
+        const prevValue = cashBalance + (btcBalance * prevPrice)
+        const currValue = cashBalance + (btcBalance * currPrice)
+        
+        const dailyReturn = (currValue - prevValue) / prevValue
+        if (!isNaN(dailyReturn) && isFinite(dailyReturn) && prevValue > 0) {
+          dailyReturns.push(dailyReturn)
+        }
       }
     }
     
@@ -1091,28 +1210,44 @@ async function runDemo() {
     let sharpeRatio = 0
     let sortinoRatio = 0
     
+    if (verbose) {
+      console.log(chalk.gray(`  Daily Returns Array Length: ${dailyReturns.length}`));
+      if (dailyReturns.length > 0) {
+        console.log(chalk.gray(`  Sample Returns: ${dailyReturns.slice(0, 5).map(r => (r * 100).toFixed(2) + '%').join(', ')}...`));
+      }
+    }
+    
     if (dailyReturns.length > 1 && timeYears > 0) {
       // Calculate average daily return
       const avgDailyReturn = dailyReturns.reduce((sum, r) => sum + r, 0) / dailyReturns.length
-      const annualizedReturn = avgDailyReturn * 365 // Annualize
+      const annualizedReturn = avgDailyReturn * 252 // Annualize using trading days
       
       // Calculate standard deviation of returns
       const variance = dailyReturns.reduce((sum, r) => sum + Math.pow(r - avgDailyReturn, 2), 0) / dailyReturns.length
       const stdDev = Math.sqrt(variance)
-      const annualizedStdDev = stdDev * Math.sqrt(365) // Annualize
+      const annualizedStdDev = stdDev * Math.sqrt(252) // Annualize using trading days
+      
+      if (verbose) {
+        console.log(chalk.gray(`\nRisk Calculation Debug:`));
+        console.log(chalk.gray(`  Daily Returns: ${dailyReturns.length} samples`));
+        console.log(chalk.gray(`  Avg Daily Return: ${(avgDailyReturn * 100).toFixed(4)}%`));
+        console.log(chalk.gray(`  Daily Std Dev: ${(stdDev * 100).toFixed(4)}%`));
+        console.log(chalk.gray(`  Annualized Return: ${(annualizedReturn * 100).toFixed(2)}%`));
+        console.log(chalk.gray(`  Annualized Std Dev: ${(annualizedStdDev * 100).toFixed(2)}%`));
+      }
       
       // Sharpe ratio = (Return - Risk Free Rate) / Standard Deviation
       sharpeRatio = annualizedStdDev > 0 ? (annualizedReturn - riskFreeRate) / annualizedStdDev : 0
       
       // Calculate downside deviation for Sortino ratio
-      const downsideThreshold = riskFreeRate / 365 // Daily risk-free rate
+      const downsideThreshold = riskFreeRate / 252 // Daily risk-free rate (trading days)
       const downsideReturns = dailyReturns.filter(r => r < downsideThreshold)
       
       if (downsideReturns.length > 0) {
         const downsideDeviations = downsideReturns.map(r => Math.pow(r - downsideThreshold, 2))
         const downsideVariance = downsideDeviations.reduce((sum, d) => sum + d, 0) / downsideReturns.length
         const downsideDeviation = Math.sqrt(downsideVariance)
-        const annualizedDownsideDeviation = downsideDeviation * Math.sqrt(365)
+        const annualizedDownsideDeviation = downsideDeviation * Math.sqrt(252) // Use trading days
         
         sortinoRatio = annualizedDownsideDeviation > 0 ? (annualizedReturn - riskFreeRate) / annualizedDownsideDeviation : 0
       }
@@ -1165,24 +1300,18 @@ async function runDemo() {
       console.log(table(agentData))
     }
     
-    // Get grid state (only if grid was created)
-    if (grid) {
-      const gridState = gridManager.getGridState(grid.gridId)
-      if (gridState) {
-        const activeLevels = gridState.levels.filter(l => l.isActive).length
-        console.log(chalk.cyan('\nGrid Status:'))
-        console.log(`- Active Grid Levels: ${activeLevels}/${gridState.levels.length}`)
-        console.log(`- Current Price: $${finalPrice.toFixed(2)}`)
-      }
+    // Get trading status
+    if (tradingActive) {
+      console.log(chalk.cyan('\nTrading Status:'))
+      console.log(`- Trading Active: Yes`)
+      console.log(`- Current Price: $${finalPrice.toFixed(2)}`)
     } else {
-      console.log(chalk.yellow('\nGrid Status:'))
-      console.log(`- Grid not created (insufficient history)`)
+      console.log(chalk.yellow('\nTrading Status:'))
+      console.log(`- Trading not activated (insufficient history)`)
       console.log(`- Current Price: $${finalPrice.toFixed(2)}`)
     }
     
     // Cleanup
-    await gridManager.shutdown()
-    
   } catch (error) {
     console.error(chalk.red('\nError:'), error)
     process.exit(1)

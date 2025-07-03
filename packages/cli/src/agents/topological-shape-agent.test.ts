@@ -17,11 +17,10 @@ describe('TopologicalShapeAgent', () => {
   beforeEach(async () => {
     agent = new TopologicalShapeAgent(metadata, undefined, {
       persistenceThreshold: 0.02,
-      voidSizeThreshold: 0.015,
-      clusterEpsilon: 0.01,
-      minClusterSize: 3,
-      homologyDimension: 1,
-      birthDeathRatio: 1.5
+      priceResolution: 0.001,
+      timeWindow: 1440,
+      samplePoints: 20,
+      maxDimension: 2
     })
     await agent.initialize()
   })
@@ -34,9 +33,9 @@ describe('TopologicalShapeAgent', () => {
     symbol: 'BTC-USD',
     currentPrice: prices[prices.length - 1] || 50000,
     candles: prices.map((price, i) => ({
-      open: price - 5,
-      high: price + 10,
-      low: price - 10,
+      open: price,
+      high: price,
+      low: price,
       close: price,
       volume: volumes?.[i] || 1000,
       timestamp: toEpochDate(Date.now() - (prices.length - i) * 60000)
@@ -57,8 +56,8 @@ describe('TopologicalShapeAgent', () => {
     // Create price pattern with a void
     const prices = [
       50000, 50100, 50200, 50300, 50400,  // Rising
-      50600, 50700, 50800,                // Gap/void around 50500
-      50750, 50700, 50650                 // Consolidation
+      51000, 51100, 51200,                // Big gap/void around 50700
+      51150, 51100, 51050                 // Consolidation
     ]
     
     for (const price of prices) {
@@ -67,16 +66,13 @@ describe('TopologicalShapeAgent', () => {
     }
 
     // Price entering void area
-    const voidPrice = 50500
+    const voidPrice = 50700
     const context = createContext([...prices, voidPrice])
     const signal = await agent.analyze(context)
     
     assert.ok(signal)
     // Should generate signal when price enters void
-    if (signal.reason.includes('void')) {
-      assert.ok(['buy', 'sell'].includes(signal.action))
-      assert.ok(signal.confidence >= 0.6)
-    }
+    assert.ok(signal.reason.includes('void'), `Expected reason to include 'void' but got: ${signal.reason}`)
   })
 
   it('should identify persistent features', async () => {
@@ -167,23 +163,21 @@ describe('TopologicalShapeAgent', () => {
     // Create pattern with established void
     const prices = [
       50000, 50100, 50200,        // Lower range
-      50400, 50500, 50600,        // Upper range (void at 50300)
-      50550, 50500, 50450,        // Consolidation
-      50350                       // Entering void
+      50800, 50900, 51000,        // Upper range (big void at 50500)
+      50950, 50900, 50850         // Consolidation
     ]
     
-    for (let i = 0; i < prices.length - 1; i++) {
+    for (let i = 0; i < prices.length; i++) {
       const context = createContext(prices.slice(0, i + 1))
       await agent.analyze(context)
     }
 
     // Price breaking into void
-    const signal = await agent.analyze(createContext(prices))
+    const voidBreakPrice = 50500
+    const signal = await agent.analyze(createContext([...prices, voidBreakPrice]))
     
     assert.ok(signal)
-    if (signal.reason.includes('void')) {
-      assert.ok(signal.confidence >= 0.65)
-    }
+    assert.ok(signal.reason.includes('void'), `Expected reason to include 'void' but got: ${signal.reason}`)
   })
 
   it('should identify homological death', async () => {

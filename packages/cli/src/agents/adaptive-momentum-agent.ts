@@ -1,5 +1,6 @@
 import { IndicatorCalculator } from '@trdr/core'
-import type { AgentSignal, MarketContext } from '@trdr/core/dist/agents/types'
+import type { AgentSignal, MarketContext, AgentMetadata } from '@trdr/core/dist/agents/types'
+import type { Logger } from '@trdr/types'
 import { AdaptiveBaseAgent } from './adaptive-base-agent'
 import type { MarketRegime } from './market-regime-detector'
 
@@ -112,7 +113,7 @@ export class AdaptiveMomentumAgent extends AdaptiveBaseAgent {
   private priceLows: Array<{value: number, index: number}> = []
   private readonly historyLength = 20
   
-  constructor(metadata: any, logger?: any, config?: AdaptiveMomentumConfig) {
+  constructor(metadata: AgentMetadata, logger?: Logger, config?: AdaptiveMomentumConfig) {
     super(metadata, logger, {
       adaptationRate: 0.15,
       regimeMemory: 10,
@@ -238,10 +239,7 @@ export class AdaptiveMomentumAgent extends AdaptiveBaseAgent {
     })
   }
   
-  protected async performAdaptiveAnalysis(
-    context: MarketContext,
-    regime: MarketRegime
-  ): Promise<AgentSignal> {
+  protected async performAdaptiveAnalysis(context: MarketContext, regime: MarketRegime): Promise<AgentSignal> {
     const { candles, currentPrice } = context
     
     // Check minimum data requirements
@@ -282,7 +280,7 @@ export class AdaptiveMomentumAgent extends AdaptiveBaseAgent {
   
   private synthesizeRegimeAwareSignal(
     rsi: number,
-    macd: {line: number, signal: number, histogram: number},
+    _macd: {line: number, signal: number, histogram: number},
     divergence: {type: 'bullish' | 'bearish' | 'none', strength: number, indicator: string, confidence: number},
     condition: {type: string, severity: string, confidence: number},
     momentum: {direction: string, strength: string, confluence: number, confidence: number},
@@ -449,7 +447,7 @@ export class AdaptiveMomentumAgent extends AdaptiveBaseAgent {
     this.updatePivotPoints(price)
   }
   
-  private updatePivotPoints(price: number): void {
+  private updatePivotPoints(_price: number): void {
     const lookback = 3
     
     if (this.priceHistory.length < lookback * 2 + 1) return

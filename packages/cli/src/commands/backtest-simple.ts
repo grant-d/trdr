@@ -7,7 +7,6 @@ import path from 'path'
 import { 
   EventBus, 
   BacktestDataFeed,
-  GridManager,
   TrailingOrderManager,
   AgentOrchestrator
 } from '@trdr/core'
@@ -25,8 +24,6 @@ interface BacktestOptions {
   file: string
   symbol: string
   capital: string
-  gridSpacing: string
-  gridLevels: string
   agents: string
   startDate?: string
   endDate?: string
@@ -59,8 +56,6 @@ export async function runBacktest(options: BacktestOptions): Promise<void> {
     // Parse options
     const symbol = toStockSymbol(options.symbol)
     const initialCapital = parseFloat(options.capital)
-    const gridSpacing = parseFloat(options.gridSpacing)
-    const gridLevels = parseInt(options.gridLevels)
     const agentTypes = options.agents.split(',').map(a => a.trim())
     
     // Load CSV data
@@ -109,11 +104,7 @@ export async function runBacktest(options: BacktestOptions): Promise<void> {
     
     const trailingOrderManager = new TrailingOrderManager(eventBus)
     
-    // Initialize grid manager
-    const gridManager = new GridManager(
-      eventBus,
-      trailingOrderManager
-    )
+    // Grid manager removed - using stop/limit orders instead
     
     // Initialize agents
     spinner.text = 'Initializing trading agents...'
@@ -193,29 +184,8 @@ export async function runBacktest(options: BacktestOptions): Promise<void> {
       }
     })
     
-    // Create initial grid
-    spinner.text = 'Creating trading grid...'
-    const currentPrice = filteredCandles[0]?.close || 50000
-    
-    const gridConfig = {
-      gridSpacing,
-      gridLevels,
-      trailPercent: 0.5,
-      minOrderSize: 0.001,
-      maxOrderSize: currentCapital * 0.05 / currentPrice, // Max 5% per order
-      rebalanceThreshold: 0.1
-    }
-    
-    const gridParams = {
-      symbol,
-      allocatedCapital: currentCapital * 0.8, // Use 80% for grid
-      baseAmount: 0,
-      quoteAmount: currentCapital * 0.8,
-      riskLevel: 0.5
-    }
-    
-    const grid = await gridManager.createGrid(gridConfig, gridParams)
-    await gridManager.activateNearbyGrids(grid.gridId, currentPrice)
+    // Trading configuration
+    spinner.text = 'Setting up trading configuration...'
     
     spinner.succeed('Backtest environment ready')
     
@@ -252,9 +222,7 @@ export async function runBacktest(options: BacktestOptions): Promise<void> {
         // Continue even if consensus fails
       }
       
-      // Update grid with new price
-      await gridManager.updateGrid(grid.gridId, candle.close)
-      await gridManager.processMarketUpdate(grid.gridId, candle.close, candle.volume)
+      // Process market update
       
       // Process trailing orders
       await trailingOrderManager.processMarketUpdate(symbol, candle.close)
@@ -312,7 +280,6 @@ export async function runBacktest(options: BacktestOptions): Promise<void> {
     
     // Cleanup
     await dataFeed.stop()
-    await gridManager.shutdown()
     await agentOrchestrator.shutdown()
     
   } catch (error) {

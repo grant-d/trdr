@@ -1,5 +1,6 @@
 import { BaseAgent } from '@trdr/core'
-import type { AgentSignal, MarketContext } from '@trdr/core/dist/agents/types'
+import type { AgentSignal, MarketContext, AgentMetadata } from '@trdr/core/dist/agents/types'
+import type { Logger } from '@trdr/types'
 import { MarketRegimeDetector, type MarketRegime } from './market-regime-detector'
 
 /**
@@ -39,7 +40,7 @@ export interface AdaptiveConfig {
  * - Adjust signal confidence based on regime alignment
  * - Track performance metrics
  */
-export abstract class AdaptiveBaseAgent extends BaseAgent {
+export abstract class AdaptiveBaseAgent<T = unknown> extends BaseAgent {
   protected regimeDetector = new MarketRegimeDetector()
   protected currentRegime: MarketRegime | null = null
   protected regimeHistory: MarketRegime[] = []
@@ -47,11 +48,11 @@ export abstract class AdaptiveBaseAgent extends BaseAgent {
   
   // Performance tracking for adaptation
   protected recentPerformance: { correct: number, total: number } = { correct: 0, total: 0 }
-  protected parameterPerformance = new Map<string, { value: any, score: number }>()
+  protected parameterPerformance: Map<string, { value: T, score: number }>
   
-  constructor(metadata: any, logger?: any, adaptiveConfig?: AdaptiveConfig) {
+  constructor(metadata: AgentMetadata, logger?: Logger, adaptiveConfig?: AdaptiveConfig) {
     super(metadata, logger)
-    
+    this.parameterPerformance = new Map<string, { value: T, score: number }>()
     this.adaptiveConfig = {
       adaptationRate: adaptiveConfig?.adaptationRate ?? 0.1,
       regimeMemory: adaptiveConfig?.regimeMemory ?? 10,
@@ -212,7 +213,7 @@ export abstract class AdaptiveBaseAgent extends BaseAgent {
   /**
    * Track signal performance for adaptation
    */
-  private trackSignalPerformance(signal: AgentSignal, context: MarketContext): void {
+  private trackSignalPerformance(_signal: AgentSignal, _context: MarketContext): void {
     // This would be called later to evaluate if the signal was correct
     // For now, we just track that a signal was made
     this.recentPerformance.total++

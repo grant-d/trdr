@@ -294,7 +294,6 @@ export interface EnhancedOrderMetadata {
   readonly createdBy?: string
   readonly timeConstraints?: TimeConstraints
   readonly strategy?: string
-  readonly gridLevel?: number
   readonly parentOrderId?: string
 }
 

@@ -1,7 +1,8 @@
-import { IndicatorCalculator } from '@trdr/core'
-import type { AgentSignal, MarketContext } from '@trdr/core/dist/agents/types'
+import type { AgentSignal, MarketContext, AgentMetadata } from '@trdr/core/dist/agents/types'
 import { AdaptiveBaseAgent } from './adaptive-base-agent'
 import type { MarketRegime } from './market-regime-detector'
+import type { Candle } from '@trdr/shared/src/types/market-data'
+import type { Logger } from '@trdr/types'
 
 interface AdaptiveVolumeProfileConfig {
   baseVolumeThreshold?: number
@@ -97,8 +98,6 @@ interface AdaptiveVolumeProfileConfig {
  * - Maximum 5 levels tracked
  */
 export class AdaptiveVolumeProfileAgent extends AdaptiveBaseAgent {
-  private readonly calculator = new IndicatorCalculator()
-  
   // Base configuration
   private readonly baseConfig: Required<AdaptiveVolumeProfileConfig>
   
@@ -110,12 +109,11 @@ export class AdaptiveVolumeProfileAgent extends AdaptiveBaseAgent {
   private spikeDetectionPeriod: number
   
   // Volume tracking
-  private volumeHistory: number[] = []
   private priceHistory: number[] = []
   private readonly volumeProfile = new Map<number, number>()
   private readonly historyLength = 100
   
-  constructor(metadata: any, logger?: any, config?: AdaptiveVolumeProfileConfig) {
+  constructor(metadata: AgentMetadata, logger?: Logger, config?: AdaptiveVolumeProfileConfig) {
     super(metadata, logger, {
       adaptationRate: 0.15,
       regimeMemory: 10,
@@ -238,10 +236,7 @@ export class AdaptiveVolumeProfileAgent extends AdaptiveBaseAgent {
     })
   }
   
-  protected async performAdaptiveAnalysis(
-    context: MarketContext,
-    regime: MarketRegime
-  ): Promise<AgentSignal> {
+  protected async performAdaptiveAnalysis(context: MarketContext, regime: MarketRegime): Promise<AgentSignal> {
     const { candles, currentPrice } = context
     
     if (candles.length < this.spikeDetectionPeriod) {
@@ -264,7 +259,7 @@ export class AdaptiveVolumeProfileAgent extends AdaptiveBaseAgent {
     const supportResistance = this.identifySupportResistance(volumeProfile, currentPrice)
     
     // Calculate average volume
-    const recentCandles = candles.slice(-this.spikeDetectionPeriod)
+    const recentCandles = (candles).slice(-this.spikeDetectionPeriod)
     const averageVolume = recentCandles.reduce((sum, c) => sum + c.volume, 0) / recentCandles.length
     
     // Generate regime-aware signal
@@ -401,7 +396,7 @@ export class AdaptiveVolumeProfileAgent extends AdaptiveBaseAgent {
     )
   }
   
-  private buildVolumeProfile(candles: readonly any[]): Map<number, {volume: number, percentage: number, type: 'poc' | 'high' | 'low' | 'normal'}> {
+  private buildVolumeProfile(candles: readonly Candle[]): Map<number, {volume: number, percentage: number, type: 'poc' | 'high' | 'low' | 'normal'}> {
     const lookback = candles.slice(-this.lookbackPeriod)
     
     let minPrice = Infinity
@@ -466,7 +461,7 @@ export class AdaptiveVolumeProfileAgent extends AdaptiveBaseAgent {
     return profile
   }
   
-  private detectVolumeSpike(candles: readonly any[]): {timestamp: number, volume: number, priceChange: number, significance: number, type: 'bullish' | 'bearish' | 'neutral'} | null {
+  private detectVolumeSpike(candles: readonly Candle[]): {timestamp: number, volume: number, priceChange: number, significance: number, type: 'bullish' | 'bearish' | 'neutral'} | null {
     if (candles.length < this.spikeDetectionPeriod + 1) return null
     
     const currentCandle = candles[candles.length - 1]!
@@ -583,7 +578,6 @@ export class AdaptiveVolumeProfileAgent extends AdaptiveBaseAgent {
   }
   
   protected async onReset(): Promise<void> {
-    this.volumeHistory = []
     this.priceHistory = []
     this.volumeProfile.clear()
     this.currentRegime = null

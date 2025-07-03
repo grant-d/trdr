@@ -1,5 +1,6 @@
 import { IndicatorCalculator } from '@trdr/core'
-import type { AgentSignal, MarketContext } from '@trdr/core/dist/agents/types'
+import type { AgentSignal, MarketContext, AgentMetadata } from '@trdr/core/dist/agents/types'
+import type { Logger } from '@trdr/types'
 import { AdaptiveBaseAgent } from './adaptive-base-agent'
 import type { MarketRegime } from './market-regime-detector'
 
@@ -75,7 +76,7 @@ export class AdaptiveMacdAgent extends AdaptiveBaseAgent {
   private priceHistory: number[] = []
   private readonly historyLength = 15
   
-  constructor(metadata: any, logger?: any, config?: AdaptiveMacdConfig) {
+  constructor(metadata: AgentMetadata, logger?: Logger, config?: AdaptiveMacdConfig) {
     super(metadata, logger, {
       adaptationRate: 0.15,
       regimeMemory: 10,
@@ -159,10 +160,7 @@ export class AdaptiveMacdAgent extends AdaptiveBaseAgent {
     })
   }
   
-  protected async performAdaptiveAnalysis(
-    context: MarketContext,
-    regime: MarketRegime
-  ): Promise<AgentSignal> {
+  protected async performAdaptiveAnalysis(context: MarketContext, regime: MarketRegime): Promise<AgentSignal> {
     const { candles, currentPrice } = context
     
     if (candles.length < this.slowPeriod + this.signalPeriod) {
@@ -304,11 +302,11 @@ export class AdaptiveMacdAgent extends AdaptiveBaseAgent {
   }
   
   private generateRangingSignal(
-    macdLine: number,
-    signal: number,
-    histogram: number,
+    _macdLine: number,
+    _signal: number,
+    _histogram: number,
     crossover: { type: string, strength: number },
-    momentum: string
+    _momentum: string
   ): AgentSignal {
     // In ranging markets, focus on crossovers
     if (crossover.type === 'bullish' && crossover.strength > 0.01) {
@@ -331,11 +329,11 @@ export class AdaptiveMacdAgent extends AdaptiveBaseAgent {
   }
   
   private generateBreakoutSignal(
-    macdLine: number,
-    signal: number,
+    _macdLine: number,
+    _signal: number,
     histogram: number,
-    crossover: { type: string, strength: number },
-    zeroLineCross: string,
+    _crossover: { type: string, strength: number },
+    _zeroLineCross: string,
     regime: MarketRegime
   ): AgentSignal {
     // During breakouts, look for strong momentum
@@ -360,9 +358,9 @@ export class AdaptiveMacdAgent extends AdaptiveBaseAgent {
   }
   
   private generateReversalSignal(
-    macdLine: number,
-    signal: number,
-    histogram: number,
+    _macdLine: number,
+    _signal: number,
+    _histogram: number,
     crossover: { type: string, strength: number },
     momentum: string
   ): AgentSignal {
@@ -380,11 +378,11 @@ export class AdaptiveMacdAgent extends AdaptiveBaseAgent {
   }
   
   private generateDefaultSignal(
-    macdLine: number,
-    signal: number,
-    histogram: number,
+    _macdLine: number,
+    _signal: number,
+    _histogram: number,
     crossover: { type: string, strength: number },
-    momentum: string
+    _momentum: string
   ): AgentSignal {
     // Standard MACD logic
     if (crossover.type === 'bullish') {

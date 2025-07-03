@@ -1,11 +1,11 @@
 import { describe, it, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert'
-import { BollingerAgent } from './bollinger-agent'
+import { BollingerBandsAgent } from './bollinger-agent'
 import type { MarketContext, AgentMetadata } from '@trdr/core/dist/agents/types'
 import { toEpochDate } from '@trdr/shared'
 
 describe('BollingerAgent', () => {
-  let agent: BollingerAgent
+  let agent: BollingerBandsAgent
   const metadata: AgentMetadata = {
     id: 'bollinger-test',
     name: 'Bollinger Test Agent',
@@ -15,7 +15,7 @@ describe('BollingerAgent', () => {
   }
 
   beforeEach(async () => {
-    agent = new BollingerAgent(metadata)
+    agent = new BollingerBandsAgent(metadata)
     await agent.initialize()
   })
 

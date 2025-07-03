@@ -1,5 +1,5 @@
 import type { EpochDate } from './dates'
-import { StockSymbol } from './orders'
+import type { StockSymbol } from './orders'
 
 /**
  * Represents a single candlestick in OHLCV format.

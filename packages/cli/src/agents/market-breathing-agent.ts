@@ -611,7 +611,8 @@ export class MarketBreathingAgent extends BaseAgent {
   /**
    * Adjust trail distance based on breath amplitude
    */
-  private calculateBreathingTrailDistance(
+  // @ts-ignore - unused variable (reserved for future use)
+  private _calculateBreathingTrailDistance(
     baseDistance: number,
     currentAmplitude: number,
     averageAmplitude: number

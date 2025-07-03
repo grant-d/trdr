@@ -79,10 +79,27 @@ export class MacdAgent extends BaseAgent {
         confidence = 0.92
       }
       
+      // Calculate stop loss and limit price for divergence signals
+      const stopLossPercent = 0.02 + (1 - confidence) * 0.015 // 2-3.5% based on confidence
+      const stopLoss = direction === 'buy' 
+        ? currentPrice * (1 - stopLossPercent)
+        : currentPrice * (1 + stopLossPercent)
+      
+      // Slightly aggressive limit for divergence signals (high conviction)
+      const limitSlippage = 0.0005 // 0.05% slippage tolerance
+      const limitPrice = direction === 'buy'
+        ? currentPrice * (1 + limitSlippage)
+        : currentPrice * (1 - limitSlippage)
+      
       return this.createSignal(
         direction,
         confidence,
-        `MACD ${divergence.type} divergence detected (MACD: ${macdLine.toFixed(4)}, momentum: ${momentum})`
+        `MACD ${divergence.type} divergence detected (MACD: ${macdLine.toFixed(4)}, momentum: ${momentum})`,
+        undefined, // analysis
+        undefined, // priceTarget
+        stopLoss,
+        undefined, // positionSize
+        limitPrice
       )
     }
     
@@ -94,10 +111,26 @@ export class MacdAgent extends BaseAgent {
       // Boost confidence if momentum is strengthening
       if (momentum === 'strengthening') confidence = 0.85
       
+      // Calculate stop loss and limit price for zero line crossovers
+      const stopLossPercent = 0.025 + (1 - confidence) * 0.02 // 2.5-4.5% based on confidence
+      const stopLoss = direction === 'buy' 
+        ? currentPrice * (1 - stopLossPercent)
+        : currentPrice * (1 + stopLossPercent)
+      
+      // Conservative limit for trend signals
+      const limitPrice = direction === 'buy'
+        ? currentPrice * 1.001 // 0.1% above for quick fill
+        : currentPrice * 0.999 // 0.1% below for quick fill
+      
       return this.createSignal(
         direction,
         confidence,
-        `MACD zero line ${zeroLineCross} crossover (MACD: ${macdLine.toFixed(4)}, signal: ${signal.toFixed(4)})`
+        `MACD zero line ${zeroLineCross} crossover (MACD: ${macdLine.toFixed(4)}, signal: ${signal.toFixed(4)})`,
+        undefined, // analysis
+        undefined, // priceTarget
+        stopLoss,
+        undefined, // positionSize
+        limitPrice
       )
     }
     

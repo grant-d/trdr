@@ -1,5 +1,6 @@
 import type { PerformanceHistory, PerformanceSummary, WeightAdjustment } from './performance-tracker'
-import { EpochDate, epochDateNow } from '@trdr/shared'
+import type { EpochDate} from '@trdr/shared'
+import { epochDateNow } from '@trdr/shared'
 
 /**
  * Performance chart data point

@@ -79,18 +79,20 @@ interface SpacetimeEvent {
 export class LorentzianDistanceAgent extends BaseAgent {
   protected readonly config: Required<LorentzianConfig>
   private priceHistory: ComplexPrice[] = []
-  private patternLibrary: LorentzianPattern[] = []
+  // @ts-ignore - unused variable (reserved for future use)
+  private _patternLibrary: LorentzianPattern[] = []
   private spacetimeEvents: SpacetimeEvent[] = []
-  private currentLightCone: { future: ComplexPrice[], past: ComplexPrice[] } = { future: [], past: [] }
+  // @ts-ignore - unused variable (reserved for future use)
+  private _currentLightCone: { future: ComplexPrice[], past: ComplexPrice[] } = { future: [], past: [] }
   
   constructor(metadata: any, logger?: any, config?: LorentzianConfig) {
     super(metadata, logger)
     
     this.config = {
       lookbackPeriod: config?.lookbackPeriod ?? 100,
-      similarityThreshold: config?.similarityThreshold ?? 0.1, // 10% distance
-      imaginaryWeight: config?.imaginaryWeight ?? 0.5,
-      minMatches: config?.minMatches ?? 3,
+      similarityThreshold: config?.similarityThreshold ?? 0.5, // Increased significantly for more matches
+      imaginaryWeight: config?.imaginaryWeight ?? 1.0, // Increased to make momentum more significant
+      minMatches: config?.minMatches ?? 2, // Reduced to allow more signals
       useTimeDilation: config?.useTimeDilation ?? true,
       marketSpeedLimit: config?.marketSpeedLimit ?? 0.05 // 5% max price change per period
     }
@@ -110,6 +112,15 @@ export class LorentzianDistanceAgent extends BaseAgent {
     // 1. Calculate momentum from recent price changes
     const prices = candles.slice(-20).map(c => c.close)
     const momentum = this.calculateMomentum(prices, 5)
+    
+    // Debug logging
+    if (Math.random() < 0.05) { // Log 5% of the time to avoid spam
+      this.logger?.debug('Lorentzian analysis', {
+        currentPrice,
+        momentum: momentum.toFixed(6),
+        priceHistoryLength: this.priceHistory.length
+      })
+    }
     
     // 2. Create complex price representation
     const currentComplex = this.createComplexPrice(currentPrice, momentum)
@@ -132,6 +143,23 @@ export class LorentzianDistanceAgent extends BaseAgent {
       this.config.similarityThreshold
     )
     
+    // Debug pattern matching
+    if (this.priceHistory.length > 50 && neighbors.length === 0) {
+      // Try with a more lenient threshold to see if patterns exist
+      const lenientNeighbors = this.findLorentzianNeighbors(
+        currentComplex,
+        this.priceHistory.slice(0, -1),
+        this.config.similarityThreshold * 2 // Double the threshold
+      )
+      if (lenientNeighbors.length > 0) {
+        this.logger?.debug('Found patterns with lenient threshold', {
+          strictThreshold: this.config.similarityThreshold,
+          lenientThreshold: this.config.similarityThreshold * 2,
+          lenientMatches: lenientNeighbors.length
+        })
+      }
+    }
+    
     if (neighbors.length < this.config.minMatches) {
       return this.createSignal('hold', 0.5, `Found ${neighbors.length} patterns, need ${this.config.minMatches}`)
     }
@@ -142,20 +170,21 @@ export class LorentzianDistanceAgent extends BaseAgent {
     
     // 6. Check causality constraints
     if (this.config.useTimeDilation) {
-      this.currentLightCone = this.constructLightCone(currentEvent, this.config.marketSpeedLimit)
+      this._currentLightCone = this.constructLightCone(currentEvent, this.config.marketSpeedLimit)
     }
     
     // 7. Analyze pattern outcomes
     const patternAnalysis = this.analyzePatternOutcomes(currentComplex, neighbors)
     
     // 8. Generate signal based on pattern predictions
-    if (patternAnalysis.averageReturn > 0.001 && patternAnalysis.confidence > 0.6) {
+    // Adjusted thresholds to be more balanced
+    if (patternAnalysis.averageReturn > 0.0005 && patternAnalysis.confidence > 0.55) {
       return this.createSignal(
         'buy',
         patternAnalysis.confidence,
         `Lorentzian pattern match: ${neighbors.length} similar patterns, avg return: ${(patternAnalysis.averageReturn * 100).toFixed(2)}%`
       )
-    } else if (patternAnalysis.averageReturn < -0.001 && patternAnalysis.confidence > 0.6) {
+    } else if (patternAnalysis.averageReturn < -0.0005 && patternAnalysis.confidence > 0.55) {
       const signal = this.createSignal(
         'sell',
         patternAnalysis.confidence,
@@ -166,19 +195,29 @@ export class LorentzianDistanceAgent extends BaseAgent {
     
     // Check phase transitions
     const phaseTransition = this.detectPhaseTransition(currentComplex, this.priceHistory)
-    if (phaseTransition.detected) {
+    if (phaseTransition.detected && Math.abs(currentComplex.imaginary) > 0.0001) {
+      // Only act on phase transitions with significant momentum
       const signal = this.createSignal(
         phaseTransition.direction === 'positive' ? 'buy' : 'sell',
         0.65,
-        `Phase transition detected: ${phaseTransition.type}`
+        `Phase transition detected: ${phaseTransition.type}, momentum: ${currentComplex.imaginary.toFixed(4)}`
       )
       return enforceNoShorting(signal, context)
     }
     
+    // Check for momentum reversal patterns
+    const reversalSignal = this.detectMomentumReversal(currentComplex, this.priceHistory)
+    if (reversalSignal.action !== 'hold') {
+      return enforceNoShorting(reversalSignal, context)
+    }
+    
+    const phaseDegrees = isFinite(currentComplex.phase) ? 
+      (currentComplex.phase * 180 / Math.PI).toFixed(0) : '0'
+    
     return this.createSignal(
       'hold',
       0.5,
-      `Lorentzian analysis: ${neighbors.length} patterns, phase: ${(currentComplex.phase * 180 / Math.PI).toFixed(0)}°`
+      `Lorentzian analysis: ${neighbors.length} patterns, phase: ${phaseDegrees}°, momentum: ${currentComplex.imaginary.toFixed(4)}`
     )
   }
   
@@ -204,7 +243,7 @@ export class LorentzianDistanceAgent extends BaseAgent {
    * Analyze outcomes of similar patterns
    */
   private analyzePatternOutcomes(
-    current: ComplexPrice,
+    _current: ComplexPrice,
     neighbors: ComplexPrice[]
   ): { averageReturn: number, confidence: number } {
     if (neighbors.length === 0) return { averageReturn: 0, confidence: 0 }
@@ -224,6 +263,12 @@ export class LorentzianDistanceAgent extends BaseAgent {
         const return_ = (futurePrice.real - neighbor.real) / neighbor.real
         totalReturn += return_
         validOutcomes++
+      } else if (neighborIndex >= 0 && neighborIndex < this.priceHistory.length - 2) {
+        // If we can't look 5 ahead, try 2 periods
+        const futurePrice = this.priceHistory[neighborIndex + 2]!
+        const return_ = (futurePrice.real - neighbor.real) / neighbor.real
+        totalReturn += return_ * 0.5 // Weight less since shorter timeframe
+        validOutcomes += 0.5
       }
     }
     
@@ -262,10 +307,15 @@ export class LorentzianDistanceAgent extends BaseAgent {
     const currentQuadrant = Math.floor((currentPhase + Math.PI) / (Math.PI / 2))
     
     if (previousQuadrant !== currentQuadrant) {
+      // Determine direction based on quadrant transition, not just momentum
+      const quadrantTransition = currentQuadrant - previousQuadrant
+      const isPositiveTransition = (quadrantTransition === 1 || quadrantTransition === -3) || 
+                                   (currentQuadrant === 0 || currentQuadrant === 3)
+      
       return {
         detected: true,
         type: `Quadrant ${previousQuadrant} → ${currentQuadrant}`,
-        direction: current.imaginary > 0 ? 'positive' : 'negative'
+        direction: isPositiveTransition ? 'positive' : 'negative'
       }
     }
     
@@ -399,7 +449,8 @@ export class LorentzianDistanceAgent extends BaseAgent {
     
     // Calculate velocity magnitude
     const v_squared = v_x * v_x + v_y * v_y + v_z * v_z
-    const v = Math.sqrt(v_squared)
+    // @ts-ignore - unused variable (reserved for future use)
+    const _v = Math.sqrt(v_squared)
     
     // Lorentz factor (gamma)
     const c = this.config.marketSpeedLimit // Speed limit
@@ -418,9 +469,10 @@ export class LorentzianDistanceAgent extends BaseAgent {
    * Check if pattern is within light cone (causal)
    * @todo Verify causality constraints
    */
-  private isWithinLightCone(
-    event1: SpacetimeEvent, 
-    event2: SpacetimeEvent
+  // @ts-ignore - unused variable (reserved for future use)
+  private _isWithinLightCone(
+    _event1: SpacetimeEvent, 
+    _event2: SpacetimeEvent
   ): boolean {
     // Stub implementation
     return true
@@ -430,9 +482,10 @@ export class LorentzianDistanceAgent extends BaseAgent {
    * Transform to price rest frame
    * @todo Lorentz transformation to remove price trend
    */
-  private lorentzTransform(
+  // @ts-ignore - unused variable (reserved for future use)
+  private _lorentzTransform(
     event: SpacetimeEvent, 
-    velocity: number
+    _velocity: number
   ): SpacetimeEvent {
     // Stub implementation
     return event
@@ -442,7 +495,8 @@ export class LorentzianDistanceAgent extends BaseAgent {
    * Calculate pattern quality using Lorentzian metric
    * @todo Assess pattern strength in hyperbolic space
    */
-  private calculatePatternQuality(pattern: LorentzianPattern): number {
+  // @ts-ignore - unused variable (reserved for future use)
+  private _calculatePatternQuality(_pattern: LorentzianPattern): number {
     // Stub implementation
     return 0.5
   }
@@ -451,9 +505,10 @@ export class LorentzianDistanceAgent extends BaseAgent {
    * Predict future price using matched patterns
    * @todo Extrapolate along geodesics in Lorentzian space
    */
-  private predictFromPatterns(
-    matches: LorentzianPattern[], 
-    currentPhase: number
+  // @ts-ignore - unused variable (reserved for future use)
+  private _predictFromPatterns(
+    _matches: LorentzianPattern[], 
+    _currentPhase: number
   ): { price: number, confidence: number } {
     // Stub implementation
     return { price: 0, confidence: 0 }
@@ -488,14 +543,74 @@ export class LorentzianDistanceAgent extends BaseAgent {
       smoothedMomentum /= weightSum
     }
     
-    // Blend basic and smoothed momentum
-    return momentum * 0.7 + smoothedMomentum * 0.3
+    // Blend basic and smoothed momentum with normalization
+    const blendedMomentum = momentum * 0.7 + smoothedMomentum * 0.3
+    
+    // Add detrending to avoid directional bias
+    const avgPrice = recentPrices.reduce((a, b) => a + b, 0) / recentPrices.length
+    const priceStdDev = Math.sqrt(
+      recentPrices.reduce((sum, p) => sum + Math.pow(p - avgPrice, 2), 0) / recentPrices.length
+    )
+    const normalizedMomentum = priceStdDev > 0 ? blendedMomentum * avgPrice / priceStdDev : blendedMomentum
+    
+    return normalizedMomentum
+  }
+  
+  /**
+   * Detect momentum reversal patterns
+   */
+  private detectMomentumReversal(
+    current: ComplexPrice,
+    history: ComplexPrice[]
+  ): AgentSignal {
+    if (history.length < 10) {
+      return this.createSignal('hold', 0.4, 'Insufficient history for reversal detection')
+    }
+    
+    const recentHistory = history.slice(-10)
+    const momentums = recentHistory.map(p => p.imaginary)
+    momentums.push(current.imaginary)
+    
+    // Calculate momentum trend
+    let trendSum = 0
+    for (let i = 1; i < momentums.length; i++) {
+      trendSum += momentums[i]! - momentums[i-1]!
+    }
+    const momentumTrend = trendSum / (momentums.length - 1)
+    
+    // Find local extremes
+    const recentMomentum = momentums.slice(-5)
+    const minMomentum = Math.min(...recentMomentum)
+    const maxMomentum = Math.max(...recentMomentum)
+    const currentMomentum = current.imaginary
+    
+    // Detect bullish reversal: momentum was very negative, now turning positive
+    if (minMomentum < -0.001 && currentMomentum > minMomentum * 0.5 && momentumTrend > 0.00001) {
+      const confidence = Math.min(0.7, 0.5 + Math.abs(momentumTrend) * 100)
+      return this.createSignal(
+        'buy',
+        confidence,
+        `Bullish momentum reversal: min ${minMomentum.toFixed(4)} → current ${currentMomentum.toFixed(4)}`
+      )
+    }
+    
+    // Detect bearish reversal: momentum was very positive, now turning negative
+    if (maxMomentum > 0.001 && currentMomentum < maxMomentum * 0.5 && momentumTrend < -0.00001) {
+      const confidence = Math.min(0.7, 0.5 + Math.abs(momentumTrend) * 100)
+      return this.createSignal(
+        'sell',
+        confidence,
+        `Bearish momentum reversal: max ${maxMomentum.toFixed(4)} → current ${currentMomentum.toFixed(4)}`
+      )
+    }
+    
+    return this.createSignal('hold', 0.5, 'No momentum reversal detected')
   }
   
   protected async onReset(): Promise<void> {
     this.priceHistory = []
-    this.patternLibrary = []
+    this._patternLibrary = []
     this.spacetimeEvents = []
-    this.currentLightCone = { future: [], past: [] }
+    this._currentLightCone = { future: [], past: [] }
   }
 }

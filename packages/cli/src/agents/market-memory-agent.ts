@@ -1,5 +1,6 @@
 import { BaseAgent } from '@trdr/core'
 import type { AgentSignal, MarketContext } from '@trdr/core/dist/agents/types'
+import type { Candle } from '@trdr/shared/src/types/market-data'
 
 interface MemoryNode {
   price: number
@@ -125,7 +126,8 @@ export class MarketMemoryAgent extends BaseAgent {
   
   // Tracking
   private volumeMA = 0
-  private volatilityMA = 0
+  // @ts-ignore - unused variable (reserved for future use)
+  private _volatilityMA = 0
   private lastClusterUpdate = 0
   
   protected async onInitialize(): Promise<void> {
@@ -168,7 +170,7 @@ export class MarketMemoryAgent extends BaseAgent {
     )
   }
   
-  private updateMetrics(candles: readonly any[]): void {
+  private updateMetrics(candles: readonly Candle[]): void {
     const recentCandles = candles.slice(-20)
     
     // Volume moving average
@@ -183,10 +185,10 @@ export class MarketMemoryAgent extends BaseAgent {
       const trueRange = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose))
       totalRange += trueRange / prevClose
     }
-    this.volatilityMA = totalRange / (recentCandles.length - 1)
+    this._volatilityMA = totalRange / (recentCandles.length - 1)
   }
   
-  private formMemories(candles: readonly any[]): void {
+  private formMemories(candles: readonly Candle[]): void {
     const currentCandle = candles[candles.length - 1]!
     const prevCandle = candles[candles.length - 2]
     
@@ -272,7 +274,8 @@ export class MarketMemoryAgent extends BaseAgent {
   }
   
   private decayMemories(currentTime: number): void {
-    const hourInMs = 3600000
+    // @ts-ignore - unused variable (reserved for future use)
+    const _hourInMs = 3600000
     const dayInMs = 86400000
     const weekInMs = 604800000
     
@@ -391,8 +394,8 @@ export class MarketMemoryAgent extends BaseAgent {
   private generateMemoryBasedSignal(
     memories: MemoryNode[],
     clusters: MemoryCluster[],
-    candles: readonly any[],
-    currentPrice: number
+    candles: readonly Candle[],
+    _currentPrice: number
   ): AgentSignal {
     // No relevant memories
     if (memories.length === 0 && clusters.length === 0) {
@@ -519,7 +522,7 @@ export class MarketMemoryAgent extends BaseAgent {
   
   private generateConfluenceSignal(
     memories: MemoryNode[],
-    approachVelocity: number
+    _approachVelocity: number
   ): AgentSignal {
     // Count emotion types
     const emotions = memories.reduce((acc, m) => {
@@ -574,7 +577,7 @@ export class MarketMemoryAgent extends BaseAgent {
     this.memories = []
     this.memoryClusters = []
     this.volumeMA = 0
-    this.volatilityMA = 0
+    this._volatilityMA = 0
     this.lastClusterUpdate = 0
   }
   
