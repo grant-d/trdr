@@ -1,20 +1,11 @@
 import { createWriteStream, promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import type { Writable } from 'node:stream'
-import type { OhlcvDto } from '../models/ohlcv.dto'
-import { formatOhlcv, isValidOhlcv } from '../models/ohlcv.dto'
+import type { OhlcvDto } from '../models'
+import { formatOhlcv, isValidOhlcv } from '../models'
 import logger from '../utils/logger'
-import type {
-  CoefficientData,
-  OhlcvQuery,
-  OhlcvRepository,
-  RepositoryConfig
-} from './ohlcv-repository.interface'
-import {
-  RepositoryConnectionError,
-  RepositoryStorageError,
-  RepositoryValidationError
-} from './ohlcv-repository.interface'
+import type { CoefficientData, OhlcvQuery, OhlcvRepository, RepositoryConfig } from './ohlcv-repository.interface'
+import { RepositoryConnectionError, RepositoryStorageError, RepositoryValidationError } from './ohlcv-repository.interface'
 
 /**
  * CSV-based implementation of the OhlcvRepository interface
@@ -71,7 +62,7 @@ export class CsvRepository implements OhlcvRepository {
    */
   async save(data: OhlcvDto): Promise<void> {
     this.ensureReady()
-    
+
     if (!isValidOhlcv(data)) {
       throw new RepositoryValidationError('Invalid OHLCV data')
     }
@@ -207,7 +198,7 @@ export class CsvRepository implements OhlcvRepository {
     await fs.mkdir(path.dirname(filePath), { recursive: true })
 
     // Create write stream in append mode
-    const stream = createWriteStream(filePath, { 
+    const stream = createWriteStream(filePath, {
       flags: 'a',
       encoding: 'utf8',
       highWaterMark: 64 * 1024 // 64KB buffer
@@ -422,7 +413,7 @@ export class CsvRepository implements OhlcvRepository {
    */
   private async getRelevantFiles(symbol?: string, exchange?: string): Promise<string[]> {
     const ohlcvDir = path.join(this.basePath, 'ohlcv')
-    
+
     try {
       const files = await fs.readdir(ohlcvDir)
       const csvFiles = files.filter(file => file.endsWith('.csv'))
@@ -430,14 +421,14 @@ export class CsvRepository implements OhlcvRepository {
       if (symbol && exchange) {
         const symbolKey = this.getSymbolKey(symbol, exchange)
         const targetFile = `${symbolKey}.csv`
-        return csvFiles.includes(targetFile) 
+        return csvFiles.includes(targetFile)
           ? [path.join(ohlcvDir, targetFile)]
           : []
       }
 
       if (symbol) {
-        const matchingFiles = csvFiles.filter(file => 
-          file.includes(symbol.replace(/[^a-zA-Z0-9_-]/g, '_'))
+        const matchingFiles = csvFiles.filter(file =>
+          file.includes(symbol.replace(/[^a-zA-Z0-9_-]/g, '_')),
         )
         return matchingFiles.map(file => path.join(ohlcvDir, file))
       }
@@ -489,7 +480,7 @@ export class CsvRepository implements OhlcvRepository {
   private parseCsvRow(line: string): OhlcvDto | null {
     try {
       const values = this.parseCsvLine(line)
-      
+
       if (values.length < this.csvHeaders.length) {
         return null
       }
@@ -690,11 +681,11 @@ export class CsvRepository implements OhlcvRepository {
     exchange?: string
   ): Promise<CoefficientData | null> {
     this.ensureReady()
-    
+
     // For CSV implementation, this is inefficient as we need to read the entire file
     // In a production system, you might want to use SQLite for coefficients even with CSV for OHLCV
     logger.warn('getCoefficient is inefficient with CSV storage - consider using SQLite for coefficients')
-    
+
     try {
       const coefficients = await this.getCoefficients(name, symbol, exchange)
       return coefficients.length > 0 ? coefficients[0]! : null
@@ -702,7 +693,7 @@ export class CsvRepository implements OhlcvRepository {
       logger.error('Failed to get coefficient', { error, name })
       throw new RepositoryStorageError(
         `Failed to get coefficient: ${String(error)}`,
-        error instanceof Error ? error : undefined
+        error instanceof Error ? error : undefined,
       )
     }
   }
@@ -718,7 +709,7 @@ export class CsvRepository implements OhlcvRepository {
     this.ensureReady()
 
     const filePath = this.getCoefficientFilePath()
-    
+
     if (!(await this.fileExists(filePath))) {
       return []
     }
@@ -777,7 +768,7 @@ export class CsvRepository implements OhlcvRepository {
     const regexPattern = pattern
       .replace(/\*/g, '.*')
       .replace(/\?/g, '.')
-    
+
     const regex = new RegExp(`^${regexPattern}$`, 'i')
     return regex.test(name)
   }
@@ -799,8 +790,8 @@ export class CsvRepository implements OhlcvRepository {
       const filtered = allCoefficients.filter(coeff => {
         if (this.matchesPattern(coeff.name, namePattern)) {
           if (symbol && coeff.symbol !== symbol) return true
-          if (exchange && coeff.exchange !== exchange) return true
-          return false // This one should be deleted
+          return !!(exchange && coeff.exchange !== exchange)
+           // This one should be deleted
         }
         return true // Keep this one
       })
@@ -921,7 +912,7 @@ export class CsvRepository implements OhlcvRepository {
       for (const file of files) {
         const data = await this.readCsvFile(file)
         const filtered = data.filter(
-          item => item.timestamp < startTime || item.timestamp > endTime
+          item => item.timestamp < startTime || item.timestamp > endTime,
         )
 
         const deletedCount = data.length - filtered.length

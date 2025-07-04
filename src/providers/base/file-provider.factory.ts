@@ -1,7 +1,7 @@
 import * as path from 'node:path'
 import { CsvFileProvider } from './csv-file-provider'
 import type { FileProvider } from './file-provider.base'
-import { ParquetFileProvider } from './parquet-file-provider'
+import { JsonlFileProvider } from './jsonl-file-provider'
 import type { FileProviderConfig } from './types'
 
 /**
@@ -9,13 +9,13 @@ import type { FileProviderConfig } from './types'
  */
 export function createFileProvider(config: FileProviderConfig): FileProvider {
   const format = config.format || path.extname(config.path).toLowerCase().slice(1)
-  
+
   switch (format) {
     case 'csv':
       return new CsvFileProvider(config)
-    case 'parquet':
+    case 'jsonl':
     case 'pq':
-      return new ParquetFileProvider(config)
+      return new JsonlFileProvider(config)
     default:
       throw new Error(`Unsupported file format: ${format}`)
   }

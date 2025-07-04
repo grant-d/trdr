@@ -1,20 +1,10 @@
 import type { Database as DatabaseType, Statement } from 'better-sqlite3'
 import Database from 'better-sqlite3'
-import type { OhlcvDto } from '../models/ohlcv.dto'
-import { isValidOhlcv } from '../models/ohlcv.dto'
+import type { OhlcvDto } from '../models'
+import { isValidOhlcv } from '../models'
 import logger from '../utils/logger'
-import type {
-  AttachedDatabase,
-  CoefficientData,
-  OhlcvQuery,
-  OhlcvRepository,
-  RepositoryConfig
-} from './ohlcv-repository.interface'
-import {
-  RepositoryConnectionError,
-  RepositoryStorageError,
-  RepositoryValidationError
-} from './ohlcv-repository.interface'
+import type { AttachedDatabase, CoefficientData, OhlcvQuery, OhlcvRepository, RepositoryConfig } from './ohlcv-repository.interface'
+import { RepositoryConnectionError, RepositoryStorageError, RepositoryValidationError } from './ohlcv-repository.interface'
 
 // Database row type definitions
 interface OhlcvRow {

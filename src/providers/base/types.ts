@@ -1,4 +1,4 @@
-import type { DataProviderConfig } from '../../interfaces/data-provider.interface'
+import type { DataProviderConfig } from '../../interfaces'
 
 /**
  * Column mapping configuration for file providers
@@ -21,7 +21,7 @@ export interface FileProviderConfig extends DataProviderConfig {
   /** Path to the data file */
   path: string
   /** File format (auto-detected if not specified) */
-  format?: 'csv' | 'parquet'
+  format?: 'csv' | 'jsonl'
   /** Column mapping configuration */
   columnMapping?: ColumnMapping
   /** Chunk size for streaming (number of rows) */

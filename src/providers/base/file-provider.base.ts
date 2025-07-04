@@ -1,23 +1,19 @@
 import { constants as fsConstants, promises as fsPromises } from 'node:fs'
 import * as path from 'node:path'
-import type {
-  DataProvider,
-  HistoricalParams,
-  RealtimeParams
-} from '../../interfaces/data-provider.interface'
-import type { OhlcvDto } from '../../models/ohlcv.dto'
-import { isValidOhlcv } from '../../models/ohlcv.dto'
+import type { DataProvider, HistoricalParams, RealtimeParams } from '../../interfaces'
+import type { OhlcvDto } from '../../models'
+import { isValidOhlcv } from '../../models'
 import logger from '../../utils/logger'
 import type { ColumnMapping, FileProviderConfig } from './types'
 
 /**
  * Abstract base class for file-based data providers
- * Provides common functionality for CSV, Parquet, and other file formats
+ * Provides common functionality for CSV, Jsonl, and other file formats
  */
 export abstract class FileProvider implements DataProvider {
   readonly name = 'file'
   protected readonly filePath: string
-  protected readonly format: 'csv' | 'parquet'
+  protected readonly format: 'csv' | 'jsonl'
   protected readonly columnMapping: ColumnMapping
   protected readonly chunkSize: number
   protected readonly exchange: string
@@ -32,7 +28,7 @@ export abstract class FileProvider implements DataProvider {
     this.chunkSize = config.chunkSize || 1000
     this.exchange = config.exchange || 'unknown'
     this.symbol = config.symbol || 'unknown'
-    
+
     logger.info('FileProvider initialized', {
       filePath: this.filePath,
       format: this.format,
@@ -47,18 +43,18 @@ export abstract class FileProvider implements DataProvider {
     try {
       // Check if file exists
       await fsPromises.access(this.filePath, fsConstants.R_OK)
-      
+
       // Get file stats
       const stats = await fsPromises.stat(this.filePath)
       if (!stats.isFile()) {
         throw new Error(`Path is not a file: ${this.filePath}`)
       }
-      
+
       logger.info('Connected to file', {
         path: this.filePath,
         size: stats.size
       })
-      
+
       this.connected = true
     } catch (error) {
       logger.error('Failed to connect to file', { error, path: this.filePath })
@@ -121,14 +117,13 @@ export abstract class FileProvider implements DataProvider {
   /**
    * Detects file format from extension
    */
-  protected detectFormatFromExtension(filePath: string): 'csv' | 'parquet' {
+  protected detectFormatFromExtension(filePath: string): 'csv' | 'jsonl' {
     const ext = path.extname(filePath).toLowerCase()
     switch (ext) {
       case '.csv':
         return 'csv'
-      case '.parquet':
-      case '.pq':
-        return 'parquet'
+      case '.jsonl':
+        return 'jsonl'
       default:
         throw new Error(`Unsupported file extension: ${ext}`)
     }
@@ -162,10 +157,10 @@ export abstract class FileProvider implements DataProvider {
       const low = this.parseNumber(rawData[this.columnMapping.low], 'low', rowNumber)
       const close = this.parseNumber(rawData[this.columnMapping.close], 'close', rowNumber)
       const volume = this.parseNumber(rawData[this.columnMapping.volume], 'volume', rowNumber)
-      
+
       // Get symbol and exchange
-      const symbol = this.columnMapping.symbol && rawData[this.columnMapping.symbol] 
-        ? String(rawData[this.columnMapping.symbol]) 
+      const symbol = this.columnMapping.symbol && rawData[this.columnMapping.symbol]
+        ? String(rawData[this.columnMapping.symbol])
         : this.symbol
       const exchange = this.columnMapping.exchange && rawData[this.columnMapping.exchange]
         ? String(rawData[this.columnMapping.exchange])
@@ -207,14 +202,14 @@ export abstract class FileProvider implements DataProvider {
     // Using year 2001 as threshold: timestamps before this in raw number form are likely seconds
     // 2001-01-01 00:00:00 UTC = 978,307,200 seconds = 978,307,200,000 milliseconds
     const SECONDS_THRESHOLD = 978307200000 // Year 2001 in milliseconds
-    
+
     const convertIfSeconds = (num: number): number => {
       // If the number is less than our threshold, it's likely in seconds
       // Also check if it's greater than 0 to avoid negative timestamps
       return num > 0 && num < SECONDS_THRESHOLD ? num * 1000 : num
     }
 
-    // Handle BigInt from Parquet files
+    // Handle BigInt from Jsonl files
     if (typeof value === 'bigint') {
       const num = Number(value)
       return convertIfSeconds(num)
@@ -233,13 +228,13 @@ export abstract class FileProvider implements DataProvider {
       // eslint-disable-next-line @typescript-eslint/no-base-to-string
       valueStr = String(value)
     }
-    
+
     // Check if it's a numeric string
     const numericValue = Number(valueStr)
     if (!isNaN(numericValue)) {
       return convertIfSeconds(numericValue)
     }
-    
+
     // Try to parse as date string
     const date = new Date(valueStr)
     if (isNaN(date.getTime())) {
@@ -265,10 +260,10 @@ export abstract class FileProvider implements DataProvider {
       // eslint-disable-next-line @typescript-eslint/no-base-to-string
       valueStr = String(value)
     }
-    
+
     // Remove commas from numbers (e.g., "1,000.50" -> "1000.50")
     valueStr = valueStr.replace(/,/g, '')
-    
+
     const num = Number(valueStr)
     if (isNaN(num)) {
       throw new Error(`Invalid ${field} at row ${rowNumber}: ${valueStr}`)

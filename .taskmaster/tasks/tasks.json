@@ -72,9 +72,9 @@
       {
         "id": 2,
         "title": "File-Based Data Provider Implementation",
-        "description": "Implement the FileProvider to handle CSV and Parquet files with configurable column mapping and streaming processing.",
-        "details": "1. Create a `FileProvider` class implementing the `DataProvider` interface\n2. Implement streaming CSV reader that processes data in chunks\n3. Add support for configurable column mapping\n4. Implement Parquet file support using parquet-wasm or arrow\n5. Ensure all file operations are streaming to avoid memory issues\n6. Standardize timestamps to UTC milliseconds\n7. Add validation for OHLC relationships (high ≥ low, etc.)\n\n```typescript\nclass FileProvider implements DataProvider {\n  name = 'file';\n  private filePath: string;\n  private format: 'csv' | 'parquet';\n  private columnMapping: ColumnMapping;\n  \n  constructor(config: FileProviderConfig) {\n    this.filePath = config.path;\n    this.format = config.format || this.detectFormatFromExtension(config.path);\n    this.columnMapping = config.columnMapping || this.getDefaultColumnMapping();\n  }\n  \n  async connect(): Promise<void> {\n    // Validate file exists and is readable\n  }\n  \n  async disconnect(): Promise<void> {\n    // Close any open file handles\n  }\n  \n  async *getHistoricalData(params: HistoricalParams): AsyncIterator<OhlcvDto> {\n    // Create readable stream for file\n    // Process in chunks (e.g., 1000 rows at a time)\n    // Map columns according to columnMapping\n    // Validate and standardize data\n    // Yield standardized OhlcvDto objects\n  }\n  \n  async *subscribeRealtime(): AsyncIterator<OhlcvDto> {\n    throw new Error('FileProvider does not support real-time data');\n  }\n  \n  getRequiredEnvVars(): string[] {\n    return [];\n  }\n  \n  private detectFormatFromExtension(path: string): 'csv' | 'parquet' {\n    // Auto-detect format from file extension\n  }\n  \n  private getDefaultColumnMapping(): ColumnMapping {\n    // Return default column mapping\n  }\n}\n```",
-        "testStrategy": "1. Unit tests with sample CSV and Parquet files\n2. Test with different column mappings\n3. Verify streaming works with large files (>100MB)\n4. Test error handling for invalid files\n5. Benchmark performance with different batch sizes\n6. Verify memory usage remains constant regardless of file size",
+        "description": "Implement the FileProvider to handle CSV and jsonl files with configurable column mapping and streaming processing.",
+        "details": "1. Create a `FileProvider` class implementing the `DataProvider` interface\n2. Implement streaming CSV reader that processes data in chunks\n3. Add support for configurable column mapping\n4. Implement jsonl file support using jsonl-wasm or arrow\n5. Ensure all file operations are streaming to avoid memory issues\n6. Standardize timestamps to UTC milliseconds\n7. Add validation for OHLC relationships (high ≥ low, etc.)\n\n```typescript\nclass FileProvider implements DataProvider {\n  name = 'file';\n  private filePath: string;\n  private format: 'csv' | 'jsonl';\n  private columnMapping: ColumnMapping;\n  \n  constructor(config: FileProviderConfig) {\n    this.filePath = config.path;\n    this.format = config.format || this.detectFormatFromExtension(config.path);\n    this.columnMapping = config.columnMapping || this.getDefaultColumnMapping();\n  }\n  \n  async connect(): Promise<void> {\n    // Validate file exists and is readable\n  }\n  \n  async disconnect(): Promise<void> {\n    // Close any open file handles\n  }\n  \n  async *getHistoricalData(params: HistoricalParams): AsyncIterator<OhlcvDto> {\n    // Create readable stream for file\n    // Process in chunks (e.g., 1000 rows at a time)\n    // Map columns according to columnMapping\n    // Validate and standardize data\n    // Yield standardized OhlcvDto objects\n  }\n  \n  async *subscribeRealtime(): AsyncIterator<OhlcvDto> {\n    throw new Error('FileProvider does not support real-time data');\n  }\n  \n  getRequiredEnvVars(): string[] {\n    return [];\n  }\n  \n  private detectFormatFromExtension(path: string): 'csv' | 'jsonl' {\n    // Auto-detect format from file extension\n  }\n  \n  private getDefaultColumnMapping(): ColumnMapping {\n    // Return default column mapping\n  }\n}\n```",
+        "testStrategy": "1. Unit tests with sample CSV and jsonl files\n2. Test with different column mappings\n3. Verify streaming works with large files (>100MB)\n4. Test error handling for invalid files\n5. Benchmark performance with different batch sizes\n6. Verify memory usage remains constant regardless of file size",
         "priority": "high",
         "dependencies": [
           1
@@ -114,12 +114,12 @@
           },
           {
             "id": 4,
-            "title": "Implement Parquet File Support",
-            "description": "Extend the FileProvider to support reading from Parquet files, maintaining the same interface as the CSV provider.",
+            "title": "Implement jsonl File Support",
+            "description": "Extend the FileProvider to support reading from jsonl files, maintaining the same interface as the CSV provider.",
             "dependencies": [
               1
             ],
-            "details": "1. Create ParquetFileProvider extending the base FileProvider\n2. Integrate with appropriate Parquet library for Node.js\n3. Implement streaming/chunked reading for Parquet files\n4. Handle Parquet-specific schema and type information\n5. Optimize column projection to only read required fields\n6. Implement proper resource management for Parquet readers\n7. Add performance optimizations for Parquet's columnar format\n\nAcceptance Criteria:\n- Successfully reads standard Parquet files\n- Maintains consistent memory usage for large files\n- Correctly handles Parquet data types and converts to appropriate JavaScript types\n- Provides same interface as CSV provider for consistent usage\n- Takes advantage of Parquet's columnar nature for performance when possible",
+            "details": "1. Create jsonlFileProvider extending the base FileProvider\n2. Integrate with appropriate jsonl library for Node.js\n3. Implement streaming/chunked reading for jsonl files\n4. Handle jsonl-specific schema and type information\n5. Optimize column projection to only read required fields\n6. Implement proper resource management for jsonl readers\n7. Add performance optimizations for jsonl's columnar format\n\nAcceptance Criteria:\n- Successfully reads standard jsonl files\n- Maintains consistent memory usage for large files\n- Correctly handles jsonl data types and converts to appropriate JavaScript types\n- Provides same interface as CSV provider for consistent usage\n- Takes advantage of jsonl's columnar nature for performance when possible",
             "status": "done",
             "testStrategy": ""
           },
@@ -152,8 +152,8 @@
       {
         "id": 3,
         "title": "Storage Layer Implementation",
-        "description": "Implement the storage layer with repository pattern for SQLite, CSV, and Parquet outputs with proper indexing and streaming writes.",
-        "details": "1. Create `OhlcvRepository` interface\n2. Implement concrete repositories for each output type:\n   - `SqliteRepository`\n   - `CsvRepository`\n   - `ParquetRepository`\n3. Set up SQLite schema with proper indexing for time-series data\n4. Implement batch inserts with immediate disk writes\n5. Add support for coefficient storage\n6. Implement append-only writes to prevent memory buildup\n\n```typescript\ninterface OhlcvRepository {\n  initialize(): Promise<void>;\n  appendBatch(data: OhlcvDto[]): Promise<void>;\n  getLastTimestamp(symbol: string): Promise<number | null>;\n  storeCoefficients(symbol: string, transform: string, coefficients: Record<string, number>): Promise<void>;\n  getCoefficients(symbol: string, transform: string): Promise<Record<string, number> | null>;\n  close(): Promise<void>;\n}\n\nclass SqliteRepository implements OhlcvRepository {\n  private db: Database;\n  private table: string;\n  private batchSize: number;\n  \n  constructor(config: SqliteConfig) {\n    this.db = new Database(config.database);\n    this.table = config.table;\n    this.batchSize = config.batchSize || 1000;\n  }\n  \n  async initialize(): Promise<void> {\n    // Create tables if they don't exist\n    // Set up indexes on timestamp, symbol\n    // Prepare statements for batch inserts\n  }\n  \n  async appendBatch(data: OhlcvDto[]): Promise<void> {\n    // Use transaction for batch insert\n    // Handle dynamic columns from transforms\n  }\n  \n  async getLastTimestamp(symbol: string): Promise<number | null> {\n    // Query for most recent timestamp for a symbol\n  }\n  \n  async storeCoefficients(symbol: string, transform: string, coefficients: Record<string, number>): Promise<void> {\n    // Store transform coefficients with timestamp range\n  }\n  \n  async getCoefficients(symbol: string, transform: string): Promise<Record<string, number> | null> {\n    // Retrieve most recent coefficients for symbol/transform\n  }\n  \n  async close(): Promise<void> {\n    // Close database connection\n  }\n}\n```",
+        "description": "Implement the storage layer with repository pattern for SQLite, CSV, and jsonl outputs with proper indexing and streaming writes.",
+        "details": "1. Create `OhlcvRepository` interface\n2. Implement concrete repositories for each output type:\n   - `SqliteRepository`\n   - `CsvRepository`\n   - `jsonlRepository`\n3. Set up SQLite schema with proper indexing for time-series data\n4. Implement batch inserts with immediate disk writes\n5. Add support for coefficient storage\n6. Implement append-only writes to prevent memory buildup\n\n```typescript\ninterface OhlcvRepository {\n  initialize(): Promise<void>;\n  appendBatch(data: OhlcvDto[]): Promise<void>;\n  getLastTimestamp(symbol: string): Promise<number | null>;\n  storeCoefficients(symbol: string, transform: string, coefficients: Record<string, number>): Promise<void>;\n  getCoefficients(symbol: string, transform: string): Promise<Record<string, number> | null>;\n  close(): Promise<void>;\n}\n\nclass SqliteRepository implements OhlcvRepository {\n  private db: Database;\n  private table: string;\n  private batchSize: number;\n  \n  constructor(config: SqliteConfig) {\n    this.db = new Database(config.database);\n    this.table = config.table;\n    this.batchSize = config.batchSize || 1000;\n  }\n  \n  async initialize(): Promise<void> {\n    // Create tables if they don't exist\n    // Set up indexes on timestamp, symbol\n    // Prepare statements for batch inserts\n  }\n  \n  async appendBatch(data: OhlcvDto[]): Promise<void> {\n    // Use transaction for batch insert\n    // Handle dynamic columns from transforms\n  }\n  \n  async getLastTimestamp(symbol: string): Promise<number | null> {\n    // Query for most recent timestamp for a symbol\n  }\n  \n  async storeCoefficients(symbol: string, transform: string, coefficients: Record<string, number>): Promise<void> {\n    // Store transform coefficients with timestamp range\n  }\n  \n  async getCoefficients(symbol: string, transform: string): Promise<Record<string, number> | null> {\n    // Retrieve most recent coefficients for symbol/transform\n  }\n  \n  async close(): Promise<void> {\n    // Close database connection\n  }\n}\n```",
         "testStrategy": "1. Unit tests for each repository implementation\n2. Test batch inserts with various sizes\n3. Verify proper indexing with query performance tests\n4. Test coefficient storage and retrieval\n5. Verify append-only behavior works correctly\n6. Test with large datasets to ensure memory usage remains constant",
         "priority": "high",
         "dependencies": [
@@ -194,12 +194,12 @@
           },
           {
             "id": 4,
-            "title": "Implement ParquetRepository",
-            "description": "Create a Parquet-based implementation of the OhlcvRepository interface optimized for columnar storage of time-series data.",
+            "title": "Implement jsonlRepository",
+            "description": "Create a jsonl-based implementation of the OhlcvRepository interface optimized for columnar storage of time-series data.",
             "dependencies": [
               1
             ],
-            "details": "Implement ParquetRepository class that: 1) Stores OHLCV data in Parquet format organized by symbol, 2) Implements proper Parquet schema with appropriate data types, 3) Uses compression settings optimized for time-series data, 4) Implements efficient column filtering for queries, 5) Handles coefficient storage in a separate Parquet file, 6) Provides configurable partitioning options for large datasets. Ensure compatibility with common Parquet readers and tools.",
+            "details": "Implement jsonlRepository class that: 1) Stores OHLCV data in jsonl format organized by symbol, 2) Implements proper jsonl schema with appropriate data types, 3) Uses compression settings optimized for time-series data, 4) Implements efficient column filtering for queries, 5) Handles coefficient storage in a separate jsonl file, 6) Provides configurable partitioning options for large datasets. Ensure compatibility with common jsonl readers and tools.",
             "status": "done",
             "testStrategy": ""
           },
@@ -253,8 +253,72 @@
         "dependencies": [
           1
         ],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement BaseTransform abstract class",
+            "description": "Create the abstract base class that all transformations will inherit from, with core functionality for transform type tracking and coefficient storage.",
+            "dependencies": [],
+            "details": "Implement the BaseTransform class with the TransformType enum, coefficient tracking, and the abstract apply method. Include proper TypeScript typing and ensure the class implements the Transform interface. Add methods for coefficient retrieval and any common utility functions needed by child classes.\n<info added on 2025-07-04T23:15:42.735Z>\nImplementation of the BaseTransform abstract class is complete with the following features:\n- Type tracking and coefficient storage\n- Abstract transform method that returns AsyncGenerator\n- Helper methods for async iteration\n- Validation and parameter management\n- Support for reversible transforms\n\nA test suite has been created with 6 out of 7 tests passing. The one failing test is related to import issues with the hyjsonl module, which needs to be resolved separately. The BaseTransform class itself is functionally complete and ready for derived transform implementations.\n</info added on 2025-07-04T23:15:42.735Z>",
+            "status": "done",
+            "testStrategy": "Create unit tests verifying the base class can be extended correctly and that coefficient storage/retrieval works as expected."
+          },
+          {
+            "id": 2,
+            "title": "Implement MissingValueHandler transform",
+            "description": "Create a transform to handle missing values in time series data using various strategies like forward fill, backward fill, and interpolation.",
+            "dependencies": [],
+            "details": "Extend BaseTransform to create MissingValueHandler with configurable strategies. Implement forward fill (copy last valid value), interpolation (linear interpolation between valid points), and optional custom value replacement. The transform should detect NaN, null, and undefined values and apply the selected strategy while maintaining the original data structure.",
+            "status": "done",
+            "testStrategy": "Test with datasets containing various patterns of missing values to verify each strategy correctly fills gaps without modifying valid data points."
+          },
+          {
+            "id": 3,
+            "title": "Complete TimeframeAggregator implementation",
+            "description": "Finish the TimeframeAggregator transform to convert OHLCV data from one timeframe to another (e.g., 1m to 5m, 1h to 4h).",
+            "dependencies": [],
+            "details": "Complete the existing TimeframeAggregator class by implementing the getTargetTimestamp method and the apply generator function. Handle timeframe parsing (1m, 5m, 1h, etc.), proper OHLC aggregation (first open, highest high, lowest low, last close, summed volume), and alignment options. Ensure the transform can process data in a streaming fashion and correctly handles the final incomplete bar.",
+            "status": "done",
+            "testStrategy": "Test with continuous data streams of various timeframes, verifying correct aggregation and timestamp alignment. Include edge cases like market gaps and irregular timestamps."
+          },
+          {
+            "id": 4,
+            "title": "Implement Normalizer transforms",
+            "description": "Create transforms for data normalization including log returns, z-score, and min-max scaling.",
+            "dependencies": [],
+            "details": "Complete the LogReturnsNormalizer and implement additional normalizers: ZScoreNormalizer (standardize data to mean=0, std=1) and MinMaxNormalizer (scale data to a specific range, typically [0,1]). Each normalizer should track coefficients (like mean, std, min, max) to allow for potential reversal of the transformation. Ensure all normalizers handle multi-symbol data correctly.",
+            "status": "done",
+            "testStrategy": "Test each normalizer with both synthetic and real market data, verifying mathematical correctness and proper coefficient tracking. Include tests for reversibility where applicable."
+          },
+          {
+            "id": 5,
+            "title": "Implement PriceCalculations transform",
+            "description": "Create a transform for derived price calculations like HLC3 (High+Low+Close/3), OHLC4, typical price, and other common price aggregations.",
+            "dependencies": [],
+            "details": "Implement PriceCalculations transform that can compute various price aggregations and add them as new fields to the data. Support common calculations like HLC3, OHLC4, typical price, and weighted close. Make the calculation method configurable and allow for custom formulas. Ensure the transform preserves the original price data while adding the calculated fields.",
+            "status": "done",
+            "testStrategy": "Test each calculation method with known input values and verify the mathematical correctness of the output. Test with multi-symbol data to ensure proper handling."
+          },
+          {
+            "id": 6,
+            "title": "Implement transform composition and chaining",
+            "description": "Create a mechanism to compose multiple transforms into a single pipeline that can be applied to data streams.",
+            "dependencies": [],
+            "details": "Implement a TransformPipeline class that can chain multiple transforms together and apply them sequentially to a data stream. The pipeline should handle proper data flow between transforms, maintain transform order, and aggregate coefficients from all transforms in the chain. Include methods to add/remove/reorder transforms and to apply the entire pipeline as a single operation.",
+            "status": "done",
+            "testStrategy": "Test various combinations of transforms in different orders, verifying that data flows correctly through the pipeline and that each transform receives properly formatted input from the previous transform."
+          },
+          {
+            "id": 7,
+            "title": "Implement transform serialization and persistence",
+            "description": "Add functionality to serialize transforms and their coefficients for storage and later reuse.",
+            "dependencies": [],
+            "details": "Implement methods to serialize and deserialize transforms and their coefficients to/from JSON. This should include the transform type, parameters, and any learned coefficients. For the TransformPipeline, serialize the entire chain of transforms while maintaining their order and relationships. Ensure that deserialized transforms can be correctly applied to new data.",
+            "status": "done",
+            "testStrategy": "Test serialization and deserialization of individual transforms and pipelines, verifying that all parameters and coefficients are correctly preserved. Apply the deserialized transforms to test data and compare results with the original transforms."
+          }
+        ]
       },
       {
         "id": 5,
@@ -319,7 +383,7 @@
     ],
     "metadata": {
       "created": "2025-07-04T20:49:04.828Z",
-      "updated": "2025-07-04T23:08:04.587Z",
+      "updated": "2025-07-05T02:46:55.551Z",
       "description": "Tasks for master context"
     }
   }

@@ -1,12 +1,12 @@
 <context>
 # Overview
-A **desktop CLI application** for trading data processing that handles both historical backtesting and live data. This is a local command-line tool, NOT a web service - no user authentication, no server APIs to build, no multi-user concerns. Takes OHLCV data from CSV/Parquet files or APIs, transforms it (aggregate timeframes, normalize, generate alternative bars), and outputs to CSV/Parquet/SQLite. Config-driven, composable, and designed to run either as a one-shot CLI tool or continuous local Node.js process.
+A **desktop CLI application** for trading data processing that handles both historical backtesting and live data. This is a local command-line tool, NOT a web service - no user authentication, no server APIs to build, no multi-user concerns. Takes OHLCV data from CSV/jsonl files or APIs, transforms it (aggregate timeframes, normalize, generate alternative bars), and outputs to CSV/jsonl/SQLite. Config-driven, composable, and designed to run either as a one-shot CLI tool or continuous local Node.js process.
 
 # Core Features
 ## Data Pipeline
-- **Inputs**: CSV or Parquet files, Coinbase WebSocket/REST API (more providers later)
+- **Inputs**: CSV or jsonl files, Coinbase WebSocket/REST API (more providers later)
 - **Transforms**: Composable pipeline with intermediate outputs
-- **Outputs**: CSV, Parquet, SQLite, or any combination at any stage
+- **Outputs**: CSV, jsonl, SQLite, or any combination at any stage
 - **Modes**: Interactive CLI or continuously running Node.js process
 
 ## Key Capabilities
@@ -31,8 +31,8 @@ A **desktop CLI application** for trading data processing that handles both hist
 
 ## Storage
 - SQLite for persistent storage
-- CSV/Parquet for data exchange
-- Parquet preferred for intermediate files (better compression, faster reads)
+- CSV/jsonl for data exchange
+- jsonl preferred for intermediate files (better compression, faster reads)
 - Proper indexing for time-series queries
 - Coefficient tracking for reversible transforms
 
@@ -66,7 +66,7 @@ A **desktop CLI application** for trading data processing that handles both hist
     getRequiredEnvVars(): string[]  // e.g., ['COINBASE_API_KEY']
   }
   ```
-- `FileProvider`: handles CSV and Parquet files with configurable column mapping
+- `FileProvider`: handles CSV and jsonl files with configurable column mapping
 - `CoinbaseProvider`: REST + WebSocket, rate limiting
 - Provider factory creates instances based on config
 - All providers validated for required env vars on creation
@@ -315,7 +315,7 @@ interface PipelineConfig {
     type: 'file' | 'provider'
     // For file input
     path?: string
-    format?: 'csv' | 'parquet'  // auto-detect from extension if not specified
+    format?: 'csv' | 'jsonl'  // auto-detect from extension if not specified
     columnMapping?: {
       timestamp: string
       open: string
@@ -335,15 +335,15 @@ interface PipelineConfig {
     params: TransformParams['params']
     enabled: boolean
     output?: {  // Optional intermediate output
-      type: 'csv' | 'parquet' | 'sqlite' | 'json'
-      path?: string  // For CSV/Parquet/JSON
+      type: 'csv' | 'jsonl' | 'sqlite' | 'json'
+      path?: string  // For CSV/jsonl/JSON
       table?: string  // For SQLite
       includeMetadata?: boolean
     }
   }>
   output: {
-    type: 'csv' | 'parquet' | 'sqlite' | 'json'
-    path?: string  // For CSV/Parquet/JSON
+    type: 'csv' | 'jsonl' | 'sqlite' | 'json'
+    path?: string  // For CSV/jsonl/JSON
     table?: string  // For SQLite
     database?: string  // SQLite database path
     includeMetadata?: boolean
@@ -368,7 +368,7 @@ interface PipelineConfig {
 ## APIs and Integrations
 - Coinbase WebSocket API for real-time data
 - REST endpoints for historical data
-- CSV and Parquet file parsing with configurable formats
+- CSV and jsonl file parsing with configurable formats
 - Future: Alpaca, Interactive Brokers APIs
 
 # Development Summary
@@ -421,7 +421,7 @@ See "Simplified Sequential Development Plan" section for detailed week-by-week i
   - Configurable max retries per provider
   - Circuit breaker pattern for repeated failures
 - **Backfill on Startup**:
-  - Check last timestamp in output (database/parquet)
+  - Check last timestamp in output (database/jsonl)
   - Calculate gap between last timestamp and current time
   - Use REST API to fetch missing historical data
   - Merge backfilled data before resuming real-time feed
@@ -505,7 +505,7 @@ See "Simplified Sequential Development Plan" section for detailed week-by-week i
 3. Log returns and percent change
 4. Pipeline with intermediate outputs
 5. End-to-end tests
-6. Parquet reader/writer support
+6. jsonl reader/writer support
 
 ## Stage 4: Live Data & Server Mode (Week 4)
 1. WebSocket client abstraction
@@ -559,7 +559,7 @@ See "Simplified Sequential Development Plan" section for detailed week-by-week i
 ## Technology Stack
 - TypeScript (Node.js runtime)
 - SQLite for data storage (better-sqlite3)
-- Parquet support (parquet-wasm or arrow)
+- jsonl support (jsonl-wasm or arrow)
 - WebSocket libraries for real-time feeds (ws)
 - node:test for unit testing
 - Winston or Pino for logging
@@ -610,8 +610,8 @@ See "Simplified Sequential Development Plan" section for detailed week-by-week i
   },
   "transformations": [],
   "output": {
-    "type": "parquet",
-    "path": "data/coinbase-live.parquet",
+    "type": "jsonl",
+    "path": "data/coinbase-live.jsonl",
     "includeMetadata": true
   },
   "options": {
@@ -710,9 +710,9 @@ See "Simplified Sequential Development Plan" section for detailed week-by-week i
 
 ## What We're Building
 A simple, composable data pipeline for trading that:
-1. Reads market data from CSV/Parquet files or Coinbase API
+1. Reads market data from CSV/jsonl files or Coinbase API
 2. Transforms it through a configurable pipeline
-3. Saves results to CSV/Parquet/SQLite
+3. Saves results to CSV/jsonl/SQLite
 4. Runs as one-shot CLI or continuous server
 
 ## Core Principle

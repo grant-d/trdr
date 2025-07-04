@@ -5,7 +5,7 @@ import type { CoefficientData, OhlcvRepository } from '../../../src/repositories
 
 /**
  * Base test suite for all OhlcvRepository implementations
- * Ensures consistent behavior across SQLite, CSV, and Parquet repositories
+ * Ensures consistent behavior across SQLite, CSV, and Jsonl repositories
  */
 export abstract class RepositoryTestBase {
   public abstract createRepository(): Promise<OhlcvRepository>

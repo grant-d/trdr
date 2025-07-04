@@ -3,20 +3,20 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { rm } from 'node:fs/promises'
 import { RepositoryTestBase } from './repository-test-base'
-import { ParquetRepository } from '../../../src/repositories/parquet-repository'
+import { JsonlRepository } from '../../../src/repositories/jsonl-repository'
 import type { OhlcvRepository } from '../../../src/repositories/ohlcv-repository.interface'
 
 /**
- * Parquet Repository Tests
+ * Jsonl Repository Tests
  */
-class ParquetRepositoryTest extends RepositoryTestBase {
+class JsonlRepositoryTest extends RepositoryTestBase {
   private testDir: string = ''
 
   public async createRepository(): Promise<OhlcvRepository> {
     // Create a unique test directory
-    this.testDir = join(tmpdir(), `trdr-parquet-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    this.testDir = join(tmpdir(), `trdr-jsonl-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
     
-    const repo = new ParquetRepository()
+    const repo = new JsonlRepository()
     await repo.initialize({
       connectionString: this.testDir,
       options: {
@@ -39,10 +39,10 @@ class ParquetRepositoryTest extends RepositoryTestBase {
 }
 
 /**
- * Parquet-specific tests
+ * Jsonl-specific tests
  */
-test('Parquet Repository - Columnar Storage', async () => {
-  const testInstance = new ParquetRepositoryTest()
+test('Jsonl Repository - Columnar Storage', async () => {
+  const testInstance = new JsonlRepositoryTest()
   const repo = await testInstance.createRepository()
   
   try {
@@ -77,8 +77,8 @@ test('Parquet Repository - Columnar Storage', async () => {
   }
 })
 
-test('Parquet Repository - Batch Buffer Management', async () => {
-  const testInstance = new ParquetRepositoryTest()
+test('Jsonl Repository - Batch Buffer Management', async () => {
+  const testInstance = new JsonlRepositoryTest()
   const repo = await testInstance.createRepository()
   
   try {
@@ -108,8 +108,8 @@ test('Parquet Repository - Batch Buffer Management', async () => {
   }
 })
 
-test('Parquet Repository - File Deduplication', async () => {
-  const testInstance = new ParquetRepositoryTest()
+test('Jsonl Repository - File Deduplication', async () => {
+  const testInstance = new JsonlRepositoryTest()
   const repo = await testInstance.createRepository()
   
   try {
@@ -151,8 +151,8 @@ test('Parquet Repository - File Deduplication', async () => {
   }
 })
 
-test('Parquet Repository - Compression Efficiency', async () => {
-  const testInstance = new ParquetRepositoryTest()
+test('Jsonl Repository - Compression Efficiency', async () => {
+  const testInstance = new JsonlRepositoryTest()
   const repo = await testInstance.createRepository()
   
   try {
@@ -184,8 +184,8 @@ test('Parquet Repository - Compression Efficiency', async () => {
   }
 })
 
-test('Parquet Repository - BigInt Timestamp Handling', async () => {
-  const testInstance = new ParquetRepositoryTest()
+test('Jsonl Repository - BigInt Timestamp Handling', async () => {
+  const testInstance = new JsonlRepositoryTest()
   const repo = await testInstance.createRepository()
   
   try {
@@ -218,7 +218,7 @@ test('Parquet Repository - BigInt Timestamp Handling', async () => {
 })
 
 // Run the main test suite
-test('Parquet Repository - Complete Test Suite', async () => {
-  const testInstance = new ParquetRepositoryTest()
+test('Jsonl Repository - Complete Test Suite', async () => {
+  const testInstance = new JsonlRepositoryTest()
   await testInstance.runAllTests()
 })

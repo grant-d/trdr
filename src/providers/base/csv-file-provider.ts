@@ -1,7 +1,7 @@
 import { createReadStream } from 'node:fs'
 import { Transform } from 'node:stream'
-import type { HistoricalParams } from '../../interfaces/data-provider.interface'
-import type { OhlcvDto } from '../../models/ohlcv.dto'
+import type { HistoricalParams } from '../../interfaces'
+import type { OhlcvDto } from '../../models'
 import logger from '../../utils/logger'
 import { FileProvider } from './file-provider.base'
 import type { FileProviderConfig } from './types'
@@ -16,17 +16,17 @@ export class CsvFileProvider extends FileProvider {
 
   constructor(config: FileProviderConfig) {
     super(config)
-    
+
     // Allow custom delimiter
-    this.delimiter = ('delimiter' in config && typeof config.delimiter === 'string') 
-      ? config.delimiter 
+    this.delimiter = ('delimiter' in config && typeof config.delimiter === 'string')
+      ? config.delimiter
       : ','
   }
 
   /**
    * Streams historical data from CSV file
    */
-  async *getHistoricalData(params: HistoricalParams): AsyncIterableIterator<OhlcvDto> {
+  async* getHistoricalData(params: HistoricalParams): AsyncIterableIterator<OhlcvDto> {
     if (!this.connected) {
       throw new Error('Provider not connected. Call connect() first.')
     }
@@ -73,10 +73,10 @@ export class CsvFileProvider extends FileProvider {
           // Parse data row
           const values = this.parseCsvLine(line)
           if (values.length !== this.headers.length) {
-            logger.warn('Skipping malformed row', { 
-              row: rowNumber, 
-              expected: this.headers.length, 
-              actual: values.length 
+            logger.warn('Skipping malformed row', {
+              row: rowNumber,
+              expected: this.headers.length,
+              actual: values.length
             })
             continue
           }
@@ -200,11 +200,8 @@ export class CsvFileProvider extends FileProvider {
     }
 
     // Check symbol filter
-    if (params.symbols.length > 0 && !params.symbols.includes(ohlcv.symbol)) {
-      return false
-    }
+    return !(params.symbols.length > 0 && !params.symbols.includes(ohlcv.symbol))
 
-    return true
   }
 
   /**

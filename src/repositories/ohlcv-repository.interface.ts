@@ -1,4 +1,4 @@
-import type { OhlcvDto } from '../models/ohlcv.dto'
+import type { OhlcvDto } from '../models'
 
 /**
  * Query parameters for filtering OHLCV data
@@ -62,7 +62,7 @@ export interface RepositoryConfig {
 
 /**
  * Repository interface for OHLCV data storage and retrieval
- * Supports multiple storage backends (SQLite, CSV, Parquet) with the same interface
+ * Supports multiple storage backends (SQLite, CSV, Jsonl) with the same interface
  */
 export interface OhlcvRepository {
   /**

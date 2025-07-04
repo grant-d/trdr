@@ -5,9 +5,9 @@ A desktop CLI application for processing trading data that handles both historic
 ## Overview
 
 `trdr` is a command-line tool that:
-- Reads market data from CSV/Parquet files or exchanges (Coinbase, etc.)
+- Reads market data from CSV/Jsonl files or exchanges (Coinbase, etc.)
 - Transforms data through a configurable pipeline
-- Outputs to CSV/Parquet/SQLite for analysis
+- Outputs to CSV/Jsonl/SQLite for analysis
 - Runs as either a one-shot CLI tool or continuous local process
 
 ## Installation
@@ -105,7 +105,7 @@ export COINBASE_API_SECRET=your_api_secret
 ## Features
 
 ### Data Providers
-- **File Provider**: Read from CSV and Parquet files
+- **File Provider**: Read from CSV and Jsonl files
 - **Coinbase Provider**: Real-time and historical data via REST/WebSocket
 
 ### Transformations
@@ -117,7 +117,7 @@ export COINBASE_API_SECRET=your_api_secret
 
 ### Storage Options
 - **CSV**: Simple, human-readable output
-- **Parquet**: Efficient columnar storage
+- **Jsonl**: Efficient columnar storage
 - **SQLite**: Indexed database for queries
 
 ## License

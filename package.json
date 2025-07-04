@@ -4,6 +4,7 @@
   "description": "Trading system",
   "type": "module",
   "main": "dist/index.js",
+  "private": false,
   "scripts": {
     "up": "git gc && yarn global upgrade && yarn && yarn outdated",
     "build": "rimraf dist && tsc",
@@ -19,7 +20,7 @@
     "format": "prettier --write 'src/**/*.ts' 'scripts/**/*.ts' 'tests/**/*.ts'",
     "format:check": "prettier --check 'src/**/*.ts' 'scripts/**/*.ts' 'tests/**/*.ts'",
     "clean": "rimraf dist node_modules coverage",
-    "csv-to-parquet": "tsx scripts/csv-to-parquet.ts"
+    "csv-to-jsonl": "tsx scripts/csv-to-jsonl.ts"
   },
   "keywords": [],
   "author": "",
@@ -41,8 +42,6 @@
   "dependencies": {
     "@coinbase-sample/core-ts": "^0.2.0",
     "better-sqlite3": "^12.2.0",
-    "hyparquet": "^1.17.1",
-    "hyparquet-writer": "^0.6.0",
     "winston": "^3.17.0"
   }
 }

@@ -5,28 +5,28 @@
 export interface OhlcvDto {
   /** Exchange where the data originates from (e.g., 'coinbase', 'binance') */
   exchange: string
-  
+
   /** Trading pair symbol (e.g., 'BTC-USD', 'ETH-USD') */
   symbol: string
-  
+
   /** Unix timestamp in milliseconds (UTC) */
   timestamp: number
-  
+
   /** Opening price for the time period */
   open: number
-  
+
   /** Highest price during the time period */
   high: number
-  
+
   /** Lowest price during the time period */
   low: number
-  
+
   /** Closing price for the time period */
   close: number
-  
+
   /** Volume traded during the time period */
   volume: number
-  
+
   /** Additional columns that can be added by transforms */
   [key: string]: number | string
 }
@@ -41,7 +41,7 @@ export function isValidOhlcv(data: OhlcvDto): boolean {
   if (!data.exchange || !data.symbol || !data.timestamp) {
     return false
   }
-  
+
   // Check numeric fields are valid numbers
   if (
     isNaN(data.timestamp) ||
@@ -53,33 +53,30 @@ export function isValidOhlcv(data: OhlcvDto): boolean {
   ) {
     return false
   }
-  
+
   // Check OHLC relationships
   if (data.high < data.low) {
     return false
   }
-  
+
   if (data.high < data.open || data.high < data.close) {
     return false
   }
-  
+
   if (data.low > data.open || data.low > data.close) {
     return false
   }
-  
+
   // Check non-negative values
   if (data.open < 0 || data.high < 0 || data.low < 0 || data.close < 0 || data.volume < 0) {
     return false
   }
-  
+
   // Check timestamp is reasonable (between year 2000 and 2100)
   const year2000 = 946684800000
   const year2100 = 4102444800000
-  if (data.timestamp < year2000 || data.timestamp > year2100) {
-    return false
-  }
-  
-  return true
+  return !(data.timestamp < year2000 || data.timestamp > year2100)
+
 }
 
 /**

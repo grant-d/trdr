@@ -1,6 +1,6 @@
 export {
   createFileProvider, CsvFileProvider,
   FileProvider,
-  ParquetFileProvider
+  JsonlFileProvider
 } from './base'
 export type { ColumnMapping, FileProviderConfig } from './base'
