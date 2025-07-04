@@ -34,11 +34,11 @@ export interface SignalEvaluation {
  * - Adapt to market conditions
  */
 export class AgentPerformanceTracker {
-  private signalHistory = new Map<string, SignalEvaluation[]>()
-  private performanceCache = new Map<string, AgentPerformance>()
+  private readonly signalHistory = new Map<string, SignalEvaluation[]>()
+  private readonly performanceCache = new Map<string, AgentPerformance>()
   private marketVolatility = 0.02 // Default 2% volatility
   
-  constructor(private lookbackPeriod = 20) {}
+  constructor(private readonly lookbackPeriod = 20) {}
   
   /**
    * Record a new signal from an agent

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+// yarn demo --verbose --adaptive --liquidate ./csv/BTCUSD-feed.csv -s BTC -st -r aggressive --analyze  --normalize=frac-diff
+
 import {
   AgentOrchestrator,
   EventBus,
@@ -40,8 +42,20 @@ import { TimeDecayAgent } from './agents/time-decay-agent'
 import { TopologicalShapeAgent } from './agents/topological-shape-agent'
 import { VolumeProfileAgent } from './agents/volume-profile-agent'
 import { SelfTuningRelativisticAgent } from './agents/self-tuning-relativistic-agent'
+import { AgentPerformanceAnalyzer } from './utils/agent-performance-analyzer'
+import { PriceNormalizer, createAutoNormalizer, type NormalizedCandle } from './utils/price-normalizer'
 
-const CANDLE_COUNT = 5000
+const CANDLE_COUNT = 1000
+
+// Helper to get original price from candle (normalized or not)
+function getOriginalPrice(candle: Candle | NormalizedCandle): number {
+  return 'originalClose' in candle ? candle.originalClose : candle.close
+}
+
+// Helper to check if candle is normalized
+function isNormalizedCandle(candle: Candle | NormalizedCandle): candle is NormalizedCandle {
+  return 'originalClose' in candle
+}
 
 async function runDemo() {
   console.log(chalk.cyan('TRDR Trading System Demo\n'))
@@ -66,6 +80,8 @@ async function runDemo() {
     console.log(`  --candles, -c       Number of candles to process [default: ${CANDLE_COUNT}]`)
     console.log('  --verbose           Show detailed order information')
     console.log('  --liquidate         Liquidate all positions at end')
+    console.log('  --analyze           Show detailed agent performance analysis')
+    console.log('  --normalize, -n     Normalize prices (auto,z-score,min-max,log,percent,frac-diff) [default: none]')
     console.log('  --help, -h          Show this help\n')
     console.log(chalk.yellow('Examples:'))
     console.log('  yarn demo csv/aapl-sample.csv --symbol AAPL --liquidate')
@@ -80,6 +96,7 @@ async function runDemo() {
   const duration = durationArg ? parseInt(durationArg.includes('=') ? durationArg.split('=')[1]! : args[args.indexOf(durationArg) + 1]!) : 5000
   const verbose = args.includes('--verbose')
   const liquidateAtEnd = args.includes('--liquidate')
+  const showAnalysis = args.includes('--analyze')
   
   // Helper function to get argument value
   const getArgValue = (argName: string, shortName?: string, defaultValue?: string): string => {
@@ -118,6 +135,7 @@ async function runDemo() {
   const useSelfTuning = args.includes('--self-tuning') || args.includes('-st')
   const candleCountArg = getArgValue('candles', 'c', `${CANDLE_COUNT}`)
   const candleCount = parseInt(candleCountArg) || CANDLE_COUNT
+  const normalizeArg = getArgValue('normalize', 'n', 'none')
 
   // Adaptive tuning that updates parameters as new data arrives
   class AdaptiveTuner {
@@ -274,6 +292,29 @@ async function runDemo() {
       throw new Error('No valid price data found in CSV')
     }
     
+    // Initialize price normalizer
+    let normalizer: PriceNormalizer
+    let normalizedCandles: (Candle | NormalizedCandle)[] = candles
+    
+    if (normalizeArg !== 'none') {
+      console.log(chalk.yellow('Initializing price normalization...'))
+      
+      // Create normalizer based on option
+      if (normalizeArg === 'auto') {
+        normalizer = createAutoNormalizer(candles)
+      } else {
+        const normMethod = normalizeArg as 'z-score' | 'min-max' | 'log' | 'percent-change' | 'frac-diff'
+        normalizer = new PriceNormalizer({ method: normMethod })
+        normalizer.initialize(candles)
+      }
+      
+      // Normalize all candles
+      normalizedCandles = normalizer.normalizeCandles(candles)
+      console.log(chalk.green(`✓ Normalized prices using ${normalizer.describe()}\n`))
+    } else {
+      normalizer = new PriceNormalizer({ method: 'none' })
+    }
+    
     // Initialize adaptive tuner
     const adaptiveTuner = new AdaptiveTuner(symbol, riskProfileArg)
     
@@ -283,7 +324,7 @@ async function runDemo() {
     // Use manual overrides if provided, otherwise use adaptive values
     const trailPercent = trailPercentArg ? parseFloat(trailPercentArg) : currentParams.trailPercent
     
-    // Show data range
+    // Show data range (using original prices)
     const startDate = new Date(candles[0]!.timestamp)
     const endDate = new Date(candles[candles.length - 1]!.timestamp)
     const startPrice = candles[0]!.close
@@ -644,7 +685,10 @@ async function runDemo() {
     const activeOrders = new Map()
     const trades: Array<{side: string, price: number, size: number, timestamp: number, consensus?: any}> = []
     
-    // Agent performance tracking with proper types
+    // Initialize comprehensive agent performance analyzer
+    const performanceAnalyzer = new AgentPerformanceAnalyzer()
+    
+    // Keep the basic tracker for compatibility, but also use the analyzer
     interface TrackedSignal {
       consensus: ConsensusResult
       entryPrice: number
@@ -725,6 +769,9 @@ async function runDemo() {
           // Age signals (decrement lookAheadPeriod)
           signals.forEach(s => s.lookAheadPeriod--)
           
+          // Also age signals in the analyzer
+          performanceAnalyzer.ageSignals()
+          
           // Remove old evaluated signals to prevent memory growth
           if (signals.length > performanceWindow * 2) {
             signals.splice(0, signals.length - performanceWindow * 2)
@@ -735,6 +782,9 @@ async function runDemo() {
       // Record a new consensus signal for tracking
       recordSignal(consensus: ConsensusResult, entryPrice: number, timestamp: number) {
         const lookAheadPeriod = 3 // Will evaluate after 3 candles
+        
+        // Also record in the comprehensive analyzer
+        performanceAnalyzer.recordSignal(consensus, entryPrice, timestamp, lookAheadPeriod)
         
         for (const agentId in consensus.agentSignals) {
           if (!this.signals.has(agentId)) {
@@ -842,12 +892,15 @@ async function runDemo() {
     // Process market data directly from our CSV instead of using BacktestDataFeed
     console.log(chalk.yellow('Processing market data...'))
     
-    // Use a subset of our real data for the demo
-    const demoCandles = candles.slice(0, Math.min(candleCount, candles.length))
+    // Use a subset of our data for the demo (normalized if applicable)
+    const demoCandles = normalizedCandles.slice(0, Math.min(candleCount, normalizedCandles.length))
     let processedCandles = 0
     let tradingActive = false // Will activate after 20 candles
     
     for (const candle of demoCandles) {
+      // Get original price for this candle (for orders and display)
+      const originalPrice = getOriginalPrice(candle)
+      
       // Add candle to adaptive tuner (no future data leak)
       adaptiveTuner.addCandle(candle)
       
@@ -857,20 +910,31 @@ async function runDemo() {
         if (verbose) {
           console.log(chalk.yellow(`[ADAPT] ${newParams.marketType?.toUpperCase()} | Vol: ${(newParams.volatility * 100).toFixed(2)}% | Trail: ${newParams.trailPercent.toFixed(2)}% | MeanRev: ${(newParams.meanReversionStrength * 100).toFixed(0)}%`))
         }
+        
+        // Record market condition for performance analysis
+        if (newParams.marketType && newParams.marketType !== 'unknown') {
+          performanceAnalyzer.recordMarketCondition({
+            type: newParams.marketType,
+            volatility: newParams.volatility,
+            trendStrength: newParams.trendStrength,
+            timestamp: candle.timestamp
+          })
+        }
+        
         // Note: In a real system, you'd update trading parameters
         // For this demo, we'll just track the parameter evolution
       }
       
       if (verbose) {
-        console.log(chalk.blue(`[CANDLE] Price: $${candle.close.toFixed(2)}, Volume: ${candle.volume.toFixed(0)}`))
+        console.log(chalk.blue(`[CANDLE] Price: $${originalPrice.toFixed(2)}, Volume: ${candle.volume.toFixed(0)}`))
       }
       
       // Start active trading after building enough history for agents
       if (processedCandles === 20) {
         console.log(chalk.green('\n✓ Sufficient history built - Activating trading system...'))
         
-        // Update trading center price to current market price
-        tradingParams.centerPrice = candle.close
+        // Update trading center price to current market price (original, not normalized)
+        tradingParams.centerPrice = originalPrice
         // console.log(chalk.gray(`  - Center Price: $${candle.close.toFixed(2)} (current market price)`))
         // console.log(chalk.gray(`  - Levels: ${grid.totalLevels}`))
         console.log(chalk.gray(`  - Starting BTC: ${startingBtc.toFixed(4)}`))
@@ -891,8 +955,8 @@ async function runDemo() {
         
         const marketContext = {
           symbol,
-          currentPrice: candle.close,
-          candles: recentCandles,
+          currentPrice: candle.close, // Use normalized price for agent analysis
+          candles: recentCandles, // These are normalized candles
           volume: candle.volume,
           timestamp: candle.timestamp,
           currentPosition // Pass position so agents can enforce no-shorting
@@ -901,16 +965,16 @@ async function runDemo() {
         try {
           const consensus = await agentOrchestrator.getConsensus(marketContext)
           
-          // Record signal for post-facto performance tracking
-          agentPerformanceTracker.recordSignal(consensus, candle.close, candle.timestamp)
+          // Record signal for post-facto performance tracking (use original price)
+          agentPerformanceTracker.recordSignal(consensus, originalPrice, candle.timestamp)
           
           // Update agent weights every 10 candles based on recent performance
           if (processedCandles % 10 === 0) {
-            agentPerformanceTracker.updateAgentWeights(agentOrchestrator, candle.close)
+            agentPerformanceTracker.updateAgentWeights(agentOrchestrator, originalPrice)
             
             // Get updated weights for display
             const currentWeights = agentOrchestrator.getAgentWeights()
-            const performanceStats = agentPerformanceTracker.getPerformanceStats(candle.close)
+            const performanceStats = agentPerformanceTracker.getPerformanceStats(originalPrice)
             
             // Update current weights in stats for display
             for (const [agentId, stats] of Object.entries(performanceStats)) {
@@ -953,12 +1017,12 @@ async function runDemo() {
             }
             
             if (orderSize > 0.0001) { // Minimum order size
-              const orderId = `order-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+              const orderId = `order-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
               const order = {
                 id: orderId,
-                side: consensus.action as 'buy' | 'sell',
+                side: consensus.action,
                 size: orderSize,
-                price: candle.close,
+                price: originalPrice, // Use original price for orders
                 type: 'market',
                 status: 'pending',
                 timestamp: Date.now()
@@ -976,7 +1040,7 @@ async function runDemo() {
                   timestamp: toEpochDate(Date.now()),
                   order: {
                     ...order,
-                    filledPrice: candle.close,
+                    filledPrice: originalPrice,
                     filledSize: orderSize,
                     status: 'filled'
                   }
@@ -1005,8 +1069,8 @@ async function runDemo() {
           }
           
           const shouldFill = (
-            (order.side === 'buy' && candle.close <= executionPrice) ||
-            (order.side === 'sell' && candle.close >= executionPrice)
+            (order.side === 'buy' && originalPrice <= executionPrice) ||
+            (order.side === 'sell' && originalPrice >= executionPrice)
           )
           
           if (shouldFill) {
@@ -1027,8 +1091,8 @@ async function runDemo() {
         // await gridManager.updateGrid(grid.gridId, candle.close)
         // await gridManager.processMarketUpdate(grid.gridId, candle.close, candle.volume)
         
-        // Process trailing orders
-        await trailingOrderManager.processMarketUpdate(symbol, candle.close)
+        // Process trailing orders (using original price)
+        await trailingOrderManager.processMarketUpdate(symbol, originalPrice)
       }
       
       // Emit market events for other systems
@@ -1150,10 +1214,10 @@ async function runDemo() {
     let cashBalance = halfCapital // Start with initial cash
     
     if (verbose) {
-      console.log(chalk.gray(`\nPortfolio Debug:`));
-      console.log(chalk.gray(`  Starting BTC: ${btcBalance.toFixed(4)}`));
-      console.log(chalk.gray(`  Starting Cash: $${cashBalance.toFixed(2)}`));
-      console.log(chalk.gray(`  Total Trades: ${trades.length}`));
+      console.log(chalk.gray(`\nPortfolio Debug:`))
+      console.log(chalk.gray(`  Starting BTC: ${btcBalance.toFixed(4)}`))
+      console.log(chalk.gray(`  Starting Cash: $${cashBalance.toFixed(2)}`))
+      console.log(chalk.gray(`  Total Trades: ${trades.length}`))
     }
     
     // If we have trades, use them to reconstruct portfolio
@@ -1211,9 +1275,9 @@ async function runDemo() {
     let sortinoRatio = 0
     
     if (verbose) {
-      console.log(chalk.gray(`  Daily Returns Array Length: ${dailyReturns.length}`));
+      console.log(chalk.gray(`  Daily Returns Array Length: ${dailyReturns.length}`))
       if (dailyReturns.length > 0) {
-        console.log(chalk.gray(`  Sample Returns: ${dailyReturns.slice(0, 5).map(r => (r * 100).toFixed(2) + '%').join(', ')}...`));
+        console.log(chalk.gray(`  Sample Returns: ${dailyReturns.slice(0, 5).map(r => (r * 100).toFixed(2) + '%').join(', ')}...`))
       }
     }
     
@@ -1228,12 +1292,12 @@ async function runDemo() {
       const annualizedStdDev = stdDev * Math.sqrt(252) // Annualize using trading days
       
       if (verbose) {
-        console.log(chalk.gray(`\nRisk Calculation Debug:`));
-        console.log(chalk.gray(`  Daily Returns: ${dailyReturns.length} samples`));
-        console.log(chalk.gray(`  Avg Daily Return: ${(avgDailyReturn * 100).toFixed(4)}%`));
-        console.log(chalk.gray(`  Daily Std Dev: ${(stdDev * 100).toFixed(4)}%`));
-        console.log(chalk.gray(`  Annualized Return: ${(annualizedReturn * 100).toFixed(2)}%`));
-        console.log(chalk.gray(`  Annualized Std Dev: ${(annualizedStdDev * 100).toFixed(2)}%`));
+        console.log(chalk.gray(`\nRisk Calculation Debug:`))
+        console.log(chalk.gray(`  Daily Returns: ${dailyReturns.length} samples`))
+        console.log(chalk.gray(`  Avg Daily Return: ${(avgDailyReturn * 100).toFixed(4)}%`))
+        console.log(chalk.gray(`  Daily Std Dev: ${(stdDev * 100).toFixed(4)}%`))
+        console.log(chalk.gray(`  Annualized Return: ${(annualizedReturn * 100).toFixed(2)}%`))
+        console.log(chalk.gray(`  Annualized Std Dev: ${(annualizedStdDev * 100).toFixed(2)}%`))
       }
       
       // Sharpe ratio = (Return - Risk Free Rate) / Standard Deviation
@@ -1298,6 +1362,12 @@ async function runDemo() {
         ])
       ]
       console.log(table(agentData))
+    }
+    
+    // Generate comprehensive performance analysis report if requested
+    if (showAnalysis) {
+      const performanceReport = performanceAnalyzer.generateReport(lastPrice)
+      console.log(performanceReport)
     }
     
     // Get trading status

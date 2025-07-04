@@ -296,7 +296,7 @@ export class ClaudePatternAgent extends BaseAgent {
   /**
    * Prepare market data for Claude analysis
    */
-  private preparePromptContext(context: MarketContext, contextWindow = 20): PromptContext {
+  private preparePromptContext(context: MarketContext, contextWindow = 29): PromptContext {
     const { candles, indicators } = context
     const recentCandles = candles.slice(-contextWindow)
     const prices = recentCandles.map(c => c.close)
