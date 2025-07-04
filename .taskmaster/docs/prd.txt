@@ -1,0 +1,730 @@
+<context>
+# Overview
+A **desktop CLI application** for trading data processing that handles both historical backtesting and live data. This is a local command-line tool, NOT a web service - no user authentication, no server APIs to build, no multi-user concerns. Takes OHLCV data from CSV/Parquet files or APIs, transforms it (aggregate timeframes, normalize, generate alternative bars), and outputs to CSV/Parquet/SQLite. Config-driven, composable, and designed to run either as a one-shot CLI tool or continuous local Node.js process.
+
+# Core Features
+## Data Pipeline
+- **Inputs**: CSV or Parquet files, Coinbase WebSocket/REST API (more providers later)
+- **Transforms**: Composable pipeline with intermediate outputs
+- **Outputs**: CSV, Parquet, SQLite, or any combination at any stage
+- **Modes**: Interactive CLI or continuously running Node.js process
+
+## Key Capabilities
+- Config-driven operation via JSON files
+- Disk-based processing - no large in-memory datasets
+- Transform chaining: normalize → aggregate → generate bars
+- Reversible transforms with coefficient storage
+- Real-time and historical data processing
+- Append-only outputs to handle unlimited data sizes
+- Automatic gap detection and backfill
+- Retry mechanisms with exponential backoff
+
+## Transform Types
+- Data cleaning: missing values, outliers
+- Aggregation: any multiple of base timeframe (e.g., 1m → 3m, 17m, 90s)
+- Normalization: log returns, z-score, min-max
+- Bar generation: tick, volume, dollar, tick-imbalance, Heikin-Ashi (from time bars only)
+- Technical indicators: EMA, SMA, RSI, Bollinger Bands, MACD, ATR, volume profile
+- Price calculations: HLC3, OHLC4, typical price, VWAP
+- Statistical functions: rolling stddev, rolling correlation, rolling beta, percentile rank
+- Bucketing/discretization: quantile buckets (S/M/L), fixed range buckets, custom thresholds
+
+## Storage
+- SQLite for persistent storage
+- CSV/Parquet for data exchange
+- Parquet preferred for intermediate files (better compression, faster reads)
+- Proper indexing for time-series queries
+- Coefficient tracking for reversible transforms
+
+# User Experience
+## Target Users
+- Quantitative traders needing unified data access
+- Backtest developers requiring consistent historical data
+- Live trading systems needing real-time feeds
+- Researchers analyzing market microstructure
+
+## Key Workflows
+1. Configure provider → ingest historical data → transform → query for backtesting
+2. Subscribe to live feed → transform in real-time → store → consume
+3. Apply new transformation → backfill historical → maintain consistency
+4. CLI: `trdr --config configs/aggregate-5m.json`
+5. CLI: `trdr --config configs/collect-coinbase.json --override symbols=BTC-USD,ETH-USD`
+6. CLI: `trdr --config configs/normalize-pipeline.json`
+</context>
+<PRD>
+# Technical Architecture
+## System Components
+### Provider Layer
+- Standard `DataProvider` interface all providers must implement:
+  ```typescript
+  interface DataProvider {
+    name: string
+    connect(): Promise<void>
+    disconnect(): Promise<void>
+    getHistoricalData(params: HistoricalParams): AsyncIterator<OhlcvDto>
+    subscribeRealtime(params: RealtimeParams): AsyncIterator<OhlcvDto>
+    getRequiredEnvVars(): string[]  // e.g., ['COINBASE_API_KEY']
+  }
+  ```
+- `FileProvider`: handles CSV and Parquet files with configurable column mapping
+- `CoinbaseProvider`: REST + WebSocket, rate limiting
+- Provider factory creates instances based on config
+- All providers validated for required env vars on creation
+
+### Transformation Pipeline
+- `TransformationPipeline` with composable, ordered stages
+- Each transform receives output from previous transform
+- `MissingValueHandler`: forward fill, interpolation strategies
+- `TimeframeAggregator`: flexible OHLC aggregation (any time multiple: 3m, 17m, 90s)
+- `Normalizer`: log returns, z-score, min-max
+- `BarGenerator`: tick bars, volume bars, dollar bars, tick-imbalance bars, Heikin-Ashi (from time bars only)
+- `TechnicalIndicators`: EMA, SMA, RSI, Bollinger Bands, MACD, ATR, Stochastic
+- `PriceCalculations`: HLC3, OHLC4, typical price, VWAP, volume profile  
+- `StatisticalFunctions`: rolling stddev, correlation, beta, percentile rank, skew, kurtosis
+- `Bucketing`: discretize continuous values into S/M/L or custom buckets
+- Pipeline validates transform compatibility and ordering
+- Order matters: normalization before bar generation vs after yields different results
+- Indicators can add new columns or replace existing ones
+
+### Storage Layer
+- Repository pattern with `OhlcvRepository`
+- DTOs: `OhlcvDto`, `TransformConfigDto`, `CoefficientDto`
+- Batch inserts with immediate disk writes
+- Index management for performance
+- Append-only writes to prevent memory buildup
+
+### CLI Interface
+- `trdr` command - a local desktop tool primarily driven by JSON config files
+- Interactive mode: process configured pipeline once and exit
+- Continuous mode: run as local Node.js process to continuously listen to providers and feed pipeline
+  - Poll REST APIs at configured intervals
+  - Maintain WebSocket connections for real-time data
+  - Automatic backfill on startup to fill gaps
+  - Process incoming data through pipeline continuously
+  - Write to configured outputs (CSV/SQLite) on local disk in real-time
+  - Graceful shutdown saves state for clean restart
+- All operations are local - no server deployment, no user management, no API endpoints to expose
+- Config schema validation with helpful error messages
+- Streaming readers/writers for large file handling
+- Progress indicators for long operations
+- Override config values via command flags when needed
+
+## Data Models
+```typescript
+interface OhlcvDto {
+  exchange: string
+  symbol: string
+  timestamp: number
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+  // Additional columns added by transforms
+  [key: string]: number | string  // e.g., ema_20, rsi_14, bb_upper
+}
+
+interface HistoricalParams {
+  symbols: string[]
+  start: number  // unix timestamp
+  end: number    // unix timestamp
+  timeframe: string  // '1m', '5m', etc
+}
+
+interface RealtimeParams {
+  symbols: string[]
+  timeframe: string
+}
+
+type TransformType = 
+  | 'missingValues' 
+  | 'timeframeAggregation'
+  | 'logReturns' 
+  | 'zScore' 
+  | 'minMax' 
+  | 'percentChange'
+  | 'tickBars'
+  | 'volumeBars'
+  | 'dollarBars'
+  | 'tickImbalanceBars'
+  | 'heikinAshi'
+  | 'priceCalc'  // HLC3, OHLC4, typical price
+  | 'movingAverage'  // EMA, SMA
+  | 'rsi'
+  | 'bollinger'
+  | 'macd'
+  | 'atr'
+  | 'vwap'
+  | 'volumeProfile'
+  | 'rollingStats'  // stddev, correlation, beta
+  | 'percentileRank'
+  | 'bucket'  // discretize values into buckets
+
+interface LogReturnsParams {
+  base: 'natural' | 'log10'
+}
+
+interface MissingValuesParams {
+  method: 'forward_fill' | 'interpolate' | 'drop'
+}
+
+interface TimeframeAggregationParams {
+  targetTimeframe: string  // '3m', '17m', '90s', '1h', etc - any multiple
+  alignToMarketOpen?: boolean  // align bars to market open time
+}
+
+interface ZScoreParams {
+  window: number  // lookback period
+  minPeriods: number
+}
+
+interface MinMaxParams {
+  featureRange: [number, number]
+}
+
+interface TickBarsParams {
+  ticksPerBar: number
+}
+
+interface VolumeBarsParams {
+  volumePerBar: number
+}
+
+interface DollarBarsParams {
+  dollarVolumePerBar: number
+}
+
+interface TickImbalanceBarsParams {
+  initialExpectedImbalance: number
+  imbalanceWindow: number  // lookback period for EMA
+}
+
+interface PriceCalcParams {
+  type: 'hlc3' | 'ohlc4' | 'typical' | 'weighted'
+  outputColumn?: string  // optional custom column name
+}
+
+interface MovingAverageParams {
+  type: 'sma' | 'ema'
+  period: number
+  source?: 'close' | 'open' | 'high' | 'low' | 'volume' | 'hlc3' | 'ohlc4' | string  // any column
+  outputColumn?: string
+}
+
+interface RSIParams {
+  period: number
+  source?: 'close' | 'hlc3' | string  // any numeric column
+  outputColumn?: string
+}
+
+interface BollingerParams {
+  period: number
+  stdDev: number
+  source?: 'close' | 'hlc3' | 'volume' | string  // any numeric column
+  outputPrefix?: string  // e.g., 'bb' → bb_upper, bb_middle, bb_lower
+}
+
+interface MACDParams {
+  fastPeriod: number
+  slowPeriod: number
+  signalPeriod: number
+  source?: 'close'
+  outputPrefix?: string
+}
+
+interface ATRParams {
+  period: number
+  outputColumn?: string
+}
+
+interface VWAPParams {
+  anchorTime?: string  // e.g., '09:30' for session VWAP
+  outputColumn?: string
+}
+
+interface VolumeProfileParams {
+  bins: number
+  period?: number  // lookback period, null for all data
+  outputPrefix?: string
+}
+
+interface RollingStatsParams {
+  type: 'stddev' | 'correlation' | 'beta' | 'skew' | 'kurtosis'
+  period: number
+  source?: string  // column for stddev/skew/kurtosis
+  sourceX?: string  // for correlation/beta
+  sourceY?: string  // for correlation/beta  
+  benchmark?: string  // for beta calculation
+  outputColumn?: string
+}
+
+interface PercentileRankParams {
+  period: number
+  source?: string
+  outputColumn?: string
+}
+
+interface BucketParams {
+  type: 'quantile' | 'fixed' | 'custom'
+  source?: string
+  // For quantile buckets
+  numBuckets?: number  // default 3 for S/M/L
+  labels?: string[]  // default ['S', 'M', 'L']
+  // For fixed buckets  
+  ranges?: number[]  // e.g., [0, 50, 100] for RSI
+  // For custom buckets
+  thresholds?: Array<{value: number, label: string}>
+  outputColumn?: string
+}
+
+type TransformParams = 
+  | { type: 'missingValues'; params: MissingValuesParams }
+  | { type: 'timeframeAggregation'; params: TimeframeAggregationParams }
+  | { type: 'logReturns'; params: LogReturnsParams }
+  | { type: 'zScore'; params: ZScoreParams }
+  | { type: 'minMax'; params: MinMaxParams }
+  | { type: 'percentChange'; params: {} }
+  | { type: 'tickBars'; params: TickBarsParams }
+  | { type: 'volumeBars'; params: VolumeBarsParams }
+  | { type: 'dollarBars'; params: DollarBarsParams }
+  | { type: 'tickImbalanceBars'; params: TickImbalanceBarsParams }
+  | { type: 'heikinAshi'; params: {} }
+  | { type: 'priceCalc'; params: PriceCalcParams }
+  | { type: 'movingAverage'; params: MovingAverageParams }
+  | { type: 'rsi'; params: RSIParams }
+  | { type: 'bollinger'; params: BollingerParams }
+  | { type: 'macd'; params: MACDParams }
+  | { type: 'atr'; params: ATRParams }
+  | { type: 'vwap'; params: VWAPParams }
+  | { type: 'volumeProfile'; params: VolumeProfileParams }
+  | { type: 'rollingStats'; params: RollingStatsParams }
+  | { type: 'percentileRank'; params: PercentileRankParams }
+  | { type: 'bucket'; params: BucketParams }
+
+interface TransformConfigDto {
+  type: TransformType
+  params: TransformParams['params']
+  coefficients?: Record<string, number>
+}
+
+// Example JSON config structure
+interface PipelineConfig {
+  name: string
+  description?: string
+  input: {
+    type: 'file' | 'provider'
+    // For file input
+    path?: string
+    format?: 'csv' | 'parquet'  // auto-detect from extension if not specified
+    columnMapping?: {
+      timestamp: string
+      open: string
+      high: string
+      low: string
+      close: string
+      volume: string
+    }
+    // For provider input
+    provider?: 'coinbase' | 'alpaca'
+    symbols?: string[]
+    timeframe?: string
+    duration?: string  // e.g., "1h", "1000bars"
+  }
+  transformations: Array<{
+    type: TransformType
+    params: TransformParams['params']
+    enabled: boolean
+    output?: {  // Optional intermediate output
+      type: 'csv' | 'parquet' | 'sqlite' | 'json'
+      path?: string  // For CSV/Parquet/JSON
+      table?: string  // For SQLite
+      includeMetadata?: boolean
+    }
+  }>
+  output: {
+    type: 'csv' | 'parquet' | 'sqlite' | 'json'
+    path?: string  // For CSV/Parquet/JSON
+    table?: string  // For SQLite
+    database?: string  // SQLite database path
+    includeMetadata?: boolean
+    includeCoefficients?: boolean
+  }
+  options: {
+    batchSize?: number
+    progressInterval?: number
+    validateData?: boolean
+    inputTimezone?: string  // for CSV files that aren't UTC (convert on read)
+    backfillOnStartup?: boolean  // check for gaps and fill them
+    maxBackfillWindow?: string  // e.g., "24h", "7d"
+    retryConfig?: {
+      maxRetries: number
+      backoffMultiplier: number
+      maxBackoffSeconds: number
+    }
+  }
+}
+```
+
+## APIs and Integrations
+- Coinbase WebSocket API for real-time data
+- REST endpoints for historical data
+- CSV and Parquet file parsing with configurable formats
+- Future: Alpaca, Interactive Brokers APIs
+
+# Development Summary
+See "Simplified Sequential Development Plan" section for detailed week-by-week implementation schedule.
+
+## Key Development Principles
+1. Start simple: CSV files and basic transformations
+2. Build incrementally: each stage must work before moving on
+3. Test continuously: unit tests for each component
+4. Defer complexity: advanced features only after core works
+5. Focus on composability: each transform stands alone
+
+# Risks and Mitigations
+## Technical Challenges
+- **Risk**: WebSocket disconnections causing data gaps
+- **Mitigation**: Automatic reconnection, gap detection, historical backfill
+
+- **Risk**: Memory overflow with large datasets
+- **Mitigation**: Streaming processing, configurable batch sizes, memory monitoring
+
+## MVP Scoping
+- **Risk**: Over-engineering provider abstraction
+- **Mitigation**: Start with 2 providers (CSV, Coinbase), iterate based on usage
+
+- **Risk**: Complex transformations slowing pipeline
+- **Mitigation**: Benchmark each transformation, optional stages, async processing
+
+## Resource Constraints
+- **Risk**: SQLite performance limits
+- **Mitigation**: Proper indexing, data retention policies, consider migration path
+
+# Missing Details & Clarifications
+
+## Error Handling & Logging
+- **Logging**: Winston or Pino for structured logging
+  - Log levels: error, warn, info, debug
+  - JSON format for production, pretty print for development
+  - Separate log files for errors, transforms, providers
+  - Include context: timestamp, transform name, symbol, error details
+- **Error Strategy**:
+  - Pipeline failures: stop at failed transform, save successful stages
+  - Provider disconnections: exponential backoff, queue pending data
+  - Invalid data: configurable skip/fail behavior per transform
+  - Partial writes: transaction support for SQLite outputs
+  - All errors logged with full stack traces and context
+
+## Retry & Recovery Mechanisms
+- **Provider Retries**:
+  - Exponential backoff with jitter (1s, 2s, 4s... up to 60s)
+  - Configurable max retries per provider
+  - Circuit breaker pattern for repeated failures
+- **Backfill on Startup**:
+  - Check last timestamp in output (database/parquet)
+  - Calculate gap between last timestamp and current time
+  - Use REST API to fetch missing historical data
+  - Merge backfilled data before resuming real-time feed
+  - Configurable backfill window (e.g., max 24h)
+- **Gap Detection**:
+  - Monitor for missing sequence numbers or time gaps
+  - Automatic backfill for small gaps (<5 min)
+  - Alert and manual intervention for large gaps
+- **State Persistence**:
+  - Save provider state on graceful shutdown
+  - Resume from last known position on restart
+
+## Authentication
+- API keys exclusively via environment variables
+- Standard env var naming: `COINBASE_API_KEY`, `COINBASE_API_SECRET`, etc.
+- Never stored in pipeline configs or code
+- All providers use same auth interface pattern
+
+## Memory Management  
+- Always file/disk based - never hold full datasets in memory
+- Streaming processing with immediate append to output files
+- Process in small chunks (default 1k rows) and write immediately
+- Each transform reads from disk and writes to disk/SQLite
+- Use temporary files for intermediate stages if needed
+- No in-memory accumulation - all aggregations use disk-based approach
+
+## Timezone Handling
+- All timestamps converted to UTC on ingestion
+- Store internally as UTC unix timestamps (milliseconds)
+- No timezone information stored with data
+- Market-specific features (e.g., align to market open) handle timezone at transform level
+- Consumers responsible for converting UTC to local timezone if needed
+- Avoids daylight saving time issues and timezone ambiguity
+
+## Alternative Bar Timestamps
+- Tick bars: timestamp of last tick that completes the bar
+- Volume bars: timestamp of last trade when cumulative volume threshold reached
+- Dollar bars: timestamp of last trade when dollar volume threshold reached
+- Tick-imbalance bars: timestamp of last tick when imbalance threshold triggered
+- Time bars: retain original period timestamps (e.g., 09:30 for 9:30-9:35 bar)
+- Heikin-Ashi: uses same timestamp as underlying bar
+
+## Transform Reversibility
+- Coefficients stored with timestamp range validity
+- Lookups by (symbol, transform, timestamp)
+- Not all transforms reversible (e.g., aggregations)
+- Reversible: normalization, log returns
+- Irreversible: bar generation, aggregations
+
+## Bar Generation Constraints
+- Alternative bars (tick, volume, dollar, tick-imbalance) can only be generated from time-based OHLCV bars
+- Cannot convert between alternative bar types (e.g., tick bars → volume bars)
+- Time bars can be aggregated to any larger timeframe (1m → 3m, 17m, etc) but not disaggregated
+- Aggregation supports exotic timeframes: 90s, 3m, 17m, 7.5h - any multiple of base
+- Alternative bars lose original time alignment - cannot convert back to time bars
+- Pipeline must validate transform order: alternative bars must come after all time-based transforms
+- Tick-imbalance bars require tick-level data with trade direction information
+
+# Simplified Sequential Development Plan
+
+## Stage 1: Foundation (Week 1)
+1. Project setup: TypeScript, ESLint, node:test, Winston logging
+2. Core interfaces: `OhlcvDto`, `DataProvider`, `Transform`
+3. Streaming CSV reader that processes chunks
+4. File-based pipeline executor (read → transform → append)
+5. Unit tests for core logic
+6. Error handling with proper logging
+7. UTC timestamp standardization
+
+## Stage 2: Storage & CLI (Week 2)  
+1. SQLite schema and connection management
+2. Basic repository implementation
+3. CSV writer with streaming
+4. Simple CLI with JSON config loading
+5. Integration tests CSV → SQLite
+6. Basic config validation
+
+## Stage 3: Core Transformations (Week 3)
+1. Missing value handler
+2. Flexible timeframe aggregation (1m → any multiple)
+3. Log returns and percent change
+4. Pipeline with intermediate outputs
+5. End-to-end tests
+6. Parquet reader/writer support
+
+## Stage 4: Live Data & Server Mode (Week 4)
+1. WebSocket client abstraction
+2. Coinbase provider (REST first, then WebSocket)
+3. Rate limiting and reconnection
+4. Backfill mechanism for gaps
+5. Server mode for continuous operation
+6. Live data integration tests
+
+## Stage 5: Technical Analysis (Week 5)
+1. Price calculations (HLC3, OHLC4, typical price)
+2. Moving averages (SMA, EMA) on any column
+3. RSI and Bollinger Bands
+4. Z-score normalization
+5. Coefficient storage/retrieval
+
+## Stage 6: Advanced Features (Week 6-7)
+1. Alternative bar generators (tick, volume, dollar)
+2. Statistical functions (rolling stddev, correlation)
+3. Bucketing/discretization
+4. VWAP, ATR, MACD
+5. Heikin-Ashi bars
+6. Performance benchmarks
+
+## Stage 7: Polish & Release (Week 8)
+1. Advanced error handling and recovery
+2. Progress indicators and logging improvements
+3. Comprehensive config validation
+4. Documentation and examples
+5. NPM package setup and publishing
+
+# What to Remove
+- Fractional differentiation (complex, defer to Phase 2)
+- Renko bars (complex logic, defer)
+- Multiple providers in Phase 1 (just CSV + Coinbase)
+- Monitoring/alerting (not MVP)
+- Advanced error recovery (basic is enough for MVP)
+- Complex indicators (defer advanced TA like Ichimoku, Elliott Wave)
+
+# Appendix
+## Performance Requirements
+- Ingest 1M+ bars per minute
+- <100ms latency for live processing
+- Support 100+ concurrent subscriptions
+
+## Data Quality Standards
+- Validate OHLC relationships (high ≥ low, etc.)
+- Detect and flag anomalies
+- Maintain audit trail for transformations
+
+## Technology Stack
+- TypeScript (Node.js runtime)
+- SQLite for data storage (better-sqlite3)
+- Parquet support (parquet-wasm or arrow)
+- WebSocket libraries for real-time feeds (ws)
+- node:test for unit testing
+- Winston or Pino for logging
+- Unix timestamps throughout (milliseconds since epoch, UTC)
+- Standard npm package (not monorepo)
+
+## Example Config Files
+### CSV Aggregation (aggregate-17m.json)
+```json
+{
+  "name": "17-minute aggregation",
+  "input": {
+    "type": "file",
+    "format": "csv",
+    "path": "data/1m-bars.csv",
+    "columnMapping": {
+      "timestamp": "time",
+      "open": "o",
+      "high": "h",
+      "low": "l",
+      "close": "c",
+      "volume": "v"
+    }
+  },
+  "transformations": [{
+    "type": "timeframeAggregation",
+    "params": { "targetTimeframe": "17m" },
+    "enabled": true
+  }],
+  "output": {
+    "type": "csv",
+    "path": "data/17m-bars.csv"
+  }
+}
+```
+
+### Live Collection with Backfill (collect-coinbase.json)
+```json
+{
+  "name": "Coinbase data collection",
+  "description": "Requires COINBASE_API_KEY and COINBASE_API_SECRET env vars",
+  "input": {
+    "type": "provider",
+    "provider": "coinbase",
+    "symbols": ["BTC-USD", "ETH-USD"],
+    "timeframe": "1m",
+    "duration": "continuous"
+  },
+  "transformations": [],
+  "output": {
+    "type": "parquet",
+    "path": "data/coinbase-live.parquet",
+    "includeMetadata": true
+  },
+  "options": {
+    "progressInterval": 100,
+    "validateData": true,
+    "backfillOnStartup": true,
+    "maxBackfillWindow": "24h",
+    "retryConfig": {
+      "maxRetries": 5,
+      "backoffMultiplier": 2,
+      "maxBackoffSeconds": 60
+    }
+  }
+}
+```
+
+### Composable Pipeline with Intermediate Outputs (complex-pipeline.json)
+```json
+{
+  "name": "Complex pipeline with intermediate outputs",
+  "input": {
+    "type": "file",
+    "format": "csv",
+    "path": "data/raw-1m-prices.csv"
+  },
+  "transformations": [
+    {
+      "type": "missingValues",
+      "params": { "method": "forward_fill" },
+      "enabled": true
+    },
+    {
+      "type": "priceCalc",
+      "params": { "type": "hlc3", "outputColumn": "typical_price" },
+      "enabled": true
+    },
+    {
+      "type": "movingAverage",
+      "params": { "type": "ema", "period": 20, "source": "close", "outputColumn": "ema_20" },
+      "enabled": true
+    },
+    {
+      "type": "movingAverage",
+      "params": { "type": "sma", "period": 30, "source": "volume", "outputColumn": "volume_sma_30" },
+      "enabled": true
+    },
+    {
+      "type": "rsi",
+      "params": { "period": 14, "outputColumn": "rsi_14" },
+      "enabled": true
+    },
+    {
+      "type": "logReturns",
+      "params": { "base": "natural" },
+      "enabled": true,
+      "output": {
+        "type": "csv",
+        "path": "data/intermediate/log-returns-with-indicators.csv"
+      }
+    },
+    {
+      "type": "zScore",
+      "params": { "window": 100, "minPeriods": 20 },
+      "enabled": true,
+      "output": {
+        "type": "sqlite",
+        "database": "data/market.db",
+        "table": "normalized_returns"
+      }
+    },
+    {
+      "type": "tickBars",
+      "params": { "ticksPerBar": 1000 },
+      "enabled": true,
+      "output": {
+        "type": "csv",
+        "path": "data/intermediate/tick-bars.csv"
+      }
+    },
+    {
+      "type": "heikinAshi",
+      "params": {},
+      "enabled": true
+    }
+  ],
+  "output": {
+    "type": "sqlite",
+    "database": "data/market.db",
+    "table": "heiken_ashi_bars",
+    "includeCoefficients": true,
+    "includeMetadata": true
+  }
+}
+```
+# Final Summary
+
+## What We're Building
+A simple, composable data pipeline for trading that:
+1. Reads market data from CSV/Parquet files or Coinbase API
+2. Transforms it through a configurable pipeline
+3. Saves results to CSV/Parquet/SQLite
+4. Runs as one-shot CLI or continuous server
+
+## Core Principle
+Keep it simple. Make each piece work well. Compose them together.
+
+## First Deliverable (Week 1)
+A CLI tool that can:
+- Read a CSV of OHLCV data
+- Clean missing values  
+- Aggregate 1m bars to any timeframe (5m, 17m, etc)
+- Save to a new CSV
+- All driven by a JSON config file
+
+Everything else builds on this foundation.
+</PRD>

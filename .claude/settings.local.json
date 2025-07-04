@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__taskmaster-ai__get_tasks",
+      "mcp__taskmaster-ai__initialize_project",
+      "mcp__taskmaster-ai__parse_prd",
+      "mcp__taskmaster-ai__expand_all"
+    ],
+    "deny": []
+  }
+}
