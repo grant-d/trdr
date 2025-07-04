@@ -9,8 +9,65 @@
         "testStrategy": "1. Unit tests for each interface implementation\n2. Verify TypeScript compilation works correctly\n3. Test logging configuration with different log levels\n4. Validate project structure follows best practices\n5. Ensure ESLint rules are properly enforced",
         "priority": "high",
         "dependencies": [],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Initialize Project with npm and TypeScript",
+            "description": "Set up the project with npm, install TypeScript, and configure the TypeScript compiler options.",
+            "dependencies": [],
+            "details": "1. Create a new directory for the project\n2. Run `npm init` to create package.json\n3. Install TypeScript: `npm install typescript --save-dev`\n4. Install ts-node for development: `npm install ts-node --save-dev`\n5. Create tsconfig.json with appropriate settings:\n   - Set target to ES2020\n   - Enable strict type checking\n   - Configure module resolution\n   - Set output directory to ./dist\n6. Add npm scripts for build, start, and test\n7. Install essential dependencies: `npm install commander chalk inquirer`\n8. Create .gitignore file with appropriate entries\n\nAcceptance Criteria:\n- Project initializes without errors\n- TypeScript compiles successfully\n- Package.json contains all necessary scripts and dependencies\n- tsconfig.json is properly configured",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Set up Logging with Winston",
+            "description": "Implement a logging system using Winston to handle different log levels and output formats.",
+            "dependencies": [
+              1
+            ],
+            "details": "1. Install Winston: `npm install winston --save`\n2. Create a logger module in src/utils/logger.ts\n3. Configure Winston with the following features:\n   - Multiple transport options (console, file)\n   - Different log levels (error, warn, info, debug)\n   - Custom formatting with timestamps\n   - Log rotation for file logs\n4. Create a simple API for the application to use:\n   - logger.error()\n   - logger.warn()\n   - logger.info()\n   - logger.debug()\n5. Add configuration options to control log verbosity\n\nAcceptance Criteria:\n- Logger successfully outputs to console and file\n- Different log levels work correctly\n- Log messages include timestamps and appropriate formatting\n- Log files rotate properly when size limits are reached\n- Logger can be easily imported and used throughout the application",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Implement OhlcvDto Interface",
+            "description": "Create the OhlcvDto (Open, High, Low, Close, Volume) interface to standardize market data representation across the application.",
+            "dependencies": [
+              1
+            ],
+            "details": "1. Create src/models/ohlcv.dto.ts file\n2. Define the OhlcvDto interface with the following properties:\n   - timestamp: number (Unix timestamp in milliseconds)\n   - open: number\n   - high: number\n   - low: number\n   - close: number\n   - volume: number\n3. Add optional properties that might be useful:\n   - symbol?: string\n   - interval?: string\n4. Create utility functions for OhlcvDto:\n   - isValid(): boolean - to validate data integrity\n   - toString(): string - for logging and display\n5. Add documentation comments for each property and method\n\nAcceptance Criteria:\n- OhlcvDto interface is properly typed with all required fields\n- Interface includes appropriate documentation\n- Utility functions work correctly\n- Interface can be imported and used in other modules",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Implement DataProvider and Transform Interfaces",
+            "description": "Create the core interfaces for data providers and data transformations that will be used throughout the application.",
+            "dependencies": [
+              3
+            ],
+            "details": "1. Create src/interfaces/data-provider.interface.ts:\n   - Define DataProvider interface with methods:\n     - fetchData(symbol: string, interval: string, limit?: number): Promise<OhlcvDto[]>\n     - getAvailableSymbols(): Promise<string[]>\n     - getAvailableIntervals(): string[]\n   - Include error handling specifications\n\n2. Create src/interfaces/transform.interface.ts:\n   - Define Transform interface with methods:\n     - apply(data: OhlcvDto[]): OhlcvDto[]\n     - getName(): string\n     - getDescription(): string\n     - getParameters(): Record<string, any>\n     - setParameters(params: Record<string, any>): void\n\n3. Add documentation for both interfaces explaining their purpose and usage\n\nAcceptance Criteria:\n- Both interfaces are properly typed and documented\n- Interfaces are extensible for future implementations\n- Method signatures include appropriate parameter and return types\n- Error handling is properly specified",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Create Project Directory Structure",
+            "description": "Establish the complete directory structure for the project with placeholder files and README documentation.",
+            "dependencies": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "details": "1. Create the following directory structure:\n   - src/\n     - commands/ (for CLI commands)\n     - models/ (for data models and DTOs)\n     - interfaces/ (for application interfaces)\n     - providers/ (for data provider implementations)\n     - transforms/ (for data transformation implementations)\n     - utils/ (for utility functions)\n     - config/ (for application configuration)\n     - index.ts (main entry point)\n   - tests/\n     - unit/\n     - integration/\n   - docs/\n   - scripts/\n\n2. Create README.md with:\n   - Project description\n   - Installation instructions\n   - Usage examples\n   - Development guidelines\n\n3. Add placeholder index.ts files in each directory to maintain structure\n\nAcceptance Criteria:\n- All directories are created with appropriate structure\n- README.md contains comprehensive documentation\n- Project structure follows best practices for TypeScript applications\n- Directory structure facilitates easy navigation and maintenance",
+            "status": "done",
+            "testStrategy": ""
+          }
+        ]
       },
       {
         "id": 2,
@@ -23,7 +80,74 @@
           1
         ],
         "status": "pending",
-        "subtasks": []
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Create FileProvider Base Class Structure",
+            "description": "Design and implement the base FileProvider class that will serve as the foundation for all file-based data providers.",
+            "dependencies": [],
+            "details": "1. Create an abstract FileProvider class that implements the DataProvider interface\n2. Define common properties: filePath, chunkSize, encoding options\n3. Implement configuration methods for file access settings\n4. Create factory method for instantiating specific file format providers\n5. Define abstract methods that concrete implementations must provide\n6. Implement common utility methods for file existence checking and error handling\n7. Add logging capabilities for file operations\n\nAcceptance Criteria:\n- FileProvider class properly implements DataProvider interface\n- Configuration options are properly documented and validated\n- Factory method correctly returns appropriate provider based on file extension\n- Error handling for common file access issues is implemented",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Implement Streaming CSV Reader with Chunk Processing",
+            "description": "Create a CSV implementation of the FileProvider that processes large files in chunks to minimize memory usage.",
+            "dependencies": [
+              1
+            ],
+            "details": "1. Extend FileProvider to create CSVFileProvider implementation\n2. Implement streaming read capability using Node.js streams\n3. Add configurable chunk size processing to control memory usage\n4. Implement pause/resume functionality for processing control\n5. Add header detection and automatic column mapping\n6. Create progress tracking for long-running operations\n7. Implement proper resource cleanup after processing\n\nAcceptance Criteria:\n- Successfully processes CSV files larger than available memory\n- Memory usage remains constant regardless of file size\n- Correctly handles CSV parsing edge cases (quoted fields, escaped characters)\n- Progress can be monitored during processing\n- Resources are properly released after completion or errors",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Add Configurable Column Mapping",
+            "description": "Implement a flexible column mapping system that allows users to map source file columns to standardized field names.",
+            "dependencies": [
+              2
+            ],
+            "details": "1. Design a column mapping configuration schema\n2. Implement automatic mapping based on header names\n3. Support manual mapping through configuration files\n4. Add support for derived fields (calculated from other fields)\n5. Implement type conversion during mapping (string to number, date parsing)\n6. Add validation for required fields\n7. Create helper methods to generate mapping templates\n\nAcceptance Criteria:\n- Users can define custom mappings between source columns and target fields\n- Automatic mapping works for standard column names\n- Type conversion correctly handles common data types\n- Missing required fields generate appropriate errors\n- Mapping configuration can be saved and loaded",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Implement Parquet File Support",
+            "description": "Extend the FileProvider to support reading from Parquet files, maintaining the same interface as the CSV provider.",
+            "dependencies": [
+              1
+            ],
+            "details": "1. Create ParquetFileProvider extending the base FileProvider\n2. Integrate with appropriate Parquet library for Node.js\n3. Implement streaming/chunked reading for Parquet files\n4. Handle Parquet-specific schema and type information\n5. Optimize column projection to only read required fields\n6. Implement proper resource management for Parquet readers\n7. Add performance optimizations for Parquet's columnar format\n\nAcceptance Criteria:\n- Successfully reads standard Parquet files\n- Maintains consistent memory usage for large files\n- Correctly handles Parquet data types and converts to appropriate JavaScript types\n- Provides same interface as CSV provider for consistent usage\n- Takes advantage of Parquet's columnar nature for performance when possible",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Standardize Timestamps and Implement Data Validation",
+            "description": "Add data validation and timestamp standardization across all file providers to ensure data quality and consistency.",
+            "dependencies": [
+              2,
+              4
+            ],
+            "details": "1. Implement configurable validation rules for each field\n2. Create standard timestamp parsing for multiple formats\n3. Add timezone handling and normalization\n4. Implement data cleansing functions (trimming, null handling)\n5. Create validation error collection and reporting\n6. Add support for custom validation functions\n7. Implement row filtering based on validation results\n\nAcceptance Criteria:\n- All timestamps are converted to a standard format regardless of input\n- Validation rules can be applied to any field\n- Invalid data is properly identified and reported\n- Custom validation functions can be added for complex rules\n- Timezone conversion works correctly across different source formats",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "Write Comprehensive Tests for File Providers",
+            "description": "Create a comprehensive test suite for all file provider implementations covering different file formats, configurations, and edge cases.",
+            "dependencies": [
+              3,
+              5
+            ],
+            "details": "1. Create unit tests for each provider class\n2. Implement integration tests with sample files of various formats\n3. Add performance tests for large files\n4. Create tests for error conditions and recovery\n5. Test memory usage patterns during streaming operations\n6. Implement validation rule testing\n7. Create test fixtures for different file formats and configurations\n\nAcceptance Criteria:\n- Test coverage exceeds 90% for all file provider code\n- Tests include both small and large file examples\n- Edge cases are properly tested (malformed files, unexpected data)\n- Memory usage is verified to remain constant for large files\n- All supported file formats have dedicated test cases\n- CI pipeline includes all tests with appropriate timeouts for large file tests",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
       },
       {
         "id": 3,
@@ -36,7 +160,88 @@
           1
         ],
         "status": "pending",
-        "subtasks": []
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Define OhlcvRepository Interface",
+            "description": "Create a comprehensive interface that defines the contract for all repository implementations, including methods for storing and retrieving OHLCV data and coefficients.",
+            "dependencies": [],
+            "details": "Create an OhlcvRepository interface with the following methods: 1) save(data: OhlcvData): Promise<void>, 2) saveMany(data: OhlcvData[]): Promise<void>, 3) getBetweenDates(symbol: string, startDate: Date, endDate: Date): Promise<OhlcvData[]>, 4) getBySymbol(symbol: string): Promise<OhlcvData[]>, 5) saveCoefficient(symbol: string, name: string, value: number): Promise<void>, 6) getCoefficient(symbol: string, name: string): Promise<number>. Include proper TypeScript types and documentation for each method.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Implement SqliteRepository",
+            "description": "Create a SQLite implementation of the OhlcvRepository interface with optimized schema design and indexing for time-series data.",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement SqliteRepository class that: 1) Creates tables for OHLCV data with columns for timestamp, open, high, low, close, volume, and symbol, 2) Creates a separate table for coefficients with symbol, name, and value columns, 3) Implements proper indexing on timestamp and symbol columns for efficient queries, 4) Uses prepared statements for all database operations, 5) Implements transaction support for batch operations, 6) Handles database connection management properly. Include migration functionality for schema updates.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Implement CsvRepository",
+            "description": "Create a CSV-based implementation of the OhlcvRepository interface with streaming writes for memory efficiency.",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement CsvRepository class that: 1) Organizes CSV files by symbol in a configurable directory structure, 2) Uses streaming writes for memory-efficient operations on large datasets, 3) Implements proper CSV header management, 4) Creates a separate CSV for coefficients, 5) Handles file locking for concurrent access, 6) Implements efficient date-based filtering for queries, 7) Provides configurable CSV formatting options (delimiters, etc.). Ensure proper error handling for file operations.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Implement ParquetRepository",
+            "description": "Create a Parquet-based implementation of the OhlcvRepository interface optimized for columnar storage of time-series data.",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement ParquetRepository class that: 1) Stores OHLCV data in Parquet format organized by symbol, 2) Implements proper Parquet schema with appropriate data types, 3) Uses compression settings optimized for time-series data, 4) Implements efficient column filtering for queries, 5) Handles coefficient storage in a separate Parquet file, 6) Provides configurable partitioning options for large datasets. Ensure compatibility with common Parquet readers and tools.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Add Coefficient Storage Functionality",
+            "description": "Enhance all repository implementations with comprehensive coefficient storage capabilities for storing calculation results and metadata.",
+            "dependencies": [
+              2,
+              3,
+              4
+            ],
+            "details": "For each repository implementation: 1) Add methods to store and retrieve named coefficients associated with symbols, 2) Implement bulk coefficient operations, 3) Add versioning support for coefficients, 4) Implement coefficient metadata (timestamp, source, etc.), 5) Create efficient querying capabilities for coefficients, 6) Ensure proper type handling for different coefficient values. Include documentation on coefficient naming conventions and usage patterns.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "Implement Batch Operations and Append-Only Writes",
+            "description": "Optimize all repository implementations with batch operation support and append-only write patterns for performance and data integrity.",
+            "dependencies": [
+              2,
+              3,
+              4
+            ],
+            "details": "For each repository implementation: 1) Add efficient batch insert operations, 2) Implement append-only write patterns to prevent data corruption, 3) Add transaction support where applicable, 4) Implement proper error handling and rollback mechanisms, 5) Add performance monitoring and logging, 6) Create configurable batch size settings, 7) Implement memory-efficient streaming for large batch operations. Include performance benchmarks for different batch sizes.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 7,
+            "title": "Create Comprehensive Repository Tests",
+            "description": "Develop a thorough test suite for all repository implementations to ensure consistent behavior and data integrity.",
+            "dependencies": [
+              5,
+              6
+            ],
+            "details": "Create tests that: 1) Verify all interface methods across all implementations, 2) Test edge cases like empty datasets and invalid inputs, 3) Verify data integrity after write operations, 4) Test performance with large datasets, 5) Verify proper error handling, 6) Test concurrent access scenarios, 7) Verify proper date filtering, 8) Test coefficient storage and retrieval, 9) Verify batch operations and transactions, 10) Include integration tests with the actual storage backends. Use a test framework like Jest and implement proper test fixtures and cleanup.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
       },
       {
         "id": 4,
@@ -114,7 +319,7 @@
     ],
     "metadata": {
       "created": "2025-07-04T20:49:04.828Z",
-      "updated": "2025-07-04T20:49:04.828Z",
+      "updated": "2025-07-04T21:01:38.134Z",
       "description": "Tasks for master context"
     }
   }

@@ -1,10 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "mcp__taskmaster-ai__get_tasks",
-      "mcp__taskmaster-ai__initialize_project",
-      "mcp__taskmaster-ai__parse_prd",
-      "mcp__taskmaster-ai__expand_all"
+      "mcp__taskmaster-ai__*",
+      "Bash(yarn add winston)",
+      "Bash(mkdir:*)",
+      "Bash(yarn typecheck)",
+      "Bash(yarn lint)",
+      "mcp__taskmaster-ai__set_task_status"
     ],
     "deny": []
   }
