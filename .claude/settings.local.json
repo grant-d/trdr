@@ -22,7 +22,16 @@
       "Bash(npm test)",
       "Bash(node:*)",
       "Bash(yarn tc)",
-      "Bash(yarn tsc:*)"
+      "Bash(yarn tsc:*)",
+      "Bash(yarn list:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(yarn eslint:*)",
+      "Bash(mv:*)",
+      "Bash(npm test:*)",
+      "Bash(tsx --test tests/unit/repositories/sqlite-repository.test.ts --test-reporter=verbose)",
+      "Bash(rg:*)",
+      "Bash(git add:*)",
+      "Bash(ls:*)"
     ],
     "deny": []
   }

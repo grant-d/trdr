@@ -2,8 +2,10 @@
   "name": "trdr",
   "version": "1.0.0",
   "description": "Trading system",
+  "type": "module",
   "main": "dist/index.js",
   "scripts": {
+    "up": "git gc && yarn global upgrade && yarn && yarn outdated",
     "build": "rimraf dist && tsc",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
@@ -25,18 +27,20 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
     "@eslint/js": "^9.15.0",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.0.8",
     "@typescript-eslint/eslint-plugin": "^8.31.0",
     "@typescript-eslint/parser": "^8.31.0",
     "eslint": "^9.30.0",
     "prettier": "^3.6.2",
-    "rimraf": "^5.0.0",
+    "rimraf": "^6.0.1",
     "task-master-ai": "^0.18.0",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3"
   },
   "dependencies": {
     "@coinbase-sample/core-ts": "^0.2.0",
+    "better-sqlite3": "^12.2.0",
     "hyparquet": "^1.17.1",
     "hyparquet-writer": "^0.6.0",
     "winston": "^3.17.0"

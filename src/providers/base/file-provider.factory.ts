@@ -7,7 +7,7 @@ import type { FileProviderConfig } from './types'
 /**
  * Factory for creating file providers based on format
  */
-export async function createFileProvider(config: FileProviderConfig): Promise<FileProvider> {
+export function createFileProvider(config: FileProviderConfig): FileProvider {
   const format = config.format || path.extname(config.path).toLowerCase().slice(1)
   
   switch (format) {
