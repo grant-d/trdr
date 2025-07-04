@@ -6,7 +6,23 @@
       "Bash(mkdir:*)",
       "Bash(yarn typecheck)",
       "Bash(yarn lint)",
-      "mcp__taskmaster-ai__set_task_status"
+      "Bash(yarn add:*)",
+      "Bash(yarn test:*)",
+      "Bash(tsx scripts/csv-to-parquet.ts:*)",
+      "Bash(yarn tsx:*)",
+      "Bash(rm:*)",
+      "mcp__taskmaster-ai__get_task",
+      "Bash(find:*)",
+      "Bash(npm run lint)",
+      "Bash(npx eslint:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run:*)",
+      "Bash(npx tsx:*)",
+      "Bash(grep:*)",
+      "Bash(npm test)",
+      "Bash(node:*)",
+      "Bash(yarn tc)",
+      "Bash(yarn tsc:*)"
     ],
     "deny": []
   }

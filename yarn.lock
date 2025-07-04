@@ -3098,6 +3098,18 @@ humanize-ms@^1.2.1:
   dependencies:
     ms "^2.0.0"
 
+hyparquet-writer@^0.6.0:
+  version "0.6.0"
+  resolved "https://registry.yarnpkg.com/hyparquet-writer/-/hyparquet-writer-0.6.0.tgz#c1767576acc2364ce67fa4f6df0b364bb90bb107"
+  integrity sha512-H8nCvrJEAcAEMwUa2YSs/jYzwkEyMkWW6f9dqW8sqeqkVTC+s4VhM66QfC68Nf9vi9BL8fcWalqRItFPWC39Rw==
+  dependencies:
+    hyparquet "1.17.1"
+
+hyparquet@1.17.1, hyparquet@^1.17.1:
+  version "1.17.1"
+  resolved "https://registry.yarnpkg.com/hyparquet/-/hyparquet-1.17.1.tgz#f9e9cde3c2d69092c068bd84f919ca74c7580936"
+  integrity sha512-79NqDEkWF3VHbjiUuefexuZLtiwD/j43eSc7kKbrcI8f4V8owLBw6P8Eg6k0VaCeB0KpmJVDW3ZewlsW18h8fQ==
+
 iconv-lite@0.4.24, iconv-lite@^0.4.24:
   version "0.4.24"
   resolved "https://registry.yarnpkg.com/iconv-lite/-/iconv-lite-0.4.24.tgz#2022b4b25fbddc21d2f524974a474aafe733908b"

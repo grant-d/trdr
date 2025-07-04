@@ -1,2 +1,6 @@
-// Data provider implementations will be exported here
-export {}
+export {
+  createFileProvider, CsvFileProvider,
+  FileProvider,
+  ParquetFileProvider
+} from './base'
+export type { ColumnMapping, FileProviderConfig } from './base'

@@ -60,7 +60,7 @@ export interface DataProvider {
    * @returns Async iterator that yields OHLCV data points
    * @throws Error if parameters are invalid or fetch fails
    */
-  getHistoricalData(params: HistoricalParams): AsyncIterator<OhlcvDto>
+  getHistoricalData(params: HistoricalParams): AsyncIterableIterator<OhlcvDto>
   
   /**
    * Subscribes to real-time OHLCV data updates
@@ -68,7 +68,7 @@ export interface DataProvider {
    * @returns Async iterator that yields OHLCV data as it arrives
    * @throws Error if subscription fails or is not supported
    */
-  subscribeRealtime(params: RealtimeParams): AsyncIterator<OhlcvDto>
+  subscribeRealtime(params: RealtimeParams): AsyncIterableIterator<OhlcvDto>
   
   /**
    * Returns list of environment variables required by this provider

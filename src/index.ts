@@ -1,3 +1,3 @@
-console.log('Hello from trdr!')
+// Entry point for trdr CLI application
 
 export {}

@@ -1,11 +1,10 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
     "lib": ["ES2022"],
     "outDir": "./dist",
-    "rootDir": "./src",
     "esModuleInterop": true,
     "skipLibCheck": true,
     "strict": true,
@@ -21,6 +20,6 @@
     "noUncheckedIndexedAccess": true,
     "allowSyntheticDefaultImports": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "scripts/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }
