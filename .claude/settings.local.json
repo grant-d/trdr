@@ -39,7 +39,13 @@
       "Bash(chmod:*)",
       "Bash(tsx scripts/convert-csv-to-jsonl.ts:*)",
       "Bash(timeout 30 npm run test:unit:*)",
-      "Bash(yarn cli:*)"
+      "Bash(yarn cli:*)",
+      "mcp__taskmaster-ai__get_tasks",
+      "mcp__taskmaster-ai__set_task_status",
+      "Bash(npm search:*)",
+      "Bash(npm ls:*)",
+      "Bash(yarn build)",
+      "WebFetch(domain:docs.cdp.coinbase.com)"
     ],
     "deny": []
   }

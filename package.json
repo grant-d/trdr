@@ -44,9 +44,12 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
+    "@coinbase-sample/advanced-trade-sdk-ts": "^0.2.0",
     "@coinbase-sample/core-ts": "^0.2.0",
+    "@types/ws": "^8.18.1",
     "better-sqlite3": "^12.2.0",
     "commander": "^14.0.0",
-    "winston": "^3.17.0"
+    "winston": "^3.17.0",
+    "ws": "^8.18.3"
   }
 }
