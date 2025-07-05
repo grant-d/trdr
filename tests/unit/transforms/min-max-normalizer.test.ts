@@ -477,7 +477,7 @@ describe('MinMaxNormalizer', () => {
 
       // Min=-200, Max=-50, range=150
       // (-100-(-200))/150 = 100/150 = 0.667
-      strictEqual(transformed[0]!.open_norm.toFixed(3), '0.667')
+      strictEqual(transformed[0]!.open_norm!.toFixed(3), '0.667')
       // (-50-(-200))/150 = 150/150 = 1
       strictEqual(transformed[1]!.open_norm, 1)
       // (-200-(-200))/150 = 0/150 = 0

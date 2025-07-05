@@ -1,0 +1,24 @@
+{
+  "name": "Alpaca AAPL Live Stream",
+  "description": "Stream live Apple stock data from Alpaca",
+  "input": {
+    "type": "provider",
+    "provider": "alpaca",
+    "symbols": ["AAPL"],
+    "timeframe": "1m",
+    "duration": "continuous"
+  },
+  "transformations": [],
+  "output": {
+    "type": "jsonl",
+    "path": "data/aapl-live.jsonl",
+    "includeMetadata": true
+  },
+  "options": {
+    "batchSize": 10,
+    "progressInterval": 5,
+    "validateData": true,
+    "backfillOnStartup": true,
+    "maxBackfillWindow": "1h"
+  }
+}

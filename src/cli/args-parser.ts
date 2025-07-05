@@ -92,6 +92,24 @@ Configuration overrides use dot notation to target nested properties:
   output.path               - Override output path
   transformations.0.params  - Override first transformation parameters
   options.chunkSize         - Override processing chunk size
+
+Provider Configuration:
+  When using type: 'provider' in input configuration:
+  - duration: Supports multiple formats
+    * Minutes: "5m", "30m", "60m"
+    * Hours: "1h", "6h", "24h" 
+    * Days: "1d", "7d", "30d"
+    * Weeks: "1w", "4w", "52w"
+    * Months: "1M", "3M", "12M" (30-day approximation)
+    * Years: "1y", "2y", "5y" (365-day approximation)
+    * Bar count: "1000bars"
+    * Continuous: "continuous" (for real-time streaming)
+  - timeframe: "1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w", "1M"
+
+Output Options:
+  - format: "csv", "jsonl", "sqlite"
+  - overwrite: true/false (when true, replaces existing file; when false, appends)
+  - Single file per symbol/exchange combination enforced
 `)
 
   // Remove preAction hook - we'll validate after parsing

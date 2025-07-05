@@ -1,10 +1,12 @@
-import { describe, it, beforeEach, afterEach } from 'node:test'
-import { strictEqual, deepStrictEqual, ok, rejects, doesNotReject } from 'node:assert'
-import { PipelineFactory } from '../../../src/cli/pipeline-factory'
-import type { PipelineConfig } from '../../../src/interfaces'
+import { deepStrictEqual, ok, rejects, strictEqual } from 'node:assert'
 import * as fs from 'node:fs/promises'
-import * as path from 'node:path'
 import { tmpdir } from 'node:os'
+import * as path from 'node:path'
+import { afterEach, beforeEach, describe, it } from 'node:test'
+import { PipelineFactory } from '../../../src/cli/pipeline-factory'
+import type { PipelineConfig, TransformConfig } from '../../../src/interfaces'
+import { forceCleanupAsyncHandles } from '../../helpers/test-cleanup'
+import { LogReturnsParams, MissingValueParams, PriceCalcParams, ZScoreParams, MinMaxParams } from '../../../src/transforms'
 
 describe('Pipeline Factory', () => {
   let tempDir: string
@@ -17,6 +19,7 @@ describe('Pipeline Factory', () => {
   afterEach(async () => {
     // Clean up temp directory
     await fs.rm(tempDir, { recursive: true, force: true })
+    forceCleanupAsyncHandles()
   })
 
   describe('createPipeline', () => {
@@ -29,7 +32,8 @@ describe('Pipeline Factory', () => {
       
       const config: PipelineConfig = {
         input: {
-          type: 'csv',
+          type: 'file',
+          format: 'csv',
           path: inputPath,
           hasHeader: true
         },
@@ -58,9 +62,27 @@ describe('Pipeline Factory', () => {
       
       await fs.writeFile(inputPath, 'timestamp,open,high,low,close,volume\n1234567890,100,110,90,105,1000\n')
       
+      const logReturnsTx: TransformConfig<LogReturnsParams> = {
+        type: 'logReturns',
+        params: {
+          outputField: 'returns',
+          priceField: 'close'
+        },
+        enabled: true
+      }
+
+      const minMaxTx: TransformConfig<MinMaxParams> = {
+        type: 'minMax',
+        params: {
+          fields: ['returns']
+        },
+        enabled: true
+      }
+
       const config: PipelineConfig = {
         input: {
-          type: 'csv',
+          type: 'file',
+          format: 'csv',
           path: inputPath,
           hasHeader: true
         },
@@ -69,19 +91,8 @@ describe('Pipeline Factory', () => {
           format: 'jsonl'
         },
         transformations: [
-          {
-            type: 'logReturns',
-            params: {
-              outputField: 'returns',
-              priceField: 'close'
-            }
-          },
-          {
-            type: 'minMax',
-            params: {
-              fields: ['returns']
-            }
-          }
+          logReturnsTx,
+          minMaxTx
         ],
         options: {
           showProgress: false
@@ -106,10 +117,19 @@ describe('Pipeline Factory', () => {
         inputPath, 
         '{"timestamp":1234567890,"open":100,"high":110,"low":90,"close":105,"volume":1000}\n'
       )
-      
+
+      const tx: TransformConfig<PriceCalcParams> = {
+        type: 'priceCalc',
+        params: {
+          calculation: 'hlc3'
+        },
+        enabled: true
+      }
+
       const config: PipelineConfig = {
         input: {
-          type: 'jsonl',
+          type: 'file',
+          format: 'jsonl',
           path: inputPath
         },
         output: {
@@ -118,12 +138,7 @@ describe('Pipeline Factory', () => {
           overwrite: true
         },
         transformations: [
-          {
-            type: 'priceCalc',
-            params: {
-              calculation: 'hlc3'
-            }
-          }
+          tx,
         ],
         options: {
           chunkSize: 50
@@ -166,8 +181,9 @@ describe('Pipeline Factory', () => {
     it('should throw error for unsupported output format', async () => {
       const config = {
         input: {
-          type: 'csv',
-          path: 'test.csv'
+          type: 'file',
+          path: 'test.csv',
+          format: 'csv'
         },
         output: {
           path: 'output.xml',
@@ -186,8 +202,9 @@ describe('Pipeline Factory', () => {
     it('should throw error for unknown transform type', async () => {
       const config = {
         input: {
-          type: 'csv',
-          path: 'test.csv'
+          type: 'file',
+          path: 'test.csv',
+          format: 'csv'
         },
         output: {
           path: 'output.db',
@@ -216,7 +233,8 @@ describe('Pipeline Factory', () => {
       
       const config = {
         input: {
-          type: 'csv',
+          type: 'file',
+          format: 'csv',
           path: inputPath
         },
         output: {
@@ -254,7 +272,8 @@ describe('Pipeline Factory', () => {
       
       const config = {
         input: {
-          type: 'csv',
+          type: 'file',
+          format: 'csv',
           path: inputPath
         },
         output: {
@@ -328,10 +347,46 @@ describe('Pipeline Factory', () => {
         '1234567890,100,110,90,105,1000,BTC-USD\n' +
         '1234567900,105,115,95,110,1100,BTC-USD\n'
       )
-      
+
+      const imputeTx: TransformConfig<MissingValueParams> = {
+        type: 'missingValues',
+        params: {
+          strategy: 'forward',
+          fields: ['open', 'high', 'low', 'close', 'volume']
+        },
+        enabled: true
+      }
+
+      const priceCalcTx: TransformConfig<PriceCalcParams> = {
+        type: 'priceCalc',
+        params: {
+          calculation: 'ohlc4'
+        },
+        enabled: true
+      }
+
+      const logReturnsTx: TransformConfig<LogReturnsParams> = {
+        type: 'logReturns',
+        params: {
+          outputField: 'returns',
+          priceField: 'close'
+        },
+        enabled: true
+      }
+
+      const zScoreTx: TransformConfig<ZScoreParams> = {
+        type: 'zScore',
+        params: {
+          fields: ['returns'],
+          windowSize: 20
+        },
+        enabled: true
+      }
+
       const config: PipelineConfig = {
         input: {
-          type: 'csv',
+          type: 'file',
+          format: 'csv',
           path: inputPath,
           hasHeader: true,
           columnMapping: {
@@ -350,33 +405,10 @@ describe('Pipeline Factory', () => {
           overwrite: true
         },
         transformations: [
-          {
-            type: 'missingValues',
-            params: {
-              strategy: 'forward',
-              fields: ['open', 'high', 'low', 'close', 'volume']
-            }
-          },
-          {
-            type: 'priceCalc',
-            params: {
-              calculation: 'ohlc4'
-            }
-          },
-          {
-            type: 'logReturns',
-            params: {
-              outputField: 'returns',
-              priceField: 'ohlc4'
-            }
-          },
-          {
-            type: 'zScore',
-            params: {
-              fields: ['returns'],
-              windowSize: 20
-            }
-          }
+          imputeTx,
+          priceCalcTx,
+          logReturnsTx,
+          zScoreTx
         ],
         options: {
           chunkSize: 1000,

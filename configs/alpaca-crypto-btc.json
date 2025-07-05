@@ -1,0 +1,36 @@
+{
+  "input": {
+    "type": "provider",
+    "provider": "alpaca",
+    "symbols": ["BTC/USD"],
+    "timeframe": "5m",
+    "duration": "1h"
+  },
+  "output": {
+    "path": "./data/alpaca-btc-5m.jsonl",
+    "format": "jsonl",
+    "overwrite": true
+  },
+  "transformations": [
+    {
+      "type": "logReturns",
+      "enabled": true,
+      "params": {
+        "outputField": "returns",
+        "priceField": "close"
+      }
+    }
+  ],
+  "options": {
+    "chunkSize": 1000,
+    "continueOnError": true,
+    "maxErrors": 10,
+    "showProgress": true
+  },
+  "metadata": {
+    "name": "Alpaca BTC/USD with Log Returns",
+    "version": "1.0.0",
+    "description": "Fetches 24 hours of 5-minute BTC/USD data from Alpaca and calculates log returns",
+    "created": "2025-01-05T00:00:00Z"
+  }
+}

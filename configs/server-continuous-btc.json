@@ -1,0 +1,28 @@
+{
+  "input": {
+    "type": "provider",
+    "provider": "alpaca",
+    "symbols": ["BTC/USD"],
+    "timeframe": "1m",
+    "duration": "5m"
+  },
+  "output": {
+    "path": "./data/btc-continuous.db",
+    "format": "sqlite",
+    "overwrite": false
+  },
+  "transformations": [],
+  "options": {
+    "chunkSize": 100,
+    "continueOnError": true,
+    "maxErrors": 10,
+    "showProgress": true,
+    "validateData": true
+  },
+  "metadata": {
+    "name": "BTC/USD Continuous Collection",
+    "version": "1.0.0",
+    "description": "Collects BTC/USD data every 5 minutes",
+    "created": "2025-01-05T00:00:00Z"
+  }
+}

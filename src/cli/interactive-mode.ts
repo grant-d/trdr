@@ -55,7 +55,10 @@ export class InteractiveMode {
 
     this.rl.on('close', () => {
       console.log('\nGoodbye!')
-      process.exit(0)
+      // Don't call process.exit in tests - let the process exit naturally
+      if (process.env.NODE_ENV !== 'test') {
+        process.exit(0)
+      }
     })
   }
 
@@ -209,7 +212,14 @@ Available commands:
   private showStatus(): void {
     console.log('\nPipeline Status:')
     console.log(`  Running: ${this.isRunning ? 'Yes' : 'No'}`)
-    console.log(`  Input: ${this.config.input.type} (${this.config.input.path})`)
+
+    // Show input details based on type
+    if (this.config.input.type === 'file') {
+      console.log(`  Input: file (${this.config.input.path})`)
+    } else if (this.config.input.type === 'provider') {
+      console.log(`  Input: ${this.config.input.provider} provider (${this.config.input.symbols.join(', ')})`)
+    }
+
     console.log(`  Output: ${this.config.output.format} (${this.config.output.path})`)
     console.log(`  Transforms: ${this.config.transformations.length}`)
   }
@@ -238,5 +248,14 @@ Available commands:
     available.forEach(type => {
       console.log(`  - ${type}`)
     })
+  }
+
+  /**
+   * Clean up resources
+   */
+  public cleanup(): void {
+    if (this.rl) {
+      this.rl.close()
+    }
   }
 }

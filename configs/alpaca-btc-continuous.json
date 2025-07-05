@@ -1,0 +1,28 @@
+{
+  "input": {
+    "type": "provider",
+    "provider": "alpaca",
+    "symbols": ["BTC/USD"],
+    "timeframe": "1m",
+    "duration": "continuous"
+  },
+  "output": {
+    "path": "./data/alpaca-btc-live.db",
+    "format": "sqlite",
+    "overwrite": false
+  },
+  "transformations": [],
+  "options": {
+    "chunkSize": 100,
+    "continueOnError": true,
+    "maxErrors": 10,
+    "showProgress": true,
+    "validateData": true
+  },
+  "metadata": {
+    "name": "Alpaca BTC/USD Continuous Stream",
+    "version": "1.0.0",
+    "description": "Continuously streams live BTC/USD data from Alpaca",
+    "created": "2025-01-05T00:00:00Z"
+  }
+}

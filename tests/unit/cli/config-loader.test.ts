@@ -1,4 +1,4 @@
-import { deepStrictEqual, ok, rejects, strictEqual } from 'node:assert'
+import { deepStrictEqual, ok, strictEqual } from 'node:assert'
 import { mkdir, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, it } from 'node:test'
@@ -8,6 +8,7 @@ import {
   createDefaultPipelineConfig,
   loadPipelineConfig
 } from '../../../src/cli/config-loader'
+import type { FileInputConfig } from '../../../src/interfaces/pipeline-config.interface'
 
 describe('Config Loader', () => {
   const testDir = join(process.cwd(), 'test-configs')
@@ -15,11 +16,7 @@ describe('Config Loader', () => {
 
   beforeEach(async () => {
     // Create test directory
-    try {
-      await mkdir(testDir, { recursive: true })
-    } catch {
-      // Directory might already exist
-    }
+    await mkdir(testDir, { recursive: true })
   })
 
   afterEach(async () => {
@@ -27,8 +24,9 @@ describe('Config Loader', () => {
     for (const file of createdFiles) {
       try {
         await unlink(file)
-      } catch {
+      } catch (error) {
         // File might not exist
+        console.warn('Failed to delete test file:', file, error)
       }
     }
     createdFiles = []
@@ -45,6 +43,7 @@ describe('Config Loader', () => {
     it('should load valid configuration', async () => {
       const validConfig = {
         input: {
+          type: 'file',
           path: './data/test.csv',
           format: 'csv',
           chunkSize: 500
@@ -74,16 +73,17 @@ describe('Config Loader', () => {
       const configPath = await createTestConfig('valid.json', validConfig)
       const loaded = await loadPipelineConfig(configPath)
 
-      strictEqual(loaded.input.path, './data/test.csv')
-      strictEqual(loaded.input.format, 'csv')
-      strictEqual(loaded.input.chunkSize, 500)
+      const fileInput = loaded.input as FileInputConfig
+      strictEqual(fileInput.path, './data/test.csv')
+      strictEqual(fileInput.format, 'csv')
+      strictEqual(fileInput.chunkSize, 500)
       strictEqual(loaded.output.path, './output/result.jsonl')
       strictEqual(loaded.output.format, 'jsonl')
       strictEqual(loaded.output.overwrite, true)
       strictEqual(loaded.transformations.length, 1)
       strictEqual(loaded.transformations[0]!.type, 'logReturns')
       strictEqual(loaded.transformations[0]!.enabled, true)
-      strictEqual(loaded.transformations[0]!.params.outputField, 'returns')
+      strictEqual((loaded.transformations[0]!.params as any).outputField, 'returns')
       strictEqual(loaded.options.chunkSize, 1000)
       strictEqual(loaded.options.continueOnError, true)
       strictEqual(loaded.options.maxErrors, 50)
@@ -93,6 +93,7 @@ describe('Config Loader', () => {
     it('should load minimal valid configuration', async () => {
       const minimalConfig = {
         input: {
+          type: 'file',
           path: './input.csv'
         },
         output: {
@@ -105,7 +106,8 @@ describe('Config Loader', () => {
       const configPath = await createTestConfig('minimal.json', minimalConfig)
       const loaded = await loadPipelineConfig(configPath)
 
-      strictEqual(loaded.input.path, './input.csv')
+      const fileInput1 = loaded.input as FileInputConfig
+      strictEqual(fileInput1.path, './input.csv')
       strictEqual(loaded.output.path, './output.jsonl')
       strictEqual(loaded.output.format, 'jsonl')
       strictEqual(loaded.transformations.length, 0)
@@ -119,6 +121,7 @@ describe('Config Loader', () => {
 
       const configWithEnvVars = {
         input: {
+          type: 'file',
           path: '${TEST_INPUT_PATH}',
           chunkSize: '$TEST_CHUNK_SIZE'
         },
@@ -132,8 +135,9 @@ describe('Config Loader', () => {
       const configPath = await createTestConfig('with-env.json', configWithEnvVars)
       const loaded = await loadPipelineConfig(configPath)
 
-      strictEqual(loaded.input.path, '/test/input.csv')
-      strictEqual(loaded.input.chunkSize, '2000') // Note: JSON parsing keeps this as string
+      const fileInput2 = loaded.input as FileInputConfig
+      strictEqual(fileInput2.path, '/test/input.csv')
+      strictEqual(fileInput2.chunkSize, '2000') // Note: JSON parsing keeps this as string
       strictEqual(loaded.output.path, '/test/output.jsonl')
 
       // Clean up environment variables
@@ -144,7 +148,7 @@ describe('Config Loader', () => {
 
     it('should handle relative and absolute paths', async () => {
       const config = {
-        input: { path: './input.csv' },
+        input: { type: 'file', path: './input.csv' },
         output: { path: './output.jsonl', format: 'jsonl' },
         transformations: []
       }
@@ -153,22 +157,23 @@ describe('Config Loader', () => {
       
       // Test with relative path
       const loadedRelative = await loadPipelineConfig('test-configs/paths.json')
-      ok(loadedRelative.input.path)
+      const fileInputRel = loadedRelative.input as FileInputConfig
+      ok(fileInputRel.path)
 
       // Test with absolute path
       const loadedAbsolute = await loadPipelineConfig(configPath)
-      ok(loadedAbsolute.input.path)
+      const fileInputAbs = loadedAbsolute.input as FileInputConfig
+      ok(fileInputAbs.path)
     })
 
     it('should throw ConfigLoadError for non-existent file', async () => {
-      await rejects(
-        loadPipelineConfig('./non-existent.json'),
-        (error: ConfigLoadError) => {
-          strictEqual(error.name, 'ConfigLoadError')
-          ok(error.message.includes('Configuration file not found'))
-          return true
-        }
-      )
+      try {
+        await loadPipelineConfig('./non-existent.json')
+        throw new Error('Expected ConfigLoadError but no error was thrown')
+      } catch (error: any) {
+        strictEqual(error.name, 'ConfigLoadError')
+        ok(error.message.includes('Configuration file not found'))
+      }
     })
 
     it('should throw ConfigLoadError for invalid JSON', async () => {
@@ -176,14 +181,13 @@ describe('Config Loader', () => {
       await writeFile(invalidJsonPath, '{ invalid json }')
       createdFiles.push(invalidJsonPath)
 
-      await rejects(
-        loadPipelineConfig(invalidJsonPath),
-        (error: ConfigLoadError) => {
-          strictEqual(error.name, 'ConfigLoadError')
-          ok(error.message.includes('Failed to parse JSON'))
-          return true
-        }
-      )
+      try {
+        await loadPipelineConfig(invalidJsonPath)
+        throw new Error('Expected ConfigLoadError but no error was thrown')
+      } catch (error: any) {
+        strictEqual(error.name, 'ConfigLoadError')
+        ok(error.message.includes('Failed to parse JSON'))
+      }
     })
 
     it('should throw ConfigValidationError for missing input section', async () => {
@@ -194,74 +198,70 @@ describe('Config Loader', () => {
 
       const configPath = await createTestConfig('no-input.json', invalidConfig)
 
-      await rejects(
-        loadPipelineConfig(configPath),
-        (error: ConfigValidationError) => {
-          strictEqual(error.name, 'ConfigValidationError')
-          ok(error.message.includes('must have an "input" section'))
-          return true
-        }
-      )
+      try {
+        await loadPipelineConfig(configPath)
+        throw new Error('Expected ConfigValidationError but no error was thrown')
+      } catch (error: any) {
+        strictEqual(error.name, 'ConfigValidationError')
+        ok(error.message.includes('must have an "input" section'))
+      }
     })
 
     it('should throw ConfigValidationError for missing output section', async () => {
       const invalidConfig = {
-        input: { path: './input.csv' },
+        input: { type: 'file', path: './input.csv' },
         transformations: []
       }
 
       const configPath = await createTestConfig('no-output.json', invalidConfig)
 
-      await rejects(
-        loadPipelineConfig(configPath),
-        (error: ConfigValidationError) => {
-          strictEqual(error.name, 'ConfigValidationError')
-          ok(error.message.includes('must have an "output" section'))
-          return true
-        }
-      )
+      try {
+        await loadPipelineConfig(configPath)
+        throw new Error('Expected ConfigValidationError but no error was thrown')
+      } catch (error: any) {
+        strictEqual(error.name, 'ConfigValidationError')
+        ok(error.message.includes('must have an "output" section'))
+      }
     })
 
     it('should throw ConfigValidationError for invalid output format', async () => {
       const invalidConfig = {
-        input: { path: './input.csv' },
+        input: { type: 'file', path: './input.csv' },
         output: { path: './output.txt', format: 'txt' },
         transformations: []
       }
 
       const configPath = await createTestConfig('invalid-format.json', invalidConfig)
 
-      await rejects(
-        loadPipelineConfig(configPath),
-        (error: ConfigValidationError) => {
-          strictEqual(error.name, 'ConfigValidationError')
-          ok(error.message.includes('Output format must be one of'))
-          return true
-        }
-      )
+      try {
+        await loadPipelineConfig(configPath)
+        throw new Error('Expected ConfigValidationError but no error was thrown')
+      } catch (error: any) {
+        strictEqual(error.name, 'ConfigValidationError')
+        ok(error.message.includes('Output format must be one of'))
+      }
     })
 
     it('should throw ConfigValidationError for missing transformations array', async () => {
       const invalidConfig = {
-        input: { path: './input.csv' },
+        input: { type: 'file', path: './input.csv' },
         output: { path: './output.jsonl', format: 'jsonl' }
       }
 
       const configPath = await createTestConfig('no-transforms.json', invalidConfig)
 
-      await rejects(
-        loadPipelineConfig(configPath),
-        (error: ConfigValidationError) => {
-          strictEqual(error.name, 'ConfigValidationError')
-          ok(error.message.includes('must have a "transformations" array'))
-          return true
-        }
-      )
+      try {
+        await loadPipelineConfig(configPath)
+        throw new Error('Expected ConfigValidationError but no error was thrown')
+      } catch (error: any) {
+        strictEqual(error.name, 'ConfigValidationError')
+        ok(error.message.includes('must have a "transformations" array'))
+      }
     })
 
     it('should throw ConfigValidationError for invalid transformation', async () => {
       const invalidConfig = {
-        input: { path: './input.csv' },
+        input: { type: 'file', path: './input.csv' },
         output: { path: './output.jsonl', format: 'jsonl' },
         transformations: [
           {
@@ -273,19 +273,18 @@ describe('Config Loader', () => {
 
       const configPath = await createTestConfig('invalid-transform.json', invalidConfig)
 
-      await rejects(
-        loadPipelineConfig(configPath),
-        (error: ConfigValidationError) => {
-          strictEqual(error.name, 'ConfigValidationError')
-          ok(error.message.includes('must have an "enabled" boolean'))
-          return true
-        }
-      )
+      try {
+        await loadPipelineConfig(configPath)
+        throw new Error('Expected ConfigValidationError but no error was thrown')
+      } catch (error: any) {
+        strictEqual(error.name, 'ConfigValidationError')
+        ok(error.message.includes('must have an "enabled" boolean'))
+      }
     })
 
     it('should throw ConfigValidationError for invalid options', async () => {
       const invalidConfig = {
-        input: { path: './input.csv' },
+        input: { type: 'file', path: './input.csv' },
         output: { path: './output.jsonl', format: 'jsonl' },
         transformations: [],
         options: {
@@ -295,19 +294,19 @@ describe('Config Loader', () => {
 
       const configPath = await createTestConfig('invalid-options.json', invalidConfig)
 
-      await rejects(
-        loadPipelineConfig(configPath),
-        (error: ConfigValidationError) => {
-          strictEqual(error.name, 'ConfigValidationError')
-          ok(error.message.includes('chunkSize must be a positive integer'))
-          return true
-        }
-      )
+      try {
+        await loadPipelineConfig(configPath)
+        throw new Error('Expected ConfigValidationError but no error was thrown')
+      } catch (error: any) {
+        strictEqual(error.name, 'ConfigValidationError')
+        ok(error.message.includes('chunkSize must be a positive integer'))
+      }
     })
 
     it('should handle complex configuration with metadata', async () => {
       const complexConfig = {
         input: {
+          type: 'file',
           path: './data/complex.csv',
           format: 'csv',
           columnMapping: {
@@ -364,10 +363,11 @@ describe('Config Loader', () => {
       const loaded = await loadPipelineConfig(configPath)
 
       // Verify complex nested structures
-      strictEqual(loaded.input.columnMapping?.timestamp, 'ts')
-      strictEqual(loaded.input.columnMapping?.close, 'c')
-      strictEqual(loaded.input.exchange, 'test')
-      strictEqual(loaded.input.symbol, 'BTC-USD')
+      const fileInput3 = loaded.input as FileInputConfig
+      strictEqual(fileInput3.columnMapping?.timestamp, 'ts')
+      strictEqual(fileInput3.columnMapping?.close, 'c')
+      strictEqual(fileInput3.exchange, 'test')
+      strictEqual(fileInput3.symbol, 'BTC-USD')
       
       strictEqual(loaded.output.format, 'sqlite')
       strictEqual(loaded.output.overwrite, false)
@@ -375,7 +375,7 @@ describe('Config Loader', () => {
       strictEqual(loaded.transformations.length, 2)
       strictEqual(loaded.transformations[0]!.enabled, true)
       strictEqual(loaded.transformations[1]!.enabled, false)
-      strictEqual(loaded.transformations[1]!.params.windowSize, 20)
+      strictEqual((loaded.transformations[1]!.params as any).windowSize, 20)
       
       strictEqual(loaded.options.continueOnError, false)
       
@@ -395,10 +395,11 @@ describe('Config Loader', () => {
       ok(defaultConfig.options)
       ok(defaultConfig.metadata)
 
-      // Check default values
-      strictEqual(defaultConfig.input.path, './data/input.csv')
-      strictEqual(defaultConfig.input.format, 'csv')
-      strictEqual(defaultConfig.input.chunkSize, 1000)
+      // Check default values - we know createDefaultPipelineConfig returns file input
+      const fileInput = defaultConfig.input as FileInputConfig
+      strictEqual(fileInput.path, './data/input.csv')
+      strictEqual(fileInput.format, 'csv')
+      strictEqual(fileInput.chunkSize, 1000)
       
       strictEqual(defaultConfig.output.path, './data/output.jsonl')
       strictEqual(defaultConfig.output.format, 'jsonl')
@@ -456,6 +457,7 @@ describe('Config Loader', () => {
     it('should handle missing environment variables gracefully', async () => {
       const configWithMissingEnv = {
         input: {
+          type: 'file',
           path: '${MISSING_VAR}/input.csv'
         },
         output: {
@@ -469,7 +471,8 @@ describe('Config Loader', () => {
       const loaded = await loadPipelineConfig(configPath)
 
       // Missing env var should be replaced with empty string
-      strictEqual(loaded.input.path, '/input.csv')
+      const fileInput5 = loaded.input as FileInputConfig
+      strictEqual(fileInput5.path, '/input.csv')
     })
 
     it('should expand multiple variables in same string', async () => {
@@ -478,6 +481,7 @@ describe('Config Loader', () => {
 
       const config = {
         input: {
+          type: 'file',
           path: '${TEST_DIR}/${TEST_FILE}'
         },
         output: {
@@ -490,7 +494,8 @@ describe('Config Loader', () => {
       const configPath = await createTestConfig('multi-env.json', config)
       const loaded = await loadPipelineConfig(configPath)
 
-      strictEqual(loaded.input.path, '/test/data.csv')
+      const fileInput6 = loaded.input as FileInputConfig
+      strictEqual(fileInput6.path, '/test/data.csv')
 
       delete process.env.TEST_DIR
       delete process.env.TEST_FILE

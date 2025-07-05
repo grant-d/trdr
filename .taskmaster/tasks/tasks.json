@@ -547,11 +547,120 @@
         ],
         "status": "pending",
         "subtasks": []
+      },
+      {
+        "id": 9,
+        "title": "Alpaca Provider Implementation",
+        "description": "Implement the Alpaca provider with REST and WebSocket support, rate limiting, and reconnection logic.",
+        "details": "1. Create `AlpacaProvider` class implementing the `DataProvider` interface\n2. Implement REST API client for historical data\n3. Implement WebSocket client for real-time data\n4. Add rate limiting with exponential backoff\n5. Implement reconnection logic with circuit breaker pattern\n6. Add authentication via environment variables\n7. Implement backfill mechanism for gaps\n\n```typescript\nclass AlpacaProvider implements DataProvider {\n  name = 'alpaca';\n  private apiKey: string;\n  private apiSecret: string;\n  private wsClient: WebSocket | null = null;\n  private subscriptions: Map<string, Set<string>> = new Map();\n  private retryConfig: RetryConfig;\n  \n  constructor(config: AlpacaConfig) {\n    this.apiKey = process.env.ALPACA_API_KEY || '';\n    this.apiSecret = process.env.ALPACA_API_SECRET || '';\n    this.retryConfig = config.retryConfig || {\n      maxRetries: 5,\n      backoffMultiplier: 2,\n      maxBackoffSeconds: 60\n    };\n  }\n  \n  async connect(): Promise<void> {\n    if (!this.apiKey || !this.apiSecret) {\n      throw new Error('Alpaca API credentials not found in environment variables');\n    }\n    // Initialize REST client\n  }\n  \n  async disconnect(): Promise<void> {\n    // Close WebSocket connection if open\n    if (this.wsClient) {\n      this.wsClient.close();\n      this.wsClient = null;\n    }\n  }\n  \n  async *getHistoricalData(params: HistoricalParams): AsyncIterator<OhlcvDto> {\n    // Fetch historical data from REST API\n    // Handle pagination\n    // Apply rate limiting\n    // Convert to OhlcvDto format\n    // Yield bars in chronological order\n  }\n  \n  async *subscribeRealtime(params: RealtimeParams): AsyncIterator<OhlcvDto> {\n    // Connect to WebSocket if not already connected\n    await this.ensureWebSocketConnection();\n    \n    // Subscribe to channels for requested symbols\n    for (const symbol of params.symbols) {\n      await this.subscribeToSymbol(symbol, params.timeframe);\n    }\n    \n    // Create and return async iterator that yields real-time bars\n    // Handle reconnections and backfill gaps\n  }\n  \n  getRequiredEnvVars(): string[] {\n    return ['ALPACA_API_KEY', 'ALPACA_API_SECRET'];\n  }\n  \n  private async ensureWebSocketConnection(): Promise<void> {\n    // Create WebSocket connection if not exists\n    // Set up event handlers\n    // Implement reconnection logic\n  }\n  \n  private async subscribeToSymbol(symbol: string, timeframe: string): Promise<void> {\n    // Send subscription message to WebSocket\n    // Track active subscriptions\n  }\n  \n  private async backfill(symbol: string, lastTimestamp: number): Promise<OhlcvDto[]> {\n    // Calculate gap between last timestamp and current time\n    // Fetch missing data via REST API\n    // Return backfilled bars\n  }\n}\n```",
+        "testStrategy": "1. Unit tests with mocked API responses\n2. Test rate limiting behavior\n3. Test reconnection logic with simulated disconnections\n4. Verify backfill mechanism works correctly\n5. Test authentication error handling\n6. Integration tests with actual Alpaca API (using test credentials)",
+        "priority": "medium",
+        "dependencies": [
+          1,
+          2
+        ],
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Design AlpacaProvider Class Structure",
+            "description": "Define the AlpacaProvider class, ensuring it implements the DataProvider interface and includes all required properties and method signatures.",
+            "dependencies": [],
+            "details": "Establish the class skeleton, including constructor, required environment variables, and placeholders for REST and WebSocket logic.",
+            "status": "done",
+            "testStrategy": "Verify class instantiation and interface compliance with TypeScript type checks."
+          },
+          {
+            "id": 2,
+            "title": "Implement REST API Client for Historical Data",
+            "description": "Develop the REST API client to fetch historical OHLCV data from Alpaca, handling pagination and data transformation.",
+            "dependencies": [
+              1
+            ],
+            "details": "Use a supported Alpaca REST client (e.g., CBAdvancedTradeClient) to retrieve historical data, convert responses to OhlcvDto format, and yield results in chronological order[3].",
+            "status": "done",
+            "testStrategy": "Mock REST responses and validate correct data retrieval, pagination, and transformation."
+          },
+          {
+            "id": 3,
+            "title": "Implement WebSocket Client for Real-Time Data",
+            "description": "Set up the WebSocket client to subscribe to real-time market data channels, manage subscriptions, and process incoming messages.",
+            "dependencies": [
+              1
+            ],
+            "details": "Establish WebSocket connection for ticker and trade data, not candle/OHLCV data directly, subscribe to relevant channels, and handle incoming data streams according to Alpaca's WebSocket API documentation[1][5].",
+            "status": "done",
+            "testStrategy": "Simulate WebSocket events and confirm correct subscription, message parsing, and data emission."
+          },
+          {
+            "id": 4,
+            "title": "Add Authentication via Environment Variables",
+            "description": "Integrate authentication for both REST and WebSocket clients using API credentials sourced from environment variables.",
+            "dependencies": [
+              2,
+              3
+            ],
+            "details": "Ensure API key and secret are securely loaded from environment variables and used in all authenticated requests[5].",
+            "status": "done",
+            "testStrategy": "Test with valid and invalid credentials, confirming proper error handling and successful authentication."
+          },
+          {
+            "id": 5,
+            "title": "Implement Rate Limiting with Exponential Backoff",
+            "description": "Add rate limiting logic to REST and WebSocket clients, applying exponential backoff strategies on rate limit errors.",
+            "dependencies": [
+              2,
+              3
+            ],
+            "details": "Monitor API responses for rate limit errors and apply retry logic with increasing delays up to a maximum backoff threshold.",
+            "status": "done",
+            "testStrategy": "Simulate rate limit scenarios and verify correct backoff and retry behavior."
+          },
+          {
+            "id": 6,
+            "title": "Implement Reconnection Logic with Circuit Breaker Pattern",
+            "description": "Develop robust reconnection logic for the WebSocket client using a circuit breaker pattern to handle repeated failures.",
+            "dependencies": [
+              3,
+              5
+            ],
+            "details": "Detect connection drops, trigger reconnection attempts with backoff, and open the circuit after repeated failures to prevent overload.",
+            "status": "done",
+            "testStrategy": "Force connection failures and observe circuit breaker state transitions and reconnection attempts."
+          },
+          {
+            "id": 7,
+            "title": "Implement Backfill Mechanism for Data Gaps",
+            "description": "Create a mechanism to detect and backfill missing data using the REST API when real-time data gaps are identified.",
+            "dependencies": [
+              2,
+              3,
+              6
+            ],
+            "details": "On reconnection or detected gaps, calculate missing intervals and fetch historical data to fill them.",
+            "status": "done",
+            "testStrategy": "Simulate data gaps and verify that missing data is correctly identified and backfilled."
+          },
+          {
+            "id": 8,
+            "title": "Comprehensive Integration and Validation Testing",
+            "description": "Conduct end-to-end testing of the AlpacaProvider, covering REST, WebSocket, authentication, rate limiting, reconnection, and backfill features.",
+            "dependencies": [
+              4,
+              5,
+              6,
+              7
+            ],
+            "details": "Test the provider in realistic scenarios, including normal operation, network interruptions, and API rate limits.",
+            "status": "done",
+            "testStrategy": "Run integration tests with live and mocked Alpaca endpoints, ensuring all features work together as intended."
+          }
+        ]
       }
     ],
     "metadata": {
       "created": "2025-07-04T20:49:04.828Z",
-      "updated": "2025-07-05T08:34:56.851Z",
+      "updated": "2025-07-05T16:06:19.690Z",
       "description": "Tasks for master context"
     }
   }

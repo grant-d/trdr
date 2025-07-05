@@ -1,4 +1,4 @@
-import type { Transform } from '../interfaces'
+import type { DataProvider, HistoricalParams, Transform } from '../interfaces'
 import type { OhlcvDto } from '../models'
 import type { FileProvider } from '../providers'
 import type { OhlcvRepository } from '../repositories'
@@ -41,7 +41,7 @@ export interface PipelineMetadata {
  */
 export interface PipelineConfig {
   /** Data provider */
-  provider: FileProvider
+  provider: FileProvider | DataProvider
   /** Optional transform or transform pipeline */
   transform?: Transform
   /** Output repository */
@@ -50,6 +50,8 @@ export interface PipelineConfig {
   options?: PipelineOptions
   /** Pipeline metadata */
   metadata?: PipelineMetadata
+  /** Historical data parameters for DataProvider */
+  historicalParams?: HistoricalParams
 }
 
 /**
@@ -122,12 +124,20 @@ export class Pipeline {
       }
 
       // Get data stream from provider
-      const dataStream = this.config.provider.getHistoricalData({
-        symbols: [], // Empty array means all symbols
-        start: 0,
-        end: Date.now(),
-        timeframe: '1m',
-      })
+      let dataStream: AsyncIterableIterator<OhlcvDto>
+      
+      if (this.config.historicalParams) {
+        // Use provided historical params (for API providers)
+        dataStream = this.config.provider.getHistoricalData(this.config.historicalParams)
+      } else {
+        // For file providers, use default params (entire file)
+        dataStream = this.config.provider.getHistoricalData({
+          symbols: [], // Empty array means all symbols
+          start: 0,
+          end: Date.now(),
+          timeframe: '1m',
+        })
+      }
 
       // Apply transform if provided
       let processedStream: AsyncIterableIterator<OhlcvDto>

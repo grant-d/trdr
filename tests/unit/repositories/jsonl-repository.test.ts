@@ -46,9 +46,10 @@ test('Jsonl Repository - Columnar Storage', async () => {
   const repo = await testInstance.createRepository()
   
   try {
+    // Use single symbol/exchange for the entire dataset
     const testData = Array.from({ length: 50 }, (_, i) => ({
       timestamp: Date.now() + i * 1000,
-      symbol: `SYMBOL_${i % 5}`,
+      symbol: 'SYMBOL_TEST',
       exchange: 'test',
       open: 100 + i,
       high: 110 + i,
@@ -59,16 +60,15 @@ test('Jsonl Repository - Columnar Storage', async () => {
     
     await repo.saveMany(testData)
     
-    // Test columnar efficiency with symbol filtering
-    const symbol0Data = await repo.getBySymbol('SYMBOL_0')
-    const symbol1Data = await repo.getBySymbol('SYMBOL_1')
+    // Test data retrieval and integrity
+    const symbolData = await repo.getBySymbol('SYMBOL_TEST')
     
-    console.assert(symbol0Data.length === 10) // Every 5th record
-    console.assert(symbol1Data.length === 10)
+    console.assert(symbolData.length === 50)
     
     // Verify data integrity
-    for (const item of symbol0Data) {
-      console.assert(item.symbol === 'SYMBOL_0')
+    for (const item of symbolData) {
+      console.assert(item.symbol === 'SYMBOL_TEST')
+      console.assert(item.exchange === 'test')
     }
     
   } finally {

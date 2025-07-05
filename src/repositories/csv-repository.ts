@@ -15,6 +15,8 @@ export class CsvRepository implements OhlcvRepository {
   private ready = false
   private basePath = ''
   private readonly writeStreams = new Map<string, Writable>()
+  private singleSymbol: string | null = null
+  private singleExchange: string | null = null
 
   // CSV configuration
   private readonly csvDelimiter = ','
@@ -36,12 +38,15 @@ export class CsvRepository implements OhlcvRepository {
     try {
       this.basePath = config.connectionString
 
-      // Create base directory if it doesn't exist
-      await fs.mkdir(this.basePath, { recursive: true })
+      // Create parent directory if it doesn't exist
+      const dir = path.dirname(this.basePath)
+      await fs.mkdir(dir, { recursive: true })
 
-      // Create subdirectories for organization
-      await fs.mkdir(path.join(this.basePath, 'ohlcv'), { recursive: true })
-      await fs.mkdir(path.join(this.basePath, 'coefficients'), { recursive: true })
+      // Handle overwrite option - delete existing file
+      if (config.options?.overwrite && await this.fileExists(this.basePath)) {
+        await fs.unlink(this.basePath)
+        logger.debug('Removed existing CSV file due to overwrite option')
+      }
 
       this.ready = true
       logger.info('CSV repository initialized', {
@@ -140,14 +145,23 @@ export class CsvRepository implements OhlcvRepository {
    * Append a single OHLCV record to the appropriate CSV file
    */
   private async appendToFile(data: OhlcvDto): Promise<void> {
-    const symbolKey = this.getSymbolKey(data.symbol, data.exchange)
-    const filePath = this.getOhlcvFilePath(symbolKey)
+    // Enforce single symbol/exchange per file
+    if (this.singleSymbol === null) {
+      this.singleSymbol = data.symbol
+      this.singleExchange = data.exchange
+    } else if (this.singleSymbol !== data.symbol || this.singleExchange !== data.exchange) {
+      throw new RepositoryValidationError(
+        `CSV file can only contain data for one symbol/exchange. Expected ${this.singleSymbol}/${this.singleExchange}, got ${data.symbol}/${data.exchange}`
+      )
+    }
+
+    const filePath = this.basePath
 
     // Check if file exists and needs headers
     const needsHeaders = !(await this.fileExists(filePath))
 
-    // Get or create write stream for this symbol
-    const stream = await this.getWriteStream(symbolKey, filePath)
+    // Get or create write stream for this file
+    const stream = await this.getWriteStream('main', filePath)
 
     // Write headers if this is a new file
     if (needsHeaders) {
@@ -162,14 +176,31 @@ export class CsvRepository implements OhlcvRepository {
   /**
    * Append multiple OHLCV records to a CSV file efficiently
    */
-  private async appendManyToFile(symbolKey: string, data: OhlcvDto[]): Promise<void> {
-    const filePath = this.getOhlcvFilePath(symbolKey)
+  private async appendManyToFile(_symbolKey: string, data: OhlcvDto[]): Promise<void> {
+    // Validate all data is for the same symbol/exchange
+    if (data.length > 0) {
+      const firstItem = data[0]!
+      if (this.singleSymbol === null) {
+        this.singleSymbol = firstItem.symbol
+        this.singleExchange = firstItem.exchange
+      }
+      
+      for (const item of data) {
+        if (item.symbol !== this.singleSymbol || item.exchange !== this.singleExchange) {
+          throw new RepositoryValidationError(
+            `CSV file can only contain data for one symbol/exchange. Expected ${this.singleSymbol}/${this.singleExchange}, got ${item.symbol}/${item.exchange}`
+          )
+        }
+      }
+    }
+
+    const filePath = this.basePath
 
     // Check if file exists and needs headers
     const needsHeaders = !(await this.fileExists(filePath))
 
-    // Get or create write stream for this symbol
-    const stream = await this.getWriteStream(symbolKey, filePath)
+    // Get or create write stream for this file
+    const stream = await this.getWriteStream('main', filePath)
 
     // Write headers if this is a new file
     if (needsHeaders) {
@@ -197,9 +228,12 @@ export class CsvRepository implements OhlcvRepository {
     // Ensure directory exists
     await fs.mkdir(path.dirname(filePath), { recursive: true })
 
-    // Create write stream in append mode
+    // Check if file exists to determine the correct flag
+    const fileExists = await this.fileExists(filePath)
+    
+    // Create write stream - use 'w' for new files, 'a' for existing
     const stream = createWriteStream(filePath, {
-      flags: 'a',
+      flags: fileExists ? 'a' : 'w',
       encoding: 'utf8',
       highWaterMark: 64 * 1024 // 64KB buffer
     })
@@ -267,17 +301,13 @@ export class CsvRepository implements OhlcvRepository {
   }
 
   /**
-   * Get the file path for OHLCV data for a specific symbol
-   */
-  private getOhlcvFilePath(symbolKey: string): string {
-    return path.join(this.basePath, 'ohlcv', `${symbolKey}.csv`)
-  }
-
-  /**
    * Get the file path for coefficient data
    */
   private getCoefficientFilePath(): string {
-    return path.join(this.basePath, 'coefficients', 'coefficients.csv')
+    // Store coefficients in same directory as data file
+    const dir = path.dirname(this.basePath)
+    const basename = path.basename(this.basePath, '.csv')
+    return path.join(dir, `${basename}.coefficients.csv`)
   }
 
   /**
@@ -412,34 +442,18 @@ export class CsvRepository implements OhlcvRepository {
    * Get relevant CSV files based on symbol and exchange filters
    */
   private async getRelevantFiles(symbol?: string, exchange?: string): Promise<string[]> {
-    const ohlcvDir = path.join(this.basePath, 'ohlcv')
-
-    try {
-      const files = await fs.readdir(ohlcvDir)
-      const csvFiles = files.filter(file => file.endsWith('.csv'))
-
-      if (symbol && exchange) {
-        const symbolKey = this.getSymbolKey(symbol, exchange)
-        const targetFile = `${symbolKey}.csv`
-        return csvFiles.includes(targetFile)
-          ? [path.join(ohlcvDir, targetFile)]
-          : []
+    // Since we're using a single file approach, just return the base path if it exists
+    if (await this.fileExists(this.basePath)) {
+      // If filtering by symbol/exchange, check if it matches our single symbol/exchange
+      if (symbol && this.singleSymbol && symbol !== this.singleSymbol) {
+        return []
       }
-
-      if (symbol) {
-        const matchingFiles = csvFiles.filter(file =>
-          file.includes(symbol.replace(/[^a-zA-Z0-9_-]/g, '_')),
-        )
-        return matchingFiles.map(file => path.join(ohlcvDir, file))
+      if (exchange && this.singleExchange && exchange !== this.singleExchange) {
+        return []
       }
-
-      // Return all files
-      return csvFiles.map(file => path.join(ohlcvDir, file))
-    } catch (error) {
-      // Directory might not exist yet
-      logger.debug('Directory does not exist', { error })
-      return []
+      return [this.basePath]
     }
+    return []
   }
 
   /**
@@ -1081,6 +1095,24 @@ export class CsvRepository implements OhlcvRepository {
         )
       }
     }
+  }
+
+  /**
+   * Force close all streams immediately without flushing
+   * Use only in test cleanup scenarios
+   */
+  forceClose(): void {
+    for (const [, stream] of this.writeStreams) {
+      try {
+        if (stream && typeof stream.destroy === 'function') {
+          stream.destroy()
+        }
+      } catch {
+        // Ignore errors during force close
+      }
+    }
+    this.writeStreams.clear()
+    this.ready = false
   }
 
   /**

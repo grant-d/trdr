@@ -1,10 +1,15 @@
 import { ok, strictEqual } from 'node:assert'
-import { beforeEach, describe, it } from 'node:test'
+import { beforeEach, describe, it, afterEach } from 'node:test'
 import { createDefaultPipelineConfig } from '../../../src/cli/config-loader'
 import { ConfigValidator, validatePipelineConfig } from '../../../src/cli/config-validator'
-import type { PipelineConfig } from '../../../src/interfaces'
+import type { PipelineConfig, TransformConfig } from '../../../src/interfaces'
+import { forceCleanupAsyncHandles } from '../../helpers/test-cleanup'
+import type { LogReturnsParams, ZScoreParams, PriceCalcParams } from '../../../src/transforms'
 
 describe('Config Validator', () => {
+  afterEach(() => {
+    forceCleanupAsyncHandles()
+  })
   describe('validatePipelineConfig function', () => {
     it('should validate a default configuration successfully', () => {
       const config = createDefaultPipelineConfig()
@@ -18,8 +23,26 @@ describe('Config Validator', () => {
     })
 
     it('should validate a complete valid configuration', () => {
+      const logReturnsTx: TransformConfig<LogReturnsParams> = {
+        type: 'logReturns',
+        enabled: true,
+        params: { 
+          outputField: 'returns'
+        }
+      }
+
+      const zScoreTx: TransformConfig<ZScoreParams> = {
+        type: 'zScore',
+        enabled: true,
+        params: { 
+          fields: ['returns'],
+          windowSize: 20
+        }
+      }
+
       const config: PipelineConfig = {
         input: {
+          type: 'file',
           path: './data/input.csv',
           format: 'csv',
           chunkSize: 1000,
@@ -38,21 +61,8 @@ describe('Config Validator', () => {
           overwrite: true
         },
         transformations: [
-          {
-            type: 'logReturns',
-            enabled: true,
-            params: {
-              outputField: 'returns'
-            }
-          },
-          {
-            type: 'zScore',
-            enabled: true,
-            params: {
-              fields: ['returns'],
-              windowSize: 20
-            }
-          }
+          logReturnsTx,
+          zScoreTx
         ],
         options: {
           chunkSize: 2000,
@@ -94,7 +104,8 @@ describe('Config Validator', () => {
 
       it('should reject empty input path', () => {
         const config = createDefaultPipelineConfig()
-        config.input.path = '   '
+        const fileInput = config.input as any
+        fileInput.path = '   '
 
         const result = validator.validate(config)
         strictEqual(result.isValid, false)
@@ -112,7 +123,8 @@ describe('Config Validator', () => {
 
       it('should reject invalid chunk size', () => {
         const config = createDefaultPipelineConfig()
-        config.input.chunkSize = -1
+        const fileInput = config.input as any
+        fileInput.chunkSize = -1
 
         const result = validator.validate(config)
         strictEqual(result.isValid, false)
@@ -121,7 +133,8 @@ describe('Config Validator', () => {
 
       it('should warn about very large chunk size', () => {
         const config = createDefaultPipelineConfig()
-        config.input.chunkSize = 200000
+        const fileInput = config.input as any
+        fileInput.chunkSize = 200000
 
         const result = validator.validate(config)
         strictEqual(result.isValid, true) // Warning, not error
@@ -130,7 +143,8 @@ describe('Config Validator', () => {
 
       it('should validate column mapping', () => {
         const config = createDefaultPipelineConfig()
-        config.input.columnMapping = {
+        const fileInput = config.input as any
+        fileInput.columnMapping = {
           timestamp: 'ts',
           open: 'o',
           high: '', // Invalid empty string
@@ -146,7 +160,8 @@ describe('Config Validator', () => {
 
       it('should detect duplicate column mappings', () => {
         const config = createDefaultPipelineConfig()
-        config.input.columnMapping = {
+        const fileInput = config.input as any
+        fileInput.columnMapping = {
           timestamp: 'price',
           open: 'price', // Duplicate mapping
           high: 'h',
@@ -162,8 +177,9 @@ describe('Config Validator', () => {
 
       it('should validate CSV delimiter', () => {
         const config = createDefaultPipelineConfig()
-        config.input.format = 'csv'
-        config.input.delimiter = 'too-long'
+        const fileInput = config.input as any
+        fileInput.format = 'csv'
+        fileInput.delimiter = 'too-long'
 
         const result = validator.validate(config)
         strictEqual(result.isValid, false)
@@ -192,7 +208,8 @@ describe('Config Validator', () => {
 
       it('should reject same input and output paths', () => {
         const config = createDefaultPipelineConfig()
-        config.output.path = config.input.path
+        const fileInput = config.input as any
+        config.output.path = fileInput.path
 
         const result = validator.validate(config)
         strictEqual(result.isValid, false)
@@ -201,7 +218,8 @@ describe('Config Validator', () => {
 
       it('should warn about CSV to SQLite conversion', () => {
         const config = createDefaultPipelineConfig()
-        config.input.format = 'csv'
+        const fileInput = config.input as any
+        fileInput.format = 'csv'
         config.output.format = 'sqlite'
 
         const result = validator.validate(config)
@@ -293,10 +311,10 @@ describe('Config Validator', () => {
           {
             type: 'zScore',
             enabled: true,
-            params: {
+            params: { 
               fields: [], // Empty array should fail
               windowSize: -5 // Invalid window size
-            }
+            } as any
           }
         ]
 
@@ -308,17 +326,19 @@ describe('Config Validator', () => {
 
       it('should validate movingAverage transform parameters', () => {
         const config = createDefaultPipelineConfig()
-        config.transformations = [
-          {
-            type: 'movingAverage',
-            enabled: true,
-            params: {
-              field: '', // Missing field
-              windowSize: 'invalid', // Invalid window size
-              type: 'invalid' // Invalid type
-            }
+        
+        const invalidMovingAverage: TransformConfig = {
+          type: 'movingAverage',
+          enabled: true,
+          params: {
+            // @ts-ignore - Intentionally invalid
+            field: '',
+            windowSize: 'invalid', // Invalid window size
+            type: 'invalid' // Invalid type
           }
-        ]
+        }
+        
+        config.transformations = [invalidMovingAverage]
 
         const result = validator.validate(config)
         strictEqual(result.isValid, false)
@@ -333,10 +353,10 @@ describe('Config Validator', () => {
           {
             type: 'priceCalc',
             enabled: true,
-            params: {
+            params: { 
               calculation: 'custom'
               // Missing customFormula
-            }
+            } as any
           }
         ]
 
@@ -351,9 +371,9 @@ describe('Config Validator', () => {
           {
             type: 'rsi',
             enabled: true,
-            params: {
+            params: { 
               period: -1 // Invalid period
-            }
+            } as any
           }
         ]
 
@@ -439,9 +459,9 @@ describe('Config Validator', () => {
           {
             type: 'zScore',
             enabled: true,
-            params: {
+            params: { 
               fields: ['non_existent_field'] // This field doesn't exist
-            }
+            } as any
           }
         ]
 
@@ -452,21 +472,26 @@ describe('Config Validator', () => {
 
       it('should track fields through transform chain', () => {
         const config = createDefaultPipelineConfig()
-        config.transformations = [
-          {
-            type: 'logReturns',
-            enabled: true,
-            params: {
-              outputField: 'returns'
-            }
-          },
-          {
-            type: 'zScore',
-            enabled: true,
-            params: {
-              fields: ['returns'] // This should work - returns is created by logReturns
-            }
+        
+        const logReturnsTx: TransformConfig<LogReturnsParams> = {
+          type: 'logReturns',
+          enabled: true,
+          params: { 
+            outputField: 'returns'
           }
+        }
+
+        const zScoreTx: TransformConfig<ZScoreParams> = {
+          type: 'zScore',
+          enabled: true,
+          params: { 
+            fields: ['returns'] // This should work - returns is created by logReturns
+          }
+        }
+
+        config.transformations = [
+          logReturnsTx,
+          zScoreTx
         ]
 
         const result = validator.validate(config)
@@ -480,17 +505,17 @@ describe('Config Validator', () => {
           {
             type: 'movingAverage',
             enabled: true,
-            params: {
+            params: { 
               field: 'returns', // returns field doesn't exist yet
               windowSize: 20
-            }
+            } as any
           },
           {
             type: 'logReturns',
             enabled: true,
-            params: {
+            params: { 
               outputField: 'returns'
-            }
+            } as any
           }
         ]
 
@@ -501,21 +526,26 @@ describe('Config Validator', () => {
 
       it('should handle disabled transforms in chain', () => {
         const config = createDefaultPipelineConfig()
-        config.transformations = [
-          {
-            type: 'logReturns',
-            enabled: false, // Disabled - won't provide returns field
-            params: {
-              outputField: 'returns'
-            }
-          },
-          {
-            type: 'zScore',
-            enabled: true,
-            params: {
-              fields: ['returns'] // This should fail - returns not available
-            }
+        
+        const logReturnsTx: TransformConfig<LogReturnsParams> = {
+          type: 'logReturns',
+          enabled: false, // Disabled - won't provide returns field
+          params: { 
+            outputField: 'returns'
           }
+        }
+
+        const zScoreTx: TransformConfig<ZScoreParams> = {
+          type: 'zScore',
+          enabled: true,
+          params: { 
+            fields: ['returns'] // This should fail - returns not available
+          }
+        }
+
+        config.transformations = [
+          logReturnsTx,
+          zScoreTx
         ]
 
         const result = validator.validate(config)
@@ -525,30 +555,38 @@ describe('Config Validator', () => {
 
       it('should validate complex transform chains', () => {
         const config = createDefaultPipelineConfig()
-        config.transformations = [
-          {
-            type: 'priceCalc',
-            enabled: true,
-            params: {
-              calculation: 'hlc3'
-            }
-          },
-          {
-            type: 'movingAverage',
-            enabled: true,
-            params: {
-              field: 'hlc3',
-              windowSize: 20,
-              type: 'sma'
-            }
-          },
-          {
-            type: 'zScore',
-            enabled: true,
-            params: {
-              fields: ['hlc3_sma']
-            }
+        
+        const priceCalcTx: TransformConfig<PriceCalcParams> = {
+          type: 'priceCalc',
+          enabled: true,
+          params: { 
+            calculation: 'hlc3'
           }
+        }
+
+        // movingAverage doesn't seem to exist in the codebase, using any for invalid transform test
+        const movingAverageTx = {
+          type: 'movingAverage' as any,
+          enabled: true,
+          params: { 
+            field: 'hlc3',
+            windowSize: 20,
+            type: 'sma'
+          } as any
+        } as any
+
+        const zScoreTx: TransformConfig<ZScoreParams> = {
+          type: 'zScore',
+          enabled: true,
+          params: { 
+            fields: ['hlc3_sma']
+          }
+        }
+
+        config.transformations = [
+          priceCalcTx,
+          movingAverageTx,
+          zScoreTx
         ]
 
         const result = validator.validate(config)
@@ -561,6 +599,7 @@ describe('Config Validator', () => {
       it('should provide detailed error report for completely invalid config', () => {
         const invalidConfig = {
           input: {
+            type: 'file',
             // Missing path
             format: 'invalid',
             chunkSize: -1

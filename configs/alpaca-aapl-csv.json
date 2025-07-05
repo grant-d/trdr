@@ -1,0 +1,28 @@
+{
+  "input": {
+    "type": "provider",
+    "provider": "alpaca",
+    "symbols": ["AAPL"],
+    "timeframe": "1d",
+    "duration": "1y"
+  },
+  "output": {
+    "path": "./data/alpaca-aapl-1d.csv",
+    "format": "csv",
+    "overwrite": true
+  },
+  "transformations": [],
+  "options": {
+    "chunkSize": 1000,
+    "continueOnError": true,
+    "maxErrors": 10,
+    "showProgress": true,
+    "validateData": true
+  },
+  "metadata": {
+    "name": "Alpaca AAPL Historical Data",
+    "version": "1.0.0",
+    "description": "Fetches 30 days of daily AAPL data from Alpaca",
+    "created": "2025-01-05T00:00:00Z"
+  }
+}

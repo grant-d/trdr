@@ -1,5 +1,5 @@
 import { createReadStream, createWriteStream, existsSync } from 'node:fs'
-import { mkdir, readdir, rm, stat, unlink, rename } from 'node:fs/promises'
+import { mkdir, rm, stat, unlink, rename } from 'node:fs/promises'
 import * as path from 'node:path'
 import { createInterface } from 'node:readline'
 import type { OhlcvDto } from '../models'
@@ -22,8 +22,15 @@ export class JsonlRepository implements OhlcvRepository {
   private ohlcvBuffer: OhlcvDto[] = []
   private coefficientBuffer: CoefficientData[] = []
   
+  // Last pending record for deduplication
+  private lastPendingRecord: OhlcvDto | null = null
+  
   // Active write streams
-  private readonly activeStreams = new Map<string, NodeJS.WritableStream>()
+  private readonly activeStreams = new Map<string, NodeJS.WritableStream & { destroy?: () => void }>()
+  
+  // Track single symbol/exchange per file
+  private singleSymbol: string | null = null
+  private singleExchange: string | null = null
 
   /**
    * Initialize the JSONL repository and set up directory structure
@@ -33,9 +40,14 @@ export class JsonlRepository implements OhlcvRepository {
       this.basePath = config.connectionString
       this.batchSize = (config.options?.batchSize as number | undefined) || 1000
       
-      // Create base directories
-      await mkdir(path.join(this.basePath, 'ohlcv'), { recursive: true })
-      await mkdir(path.join(this.basePath, 'coefficients'), { recursive: true })
+      // Ensure the directory exists
+      const dir = path.dirname(this.basePath)
+      await mkdir(dir, { recursive: true })
+      
+      // Clear existing file if overwrite is requested
+      if (config.options?.overwrite && existsSync(this.basePath)) {
+        await unlink(this.basePath)
+      }
       
       this.ready = true
       logger.info('JSONL repository initialized', { basePath: this.basePath })
@@ -45,17 +57,48 @@ export class JsonlRepository implements OhlcvRepository {
   }
 
   async close(): Promise<void> {
-    // Flush any remaining data
+    // Flush any remaining data (including pending record)
     await this.flush()
     
-    // Close all active streams
+    // Close all active streams and wait for them to complete
+    const closePromises: Promise<void>[] = []
     for (const [path, stream] of this.activeStreams) {
-      stream.end()
+      const closePromise = new Promise<void>((resolve, reject) => {
+        stream.end((error?: Error) => {
+          if (error) {
+            reject(error)
+          } else {
+            resolve()
+          }
+        })
+      })
+      closePromises.push(closePromise)
       this.activeStreams.delete(path)
     }
     
+    // Wait for all streams to close
+    await Promise.all(closePromises)
+    
     this.ready = false
     logger.info('JSONL repository closed')
+  }
+
+  /**
+   * Force close all streams immediately without flushing
+   * Use only in test cleanup scenarios
+   */
+  forceClose(): void {
+    for (const [, stream] of this.activeStreams) {
+      try {
+        if (stream?.destroy) {
+          stream.destroy()
+        }
+      } catch {
+        // Ignore errors during force close
+      }
+    }
+    this.activeStreams.clear()
+    this.ready = false
   }
 
   async save(data: OhlcvDto): Promise<void> {
@@ -65,10 +108,36 @@ export class JsonlRepository implements OhlcvRepository {
       throw new RepositoryValidationError('Invalid OHLCV data')
     }
     
-    this.ohlcvBuffer.push(data)
+    // Enforce single symbol/exchange per file
+    if (this.singleSymbol === null) {
+      this.singleSymbol = data.symbol
+      this.singleExchange = data.exchange
+    } else if (this.singleSymbol !== data.symbol || this.singleExchange !== data.exchange) {
+      throw new RepositoryValidationError(
+        `JSONL file can only contain data for one symbol/exchange. Expected ${this.singleSymbol}/${this.singleExchange}, got ${data.symbol}/${data.exchange}`
+      )
+    }
     
-    if (this.ohlcvBuffer.length >= this.batchSize) {
-      await this.flush()
+    // If we have a pending record, check if new record has same key
+    if (this.lastPendingRecord) {
+      const lastKey = `${this.lastPendingRecord.timestamp}:${this.lastPendingRecord.symbol}:${this.lastPendingRecord.exchange}`
+      const newKey = `${data.timestamp}:${data.symbol}:${data.exchange}`
+      
+      if (lastKey === newKey) {
+        // Same key - just overwrite the pending record
+        this.lastPendingRecord = data
+      } else {
+        // Different key - write the pending record and store new one
+        this.ohlcvBuffer.push(this.lastPendingRecord)
+        this.lastPendingRecord = data
+        
+        if (this.ohlcvBuffer.length >= this.batchSize) {
+          await this.flush()
+        }
+      }
+    } else {
+      // First record - just store it
+      this.lastPendingRecord = data
     }
   }
 
@@ -82,10 +151,26 @@ export class JsonlRepository implements OhlcvRepository {
       }
     }
     
-    this.ohlcvBuffer.push(...data)
+    // Validate all data is for the same symbol/exchange
+    if (data.length > 0) {
+      const firstItem = data[0]!
+      if (this.singleSymbol === null) {
+        this.singleSymbol = firstItem.symbol
+        this.singleExchange = firstItem.exchange
+      }
+      
+      for (const item of data) {
+        if (item.symbol !== this.singleSymbol || item.exchange !== this.singleExchange) {
+          throw new RepositoryValidationError(
+            `JSONL file can only contain data for one symbol/exchange. Expected ${this.singleSymbol}/${this.singleExchange}, got ${item.symbol}/${item.exchange}`
+          )
+        }
+      }
+    }
     
-    if (this.ohlcvBuffer.length >= this.batchSize) {
-      await this.flush()
+    // Process each record through deduplication logic
+    for (const item of data) {
+      await this.save(item)
     }
   }
 
@@ -140,7 +225,8 @@ export class JsonlRepository implements OhlcvRepository {
         if (!line.trim()) continue
         
         try {
-          const record = JSON.parse(line) as OhlcvDto
+          const rawRecord = JSON.parse(line)
+          const record = this.normalizeRecord(rawRecord)
           
           if (this.matchesQuery(record, query)) {
             results.push(record)
@@ -225,7 +311,8 @@ export class JsonlRepository implements OhlcvRepository {
         if (!line.trim()) continue
         
         try {
-          const record = JSON.parse(line) as OhlcvDto
+          const rawRecord = JSON.parse(line)
+          const record = this.normalizeRecord(rawRecord)
           
           if (record.timestamp >= startTime && record.timestamp <= endTime &&
               (!symbol || record.symbol === symbol) &&
@@ -281,7 +368,9 @@ export class JsonlRepository implements OhlcvRepository {
     await this.flush()
     
     const results: CoefficientData[] = []
-    const coeffFile = path.join(this.basePath, 'coefficients', 'coefficients.jsonl')
+    const dir = path.dirname(this.basePath)
+    const basename = path.basename(this.basePath, '.jsonl')
+    const coeffFile = path.join(dir, `${basename}.coefficients.jsonl`)
     
     if (!existsSync(coeffFile)) {
       return results
@@ -315,7 +404,10 @@ export class JsonlRepository implements OhlcvRepository {
     // Flush buffer before deleting
     await this.flush()
     
-    const coeffFile = path.join(this.basePath, 'coefficients', 'coefficients.jsonl')
+    const dir = path.dirname(this.basePath)
+    const basename = path.basename(this.basePath, '.jsonl')
+    const coeffFile = path.join(dir, `${basename}.coefficients.jsonl`)
+    
     if (!existsSync(coeffFile)) {
       return 0
     }
@@ -372,7 +464,8 @@ export class JsonlRepository implements OhlcvRepository {
         if (!line.trim()) continue
         
         try {
-          const record = JSON.parse(line) as OhlcvDto
+          const rawRecord = JSON.parse(line)
+          const record = this.normalizeRecord(rawRecord)
           if (!exchange || record.exchange === exchange) {
             symbols.add(record.symbol)
           }
@@ -401,7 +494,8 @@ export class JsonlRepository implements OhlcvRepository {
         if (!line.trim()) continue
         
         try {
-          const record = JSON.parse(line) as OhlcvDto
+          const rawRecord = JSON.parse(line)
+          const record = this.normalizeRecord(rawRecord)
           exchanges.add(record.exchange)
         } catch (error) {
           // Skip invalid records
@@ -446,7 +540,8 @@ export class JsonlRepository implements OhlcvRepository {
         if (!line.trim()) continue
         
         try {
-          const record = JSON.parse(line) as OhlcvDto
+          const rawRecord = JSON.parse(line)
+          const record = this.normalizeRecord(rawRecord)
           totalRecords++
           symbols.add(record.symbol)
           exchanges.add(record.exchange)
@@ -477,6 +572,12 @@ export class JsonlRepository implements OhlcvRepository {
   }
 
   async flush(): Promise<void> {
+    // Write any pending record first
+    if (this.lastPendingRecord) {
+      this.ohlcvBuffer.push(this.lastPendingRecord)
+      this.lastPendingRecord = null
+    }
+    
     // Flush OHLCV data
     if (this.ohlcvBuffer.length > 0) {
       await this.writeOhlcvBatch(this.ohlcvBuffer)
@@ -501,49 +602,51 @@ export class JsonlRepository implements OhlcvRepository {
   }
 
   private async writeOhlcvBatch(data: OhlcvDto[]): Promise<void> {
-    // Group by date for file organization
-    const grouped = new Map<string, OhlcvDto[]>()
-    
-    for (const record of data) {
-      const date = new Date(record.timestamp)
-      const dateKey = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`
-      
-      if (!grouped.has(dateKey)) {
-        grouped.set(dateKey, [])
-      }
-      grouped.get(dateKey)!.push(record)
-    }
-    
-    // Write to files
-    for (const [dateKey, records] of grouped) {
-      const filePath = path.join(this.basePath, 'ohlcv', `${dateKey}.jsonl`)
-      
-      // Get or create write stream
-      let stream = this.activeStreams.get(filePath)
-      if (!stream) {
-        stream = createWriteStream(filePath, { flags: 'a' })
-        this.activeStreams.set(filePath, stream)
-      }
-      
-      // Write records
-      for (const record of records) {
-        await new Promise<void>((resolve, reject) => {
-          stream.write(JSON.stringify(record) + '\n', (err) => {
-            if (err) reject(err)
-            else resolve()
-          })
-        })
-      }
-    }
-  }
-
-  private async writeCoefficientBatch(data: CoefficientData[]): Promise<void> {
-    const filePath = path.join(this.basePath, 'coefficients', 'coefficients.jsonl')
+    // Write to a single file
+    const filePath = this.basePath
     
     // Get or create write stream
     let stream = this.activeStreams.get(filePath)
     if (!stream) {
-      stream = createWriteStream(filePath, { flags: 'a' })
+      // Check if file exists to determine the correct flag
+      const fileExists = existsSync(filePath)
+      stream = createWriteStream(filePath, { flags: fileExists ? 'a' : 'w' })
+      this.activeStreams.set(filePath, stream)
+    }
+    
+    // Write records with abbreviated property names
+    for (const record of data) {
+      const abbreviated = {
+        x: record.exchange,
+        s: record.symbol,
+        t: record.timestamp,
+        o: record.open,
+        h: record.high,
+        l: record.low,
+        c: record.close,
+        v: record.volume
+      }
+      await new Promise<void>((resolve, reject) => {
+        stream.write(JSON.stringify(abbreviated) + '\n', (err) => {
+          if (err) reject(err)
+          else resolve()
+        })
+      })
+    }
+  }
+
+  private async writeCoefficientBatch(data: CoefficientData[]): Promise<void> {
+    // Write coefficients to a separate file in the same directory
+    const dir = path.dirname(this.basePath)
+    const basename = path.basename(this.basePath, '.jsonl')
+    const filePath = path.join(dir, `${basename}.coefficients.jsonl`)
+    
+    // Get or create write stream
+    let stream = this.activeStreams.get(filePath)
+    if (!stream) {
+      // Check if file exists to determine the correct flag
+      const fileExists = existsSync(filePath)
+      stream = createWriteStream(filePath, { flags: fileExists ? 'a' : 'w' })
       this.activeStreams.set(filePath, stream)
     }
     
@@ -558,34 +661,12 @@ export class JsonlRepository implements OhlcvRepository {
     }
   }
 
-  private async getRelevantFiles(query: OhlcvQuery): Promise<string[]> {
-    const ohlcvDir = path.join(this.basePath, 'ohlcv')
-    const files: string[] = []
-    
-    try {
-      const entries = await readdir(ohlcvDir)
-      
-      for (const entry of entries) {
-        if (entry.endsWith('.jsonl')) {
-          // If query has date range, filter files
-          if (query.startTime || query.endTime) {
-            const dateStr = entry.replace('.jsonl', '')
-            const fileDate = new Date(dateStr + 'T00:00:00Z')
-            const fileTime = fileDate.getTime()
-            
-            if (query.startTime && fileTime < query.startTime - 86400000) continue // Subtract 1 day for safety
-            if (query.endTime && fileTime > query.endTime + 86400000) continue // Add 1 day for safety
-          }
-          
-          files.push(path.join(ohlcvDir, entry))
-        }
-      }
-    } catch (error) {
-      // Directory might not exist yet
-      logger.debug('OHLCV directory does not exist yet', { error })
+  private async getRelevantFiles(_query: OhlcvQuery): Promise<string[]> {
+    // Simply return the single JSONL file if it exists
+    if (existsSync(this.basePath)) {
+      return [this.basePath]
     }
-    
-    return files.sort()
+    return []
   }
 
   private matchesQuery(record: OhlcvDto, query: OhlcvQuery): boolean {
@@ -595,6 +676,28 @@ export class JsonlRepository implements OhlcvRepository {
     if (query.exchange && record.exchange !== query.exchange) return false
     
     return true
+  }
+  
+  /**
+   * Normalizes a record from abbreviated or full property names to standard OhlcvDto
+   */
+  private normalizeRecord(record: any): OhlcvDto {
+    // Handle abbreviated format
+    if ('t' in record && 'o' in record) {
+      return {
+        exchange: record.x || record.e || record.exchange,
+        symbol: record.s || record.symbol,
+        timestamp: record.t || record.timestamp,
+        open: record.o || record.open,
+        high: record.h || record.high,
+        low: record.l || record.low,
+        close: record.c || record.close,
+        volume: record.v || record.volume
+      }
+    }
+    
+    // Already in full format
+    return record as OhlcvDto
   }
 
   private matchesPattern(name: string, pattern: string): boolean {
@@ -613,8 +716,19 @@ export class JsonlRepository implements OhlcvRepository {
     const stream = createWriteStream(tempPath)
     
     for (const record of records) {
+      // Write in abbreviated format to save space
+      const abbreviated = {
+        x: record.exchange,
+        s: record.symbol,
+        t: record.timestamp,
+        o: record.open,
+        h: record.high,
+        l: record.low,
+        c: record.close,
+        v: record.volume
+      }
       await new Promise<void>((resolve, reject) => {
-        stream.write(JSON.stringify(record) + '\n', (err) => {
+        stream.write(JSON.stringify(abbreviated) + '\n', (err) => {
           if (err) reject(err)
           else resolve()
         })

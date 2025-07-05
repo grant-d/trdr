@@ -1,13 +1,28 @@
 import { describe, it, beforeEach, afterEach } from 'node:test'
 import { strictEqual, ok } from 'node:assert'
 import { ProgressIndicator, Spinner, MultiProgress } from '../../../src/cli/progress-indicator'
+import { forceCleanupAsyncHandles } from '../../helpers/test-cleanup'
 
 // Mock stdout to capture output
 let stdoutOutput = ''
 const originalWrite = process.stdout.write
+let activeTimeouts: Set<NodeJS.Timeout> = new Set()
+
+// Helper function to create tracked timeouts
+function createTimeout(callback: () => void, delay: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      activeTimeouts.delete(timeout)
+      callback()
+      resolve()
+    }, delay)
+    activeTimeouts.add(timeout)
+  })
+}
 
 beforeEach(() => {
   stdoutOutput = ''
+  activeTimeouts.clear()
   process.stdout.write = ((chunk: any) => {
     stdoutOutput += chunk.toString()
     return true
@@ -16,6 +31,12 @@ beforeEach(() => {
 
 afterEach(() => {
   process.stdout.write = originalWrite
+  // Clear any remaining timeouts to prevent hangs
+  for (const timeout of activeTimeouts) {
+    clearTimeout(timeout)
+  }
+  activeTimeouts.clear()
+  forceCleanupAsyncHandles()
 })
 
 describe('Progress Indicator', () => {
@@ -159,7 +180,7 @@ describe('Progress Indicator', () => {
       ok(stdoutOutput.includes('1 Testing'))
       
       // Wait for a few frame cycles
-      await new Promise(resolve => setTimeout(resolve, 250))
+      await createTimeout(() => {}, 250)
       
       // Stop the spinner before checking output
       spinner.stop()
@@ -177,14 +198,14 @@ describe('Progress Indicator', () => {
       ok(stdoutOutput.includes('Initial'))
       
       // Give it time to render a frame
-      await new Promise(resolve => setTimeout(resolve, 100))
+      await createTimeout(() => {}, 100)
       
       // Clear output and update message
       stdoutOutput = ''
       spinner.update('Updated')
       
       // Give it time to render with new message
-      await new Promise(resolve => setTimeout(resolve, 100))
+      await createTimeout(() => {}, 100)
       
       // Stop before checking
       spinner.stop()

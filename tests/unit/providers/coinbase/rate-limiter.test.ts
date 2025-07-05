@@ -1,6 +1,7 @@
-import { describe, it, beforeEach } from 'node:test'
-import assert from 'node:assert'
+import { describe, it, beforeEach, afterEach } from 'node:test'
+import { ok, strictEqual, rejects } from 'node:assert'
 import { RateLimiter } from '../../../../src/providers/coinbase/rate-limiter'
+import { forceCleanupAsyncHandles } from '../../../helpers/test-cleanup'
 
 describe('RateLimiter', () => {
   let rateLimiter: RateLimiter
@@ -13,6 +14,10 @@ describe('RateLimiter', () => {
       maxRetryDelayMs: 1000,
       backoffMultiplier: 2
     })
+  })
+
+  afterEach(() => {
+    forceCleanupAsyncHandles()
   })
   
   it('should limit requests per second', async () => {
@@ -28,9 +33,9 @@ describe('RateLimiter', () => {
     }
     
     // First 2 should be immediate, 3rd should wait ~1 second
-    assert.ok(results[0] < 100, 'First request should be immediate')
-    assert.ok(results[1] < 100, 'Second request should be immediate')
-    assert.ok(results[2] >= 900, 'Third request should wait for rate limit')
+    ok(results[0]! < 100, 'First request should be immediate')
+    ok(results[1]! < 100, 'Second request should be immediate')
+    ok(results[2]! >= 900, 'Third request should wait for rate limit')
   })
   
   it('should retry with exponential backoff on rate limit errors', async () => {
@@ -55,19 +60,19 @@ describe('RateLimiter', () => {
       return 'success'
     })
     
-    assert.strictEqual(result, 'success')
-    assert.strictEqual(attempts, 3)
-    assert.strictEqual(delays.length, 2)
+    strictEqual(result, 'success')
+    strictEqual(attempts, 3)
+    strictEqual(delays.length, 2)
     
     // Check exponential backoff (with jitter tolerance)
-    assert.ok(delays[0] >= 90 && delays[0] <= 110, 'First retry ~100ms')
-    assert.ok(delays[1] >= 180 && delays[1] <= 220, 'Second retry ~200ms')
+    ok(delays[0]! >= 90 && delays[0]! <= 110, 'First retry ~100ms')
+    ok(delays[1]! >= 180 && delays[1]! <= 220, 'Second retry ~200ms')
   })
   
   it('should throw non-rate-limit errors immediately', async () => {
     let attempts = 0
     
-    await assert.rejects(
+    await rejects(
       async () => {
         await rateLimiter.execute(async () => {
           attempts++
@@ -77,13 +82,13 @@ describe('RateLimiter', () => {
       /Some other error/
     )
     
-    assert.strictEqual(attempts, 1, 'Should not retry non-rate-limit errors')
+    strictEqual(attempts, 1, 'Should not retry non-rate-limit errors')
   })
   
   it('should throw after max retries', async () => {
     let attempts = 0
     
-    await assert.rejects(
+    await rejects(
       async () => {
         await rateLimiter.execute(async () => {
           attempts++
@@ -95,7 +100,7 @@ describe('RateLimiter', () => {
       /Rate limit retry exhausted after 3 attempts/
     )
     
-    assert.strictEqual(attempts, 3)
+    strictEqual(attempts, 3)
   })
   
   it('should detect various rate limit error formats', async () => {
@@ -120,7 +125,7 @@ describe('RateLimiter', () => {
         return 'success'
       })
       
-      assert.strictEqual(attempts, 2, `Should retry for error format: ${JSON.stringify(errorFormat)}`)
+      strictEqual(attempts, 2, `Should retry for error format: ${JSON.stringify(errorFormat)}`)
     }
   })
   
@@ -151,6 +156,6 @@ describe('RateLimiter', () => {
     
     // Check that delays have some variance due to jitter
     const uniqueDelays = new Set(delays)
-    assert.ok(uniqueDelays.size > 1, 'Delays should vary due to jitter')
+    ok(uniqueDelays.size > 1, 'Delays should vary due to jitter')
   })
 })

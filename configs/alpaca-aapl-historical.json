@@ -1,0 +1,28 @@
+{
+  "input": {
+    "type": "provider",
+    "provider": "alpaca",
+    "symbols": ["AAPL"],
+    "timeframe": "1d",
+    "duration": "30d"
+  },
+  "output": {
+    "path": "./data/alpaca-aapl-1d.jsonl",
+    "format": "jsonl",
+    "overwrite": true
+  },
+  "transformations": [],
+  "options": {
+    "chunkSize": 1000,
+    "continueOnError": true,
+    "maxErrors": 10,
+    "showProgress": true,
+    "validateData": true
+  },
+  "metadata": {
+    "name": "Alpaca AAPL Historical Data",
+    "version": "1.0.0",
+    "description": "Fetches 24 hour of historical 1-minute AAPL data from Alpaca",
+    "created": "2025-01-05T00:00:00Z"
+  }
+}

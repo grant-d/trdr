@@ -1,10 +1,10 @@
-import { test } from 'node:test'
+import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { rm } from 'node:fs/promises'
-import { RepositoryTestBase } from './repository-test-base'
+import { test } from 'node:test'
 import { CsvRepository } from '../../../src/repositories/csv-repository'
 import type { OhlcvRepository } from '../../../src/repositories/ohlcv-repository.interface'
+import { RepositoryTestBase } from './repository-test-base'
 
 /**
  * CSV Repository Tests
@@ -57,13 +57,13 @@ test('CSV Repository - File Organization', async () => {
       },
       {
         timestamp: Date.now() + 1000,
-        symbol: 'ETHUSD',
-        exchange: 'binance',
-        open: 3800,
-        high: 3850,
-        low: 3780,
-        close: 3825,
-        volume: 500
+        symbol: 'BTCUSD',
+        exchange: 'coinbase',
+        open: 47200,
+        high: 47850,
+        low: 47000,
+        close: 47500,
+        volume: 200
       }
     ]
     
@@ -71,12 +71,10 @@ test('CSV Repository - File Organization', async () => {
     
     // Verify data can be retrieved correctly
     const btcData = await repo.getBySymbol('BTCUSD', 'coinbase')
-    const ethData = await repo.getBySymbol('ETHUSD', 'binance')
     
-    console.assert(btcData.length === 1)
-    console.assert(ethData.length === 1)
+    console.assert(btcData.length === 2)
     console.assert(btcData[0]!.symbol === 'BTCUSD')
-    console.assert(ethData[0]!.symbol === 'ETHUSD')
+    console.assert(btcData[1]!.symbol === 'BTCUSD')
     
   } finally {
     await repo.close()
@@ -136,8 +134,8 @@ test('CSV Repository - CSV Escaping', async () => {
       },
       {
         timestamp: Date.now() + 1000,
-        symbol: 'ETH\nUSD', // Contains newline
-        exchange: 'normal',
+        symbol: 'BTC,USD', // Same symbol/exchange pair
+        exchange: 'test"exchange', // Same exchange
         open: 3800,
         high: 3850,
         low: 3780,
@@ -154,7 +152,7 @@ test('CSV Repository - CSV Escaping', async () => {
     
     const specialSymbols = results.map(r => r.symbol)
     console.assert(specialSymbols.includes('BTC,USD'))
-    console.assert(specialSymbols.includes('ETH\nUSD'))
+    console.assert(specialSymbols.every(s => s === 'BTC,USD'))
     
   } finally {
     await repo.close()

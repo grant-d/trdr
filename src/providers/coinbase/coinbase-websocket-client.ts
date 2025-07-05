@@ -10,14 +10,16 @@ import type { WebSocketMessageType, WebSocketSubscribeMessage } from './types'
  */
 export class CoinbaseWebSocketClient {
   private ws?: WebSocket
-  private url: string
+  private readonly url: string
   private reconnectAttempts = 0
-  private maxReconnectAttempts = 5
-  private reconnectDelay = 1000
-  private subscriptions = new Map<string, Set<string>>()
+  private readonly maxReconnectAttempts = 5
+  private readonly reconnectDelay = 1000
+  private readonly subscriptions = new Map<string, Set<string>>()
   private messageQueue: OhlcvDto[] = []
   private isConnecting = false
+  private isDisconnecting = false
   private heartbeatInterval?: NodeJS.Timeout
+  private reconnectTimeoutId?: NodeJS.Timeout
   
   constructor(config: { sandbox?: boolean } = {}) {
     // Coinbase WebSocket endpoints
@@ -93,7 +95,14 @@ export class CoinbaseWebSocketClient {
    * Disconnect from WebSocket server
    */
   async disconnect(): Promise<void> {
+    this.isDisconnecting = true
     this.stopHeartbeat()
+    
+    // Clear pending reconnection timeout
+    if (this.reconnectTimeoutId) {
+      clearTimeout(this.reconnectTimeoutId)
+      this.reconnectTimeoutId = undefined
+    }
     
     if (this.ws) {
       this.ws.close(1000, 'Client disconnect')
@@ -154,15 +163,20 @@ export class CoinbaseWebSocketClient {
    * Get async iterator for data stream
    */
   async *getDataStream(): AsyncIterableIterator<{ symbol: string; data: any }> {
-    while (this.ws?.readyState === WebSocket.OPEN) {
+    while (this.ws?.readyState === WebSocket.OPEN && !this.isDisconnecting) {
       // Yield queued messages
       while (this.messageQueue.length > 0) {
         const data = this.messageQueue.shift()!
         yield { symbol: data.symbol, data }
       }
       
-      // Wait for new messages
+      // Wait for new messages with timeout to allow breaking from loop
       await new Promise(resolve => setTimeout(resolve, 100))
+      
+      // Additional check to break loop when disconnecting
+      if (this.isDisconnecting) {
+        break
+      }
     }
   }
   
@@ -239,7 +253,8 @@ export class CoinbaseWebSocketClient {
       maxAttempts: this.maxReconnectAttempts 
     })
     
-    setTimeout(async () => {
+    this.reconnectTimeoutId = setTimeout(async () => {
+      this.reconnectTimeoutId = undefined
       try {
         await this.connect()
       } catch (error) {

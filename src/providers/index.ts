@@ -7,3 +7,6 @@ export type { ColumnMapping, FileProviderConfig } from './base'
 
 export { CoinbaseProvider } from './coinbase'
 export type { CoinbaseConfig } from './coinbase'
+
+export { AlpacaProvider } from './alpaca'
+export type { AlpacaConfig } from './alpaca'

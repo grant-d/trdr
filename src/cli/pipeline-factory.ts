@@ -1,7 +1,7 @@
-import type { PipelineConfig, Transform, TransformConfig } from '../interfaces'
+import type { DataProvider, InputConfig, PipelineConfig, Transform, TransformConfig } from '../interfaces'
 import { Pipeline } from '../pipeline'
 import type { FileProvider } from '../providers'
-import { CsvFileProvider, JsonlFileProvider } from '../providers'
+import { AlpacaProvider, CoinbaseProvider, CsvFileProvider, JsonlFileProvider } from '../providers'
 import type { OhlcvRepository } from '../repositories'
 import { CsvRepository, JsonlRepository, SqliteRepository } from '../repositories'
 import {
@@ -54,6 +54,74 @@ export class PipelineFactory {
     // Create output repository
     const repository = await this.createRepository(config.output)
 
+    // Prepare historical params if using a data provider
+    let historicalParams
+    if (config.input.type === 'provider') {
+      // Parse duration to determine start/end times
+      const duration = config.input.duration || '1h'
+      const end = Date.now()
+      let start = end
+      
+      if (duration === 'continuous') {
+        // For continuous mode, we'll handle this differently in the pipeline
+        start = end - 3600000 // Default to last hour for initial data
+      } else if (duration.endsWith('m')) {
+        const minutes = parseInt(duration.slice(0, -1))
+        if (isNaN(minutes) || minutes <= 0) {
+          throw new Error(`Invalid duration value: ${duration}. Must be a positive number.`)
+        }
+        start = end - (minutes * 60000)
+      } else if (duration.endsWith('h')) {
+        const hours = parseInt(duration.slice(0, -1))
+        if (isNaN(hours) || hours <= 0) {
+          throw new Error(`Invalid duration value: ${duration}. Must be a positive number.`)
+        }
+        start = end - (hours * 3600000)
+      } else if (duration.endsWith('d')) {
+        const days = parseInt(duration.slice(0, -1))
+        if (isNaN(days) || days <= 0) {
+          throw new Error(`Invalid duration value: ${duration}. Must be a positive number.`)
+        }
+        start = end - (days * 86400000)
+      } else if (duration.endsWith('w')) {
+        const weeks = parseInt(duration.slice(0, -1))
+        if (isNaN(weeks) || weeks <= 0) {
+          throw new Error(`Invalid duration value: ${duration}. Must be a positive number.`)
+        }
+        start = end - (weeks * 7 * 86400000)
+      } else if (duration.endsWith('M')) {
+        const months = parseInt(duration.slice(0, -1))
+        if (isNaN(months) || months <= 0) {
+          throw new Error(`Invalid duration value: ${duration}. Must be a positive number.`)
+        }
+        // Use 30 days as approximate month length
+        start = end - (months * 30 * 86400000)
+      } else if (duration.endsWith('y')) {
+        const years = parseInt(duration.slice(0, -1))
+        if (isNaN(years) || years <= 0) {
+          throw new Error(`Invalid duration value: ${duration}. Must be a positive number.`)
+        }
+        // Use 365 days as approximate year length
+        start = end - (years * 365 * 86400000)
+      } else if (duration.endsWith('bars')) {
+        const bars = parseInt(duration.slice(0, -4))
+        if (isNaN(bars) || bars <= 0) {
+          throw new Error(`Invalid bar count: ${duration}. Must be a positive number.`)
+        }
+        // For bar count, we'll use a reasonable time window and let the provider handle limiting
+        start = end - (7 * 86400000) // Default to 7 days
+      } else {
+        throw new Error(`Invalid duration format: ${duration}. Supported formats: m (minutes), h (hours), d (days), w (weeks), M (months), y (years), bars, or 'continuous'`)
+      }
+      
+      historicalParams = {
+        symbols: config.input.symbols,
+        start,
+        end,
+        timeframe: config.input.timeframe,
+      }
+    }
+
     // Create and return pipeline
     return new Pipeline({
       provider,
@@ -66,32 +134,65 @@ export class PipelineFactory {
         showProgress: config.options.showProgress,
       },
       metadata: config.metadata,
+      historicalParams,
     })
   }
 
   /**
-   * Create a file provider from configuration
+   * Create a provider from configuration
    */
-  private static async createProvider(config: PipelineConfig['input']): Promise<FileProvider> {
-    switch (config.type) {
-      case 'csv':
-        return new CsvFileProvider({
-          path: config.path,
-          columnMapping: config.columnMapping,
-          delimiter: config.delimiter,
-          hasHeader: config.hasHeader,
-          encoding: config.encoding,
-        })
+  private static async createProvider(config: InputConfig): Promise<DataProvider | FileProvider> {
+    if (config.type === 'file') {
+      // Handle file-based providers
+      const fileExt = config.path.toLowerCase().split('.').pop()
+      const format = config.format || fileExt
+      
+      switch (format) {
+        case 'csv':
+          return new CsvFileProvider({
+            path: config.path,
+            columnMapping: config.columnMapping,
+            delimiter: config.delimiter,
+            hasHeader: config.hasHeader,
+            encoding: config.encoding,
+          })
 
-      case 'jsonl':
-        return new JsonlFileProvider({
-          path: config.path,
-          columnMapping: config.columnMapping,
-          encoding: config.encoding,
-        })
+        case 'jsonl':
+          return new JsonlFileProvider({
+            path: config.path,
+            columnMapping: config.columnMapping,
+            encoding: config.encoding,
+          })
 
-      default:
-        throw new Error(`Unsupported input type: ${(config as any).type}`)
+        default:
+          throw new Error(`Unsupported file format: ${format}`)
+      }
+    } else if (config.type === 'provider') {
+      // Handle API-based providers
+      let provider: DataProvider
+      
+      switch (config.provider) {
+        case 'coinbase':
+          provider = new CoinbaseProvider()
+          break
+          
+        case 'alpaca':
+          provider = new AlpacaProvider()
+          break
+          
+        default:
+          throw new Error(`Unsupported provider: ${config.provider}`)
+      }
+      
+      // Validate environment variables
+      provider.validateEnvVars()
+      
+      // Connect to the provider
+      await provider.connect()
+      
+      return provider
+    } else {
+      throw new Error(`Unsupported input type: ${(config as any).type}`)
     }
   }
 

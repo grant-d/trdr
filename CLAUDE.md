@@ -35,6 +35,31 @@ task-master validate-dependencies                            # Check for depende
 task-master generate                                         # Update task markdown files (usually auto-called)
 ```
 
+### Critical Development Commands
+
+**ALWAYS run these commands before committing or after making changes:**
+
+```bash
+# TypeScript checking (CRITICAL - catches test errors early)
+yarn tc:all          # Typecheck both source AND tests
+yarn tc              # Typecheck source only
+yarn tc:tests        # Typecheck tests only
+
+# Linting and formatting
+yarn lint            # Check code style
+yarn lint:fix        # Fix code style issues
+yarn format          # Format code
+
+# Testing
+yarn test           # Run all tests
+yarn test:unit      # Run unit tests only
+yarn test:integration # Run integration tests only
+```
+
+**IMPORTANT:** Test TypeScript errors cause significant wasted time. Always run `yarn tc:all` to catch them early!
+
+When making test changes, always run `yarn tc:tests` to avoid introducing new type errors.
+
 ## Key Files & Project Structure
 
 ### Core Files

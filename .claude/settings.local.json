@@ -45,7 +45,20 @@
       "Bash(npm search:*)",
       "Bash(npm ls:*)",
       "Bash(yarn build)",
-      "WebFetch(domain:docs.cdp.coinbase.com)"
+      "WebFetch(domain:docs.cdp.coinbase.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(LOG_LEVEL=debug npm test -- tests/integration/providers/alpaca-provider.test.ts)",
+      "Bash(yarn pipeline:*)",
+      "Bash(yarn ts-node:*)",
+      "Bash(bun:*)",
+      "Bash(yarn lint:*)",
+      "Bash(timeout 10s yarn tsx:*)",
+      "Bash(timeout 10 yarn tsx:*)",
+      "Bash(timeout:*)",
+      "Bash(gtimeout:*)",
+      "Bash(yarn run tsc:*)",
+      "Bash(yarn tc:tests:*)",
+      "Bash(yarn tc:all:*)"
     ],
     "deny": []
   }

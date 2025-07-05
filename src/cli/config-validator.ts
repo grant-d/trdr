@@ -1,5 +1,4 @@
-import type { PipelineConfig, TransformConfig } from '../interfaces'
-import type { FileProviderConfig } from '../providers'
+import type { InputConfig, PipelineConfig, TransformConfig } from '../interfaces'
 
 /**
  * Represents a validation error with details about the issue
@@ -178,40 +177,108 @@ export class ConfigValidator {
   /**
    * Validates input configuration
    */
-  private validateInput(input: FileProviderConfig): void {
-    if (!input.path || typeof input.path !== 'string') {
-      this.addError('input.path', 'Input path is required and must be a string', input.path)
+  private validateInput(input: InputConfig): void {
+    if (!input || typeof input !== 'object') {
+      this.addError('input', 'Input configuration must be an object', input)
       return
     }
 
-    if (input.path.trim().length === 0) {
-      this.addError('input.path', 'Input path cannot be empty', input.path)
+    const inputObj = input as any
+    if (!inputObj.type || typeof inputObj.type !== 'string') {
+      this.addError('input.type', 'Input type is required and must be a string', inputObj.type)
+      return
     }
 
-    // Validate format if specified
-    if (input.format && !['csv', 'jsonl'].includes(input.format)) {
-      this.addError('input.format', 'Input format must be "csv" or "jsonl"', input.format)
-    }
-
-    // Validate chunk size
-    if (input.chunkSize !== undefined) {
-      if (!Number.isInteger(input.chunkSize) || input.chunkSize <= 0) {
-        this.addError('input.chunkSize', 'Chunk size must be a positive integer', input.chunkSize)
-      } else if (input.chunkSize > 100000) {
-        this.addWarning('input.chunkSize', 'Very large chunk size may impact memory usage', input.chunkSize)
+    if (input.type === 'file') {
+      // Validate file-based input
+      if (!input.path || typeof input.path !== 'string') {
+        this.addError('input.path', 'Input path is required and must be a string', input.path)
+        return
       }
-    }
 
-    // Validate column mapping
-    if (input.columnMapping) {
-      this.validateColumnMapping(input.columnMapping)
-    }
-
-    // Validate delimiter for CSV
-    if (input.format === 'csv' && input.delimiter) {
-      if (input.delimiter.length !== 1) {
-        this.addError('input.delimiter', 'CSV delimiter must be a single character', input.delimiter)
+      if (input.path.trim().length === 0) {
+        this.addError('input.path', 'Input path cannot be empty', input.path)
       }
+
+      // Validate format if specified
+      if (input.format && !['csv', 'jsonl'].includes(input.format)) {
+        this.addError('input.format', 'Input format must be "csv" or "jsonl"', input.format)
+      }
+
+      // Validate chunk size
+      if (input.chunkSize !== undefined) {
+        if (!Number.isInteger(input.chunkSize) || input.chunkSize <= 0) {
+          this.addError('input.chunkSize', 'Chunk size must be a positive integer', input.chunkSize)
+        } else if (input.chunkSize > 100000) {
+          this.addWarning('input.chunkSize', 'Very large chunk size may impact memory usage', input.chunkSize)
+        }
+      }
+
+      // Validate column mapping
+      if (input.columnMapping) {
+        this.validateColumnMapping(input.columnMapping)
+      }
+
+      // Validate delimiter for CSV
+      if (input.format === 'csv' && input.delimiter) {
+        if (input.delimiter.length !== 1) {
+          this.addError('input.delimiter', 'CSV delimiter must be a single character', input.delimiter)
+        }
+      }
+    } else if (input.type === 'provider') {
+      // Validate provider-based input
+      if (!input.provider || typeof input.provider !== 'string') {
+        this.addError('input.provider', 'Provider name is required and must be a string', input.provider)
+        return
+      }
+
+      const supportedProviders = ['coinbase', 'alpaca']
+      if (!supportedProviders.includes(input.provider)) {
+        this.addError('input.provider', `Provider must be one of: ${supportedProviders.join(', ')}`, input.provider)
+      }
+
+      // Validate symbols
+      if (!input.symbols || !Array.isArray(input.symbols)) {
+        this.addError('input.symbols', 'Symbols must be an array', input.symbols)
+      } else if (input.symbols.length === 0) {
+        this.addError('input.symbols', 'Symbols array cannot be empty', input.symbols)
+      } else {
+        input.symbols.forEach((symbol, index) => {
+          if (typeof symbol !== 'string' || symbol.trim().length === 0) {
+            this.addError(`input.symbols[${index}]`, 'Symbol must be a non-empty string', symbol)
+          }
+        })
+      }
+
+      // Validate timeframe
+      if (!input.timeframe || typeof input.timeframe !== 'string') {
+        this.addError('input.timeframe', 'Timeframe is required and must be a string', input.timeframe)
+      } else {
+        // Basic validation for timeframe format
+        const timeframeRegex = /^\d+[smhd]$/
+        if (!timeframeRegex.test(input.timeframe)) {
+          this.addError('input.timeframe', 'Timeframe must be in format like "1m", "5m", "1h", "1d"', input.timeframe)
+        }
+      }
+
+      // Validate duration if provided
+      if (input.duration !== undefined) {
+        if (typeof input.duration !== 'string') {
+          this.addError('input.duration', 'Duration must be a string', input.duration)
+        } else if (input.duration !== 'continuous') {
+          const durationMatch = input.duration.match(/^(\d+)([mhdwMy]|bars)$/)
+          if (!durationMatch) {
+            this.addError('input.duration', 'Duration must be "continuous", or format like "5m", "1h", "7d", "1w", "3M", "1y", "1000bars"', input.duration)
+          } else {
+            const value = parseInt(durationMatch[1]!)
+            if (value <= 0 || isNaN(value)) {
+              this.addError('input.duration', 'Duration value must be a positive number', input.duration)
+            }
+          }
+        }
+      }
+    } else {
+      this.addError('input.type', `Invalid input type: ${inputObj.type}. Must be "file" or "provider"`, inputObj.type)
     }
   }
 
@@ -559,9 +626,9 @@ export class ConfigValidator {
   /**
    * Validates compatibility between input and output configurations
    */
-  private validateInputOutputCompatibility(input: FileProviderConfig, output: any): void {
-    // Check if output path conflicts with input path
-    if (input.path === output.path) {
+  private validateInputOutputCompatibility(input: InputConfig, output: any): void {
+    // Check if output path conflicts with input path (only for file inputs)
+    if (input.type === 'file' && input.path === output.path) {
       this.addError(
         'output.path',
         'Output path cannot be the same as input path',
@@ -570,10 +637,18 @@ export class ConfigValidator {
     }
 
     // Check format compatibility
-    if (input.format === 'csv' && output.format === 'sqlite') {
+    if (input.type === 'file' && input.format === 'csv' && output.format === 'sqlite') {
       this.addWarning(
         'output.format',
         'Converting from CSV to SQLite - ensure sufficient memory for large files',
+      )
+    }
+
+    // Warn about continuous mode with file output
+    if (input.type === 'provider' && input.duration === 'continuous' && output.format !== 'sqlite') {
+      this.addWarning(
+        'output.format',
+        'Continuous data collection is better suited for SQLite output format',
       )
     }
   }

@@ -19,9 +19,9 @@ export class CoinbaseProvider implements DataProvider {
   private client?: CoinbaseAdvTradeClient
   private productsService?: ProductsService
   private connected = false
-  private apiKey?: string
-  private apiSecret?: string
-  private rateLimiter: RateLimiter
+  private readonly apiKey?: string
+  private readonly apiSecret?: string
+  private readonly rateLimiter: RateLimiter
   
   // Environment variable names
   private static readonly API_KEY_ENV = 'COINBASE_API_KEY'
@@ -66,8 +66,8 @@ export class CoinbaseProvider implements DataProvider {
     try {
       // Initialize the SDK client
       const credentials = new CoinbaseAdvTradeCredentials(
-        this.apiKey!,
-        this.apiSecret!
+        this.apiKey,
+        this.apiSecret
       )
       this.client = new CoinbaseAdvTradeClient(credentials)
       this.productsService = new ProductsService(this.client)

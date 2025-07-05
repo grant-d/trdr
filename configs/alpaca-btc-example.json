@@ -1,0 +1,22 @@
+{
+  "name": "Alpaca BTC/USD Data Collection",
+  "description": "Fetch Bitcoin data from Alpaca",
+  "input": {
+    "type": "provider",
+    "provider": "alpaca",
+    "symbols": ["BTC/USD"],
+    "timeframe": "5m",
+    "duration": "24h"
+  },
+  "transformations": [],
+  "output": {
+    "type": "jsonl",
+    "path": "data/btc-5m.jsonl",
+    "includeMetadata": true
+  },
+  "options": {
+    "batchSize": 100,
+    "progressInterval": 10,
+    "validateData": true
+  }
+}

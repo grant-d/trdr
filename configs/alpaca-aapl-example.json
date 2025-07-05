@@ -1,0 +1,22 @@
+{
+  "name": "Alpaca AAPL Data Collection",
+  "description": "Fetch Apple stock data from Alpaca",
+  "input": {
+    "type": "provider",
+    "provider": "alpaca",
+    "symbols": ["AAPL"],
+    "timeframe": "1m",
+    "duration": "1000bars"
+  },
+  "transformations": [],
+  "output": {
+    "type": "jsonl",
+    "path": "./data/aapl-1m.jsonl",
+    "includeMetadata": true
+  },
+  "options": {
+    "batchSize": 100,
+    "progressInterval": 10,
+    "validateData": true
+  }
+}

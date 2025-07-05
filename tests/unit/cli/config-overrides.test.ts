@@ -1,6 +1,7 @@
 import { deepStrictEqual, ok, strictEqual, throws } from 'node:assert'
 import { describe, it } from 'node:test'
 import { createDefaultPipelineConfig } from '../../../src/cli/config-loader'
+import type { FileInputConfig } from '../../../src/interfaces/pipeline-config.interface'
 import type {
   ConfigOverrideError} from '../../../src/cli/config-overrides'
 import {
@@ -13,13 +14,13 @@ describe('Config Overrides', () => {
   describe('applyOverrides', () => {
     it('should apply simple string override', () => {
       const config = createDefaultPipelineConfig()
-      const originalPath = config.input.path
       
       applyOverrides(config, ['input.path=/new/data.csv'])
       
-      strictEqual(config.input.path, '/new/data.csv')
+      const fileInput = config.input as FileInputConfig
+      strictEqual(fileInput.path, '/new/data.csv')
       // Ensure other properties weren't affected
-      strictEqual(config.input.format, 'csv')
+      strictEqual(fileInput.format, 'csv')
     })
 
     it('should apply numeric overrides', () => {
@@ -31,7 +32,8 @@ describe('Config Overrides', () => {
         'options.maxErrors=50'
       ])
       
-      strictEqual(config.input.chunkSize, 2000)
+      const fileInput1 = config.input as FileInputConfig
+      strictEqual(fileInput1.chunkSize, 2000)
       strictEqual(config.options?.chunkSize, 5000)
       strictEqual(config.options?.maxErrors, 50)
     })
@@ -59,9 +61,10 @@ describe('Config Overrides', () => {
         'input.exchange=coinbase'
       ])
       
-      strictEqual(config.input.columnMapping?.timestamp, 'ts')
-      strictEqual(config.input.columnMapping?.close, 'c')
-      strictEqual(config.input.exchange, 'coinbase')
+      const fileInput2 = config.input as FileInputConfig
+      strictEqual(fileInput2.columnMapping?.timestamp, 'ts')
+      strictEqual(fileInput2.columnMapping?.close, 'c')
+      strictEqual(fileInput2.exchange, 'coinbase')
     })
 
     it('should apply array value overrides', () => {
@@ -71,7 +74,8 @@ describe('Config Overrides', () => {
         'input.columnMapping={"timestamp":"ts","open":"o","high":"h","low":"l","close":"c","volume":"v"}'
       ])
       
-      deepStrictEqual(config.input.columnMapping, {
+      const fileInput3 = config.input as FileInputConfig
+      deepStrictEqual(fileInput3.columnMapping, {
         timestamp: 'ts',
         open: 'o',
         high: 'h',
@@ -87,12 +91,12 @@ describe('Config Overrides', () => {
         {
           type: 'logReturns',
           enabled: true,
-          params: { outputField: 'returns' }
+          params: { outputField: 'returns' } as any
         },
         {
           type: 'zScore',
           enabled: false,
-          params: { fields: ['returns'] }
+          params: { fields: ['returns'] } as any
         }
       ]
       
@@ -115,8 +119,9 @@ describe('Config Overrides', () => {
         'input.exchange=undefined'
       ])
       
-      strictEqual(config.input.symbol, null)
-      strictEqual(config.input.exchange, undefined)
+      const fileInput4 = config.input as FileInputConfig
+      strictEqual(fileInput4.symbol, null)
+      strictEqual(fileInput4.exchange, undefined)
     })
 
     it('should handle scientific notation numbers', () => {
@@ -138,7 +143,8 @@ describe('Config Overrides', () => {
         'input.chunkSize=1000.5'
       ])
       
-      strictEqual(config.input.chunkSize, 1000.5)
+      const fileInput5 = config.input as FileInputConfig
+      strictEqual(fileInput5.chunkSize, 1000.5)
     })
 
     it('should create intermediate objects when needed', () => {
@@ -165,11 +171,11 @@ describe('Config Overrides', () => {
 
     it('should skip empty override strings', () => {
       const config = createDefaultPipelineConfig()
-      const originalPath = config.input.path
       
       applyOverrides(config, ['', '  ', 'input.path=/new/path', '\t'])
       
-      strictEqual(config.input.path, '/new/path')
+      const fileInput = config.input as FileInputConfig
+      strictEqual(fileInput.path, '/new/path')
     })
 
     it('should handle multiple overrides for same property', () => {
@@ -181,7 +187,8 @@ describe('Config Overrides', () => {
         'input.path=/final/path'
       ])
       
-      strictEqual(config.input.path, '/final/path')
+      const fileInput6 = config.input as FileInputConfig
+      strictEqual(fileInput6.path, '/final/path')
     })
   })
 
@@ -300,7 +307,8 @@ describe('Config Overrides', () => {
 
     it('should throw error when trying to override non-object intermediate value', () => {
       const config = createDefaultPipelineConfig()
-      config.input.path = 'string-value'
+      const fileInput7 = config.input as FileInputConfig
+      fileInput7.path = 'string-value'
       
       throws(() => {
         applyOverrides(config, ['input.path.nested=value'])
@@ -342,8 +350,9 @@ describe('Config Overrides', () => {
         'options.maxErrors=50'
       ])
       
-      strictEqual(typeof config.input.chunkSize, 'number')
-      strictEqual(config.input.chunkSize, 2000)
+      const fileInput8 = config.input as FileInputConfig
+      strictEqual(typeof fileInput8.chunkSize, 'number')
+      strictEqual(fileInput8.chunkSize, 2000)
       strictEqual(typeof config.options?.maxErrors, 'number')
       strictEqual(config.options?.maxErrors, 50)
     })
@@ -353,8 +362,9 @@ describe('Config Overrides', () => {
       
       applyOverrides(config, ['input.chunkSize=1000.5'])
       
-      strictEqual(typeof config.input.chunkSize, 'number')
-      strictEqual(config.input.chunkSize, 1000.5)
+      const fileInput9 = config.input as FileInputConfig
+      strictEqual(typeof fileInput9.chunkSize, 'number')
+      strictEqual(fileInput9.chunkSize, 1000.5)
     })
 
     it('should convert boolean strings', () => {
@@ -391,8 +401,9 @@ describe('Config Overrides', () => {
         'metadata.name=My Pipeline'
       ])
       
-      strictEqual(typeof config.input.path, 'string')
-      strictEqual(config.input.path, '/path/to/file.csv')
+      const fileInput10 = config.input as FileInputConfig
+      strictEqual(typeof fileInput10.path, 'string')
+      strictEqual(fileInput10.path, '/path/to/file.csv')
       strictEqual(typeof config.metadata?.name, 'string')
       strictEqual(config.metadata?.name, 'My Pipeline')
     })
@@ -404,8 +415,9 @@ describe('Config Overrides', () => {
         'input.columnMapping={"timestamp":"ts","open":"o","high":"h","low":"l","close":"c","volume":"v","symbol":"sym"}'
       ])
       
-      strictEqual(typeof config.input.columnMapping, 'object')
-      deepStrictEqual(config.input.columnMapping, {
+      const fileInput11 = config.input as FileInputConfig
+      strictEqual(typeof fileInput11.columnMapping, 'object')
+      deepStrictEqual(fileInput11.columnMapping, {
         timestamp: 'ts',
         open: 'o',
         high: 'h',
@@ -423,15 +435,17 @@ describe('Config Overrides', () => {
       const clone = cloneConfig(original)
       
       // Modify clone
-      clone.input.path = '/modified/path'
+      const cloneFileInput = clone.input as FileInputConfig
+      cloneFileInput.path = '/modified/path'
       clone.options.chunkSize = 9999
       
       // Original should be unchanged
-      strictEqual(original.input.path, './data/input.csv')
+      const originalFileInput = original.input as FileInputConfig
+      strictEqual(originalFileInput.path, './data/input.csv')
       strictEqual(original.options?.chunkSize, 1000)
       
       // Clone should have modifications
-      strictEqual(clone.input.path, '/modified/path')
+      strictEqual(cloneFileInput.path, '/modified/path')
       strictEqual(clone.options?.chunkSize, 9999)
     })
   })
@@ -439,7 +453,8 @@ describe('Config Overrides', () => {
   describe('getConfigValue', () => {
     it('should retrieve nested configuration values', () => {
       const config = createDefaultPipelineConfig()
-      config.input.columnMapping = {
+      const testInputConfig = config.input as FileInputConfig
+      testInputConfig.columnMapping = {
         timestamp: 'ts',
         open: 'o',
         high: 'h',
@@ -480,7 +495,7 @@ describe('Config Overrides', () => {
         {
           type: 'logReturns',
           enabled: true,
-          params: { outputField: 'returns' }
+          params: { outputField: 'returns' } as any
         }
       ]
       
@@ -505,10 +520,11 @@ describe('Config Overrides', () => {
       applyOverrides(config, overrides)
       
       // Verify all overrides were applied
-      strictEqual(config.input.path, '/new/data.csv')
-      strictEqual(config.input.format, 'jsonl')
-      strictEqual(config.input.chunkSize, 5000)
-      strictEqual(config.input.columnMapping?.timestamp, 'time')
+      const fileInput12 = config.input as FileInputConfig
+      strictEqual(fileInput12.path, '/new/data.csv')
+      strictEqual(fileInput12.format, 'jsonl')
+      strictEqual(fileInput12.chunkSize, 5000)
+      strictEqual(fileInput12.columnMapping?.timestamp, 'time')
       strictEqual(config.output.path, '/new/output.sqlite')
       strictEqual(config.output.format, 'sqlite')
       strictEqual(config.output.overwrite, false)

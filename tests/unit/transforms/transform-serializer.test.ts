@@ -6,7 +6,8 @@ import {
   type SerializedPipeline
 } from '../../../src/transforms/transform-serializer'
 import type {
-  TransformPipeline} from '../../../src/transforms'
+  TransformPipeline,
+  LogReturnsParams} from '../../../src/transforms'
 import {
   LogReturnsNormalizer,
   MinMaxNormalizer,
@@ -88,8 +89,9 @@ describe('Transform Serializer', () => {
       const transform = TransformSerializer.deserializeTransform(serialized)
 
       strictEqual(transform.type, 'logReturns')
-      strictEqual(transform.params.outputField, 'log_returns')
-      strictEqual(transform.params.priceField, 'close')
+      const params = transform.params as Partial<LogReturnsParams>
+      strictEqual(params.outputField, 'log_returns')
+      strictEqual(params.priceField, 'close')
     })
 
     it('should deserialize transform with coefficients', () => {

@@ -107,7 +107,5 @@ export class JsonlFileProvider extends FileProvider {
 
     // Check symbol filter
     return !(params.symbols.length > 0 && !params.symbols.includes(ohlcv.symbol))
-
-
   }
 }

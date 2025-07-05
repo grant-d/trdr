@@ -71,8 +71,28 @@ function validatePipelineConfig(config: any, filePath: string): asserts config i
     throw new ConfigValidationError('Configuration must have an "input" section', filePath)
   }
 
-  if (!config.input.path || typeof config.input.path !== 'string') {
-    throw new ConfigValidationError('Input configuration must have a valid "path" string', filePath)
+  // Check input type
+  if (!config.input.type || typeof config.input.type !== 'string') {
+    throw new ConfigValidationError('Input configuration must have a valid "type" string', filePath)
+  }
+
+  // Validate based on input type
+  if (config.input.type === 'file') {
+    if (!config.input.path || typeof config.input.path !== 'string') {
+      throw new ConfigValidationError('File input configuration must have a valid "path" string', filePath)
+    }
+  } else if (config.input.type === 'provider') {
+    if (!config.input.provider || typeof config.input.provider !== 'string') {
+      throw new ConfigValidationError('Provider input configuration must have a valid "provider" string', filePath)
+    }
+    if (!config.input.symbols || !Array.isArray(config.input.symbols)) {
+      throw new ConfigValidationError('Provider input configuration must have a "symbols" array', filePath)
+    }
+    if (!config.input.timeframe || typeof config.input.timeframe !== 'string') {
+      throw new ConfigValidationError('Provider input configuration must have a valid "timeframe" string', filePath)
+    }
+  } else {
+    throw new ConfigValidationError(`Invalid input type: ${config.input.type}. Must be "file" or "provider"`, filePath)
   }
 
   // Validate output section
@@ -189,6 +209,7 @@ export async function loadPipelineConfig(configPath: string): Promise<PipelineCo
 export function createDefaultPipelineConfig(): PipelineConfig {
   return {
     input: {
+      type: 'file',
       path: './data/input.csv',
       format: 'csv',
       chunkSize: 1000

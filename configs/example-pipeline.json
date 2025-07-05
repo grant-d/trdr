@@ -1,6 +1,7 @@
 {
   "input": {
-    "type": "csv",
+    "type": "file",
+    "format": "csv",
     "path": "./data/BTCUSD-feed.csv",
     "columnMapping": {
       "timestamp": "Date",

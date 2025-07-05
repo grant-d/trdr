@@ -2,6 +2,7 @@ import { describe, it, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert'
 import { CoinbaseProvider } from '../../../src/providers/coinbase'
 import type { HistoricalParams } from '../../../src/interfaces'
+import { forceCleanupAsyncHandles } from '../../helpers/test-cleanup'
 
 describe('CoinbaseProvider Integration Tests', () => {
   let provider: CoinbaseProvider
@@ -20,6 +21,7 @@ describe('CoinbaseProvider Integration Tests', () => {
     if (provider?.isConnected()) {
       await provider.disconnect()
     }
+    forceCleanupAsyncHandles()
   })
   
   it('should connect and disconnect successfully', async (t) => {
@@ -93,7 +95,6 @@ describe('CoinbaseProvider Integration Tests', () => {
     
     await assert.rejects(
       async () => {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         for await (const _ of provider.getHistoricalData(params)) {
           // Should not reach here
         }

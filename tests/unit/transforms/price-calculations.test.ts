@@ -182,7 +182,7 @@ describe('PriceCalculations', () => {
 
       strictEqual(transformed.length, 1)
       // (100 + 2 * 105) / 3 + 1000 * 0.001 = 103.333 + 1 = 104.333
-      strictEqual(transformed[0]!.custom_price.toFixed(3), '104.333')
+      strictEqual((transformed[0]!.custom_price as number).toFixed(3), '104.333')
     })
 
     it('should handle formula with all OHLCV fields', async () => {
@@ -284,9 +284,9 @@ describe('PriceCalculations', () => {
       const transformed = await collectResults(result.data)
 
       strictEqual(transformed.length, 3)
-      strictEqual(transformed[0]!.hlc3.toFixed(3), '101.667') // (110+90+105)/3
-      strictEqual(transformed[1]!.hlc3.toFixed(3), '106.667') // (115+95+110)/3
-      strictEqual(transformed[2]!.hlc3.toFixed(3), '111.667') // (120+100+115)/3
+      strictEqual((transformed[0]!.hlc3 as number).toFixed(3), '101.667') // (110+90+105)/3
+      strictEqual((transformed[1]!.hlc3 as number).toFixed(3), '106.667') // (115+95+110)/3
+      strictEqual((transformed[2]!.hlc3 as number).toFixed(3), '111.667') // (120+100+115)/3
     })
   })
 

@@ -2,6 +2,35 @@ import type { FileProviderConfig } from '../providers'
 import type { TransformConfig } from './transform.interface'
 
 /**
+ * Input configuration for file-based data sources
+ */
+export interface FileInputConfig extends FileProviderConfig {
+  /** Input type */
+  type: 'file'
+}
+
+/**
+ * Input configuration for provider-based data sources
+ */
+export interface ProviderInputConfig {
+  /** Input type */
+  type: 'provider'
+  /** Provider name (e.g., 'coinbase', 'alpaca') */
+  provider: 'coinbase' | 'alpaca'
+  /** Trading symbols to fetch */
+  symbols: string[]
+  /** Timeframe for the data (e.g., '1m', '5m', '1h') */
+  timeframe: string
+  /** Duration for data fetching */
+  duration?: string // e.g., "1h", "1000bars", "continuous"
+}
+
+/**
+ * Union type for all input configurations
+ */
+export type InputConfig = FileInputConfig | ProviderInputConfig
+
+/**
  * Output configuration for the pipeline
  */
 export interface OutputConfig {
@@ -27,6 +56,20 @@ export interface ProcessingOptions {
   maxErrors?: number
   /** Whether to show progress indicators */
   showProgress?: boolean
+  /** Whether to validate data during processing */
+  validateData?: boolean
+  /** Input timezone for non-UTC data */
+  inputTimezone?: string
+  /** Whether to backfill gaps on startup */
+  backfillOnStartup?: boolean
+  /** Maximum backfill window (e.g., '24h', '7d') */
+  maxBackfillWindow?: string
+  /** Retry configuration for provider connections */
+  retryConfig?: {
+    maxRetries: number
+    backoffMultiplier: number
+    maxBackoffSeconds: number
+  }
 }
 
 /**
@@ -34,7 +77,7 @@ export interface ProcessingOptions {
  */
 export interface PipelineConfig {
   /** Input data source configuration */
-  input: FileProviderConfig
+  input: InputConfig
 
   /** Output configuration */
   output: OutputConfig
