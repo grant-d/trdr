@@ -61,8 +61,10 @@ export class CsvRepository extends FileBasedRepository {
     let content = ''
     
     // Add headers if this is a new file
-    if (needsHeaders) {
-      content += this.csvHeaders.join(this.csvDelimiter) + '\n'
+    if (needsHeaders && sortedData.length > 0) {
+      // Generate headers dynamically based on the first record
+      const headers = this.generateHeaders(sortedData[0]!)
+      content += headers.join(this.csvDelimiter) + '\n'
     }
     
     // Add all rows
@@ -141,11 +143,15 @@ export class CsvRepository extends FileBasedRepository {
 
       if (lines.length === 0) return []
 
+      // Parse header row to know field names
+      const headerLine = lines[0]
+      const headers = headerLine ? this.parseCsvLine(headerLine) : undefined
+      
       // Skip header row
       const dataLines = lines.slice(1)
 
       for (const line of dataLines) {
-        const parsedRow = this.parseCsvRow(line)
+        const parsedRow = this.parseCsvRow(line, headers)
         if (parsedRow) {
           data.push(parsedRow)
         }
@@ -164,7 +170,7 @@ export class CsvRepository extends FileBasedRepository {
   /**
    * Parse a single CSV row into OhlcvDto
    */
-  private parseCsvRow(line: string): OhlcvDto | null {
+  private parseCsvRow(line: string, headers?: string[]): OhlcvDto | null {
     try {
       const values = this.parseCsvLine(line)
 
@@ -172,7 +178,7 @@ export class CsvRepository extends FileBasedRepository {
         return null
       }
 
-      const ohlcv: OhlcvDto = {
+      const ohlcv: Partial<OhlcvDto> = {
         timestamp: parseInt(values[0]!, 10),
         symbol: values[1]!,
         exchange: values[2]!,
@@ -183,7 +189,22 @@ export class CsvRepository extends FileBasedRepository {
         volume: parseFloat(values[7]!)
       }
 
-      return isValidOhlcv(ohlcv) ? ohlcv : null
+      // Add any additional fields from transforms
+      if (headers && values.length > this.csvHeaders.length) {
+        for (let i = this.csvHeaders.length; i < headers.length && i < values.length; i++) {
+          const fieldName = headers[i]
+          if (fieldName) {
+            const value = values[i]
+            if (value !== undefined && value !== '') {
+              // Try to parse as number first, fallback to string
+              const numValue = parseFloat(value)
+              ohlcv[fieldName] = isNaN(numValue) ? value : numValue
+            }
+          }
+        }
+      }
+
+      return isValidOhlcv(ohlcv) ? ohlcv as OhlcvDto : null
     } catch {
       return null
     }
@@ -434,8 +455,9 @@ export class CsvRepository extends FileBasedRepository {
       return
     }
 
-    // Create new content
-    let content = this.csvHeaders.join(this.csvDelimiter) + '\n'
+    // Create new content with dynamic headers
+    const headers = this.generateHeaders(data[0]!)
+    let content = headers.join(this.csvDelimiter) + '\n'
     for (const item of data) {
       content += this.formatOhlcvAsCsvRow(item) + '\n'
     }
@@ -513,10 +535,63 @@ export class CsvRepository extends FileBasedRepository {
   // --- Private helper methods specific to CSV ---
 
   /**
+   * Generate CSV headers dynamically based on data fields
+   */
+  private generateHeaders(data: OhlcvDto): string[] {
+    // Standard headers in order
+    const headers = [...this.csvHeaders]
+    
+    // Add any additional fields from transforms
+    const standardKeys = new Set(['timestamp', 'symbol', 'exchange', 'open', 'high', 'low', 'close', 'volume'])
+    
+    // Get all additional keys
+    const additionalKeys = Object.keys(data)
+      .filter(key => !standardKeys.has(key))
+    
+    // Group by transform name (suffix after underscore)
+    const transformGroups = new Map<string, string[]>()
+    
+    for (const key of additionalKeys) {
+      // Extract transform name from keys like "o_t1", "h_t1" -> "t1"
+      const match = /_(.+)$/.exec(key)
+      const transformName = match?.[1] ? match[1] : 'other'
+      
+      if (!transformGroups.has(transformName)) {
+        transformGroups.set(transformName, [])
+      }
+      transformGroups.get(transformName)!.push(key)
+    }
+    
+    // Sort transform names and add columns in grouped order
+    const sortedTransformNames = Array.from(transformGroups.keys()).sort()
+    
+    for (const transformName of sortedTransformNames) {
+      const columns = transformGroups.get(transformName)!
+      // Sort columns within each transform group (o_, h_, l_, c_, v_ order)
+      const sortedColumns = columns.sort((a, b) => {
+        const prefixOrder = ['o_', 'h_', 'l_', 'c_', 'v_']
+        const aPrefix = a.substring(0, 2)
+        const bPrefix = b.substring(0, 2)
+        const aIndex = prefixOrder.indexOf(aPrefix)
+        const bIndex = prefixOrder.indexOf(bPrefix)
+        
+        if (aIndex !== -1 && bIndex !== -1) {
+          return aIndex - bIndex
+        }
+        return a.localeCompare(b)
+      })
+      headers.push(...sortedColumns)
+    }
+    
+    return headers
+  }
+
+  /**
    * Format OHLCV data as a CSV row
    */
   private formatOhlcvAsCsvRow(data: OhlcvDto): string {
-    const values = [
+    // Always include standard fields first
+    const standardValues = [
       data.timestamp,
       this.escapeCsvValue(data.symbol),
       this.escapeCsvValue(data.exchange),
@@ -527,7 +602,57 @@ export class CsvRepository extends FileBasedRepository {
       data.volume
     ]
 
-    return values.join(this.csvDelimiter)
+    // Check for additional fields added by transforms
+    const standardKeys = new Set(['timestamp', 'symbol', 'exchange', 'open', 'high', 'low', 'close', 'volume'])
+    
+    // Get all additional keys
+    const additionalKeys = Object.keys(data)
+      .filter(key => !standardKeys.has(key))
+    
+    // Group by transform name (suffix after underscore)
+    const transformGroups = new Map<string, string[]>()
+    
+    for (const key of additionalKeys) {
+      // Extract transform name from keys like "o_t1", "h_t1" -> "t1"
+      const match = /_(.+)$/.exec(key)
+      const transformName = match?.[1] ? match[1] : 'other'
+      
+      if (!transformGroups.has(transformName)) {
+        transformGroups.set(transformName, [])
+      }
+      transformGroups.get(transformName)!.push(key)
+    }
+    
+    // Sort transform names and add values in grouped order
+    const additionalFields: string[] = []
+    const sortedTransformNames = Array.from(transformGroups.keys()).sort()
+    
+    for (const transformName of sortedTransformNames) {
+      const columns = transformGroups.get(transformName)!
+      // Sort columns within each transform group (o_, h_, l_, c_, v_ order)
+      const sortedColumns = columns.sort((a, b) => {
+        const prefixOrder = ['o_', 'h_', 'l_', 'c_', 'v_']
+        const aPrefix = a.substring(0, 2)
+        const bPrefix = b.substring(0, 2)
+        const aIndex = prefixOrder.indexOf(aPrefix)
+        const bIndex = prefixOrder.indexOf(bPrefix)
+        
+        if (aIndex !== -1 && bIndex !== -1) {
+          return aIndex - bIndex
+        }
+        return a.localeCompare(b)
+      })
+      
+      // Add values for each column
+      for (const key of sortedColumns) {
+        const value = (data as any)[key]
+        additionalFields.push(value !== null && value !== undefined ? String(value) : '')
+      }
+    }
+
+    // Combine standard and additional values
+    const allValues = [...standardValues, ...additionalFields]
+    return allValues.join(this.csvDelimiter)
   }
 
   /**

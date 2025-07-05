@@ -23,9 +23,9 @@ describe('Pipeline Factory', () => {
   })
 
   describe('createPipeline', () => {
-    it('should create a pipeline with CSV input and SQLite output', async () => {
+    it('should create a pipeline with CSV input and JSONL output', async () => {
       const inputPath = path.join(tempDir, 'input.csv')
-      const outputPath = path.join(tempDir, 'output.db')
+      const outputPath = path.join(tempDir, 'output.jsonl')
       
       // Create test CSV file
       await fs.writeFile(inputPath, 'timestamp,open,high,low,close,volume\n1234567890,100,110,90,105,1000\n')
@@ -39,7 +39,7 @@ describe('Pipeline Factory', () => {
         },
         output: {
           path: outputPath,
-          format: 'sqlite',
+          format: 'jsonl',
           overwrite: true
         },
         transformations: [],
@@ -67,16 +67,14 @@ describe('Pipeline Factory', () => {
         params: {
           outputField: 'returns',
           priceField: 'close'
-        },
-        enabled: true
+        }
       }
 
       const minMaxTx: TransformConfig<MinMaxParams> = {
         type: 'minMax',
         params: {
           fields: ['returns']
-        },
-        enabled: true
+        }
       }
 
       const config: PipelineConfig = {
@@ -122,8 +120,7 @@ describe('Pipeline Factory', () => {
         type: 'priceCalc',
         params: {
           calculation: 'hlc3'
-        },
-        enabled: true
+        }
       }
 
       const config: PipelineConfig = {
@@ -165,8 +162,8 @@ describe('Pipeline Factory', () => {
           path: 'test.parquet'
         },
         output: {
-          path: 'output.db',
-          format: 'sqlite'
+          path: 'output.jsonl',
+          format: 'jsonl'
         },
         transformations: [],
         options: {}
@@ -207,13 +204,13 @@ describe('Pipeline Factory', () => {
           format: 'csv'
         },
         output: {
-          path: 'output.db',
-          format: 'sqlite'
+          path: 'output.jsonl',
+          format: 'jsonl'
         },
         transformations: [
           {
             type: 'unknownTransform',
-            params: {}
+            params: {  }
           }
         ],
         options: {}
@@ -238,8 +235,8 @@ describe('Pipeline Factory', () => {
           path: inputPath
         },
         output: {
-          path: path.join(tempDir, 'output.db'),
-          format: 'sqlite'
+          path: path.join(tempDir, 'output.jsonl'),
+          format: 'jsonl',
         },
         transformations: [],
         options: {}
@@ -277,8 +274,8 @@ describe('Pipeline Factory', () => {
           path: inputPath
         },
         output: {
-          path: path.join(tempDir, 'output.db'),
-          format: 'sqlite'
+          path: path.join(tempDir, 'output.jsonl'),
+          format: 'jsonl'
         },
         transformations: [],
         options: {
@@ -315,7 +312,7 @@ describe('Pipeline Factory', () => {
     it('should get available output formats', () => {
       const outputFormats = PipelineFactory.getAvailableOutputFormats()
       
-      deepStrictEqual(outputFormats, ['sqlite', 'csv', 'jsonl'])
+      deepStrictEqual(outputFormats, ['csv', 'jsonl'])
     })
 
     it('should check if transform is supported', () => {
@@ -339,8 +336,8 @@ describe('Pipeline Factory', () => {
   describe('complex pipeline creation', () => {
     it('should create pipeline with multiple transforms and metadata', async () => {
       const inputPath = path.join(tempDir, 'data.csv')
-      const outputPath = path.join(tempDir, 'processed.db')
-      
+      const outputPath = path.join(tempDir, 'processed.jsonl')
+
       await fs.writeFile(
         inputPath,
         'timestamp,open,high,low,close,volume,symbol\n' +
@@ -353,16 +350,14 @@ describe('Pipeline Factory', () => {
         params: {
           strategy: 'forward',
           fields: ['open', 'high', 'low', 'close', 'volume']
-        },
-        enabled: true
+        }
       }
 
       const priceCalcTx: TransformConfig<PriceCalcParams> = {
         type: 'priceCalc',
         params: {
           calculation: 'ohlc4'
-        },
-        enabled: true
+        }
       }
 
       const logReturnsTx: TransformConfig<LogReturnsParams> = {
@@ -370,8 +365,7 @@ describe('Pipeline Factory', () => {
         params: {
           outputField: 'returns',
           priceField: 'close'
-        },
-        enabled: true
+        }
       }
 
       const zScoreTx: TransformConfig<ZScoreParams> = {
@@ -379,8 +373,7 @@ describe('Pipeline Factory', () => {
         params: {
           fields: ['returns'],
           windowSize: 20
-        },
-        enabled: true
+        }
       }
 
       const config: PipelineConfig = {
@@ -401,7 +394,7 @@ describe('Pipeline Factory', () => {
         },
         output: {
           path: outputPath,
-          format: 'sqlite',
+          format: 'jsonl',
           overwrite: true
         },
         transformations: [
@@ -439,7 +432,7 @@ describe('Pipeline Factory', () => {
       const transformInfo = pipeline.getTransformInfo()
       ok(transformInfo)
       strictEqual(transformInfo.type, 'pipeline')
-      strictEqual(transformInfo.name, 'BTC Price Analysis Pipeline')
+      strictEqual(transformInfo.name, 'Transform Pipeline')
     })
   })
 })

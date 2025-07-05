@@ -35,8 +35,7 @@ export class TimeframeAggregator extends BaseTransform<TimeframeAggregationParam
         marketTimezone: 'America/New_York',
         incompleteBarBehavior: 'drop',
         ...params,
-      },
-      false
+      }
     )
   }
 

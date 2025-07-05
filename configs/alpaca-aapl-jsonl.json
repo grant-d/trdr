@@ -11,21 +11,14 @@
       "type": "logReturns",
       "enabled": true,
       "params": {
-        "name": "lr",
-        "description": "Calculate log returns for all OHLCV columns",
-        "outputField": "returns",
-        "priceField": "close"
+        "description": "Calculate log returns for all OHLCV columns"
       }
     },
     {
       "type": "zScore",
       "enabled": true,
       "params": {
-        "name": "z",
         "description": "Z-score normalization of all columns",
-        "fields": [
-          "returns"
-        ],
         "windowSize": 20
       }
     },
@@ -33,7 +26,6 @@
       "type": "minMax",
       "enabled": true,
       "params": {
-        "name": "mm",
         "description": "Min-max normalization with 10-bar window",
         "windowSize": 10,
         "targetMin": 0,
@@ -42,8 +34,8 @@
     }
   ],
   "output": {
-    "path": "./data/alpaca-aapl-1d.csv",
-    "format": "csv",
+    "path": "./data/alpaca-aapl-1d.jsonl",
+    "format": "jsonl",
     "overwrite": true
   },
   "options": {

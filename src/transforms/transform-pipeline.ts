@@ -1,4 +1,4 @@
-import type { Transform, TransformResult, TransformCoefficients, BaseTransformParams } from '../interfaces'
+import type { BaseTransformParams, Transform, TransformResult } from '../interfaces'
 import type { OhlcvDto } from '../models'
 
 /**
@@ -11,13 +11,12 @@ export interface TransformPipelineParams extends BaseTransformParams {
 
 /**
  * A pipeline that chains multiple transforms together
- * Applies transforms sequentially and aggregates coefficients
+ * Applies transforms sequentially
  */
 export class TransformPipeline implements Transform<TransformPipelineParams> {
   public readonly type = 'pipeline' as const
   public readonly name: string
   public readonly description: string
-  public readonly isReversible: boolean
   public readonly params: TransformPipelineParams
 
   private readonly transforms: Transform[]
@@ -25,11 +24,8 @@ export class TransformPipeline implements Transform<TransformPipelineParams> {
   constructor(params: TransformPipelineParams) {
     this.params = params
     this.transforms = [...params.transforms]
-    this.name = params.name || 'Transform Pipeline'
-    this.description = `Pipeline of ${this.transforms.length} transforms`
-    
-    // Pipeline is reversible only if all transforms are reversible
-    this.isReversible = this.transforms.every(t => t.isReversible)
+    this.name = 'Transform Pipeline'
+    this.description = params.description || `Pipeline of ${this.transforms.length} transforms`
   }
 
   /**
@@ -115,66 +111,83 @@ export class TransformPipeline implements Transform<TransformPipelineParams> {
     })
   }
 
+  /**
+   * Pipeline is ready when all transforms in it are ready
+   */
+  public isReady(): boolean {
+    return this.transforms.every(transform => transform.isReady())
+  }
+
   public async apply(data: AsyncIterator<OhlcvDto>): Promise<TransformResult> {
     if (this.transforms.length === 0) {
       return { data }
     }
 
-    const coefficients: TransformCoefficients[] = []
-    let currentDataArray: OhlcvDto[] = []
-    
-    // Convert initial data to array so we can process it multiple times
-    let item = await data.next()
-    while (!item.done) {
-      currentDataArray.push(item.value)
-      item = await data.next()
-    }
-
-    // Apply each transform in sequence
-    for (let i = 0; i < this.transforms.length; i++) {
-      const transform = this.transforms[i]!
-      
-      // Convert array back to async iterator for each transform
-      const result = await transform.apply(this.arrayToAsyncIterator(currentDataArray))
-      
-      // Consume the transform's data stream to get coefficients
-      currentDataArray = []
-      let transformItem = await result.data.next()
-      while (!transformItem.done) {
-        currentDataArray.push(transformItem.value)
-        transformItem = await result.data.next()
-      }
-      
-      // Collect coefficients if available, with transform index
-      if (result.coefficients) {
-        // Add the transform index to the coefficient for proper aggregation
-        const coeffWithIndex = {
-          ...result.coefficients,
-          transformIndex: i
-        }
-        coefficients.push(coeffWithIndex as any)
-      }
-    }
-
-    // Aggregate coefficients if any were collected
-    const aggregatedCoefficients = coefficients.length > 0
-      ? this.aggregateCoefficients(coefficients)
-      : undefined
-
     return {
-      data: this.arrayToAsyncIterator(currentDataArray),
-      coefficients: aggregatedCoefficients
+      data: this.createReadinessAwareStream(data)
     }
   }
 
   /**
-   * Helper to convert array to async iterator
+   * Creates a streaming pipeline that waits for all transforms to be ready before emitting
    */
-  private async *arrayToAsyncIterator(array: OhlcvDto[]): AsyncGenerator<OhlcvDto> {
-    for (const item of array) {
-      yield item
+  private async* createReadinessAwareStream(data: AsyncIterator<OhlcvDto>): AsyncGenerator<OhlcvDto> {
+    // Create a chain of transform streams
+    let currentStream: AsyncGenerator<OhlcvDto> = this.streamFromIterator(data)
+    
+    for (const transform of this.transforms) {
+      const result = await transform.apply(this.iteratorFromStream(currentStream))
+      currentStream = this.streamFromIterator(result.data)
+    }
+    
+    // Buffer output until all transforms are ready
+    const buffer: OhlcvDto[] = []
+    let readinessAchieved = false
+    
+    for await (const item of currentStream) {
+      if (!readinessAchieved && !this.isReady()) {
+        // Still waiting for readiness, buffer the item
+        buffer.push(item)
+      } else {
+        if (!readinessAchieved) {
+          // Just became ready, emit all buffered items first
+          for (const bufferedItem of buffer) {
+            yield bufferedItem
+          }
+          buffer.length = 0 // Clear buffer
+          readinessAchieved = true
+        }
+        // Emit current item
+        yield item
+      }
+    }
+    
+    // If we never achieved readiness, emit buffered items anyway
+    if (!readinessAchieved) {
+      for (const bufferedItem of buffer) {
+        yield bufferedItem
+      }
     }
   }
+
+  /**
+   * Convert AsyncIterator to AsyncGenerator
+   */
+  private async* streamFromIterator(iterator: AsyncIterator<OhlcvDto>): AsyncGenerator<OhlcvDto> {
+    let item = await iterator.next()
+    while (!item.done) {
+      yield item.value
+      item = await iterator.next()
+    }
+  }
+
+  /**
+   * Convert AsyncGenerator to AsyncIterator
+   */
+  private iteratorFromStream(stream: AsyncGenerator<OhlcvDto>): AsyncIterator<OhlcvDto> {
+    return stream
+  }
+
 
   public validate(): void {
     if (this.transforms.length === 0) {
@@ -231,120 +244,14 @@ export class TransformPipeline implements Transform<TransformPipelineParams> {
     return this.transforms[0]!.getRequiredFields()
   }
 
-  public async *reverse(
-    data: AsyncIterator<OhlcvDto>, 
-    coefficients: TransformCoefficients
-  ): AsyncGenerator<OhlcvDto> {
-    if (!this.isReversible) {
-      throw new Error('Pipeline contains non-reversible transforms')
-    }
-
-    // Extract individual transform coefficients from aggregated coefficients
-    const transformCoefficients = this.extractTransformCoefficients(coefficients)
-    
-    // Apply transforms in reverse order
-    let currentData = data
-    for (let i = this.transforms.length - 1; i >= 0; i--) {
-      const transform = this.transforms[i]!
-      const coeff = transformCoefficients[i]
-      
-      if (!transform.reverse || !coeff) {
-        throw new Error(`Transform ${i} (${transform.name}) cannot be reversed`)
-      }
-      
-      // Create an async generator from the reverse method
-      const reversedData = transform.reverse(currentData, coeff)
-      currentData = reversedData
-    }
-
-    // Yield all data from the final reversed stream
-    for await (const item of currentData as AsyncGenerator<OhlcvDto>) {
-      yield item
-    }
-  }
-
   public withParams(params: Partial<TransformPipelineParams>): Transform<TransformPipelineParams> {
     return new TransformPipeline({ ...this.params, ...params })
-  }
-
-  /**
-   * Aggregate multiple transform coefficients into a single coefficient object
-   */
-  private aggregateCoefficients(coefficients: any[]): TransformCoefficients {
-    if (coefficients.length === 0) {
-      throw new Error('No coefficients to aggregate')
-    }
-
-    // Use the symbol from the first coefficient (should be the same for all)
-    const symbol = coefficients[0]!.symbol
-    
-    // Aggregate all coefficient values with transform index prefix
-    const aggregatedValues: Record<string, number> = {}
-    
-    for (const coeff of coefficients) {
-      const transformIndex = coeff.transformIndex
-      for (const [key, value] of Object.entries(coeff.values)) {
-        // Prefix with transform index to avoid collisions
-        aggregatedValues[`t${transformIndex}_${key}`] = value as number
-      }
-    }
-
-    return {
-      type: 'pipeline' as any, // Pipeline type for aggregated coefficients
-      timestamp: Date.now(),
-      symbol,
-      values: aggregatedValues
-    }
-  }
-
-  /**
-   * Extract individual transform coefficients from aggregated pipeline coefficients
-   */
-  private extractTransformCoefficients(
-    aggregated: TransformCoefficients
-  ): (TransformCoefficients | undefined)[] {
-    const coefficients: (TransformCoefficients | undefined)[] = []
-    
-    // Group values by transform index
-    const groupedValues: Record<number, Record<string, number>> = {}
-    
-    for (const [key, value] of Object.entries(aggregated.values || {})) {
-      const match = /^t(\d+)_(.+)$/.exec(key)
-      if (match) {
-        const index = parseInt(match[1]!, 10)
-        const fieldKey = match[2]!
-        
-        if (!groupedValues[index]) {
-          groupedValues[index] = {}
-        }
-        groupedValues[index][fieldKey] = value
-      }
-    }
-    
-    // Create coefficient objects for each transform
-    for (let i = 0; i < this.transforms.length; i++) {
-      const transform = this.transforms[i]!
-      const values = groupedValues[i]
-      
-      if (values && Object.keys(values).length > 0) {
-        coefficients.push({
-          type: transform.type,
-          timestamp: aggregated.timestamp,
-          symbol: aggregated.symbol,
-          values
-        })
-      } else {
-        coefficients.push(undefined)
-      }
-    }
-    
-    return coefficients
   }
 }
 
 /**
  * Helper function to create a pipeline from an array of transforms
  */
-export function createPipeline(transforms: Transform[], name?: string): TransformPipeline {
-  return new TransformPipeline({ transforms, name })
+export function createPipeline(transforms: Transform[], description?: string): TransformPipeline {
+  return new TransformPipeline({ transforms, description })
 }

@@ -21,57 +21,31 @@ describe('Transform Serializer', () => {
   describe('serializeTransform', () => {
     it('should serialize a basic transform', () => {
       const transform = new LogReturnsNormalizer({
-        outputField: 'returns',
-        priceField: 'close'
+        in: ['close'],
+        out: ['returns']
       })
 
       const serialized = TransformSerializer.serializeTransform(transform)
 
       strictEqual(serialized.type, 'logReturns')
-      strictEqual(serialized.name, 'Log Returns Normalizer')
       deepStrictEqual(serialized.params, {
-        outputField: 'returns',
-        priceField: 'close'
+        in: ['close'],
+        out: ['returns']
       })
-      strictEqual(serialized.coefficients, undefined)
-    })
-
-    it('should serialize transform with coefficients', () => {
-      const transform = new MinMaxNormalizer({
-        fields: ['close'],
-        targetMin: 0,
-        targetMax: 1
-      })
-
-      // Simulate coefficients being set
-      ;(transform as any).setCoefficients('BTC-USD', {
-        close_min: 30000,
-        close_max: 40000
-      })
-
-      const serialized = TransformSerializer.serializeTransform(transform)
-
-      ok(serialized.coefficients)
-      strictEqual(serialized.coefficients.type, 'minMax')
-      strictEqual(serialized.coefficients.symbol, 'BTC-USD')
-      strictEqual(serialized.coefficients.values.close_min, 30000)
-      strictEqual(serialized.coefficients.values.close_max, 40000)
     })
 
     it('should serialize transforms with complex parameters', () => {
       const transform = new ZScoreNormalizer({
-        fields: ['open', 'close', 'volume'],
-        windowSize: 20,
-        suffix: '_normalized',
-        addSuffix: true
+        in: ['open', 'close', 'volume'],
+        out: ['open_z', 'close_z', 'volume_z'],
+        windowSize: 20
       })
 
       const serialized = TransformSerializer.serializeTransform(transform)
 
-      deepStrictEqual(serialized.params.fields, ['open', 'close', 'volume'])
+      deepStrictEqual(serialized.params.in, ['open', 'close', 'volume'])
+      deepStrictEqual(serialized.params.out, ['open_z', 'close_z', 'volume_z'])
       strictEqual(serialized.params.windowSize, 20)
-      strictEqual(serialized.params.suffix, '_normalized')
-      strictEqual(serialized.params.addSuffix, true)
     })
   })
 
@@ -80,49 +54,37 @@ describe('Transform Serializer', () => {
       const serialized: SerializedTransform = {
         type: 'logReturns',
         params: {
-          outputField: 'log_returns',
-          priceField: 'close'
-        },
-        name: 'Log Returns'
+          in: ['close'],
+          out: ['log_returns']
+        }
       }
 
       const transform = TransformSerializer.deserializeTransform(serialized)
 
       strictEqual(transform.type, 'logReturns')
       const params = transform.params as Partial<LogReturnsParams>
-      strictEqual(params.outputField, 'log_returns')
-      strictEqual(params.priceField, 'close')
+      deepStrictEqual(params.in, ['close'])
+      deepStrictEqual(params.out, ['log_returns'])
     })
 
-    it('should deserialize transform with coefficients', () => {
+    it('should deserialize transform with complex parameters', () => {
       const serialized: SerializedTransform = {
         type: 'minMax',
         params: {
-          fields: ['close', 'volume']
-        },
-        coefficients: {
-          type: 'minMax',
-          timestamp: Date.now(),
-          symbol: 'ETH-USD',
-          values: {
-            close_min: 1000,
-            close_max: 2000,
-            volume_min: 100,
-            volume_max: 1000
-          }
+          in: ['close', 'volume'],
+          out: ['close_norm', 'volume_norm'],
+          min: -1,
+          max: 1
         }
       }
 
       const transform = TransformSerializer.deserializeTransform(serialized)
 
       strictEqual(transform.type, 'minMax')
-      
-      // Check that coefficients were restored
-      const coefficients = (transform as any).getCoefficients()
-      ok(coefficients)
-      strictEqual(coefficients.symbol, 'ETH-USD')
-      strictEqual(coefficients.values.close_min, 1000)
-      strictEqual(coefficients.values.close_max, 2000)
+      strictEqual(transform.params.min, -1)
+      strictEqual(transform.params.max, 1)
+      deepStrictEqual(transform.params.in, ['close', 'volume'])
+      deepStrictEqual(transform.params.out, ['close_norm', 'volume_norm'])
     })
 
     it('should throw error for unknown transform type', () => {
@@ -140,39 +102,20 @@ describe('Transform Serializer', () => {
   describe('serializePipeline', () => {
     it('should serialize a transform pipeline', () => {
       const pipeline = createPipeline([
-        new LogReturnsNormalizer({ outputField: 'returns' }),
-        new ZScoreNormalizer({ fields: ['returns'] }),
-        new MinMaxNormalizer({ fields: ['returns_zscore'] })
+        new LogReturnsNormalizer({ in: ['close'], out: ['returns'] }),
+        new ZScoreNormalizer({ in: ['returns'], out: ['returns_z'] }),
+        new MinMaxNormalizer({ in: ['returns_z'], out: ['returns_norm'] })
       ], 'Test Pipeline')
 
       const serialized = TransformSerializer.serializePipeline(pipeline)
 
-      strictEqual(serialized.name, 'Test Pipeline')
+      strictEqual(serialized.description, 'Test Pipeline')
       strictEqual(serialized.transforms.length, 3)
       strictEqual(serialized.transforms[0]!.type, 'logReturns')
       strictEqual(serialized.transforms[1]!.type, 'zScore')
       strictEqual(serialized.transforms[2]!.type, 'minMax')
       ok(serialized.metadata?.createdAt)
       strictEqual(serialized.metadata?.version, '1.0.0')
-    })
-
-    it('should serialize pipeline with transform coefficients', () => {
-      const minMax = new MinMaxNormalizer({ fields: ['close'] })
-      ;(minMax as any).setCoefficients('BTC-USD', {
-        close_min: 30000,
-        close_max: 40000
-      })
-
-      const pipeline = createPipeline([
-        new LogReturnsNormalizer({ outputField: 'returns' }),
-        minMax
-      ])
-
-      const serialized = TransformSerializer.serializePipeline(pipeline)
-
-      const minMaxSerialized = serialized.transforms[1]!
-      ok(minMaxSerialized.coefficients)
-      strictEqual(minMaxSerialized.coefficients.values.close_min, 30000)
     })
   })
 
@@ -186,10 +129,9 @@ describe('Transform Serializer', () => {
           },
           {
             type: 'zScore',
-            params: { fields: ['hlc3'] }
+            params: { in: ['hlc3'], out: ['hlc3_z'] }
           }
         ],
-        name: 'Deserialized Pipeline',
         metadata: {
           createdAt: '2024-01-01T00:00:00Z',
           version: '1.0.0'
@@ -198,7 +140,7 @@ describe('Transform Serializer', () => {
 
       const pipeline = TransformSerializer.deserializePipeline(serialized)
 
-      strictEqual(pipeline.name, 'Deserialized Pipeline')
+      strictEqual(pipeline.name, 'Transform Pipeline')
       const transforms = pipeline.getTransforms()
       strictEqual(transforms.length, 2)
       strictEqual(transforms[0]!.type, 'priceCalc')
@@ -209,9 +151,9 @@ describe('Transform Serializer', () => {
   describe('toJSON and fromJSON', () => {
     it('should round-trip serialize a transform', () => {
       const original = new ZScoreNormalizer({
-        fields: ['open', 'close'],
-        windowSize: 50,
-        suffix: '_z'
+        in: ['open', 'close'],
+        out: ['open_z', 'close_z'],
+        windowSize: 50
       })
 
       const json = TransformSerializer.toJSON(original)
@@ -223,8 +165,8 @@ describe('Transform Serializer', () => {
 
     it('should round-trip serialize a pipeline', () => {
       const original = createPipeline([
-        new LogReturnsNormalizer({ outputField: 'returns' }),
-        new MinMaxNormalizer({ fields: ['returns'], targetMin: -1, targetMax: 1 })
+        new LogReturnsNormalizer({ in: ['close'], out: ['returns'] }),
+        new MinMaxNormalizer({ in: ['returns'], out: ['returns_norm'], min: -1, max: 1 })
       ], 'Round-trip Pipeline')
 
       const json = TransformSerializer.toJSON(original)
@@ -253,7 +195,7 @@ describe('Transform Serializer', () => {
     it('should validate correct serialized transform', () => {
       const valid: SerializedTransform = {
         type: 'logReturns',
-        params: { outputField: 'returns' }
+        params: { in: ['close'], out: ['returns'] }
       }
 
       ok(TransformSerializer.validateSerialized(valid))
@@ -303,28 +245,20 @@ describe('Transform Serializer', () => {
 
   describe('integration tests', () => {
     it('should handle complex pipeline serialization and deserialization', () => {
-      // Create a complex pipeline with coefficients
-      const logReturns = new LogReturnsNormalizer({ outputField: 'returns' })
+      // Create a complex pipeline
+      const logReturns = new LogReturnsNormalizer({ in: ['close'], out: ['returns'] })
       
-      const minMax = new MinMaxNormalizer({ 
-        fields: ['returns'],
-        targetMin: -1,
-        targetMax: 1
-      })
-      ;(minMax as any).setCoefficients('ETH-USD', {
-        returns_min: -0.1,
-        returns_max: 0.15
+      const minMax = new MinMaxNormalizer({
+        in: ['returns'],
+        out: ['returns_norm'],
+        min: -1,
+        max: 1
       })
 
       const zScore = new ZScoreNormalizer({
-        fields: ['close', 'volume'],
+        in: ['close', 'volume'],
+        out: ['close_z', 'volume_z'],
         windowSize: 30
-      })
-      ;(zScore as any).setCoefficients('ETH-USD', {
-        close_mean: 2000,
-        close_std: 100,
-        volume_mean: 1000000,
-        volume_std: 50000
       })
 
       const original = createPipeline([logReturns, minMax, zScore], 'Complex Pipeline')
@@ -336,22 +270,22 @@ describe('Transform Serializer', () => {
       const deserialized = TransformSerializer.fromJSON(json) as TransformPipeline
 
       // Verify structure
-      strictEqual(deserialized.name, 'Complex Pipeline')
+      strictEqual(deserialized.name, 'Transform Pipeline')
       const transforms = deserialized.getTransforms()
       strictEqual(transforms.length, 3)
 
-      // Verify coefficients were preserved
-      const deserializedMinMax = transforms[1] as any
-      const minMaxCoeffs = deserializedMinMax.getCoefficients()
-      ok(minMaxCoeffs)
-      strictEqual(minMaxCoeffs.values.returns_min, -0.1)
-      strictEqual(minMaxCoeffs.values.returns_max, 0.15)
-
-      const deserializedZScore = transforms[2] as any
-      const zScoreCoeffs = deserializedZScore.getCoefficients()
-      ok(zScoreCoeffs)
-      strictEqual(zScoreCoeffs.values.close_mean, 2000)
-      strictEqual(zScoreCoeffs.values.volume_std, 50000)
+      // Verify transform types and parameters were preserved
+      strictEqual(transforms[0]!.type, 'logReturns')
+      strictEqual(transforms[1]!.type, 'minMax')
+      strictEqual(transforms[2]!.type, 'zScore')
+      
+      // Check that parameters are preserved
+      const deserializedMinMax = transforms[1] as MinMaxNormalizer
+      strictEqual(deserializedMinMax.params.min, -1)
+      strictEqual(deserializedMinMax.params.max, 1)
+      
+      const deserializedZScore = transforms[2] as ZScoreNormalizer
+      strictEqual(deserializedZScore.params.windowSize, 30)
     })
   })
 })

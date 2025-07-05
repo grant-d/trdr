@@ -18,8 +18,7 @@ export class PriceCalculations extends BaseTransform<PriceCalcParams> {
       'priceCalc',
       'Price Calculations',
       'Calculates derived price values from OHLC data',
-      params,
-      false // Not reversible
+      params
     )
 
     this.calculation = params.calculation

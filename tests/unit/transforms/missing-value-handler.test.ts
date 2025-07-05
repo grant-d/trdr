@@ -232,7 +232,7 @@ test('MissingValueHandler - Validation', () => {
   // Should throw when using 'value' strategy without fillValue
   assert.throws(
     () => {
-      const handler = new MissingValueHandler({
+      const handler = new MissingValueHandler({ name: 'mv1',
         strategy: 'value'
       })
       handler.validate()
@@ -243,7 +243,7 @@ test('MissingValueHandler - Validation', () => {
   // Should throw for invalid maxFillGap
   assert.throws(
     () => {
-      const handler = new MissingValueHandler({
+      const handler = new MissingValueHandler({ name: 'mv1',
         strategy: 'forward',
         maxFillGap: 0
       })
@@ -254,14 +254,14 @@ test('MissingValueHandler - Validation', () => {
 })
 
 test('MissingValueHandler - Required and Output Fields', () => {
-  const handler1 = new MissingValueHandler({
+  const handler1 = new MissingValueHandler({ name: 'mv1',
     strategy: 'forward'
   })
   
   assert.deepEqual(handler1.getOutputFields(), [])
   assert.deepEqual(handler1.getRequiredFields(), [])
   
-  const handler2 = new MissingValueHandler({
+  const handler2 = new MissingValueHandler({ name: 'mv1',
     strategy: 'forward',
     fields: ['open', 'close']
   })
@@ -270,7 +270,7 @@ test('MissingValueHandler - Required and Output Fields', () => {
 })
 
 test('MissingValueHandler - WithParams', () => {
-  const handler = new MissingValueHandler({
+  const handler = new MissingValueHandler({ name: 'mv1',
     strategy: 'forward'
   })
   

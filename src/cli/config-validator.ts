@@ -9,7 +9,7 @@ export interface ValidationError {
   /** Human-readable error message */
   message: string
   /** The invalid value that caused the error */
-  value?: any
+  value?: unknown
   /** Severity level of the error */
   severity: 'error' | 'warning'
 }
@@ -323,8 +323,8 @@ export class ConfigValidator {
       this.addError('output.path', 'Output path cannot be empty', output.path)
     }
 
-    if (!output.format || !['csv', 'jsonl', 'sqlite'].includes(output.format)) {
-      this.addError('output.format', 'Output format must be "csv", "jsonl", or "sqlite"', output.format)
+    if (!output.format || !['csv', 'jsonl'].includes(output.format)) {
+      this.addError('output.format', 'Output format must be "csv" or "jsonl"', output.format)
     }
 
     // Validate overwrite flag
@@ -352,7 +352,7 @@ export class ConfigValidator {
     })
 
     // Check for enabled transforms
-    const enabledTransforms = transformations.filter(t => t.enabled)
+    const enabledTransforms = transformations.filter(t => !t.disabled)
     if (enabledTransforms.length === 0) {
       this.addWarning('transformations', 'No transformations are enabled - pipeline will only copy input to output')
     }
@@ -385,9 +385,9 @@ export class ConfigValidator {
       )
     }
 
-    // Validate enabled flag
-    if (typeof transform.enabled !== 'boolean') {
-      this.addError(`${prefix}.enabled`, 'Transform enabled flag must be a boolean', transform.enabled)
+    // Validate disabled flag - optional, defaults to false
+    if (transform.disabled !== undefined && typeof transform.disabled !== 'boolean') {
+      this.addError(`${prefix}.disabled`, 'Transform disabled flag must be a boolean if present', transform.disabled)
     }
 
     // Validate params
@@ -416,16 +416,17 @@ export class ConfigValidator {
 
       case 'zScore':
       case 'minMax':
-        if (!params.fields || !Array.isArray(params.fields)) {
-          this.addError(`${prefix}.fields`, 'Fields parameter must be an array', params.fields)
-        } else if (params.fields.length === 0) {
-          this.addError(`${prefix}.fields`, 'Fields array cannot be empty', params.fields)
-        } else {
-          params.fields.forEach((field: any, idx: number) => {
-            if (typeof field !== 'string') {
-              this.addError(`${prefix}.fields[${idx}]`, 'Field name must be a string', field)
-            }
-          })
+        // Fields parameter is now optional - transforms apply to all OHLCV fields by default
+        if (params.fields !== undefined) {
+          if (!Array.isArray(params.fields)) {
+            this.addError(`${prefix}.fields`, 'Fields parameter must be an array if provided', params.fields)
+          } else {
+            params.fields.forEach((field: any, idx: number) => {
+              if (typeof field !== 'string') {
+                this.addError(`${prefix}.fields[${idx}]`, 'Field name must be a string', field)
+              }
+            })
+          }
         }
 
         if (params.windowSize !== undefined) {
@@ -539,7 +540,7 @@ export class ConfigValidator {
     // Skip validation if transformations is not a valid array
     if (!Array.isArray(transformations)) return
 
-    const enabledTransforms = transformations.filter(t => t && t.enabled)
+    const enabledTransforms = transformations.filter(t => !t.disabled)
     if (enabledTransforms.length === 0) return
 
     const availableFields = new Set(BASE_OHLCV_FIELDS)
@@ -637,20 +638,20 @@ export class ConfigValidator {
     }
 
     // Check format compatibility
-    if (input.type === 'file' && input.format === 'csv' && output.format === 'sqlite') {
-      this.addWarning(
-        'output.format',
-        'Converting from CSV to SQLite - ensure sufficient memory for large files',
-      )
-    }
+    // if (input.type === 'file' && input.format === 'csv' && output.format === 'jsonl') {
+    //   this.addWarning(
+    //     'output.format',
+    //     'Converting from CSV to JSONL - ensure sufficient memory for large files',
+    //   )
+    // }
 
     // Warn about continuous mode with file output
-    if (input.type === 'provider' && input.duration === 'continuous' && output.format !== 'sqlite') {
-      this.addWarning(
-        'output.format',
-        'Continuous data collection is better suited for SQLite output format',
-      )
-    }
+    // if (input.type === 'provider' && input.duration === 'continuous' && output.format !== 'sqlite') {
+    //   this.addWarning(
+    //     'output.format',
+    //     'Continuous data collection is better suited for SQLite output format',
+    //   )
+    // }
   }
 
   /**

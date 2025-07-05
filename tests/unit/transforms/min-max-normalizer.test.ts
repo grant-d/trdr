@@ -29,8 +29,10 @@ describe('MinMaxNormalizer', () => {
   // Helper to collect async iterator results
   async function collectResults(iterator: AsyncIterator<OhlcvDto>): Promise<TransformedOhlcvDto[]> {
     const results: TransformedOhlcvDto[] = []
-    for await (const item of { [Symbol.asyncIterator]: () => iterator }) {
-      results.push(item as TransformedOhlcvDto)
+    let item = await iterator.next()
+    while (!item.done) {
+      results.push(item.value as TransformedOhlcvDto)
+      item = await iterator.next()
     }
     return results
   }
@@ -41,12 +43,12 @@ describe('MinMaxNormalizer', () => {
       ok(normalizer)
       strictEqual(normalizer.type, 'minMax')
       strictEqual(normalizer.name, 'Min-Max Normalizer')
-      strictEqual(normalizer.description, 'Normalizes data to range [0, 1]')
+      strictEqual(normalizer.description, 'Normalizes data to range [0, 1] using 20 period rolling window')
     })
 
     it('should create instance with custom range', () => {
-      const normalizer = new MinMaxNormalizer({ targetMin: -1, targetMax: 1 })
-      strictEqual(normalizer.description, 'Normalizes data to range [-1, 1]')
+      const normalizer = new MinMaxNormalizer({ min: -1, max: 1 })
+      strictEqual(normalizer.description, 'Normalizes data to range [-1, 1] using 20 period rolling window')
     })
 
     it('should validate window size', () => {
@@ -55,18 +57,19 @@ describe('MinMaxNormalizer', () => {
     })
 
     it('should validate target range', () => {
-      const normalizer = new MinMaxNormalizer({ targetMin: 1, targetMax: 0 })
+      const normalizer = new MinMaxNormalizer({ min: 1, max: 0 })
       throws(() => normalizer.validate(), /targetMax must be greater than targetMin/)
     })
   })
 
-  describe('global min-max normalization', () => {
+  describe('rolling window min-max normalization', () => {
     it('should normalize data to [0, 1] range by default', async () => {
       // Values: 0, 50, 100
       const testData = createTestData([0, 50, 100])
       const normalizer = new MinMaxNormalizer({ 
-        fields: ['open'],
-        windowSize: null 
+        in: ['open'],
+        out: ['open_norm'],
+        windowSize: 3 
       })
 
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
@@ -74,47 +77,58 @@ describe('MinMaxNormalizer', () => {
 
       strictEqual(transformed.length, 3)
 
-      // Check normalized values
-      strictEqual(transformed[0]!.open_norm, 0)    // (0-0)/(100-0) = 0
-      strictEqual(transformed[1]!.open_norm, 0.5)  // (50-0)/(100-0) = 0.5
+      // First two items have insufficient data (window < 3), so output 0
+      strictEqual(transformed[0]!.open_norm, 0)
+      strictEqual(transformed[1]!.open_norm, 0)
+      
+      // Third item has full window [0, 50, 100]: min=0, max=100, value=100
       strictEqual(transformed[2]!.open_norm, 1)    // (100-0)/(100-0) = 1
     })
 
     it('should normalize to custom range', async () => {
       const testData = createTestData([10, 20, 30])
       const normalizer = new MinMaxNormalizer({ 
-        fields: ['open'],
-        targetMin: -1,
-        targetMax: 1,
-        windowSize: null 
+        in: ['open'],
+        out: ['open_norm'],
+        min: -1,
+        max: 1,
+        windowSize: 3 
       })
 
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // Min=10, Max=30, Range=20
-      // Formula: (x-min)/range * targetRange + targetMin
-      strictEqual(transformed[0]!.open_norm, -1)   // (10-10)/20 * 2 + (-1) = -1
-      strictEqual(transformed[1]!.open_norm, 0)    // (20-10)/20 * 2 + (-1) = 0
-      strictEqual(transformed[2]!.open_norm, 1)    // (30-10)/20 * 2 + (-1) = 1
+      // First two items have insufficient data, so output 0
+      strictEqual(transformed[0]!.open_norm, 0)
+      strictEqual(transformed[1]!.open_norm, 0)
+      
+      // Third item has window [10, 20, 30]: min=10, max=30, value=30
+      // Formula: (x-min)/range * targetRange + targetMin = (30-10)/20 * 2 + (-1) = 1
+      strictEqual(transformed[2]!.open_norm, 1)
     })
 
     it('should handle multiple fields', async () => {
-      const testData = createTestData([100])
-      const normalizer = new MinMaxNormalizer({ 
-        fields: ['open', 'close', 'volume'],
-        windowSize: null 
+      const testData = createTestData([100, 200])
+      const normalizer = new MinMaxNormalizer({  
+        in: ['open', 'close', 'volume'],
+        out: ['open_norm', 'close_norm', 'volume_norm'],
+        windowSize: 2 
       })
 
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // Check that all fields have normalized versions
-      ok('open_norm' in transformed[0]!)
-      ok('close_norm' in transformed[0])
-      ok('volume_norm' in transformed[0])
-      ok(!('high_norm' in transformed[0]))
-      ok(!('low_norm' in transformed[0]))
+      // First item has insufficient data (window size 2 needs 2 items)
+      strictEqual(transformed[0]!.open_norm, 0)
+      strictEqual(transformed[0]!.close_norm, 0)
+      strictEqual(transformed[0]!.volume_norm, 0)
+      
+      // Second item should have normalized values  
+      ok('open_norm' in transformed[1]!)
+      ok('close_norm' in transformed[1])
+      ok('volume_norm' in transformed[1])
+      ok(!('high_norm' in transformed[1]))
+      ok(!('low_norm' in transformed[1]))
     })
 
     it('should handle constant values (range=0)', async () => {
@@ -129,54 +143,32 @@ describe('MinMaxNormalizer', () => {
         volume: 1000,
       }))
 
-      const normalizer = new MinMaxNormalizer({ 
-        fields: ['close'],
-        windowSize: null 
+      const normalizer = new MinMaxNormalizer({  
+        in: ['close'],
+        out: ['close_norm'],
+        windowSize: 3 
       })
 
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // When all values are the same, should use middle of target range
-      transformed.forEach(item => {
-        strictEqual(item.close_norm, 0.5) // Middle of [0, 1]
-      })
-    })
-
-    it('should store coefficients', async () => {
-      const testData = createTestData([10, 20, 30])
-      const normalizer = new MinMaxNormalizer({ 
-        fields: ['close'],
-        targetMin: -1,
-        targetMax: 1,
-        windowSize: null 
-      })
-
-      const result = await normalizer.apply(arrayToAsyncIterator(testData))
+      // First two items have insufficient data
+      strictEqual(transformed[0]!.close_norm, 0)
+      strictEqual(transformed[1]!.close_norm, 0)
       
-      // Consume at least one item to trigger coefficient setting
-      const firstItem = await result.data.next()
-      ok(!firstItem.done)
-      
-      // Now check coefficients - they're set on the normalizer instance
-      const coefficients = normalizer['coefficients']
-      ok(coefficients)
-      strictEqual(coefficients.type, 'minMax')
-      strictEqual(coefficients.values.close_min, 15) // close = open + 5
-      strictEqual(coefficients.values.close_max, 35)
-      strictEqual(coefficients.values.target_min, -1)
-      strictEqual(coefficients.values.target_max, 1)
-      
-      // Consume remaining data
-      await collectResults(result.data)
+      // Remaining items: when all values in window are the same, should use middle of target range
+      for (let i = 2; i < transformed.length; i++) {
+        strictEqual(transformed[i]!.close_norm, 0.5) // Middle of [0, 1]
+      }
     })
   })
 
-  describe('rolling window min-max normalization', () => {
+  describe('rolling window behavior validation', () => {
     it('should normalize using rolling window', async () => {
       const testData = createTestData([10, 20, 30, 25, 15])
-      const normalizer = new MinMaxNormalizer({ 
-        fields: ['open'],
+      const normalizer = new MinMaxNormalizer({  
+        in: ['open'],
+        out: ['open_norm'],
         windowSize: 3 
       })
 
@@ -185,40 +177,45 @@ describe('MinMaxNormalizer', () => {
 
       strictEqual(transformed.length, 5)
 
-      // Check specific windows
-      // Window [20, 30, 25]: min=20, max=30
-      const window3Value = 25
-      const expected3 = (window3Value - 20) / (30 - 20) // 0.5
+      // First two items have insufficient data
+      strictEqual(transformed[0]!.open_norm, 0)
+      strictEqual(transformed[1]!.open_norm, 0)
+      
+      // Window [10, 20, 30]: min=10, max=30, value=30
+      strictEqual(transformed[2]!.open_norm, 1) // (30-10)/(30-10) = 1
+      
+      // Window [20, 30, 25]: min=20, max=30, value=25
+      const expected3 = (25 - 20) / (30 - 20) // 0.5
       strictEqual(transformed[3]!.open_norm, expected3)
 
-      // Window [30, 25, 15]: min=15, max=30
-      const window4Value = 15
-      const expected4 = (window4Value - 15) / (30 - 15) // 0
+      // Window [30, 25, 15]: min=15, max=30, value=15
+      const expected4 = (15 - 15) / (30 - 15) // 0
       strictEqual(transformed[4]!.open_norm, expected4)
     })
 
     it('should handle insufficient data gracefully', async () => {
       const testData = createTestData([100])
-      const normalizer = new MinMaxNormalizer({ 
-        fields: ['open'],
+      const normalizer = new MinMaxNormalizer({  
+        in: ['open'],
+        out: ['open_norm'],
         windowSize: 5 
       })
 
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // With only 1 data point, should output targetMin
+      // With only 1 data point (less than window size), should output 0
       strictEqual(transformed[0]!.open_norm, 0)
     })
   })
 
-  describe('custom suffix and field selection', () => {
-    it('should use custom suffix', async () => {
-      const testData = createTestData([10, 20])
-      const normalizer = new MinMaxNormalizer({ 
-        fields: ['close'],
-        suffix: '_scaled',
-        windowSize: null 
+  describe('column-driven configuration', () => {
+    it('should use custom output column names', async () => {
+      const testData = createTestData([10, 20, 30])
+      const normalizer = new MinMaxNormalizer({  
+        in: ['close'],
+        out: ['close_scaled'],
+        windowSize: 3 
       })
 
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
@@ -228,20 +225,40 @@ describe('MinMaxNormalizer', () => {
       ok(!('close_norm' in transformed[0]))
     })
 
-    it('should not add suffix when disabled', async () => {
-      const testData = createTestData([10, 20])
-      const normalizer = new MinMaxNormalizer({ 
-        fields: ['volume'],
-        addSuffix: false,
-        windowSize: null 
+    it('should overwrite original columns when using same names', async () => {
+      const testData = createTestData([10, 20, 30])
+      const normalizer = new MinMaxNormalizer({  
+        in: ['volume'],
+        out: ['volume'],
+        windowSize: 3 
       })
 
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // Original volume should be replaced with normalized value
-      strictEqual(transformed[0]!.volume, 0) // Min value
-      strictEqual(transformed[1]!.volume, 1) // Max value
+      // First two items will have zero values (not enough data)
+      strictEqual(transformed[0]!.volume, 0)
+      strictEqual(transformed[1]!.volume, 0)
+      
+      // Third item should have normalized value based on window [10, 20, 30]
+      // Volume: 300, window volumes: [100, 200, 300], min=100, max=300, range=200
+      // (300-100)/200 = 1
+      strictEqual(transformed[2]!.volume, 1)
+    })
+
+    it('should drop columns when output is null', async () => {
+      const testData = createTestData([10, 20])
+      const normalizer = new MinMaxNormalizer({  
+        in: ['close', 'volume'],
+        out: ['close_norm', null],
+        windowSize: 2 
+      })
+
+      const result = await normalizer.apply(arrayToAsyncIterator(testData))
+      const transformed = await collectResults(result.data)
+
+      ok('close_norm' in transformed[0]!)
+      ok(!('volume' in transformed[0])) // Should be dropped
     })
   })
 
@@ -249,13 +266,13 @@ describe('MinMaxNormalizer', () => {
     it('should normalize each symbol independently', async () => {
       const testData: OhlcvDto[] = []
       
-      // Add BTC data (high values)
-      for (let i = 0; i < 3; i++) {
+      // Add BTC data (high values) - need enough for window size
+      for (let i = 0; i < 6; i++) {
         testData.push({
           timestamp: 1000 + i * 1000,
           symbol: 'BTCUSD',
           exchange: 'test',
-          open: 40000 + i * 10000, // 40k, 50k, 60k
+          open: 40000 + i * 10000, // 40k, 50k, 60k, 70k, 80k, 90k
           high: 40100,
           low: 39900,
           close: 40050,
@@ -264,12 +281,12 @@ describe('MinMaxNormalizer', () => {
       }
       
       // Add ETH data (lower values)
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 6; i++) {
         testData.push({
           timestamp: 1000 + i * 1000,
           symbol: 'ETHUSD',
           exchange: 'test',
-          open: 2000 + i * 100, // 2000, 2100, 2200
+          open: 2000 + i * 100, // 2000, 2100, 2200, 2300, 2400, 2500
           high: 2010,
           low: 1990,
           close: 2005,
@@ -277,116 +294,44 @@ describe('MinMaxNormalizer', () => {
         })
       }
 
-      const normalizer = new MinMaxNormalizer({ 
-        fields: ['open'],
-        windowSize: null 
+      const normalizer = new MinMaxNormalizer({  
+        in: ['open'],
+        out: ['open_norm'],
+        windowSize: 3 
       })
 
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // BTC: min=40k, max=60k
+      // BTC data - first 2 items insufficient data, then windows available
       const btc = transformed.filter(t => t.symbol === 'BTCUSD')
-      strictEqual(btc[0]!.open_norm, 0)   // 40k
-      strictEqual(btc[1]!.open_norm, 0.5) // 50k
-      strictEqual(btc[2]!.open_norm, 1)   // 60k
+      strictEqual(btc[0]!.open_norm, 0)   // Insufficient data
+      strictEqual(btc[1]!.open_norm, 0)   // Insufficient data
+      strictEqual(btc[2]!.open_norm, 1)   // Window [40k, 50k, 60k], value=60k
 
-      // ETH: min=2000, max=2200
+      // ETH data - same pattern
       const eth = transformed.filter(t => t.symbol === 'ETHUSD')
-      strictEqual(eth[0]!.open_norm, 0)   // 2000
-      strictEqual(eth[1]!.open_norm, 0.5) // 2100
-      strictEqual(eth[2]!.open_norm, 1)   // 2200
-    })
-  })
-
-  describe('reverse transform', () => {
-    it('should correctly reverse min-max normalization', async () => {
-      const testData = createTestData([10, 30, 20])
-      const normalizer = new MinMaxNormalizer({ 
-        fields: ['open', 'volume'],
-        targetMin: -1,
-        targetMax: 1,
-        windowSize: null 
-      })
-
-      // First, apply normalization
-      const result = await normalizer.apply(arrayToAsyncIterator(testData))
-      const normalized = await collectResults(result.data)
-
-      // Get coefficients after processing
-      const coefficients = (normalizer as any).getCoefficients() // TODO: Remove any cast
-
-      // Then reverse it
-      const reversed = await collectResults(
-        normalizer.reverse(arrayToAsyncIterator(normalized), coefficients)
-      )
-
-      // Check that original values are restored
-      for (let i = 0; i < testData.length; i++) {
-        ok(Math.abs(reversed[i]!.open - testData[i]!.open) < 0.0001)
-        ok(Math.abs(reversed[i]!.volume - testData[i]!.volume) < 0.0001)
-        
-        // Normalized fields should be removed
-        ok(!('open_norm' in reversed[i]!))
-        ok(!('volume_norm' in reversed[i]!))
-      }
-    })
-
-    it('should handle edge case where targetRange is 0', async () => {
-      // This is an edge case that shouldn't happen in practice
-      const normalizer = new MinMaxNormalizer({ 
-        fields: ['open'],
-        windowSize: null 
-      })
-
-      const coefficients = {
-        type: 'minMax' as any, // TODO: Remove any cast
-        symbol: 'BTCUSD',
-        timestamp: Date.now(),
-        values: {
-          open_min: 10,
-          open_max: 20,
-          target_min: 1,
-          target_max: 1, // Same as min!
-        }
-      }
-
-      const normalized: OhlcvDto[] = [{
-        timestamp: 1000,
-        symbol: 'BTCUSD',
-        exchange: 'test',
-        open: 15,
-        high: 15,
-        low: 15,
-        close: 15,
-        volume: 150,
-        open_norm: 1, // Would be stuck at target_min
-      }]
-
-      const reversed = await collectResults(
-        normalizer.reverse(arrayToAsyncIterator(normalized), coefficients)
-      )
-
-      // Should return min value when targetRange is 0
-      strictEqual(reversed[0]!.open, 10)
+      strictEqual(eth[0]!.open_norm, 0)   // Insufficient data
+      strictEqual(eth[1]!.open_norm, 0)   // Insufficient data
+      strictEqual(eth[2]!.open_norm, 1)   // Window [2000, 2100, 2200], value=2200
     })
   })
 
   describe('getOutputFields and getRequiredFields', () => {
     it('should return correct fields', () => {
-      const normalizer1 = new MinMaxNormalizer({})
+      const normalizer1 = new MinMaxNormalizer({ })
       deepStrictEqual(
         normalizer1.getOutputFields(), 
-        ['open_norm', 'high_norm', 'low_norm', 'close_norm', 'volume_norm']
+        ['open', 'high', 'low', 'close', 'volume']
       )
       deepStrictEqual(
         normalizer1.getRequiredFields(),
         ['open', 'high', 'low', 'close', 'volume']
       )
 
-      const normalizer2 = new MinMaxNormalizer({ 
-        fields: ['close'],
-        suffix: '_01'
+      const normalizer2 = new MinMaxNormalizer({  
+        in: ['close'],
+        out: ['close_01']
       })
       deepStrictEqual(
         normalizer2.getOutputFields(),
@@ -401,35 +346,64 @@ describe('MinMaxNormalizer', () => {
 
   describe('withParams', () => {
     it('should create new instance with updated params', () => {
-      const original = new MinMaxNormalizer({ targetMin: 0, targetMax: 1 })
-      const updated = original.withParams({ targetMin: -1, targetMax: 1 })
+      const original = new MinMaxNormalizer({ min: 0, max: 1 })
+      const updated = original.withParams({ min: -1, max: 1 })
 
-      strictEqual(original.params.targetMin, 0)
-      strictEqual(updated.params.targetMin, -1)
+      strictEqual(original.params.min, 0)
+      strictEqual(updated.params.min, -1)
       ok(original !== updated)
+    })
+  })
+
+  describe('readiness', () => {
+    it('should not be ready for rolling window before enough data', () => {
+      const normalizer = new MinMaxNormalizer({ windowSize: 5 })
+      strictEqual(normalizer.isReady(), false)
+    })
+
+    it('should be ready for rolling window after enough data', async () => {
+      const testData = createTestData([1, 2, 3, 4, 5, 6])
+      const normalizer = new MinMaxNormalizer({ 
+        in: ['open'],
+        out: ['open_norm'],
+        windowSize: 3 
+      })
+
+      const result = await normalizer.apply(arrayToAsyncIterator(testData))
+      
+      // Process some data
+      const iterator = result.data
+      await iterator.next() // 1st
+      await iterator.next() // 2nd
+      strictEqual(normalizer.isReady(), false)
+      
+      await iterator.next() // 3rd - should be ready now
+      strictEqual(normalizer.isReady(), true)
     })
   })
 
   describe('edge cases', () => {
     it('should handle single data point', async () => {
       const testData = createTestData([100])
-      const normalizer = new MinMaxNormalizer({ 
-        fields: ['close'],
-        windowSize: null 
+      const normalizer = new MinMaxNormalizer({  
+        in: ['close'],
+        out: ['close_norm'],
+        windowSize: 2 
       })
 
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
       strictEqual(transformed.length, 1)
-      // With only one value, should use middle of range
-      strictEqual(transformed[0]!.close_norm, 0.5)
+      // With insufficient data (1 item but window size 2), should output 0
+      strictEqual(transformed[0]!.close_norm, 0)
     })
 
     it('should handle empty data stream', async () => {
-      const normalizer = new MinMaxNormalizer({ 
-        fields: ['close'],
-        windowSize: null 
+      const normalizer = new MinMaxNormalizer({  
+        in: ['close'],
+        out: ['close_norm'],
+        windowSize: 5 
       })
 
       const result = await normalizer.apply(arrayToAsyncIterator([]))
@@ -450,37 +424,45 @@ describe('MinMaxNormalizer', () => {
         volume: 0,
       }))
 
-      const normalizer = new MinMaxNormalizer({ 
-        fields: ['close', 'volume'],
-        windowSize: null 
+      const normalizer = new MinMaxNormalizer({  
+        in: ['close', 'volume'],
+        out: ['close_norm', 'volume_norm'],
+        windowSize: 3 
       })
 
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // All values same, should use middle of range
-      transformed.forEach(item => {
-        strictEqual(item.close_norm, 0.5)
-        strictEqual(item.volume_norm, 0.5)
-      })
+      // First two items have insufficient data
+      for (let i = 0; i < 2; i++) {
+        strictEqual(transformed[i]!.close_norm, 0)
+        strictEqual(transformed[i]!.volume_norm, 0)
+      }
+      
+      // Remaining items: all values same, should use middle of range
+      for (let i = 2; i < transformed.length; i++) {
+        strictEqual(transformed[i]!.close_norm, 0.5)
+        strictEqual(transformed[i]!.volume_norm, 0.5)
+      }
     })
 
     it('should handle negative values', async () => {
       const testData = createTestData([-100, -50, -200])
-      const normalizer = new MinMaxNormalizer({ 
-        fields: ['open'],
-        windowSize: null 
+      const normalizer = new MinMaxNormalizer({  
+        in: ['open'],
+        out: ['open_norm'],
+        windowSize: 3 
       })
 
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // Min=-200, Max=-50, range=150
-      // (-100-(-200))/150 = 100/150 = 0.667
-      strictEqual(transformed[0]!.open_norm!.toFixed(3), '0.667')
-      // (-50-(-200))/150 = 150/150 = 1
-      strictEqual(transformed[1]!.open_norm, 1)
-      // (-200-(-200))/150 = 0/150 = 0
+      // First two items have insufficient data
+      strictEqual(transformed[0]!.open_norm, 0)
+      strictEqual(transformed[1]!.open_norm, 0)
+      
+      // Window [-100, -50, -200]: min=-200, max=-50, value=-200
+      // (-200-(-200))/(-50-(-200)) = 0/150 = 0
       strictEqual(transformed[2]!.open_norm, 0)
     })
 
@@ -508,16 +490,18 @@ describe('MinMaxNormalizer', () => {
         },
       ]
 
-      const normalizer = new MinMaxNormalizer({ 
-        fields: ['open'],
-        windowSize: null 
+      const normalizer = new MinMaxNormalizer({  
+        in: ['open'],
+        out: ['open_norm'],
+        windowSize: 2 
       })
 
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // Should handle large numbers without precision loss
+      // First item has insufficient data
       strictEqual(transformed[0]!.open_norm, 0)
+      // Second item has window of 2, should normalize properly
       strictEqual(transformed[1]!.open_norm, 1)
     })
   })

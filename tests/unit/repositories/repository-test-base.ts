@@ -6,7 +6,7 @@ import { forceCleanupAsyncHandles } from '../../helpers/test-cleanup'
 
 /**
  * Base test suite for all OhlcvRepository implementations
- * Ensures consistent behavior across SQLite, CSV, and Jsonl repositories
+ * Ensures consistent behavior across CSV, and Jsonl repositories
  */
 export abstract class RepositoryTestBase {
   public abstract createRepository(): Promise<OhlcvRepository>
@@ -494,23 +494,56 @@ export abstract class RepositoryTestBase {
     const repo = await this.createRepository()
     
     try {
-      // Test invalid OHLCV data
-      const invalidData: Partial<OhlcvDto> = {
+      // First save some valid data to test that error handling doesn't break the repository
+      await repo.save({
+        timestamp: Date.now(),
+        symbol: 'VALID',
+        exchange: 'test',
+        open: 100,
+        high: 110,
+        low: 95,
+        close: 105,
+        volume: 1000
+      })
+      
+      // Test missing exchange field
+      const invalidData = {
         timestamp: Date.now(),
         symbol: 'TEST',
-        // Missing required fields
-      }
+        open: 100,
+        high: 110,
+        low: 95,
+        close: 105,
+        volume: 1000
+        // Missing exchange field
+      } as OhlcvDto
       
       let errorThrown = false
       try {
-        await repo.save(invalidData as OhlcvDto)
+        await repo.save(invalidData)
       } catch (error) {
         errorThrown = true
         assert.ok(error instanceof Error)
-        assert.ok(error.message.includes('Invalid OHLCV data'))
+        assert.ok(error.message.includes('Missing required fields'))
       }
       
-      assert.ok(errorThrown, 'Expected error was not thrown')
+      assert.ok(errorThrown, 'Expected validation error was not thrown for missing exchange')
+      
+      // Test that repository still works after error
+      await repo.save({
+        timestamp: Date.now() + 1000,
+        symbol: 'VALID',
+        exchange: 'test',
+        open: 101,
+        high: 111,
+        low: 96,
+        close: 106,
+        volume: 1001
+      })
+      
+      // Verify we can still query data
+      const results = await repo.getBySymbol('VALID', 'test')
+      assert.ok(results.length >= 2, 'Repository should still work after validation error')
       
     } finally {
       try {

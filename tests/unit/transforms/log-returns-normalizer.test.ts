@@ -29,8 +29,10 @@ describe('LogReturnsNormalizer', () => {
   // Helper to collect async iterator results
   async function collectResults(iterator: AsyncIterator<OhlcvDto>): Promise<TransformedOhlcvDto[]> {
     const results: TransformedOhlcvDto[] = []
-    for await (const item of { [Symbol.asyncIterator]: () => iterator }) {
-      results.push(item as TransformedOhlcvDto)
+    let item = await iterator.next()
+    while (!item.done) {
+      results.push(item.value as TransformedOhlcvDto)
+      item = await iterator.next()
     }
     return results
   }
@@ -43,307 +45,244 @@ describe('LogReturnsNormalizer', () => {
       strictEqual(normalizer.name, 'Log Returns Normalizer')
     })
 
-    it('should validate price field', () => {
-      const normalizer = new LogReturnsNormalizer({ priceField: 'invalid' as any }) // Intentionally invalid
-      throws(() => normalizer.validate(), /Invalid price field/)
+    it('should create instance with custom base', () => {
+      const normalizer = new LogReturnsNormalizer({ base: 'log10' })
+      strictEqual(normalizer.description, 'Calculates logarithmic returns from price data')
     })
   })
 
   describe('log returns calculation', () => {
     it('should calculate natural log returns for close prices by default', async () => {
-      const prices = [100, 110, 121, 115.95]
-      const testData = createTestData(prices)
-      const normalizer = new LogReturnsNormalizer({})
-
-      const result = await normalizer.apply(arrayToAsyncIterator(testData))
-      const transformed = await collectResults(result.data)
-
-      strictEqual(transformed.length, 4)
-
-      // First bar should have 0 return (no previous price)
-      strictEqual(transformed[0]!.close_log_return, 0)
-
-      // Second bar: ln(110/100) = ln(1.1) ≈ 0.0953
-      ok(Math.abs(transformed[1]!.close_log_return! - Math.log(1.1)) < 0.0001)
-
-      // Third bar: ln(121/110) = ln(1.1) ≈ 0.0953
-      ok(Math.abs(transformed[2]!.close_log_return! - Math.log(1.1)) < 0.0001)
-
-      // Fourth bar: ln(115.95/121) = ln(0.958264...) ≈ -0.0426
-      ok(Math.abs(transformed[3]!.close_log_return! - Math.log(115.95/121)) < 0.0001)
-    })
-
-    it('should calculate log10 returns when specified', async () => {
-      const prices = [100, 1000, 10000]
-      const testData = createTestData(prices)
-      const normalizer = new LogReturnsNormalizer({ base: 'log10' })
-
-      const result = await normalizer.apply(arrayToAsyncIterator(testData))
-      const transformed = await collectResults(result.data)
-
-      // log10(1000/100) = log10(10) = 1
-      ok(Math.abs(transformed[1]!.close_log_return! - 1) < 0.0001)
-
-      // log10(10000/1000) = log10(10) = 1
-      ok(Math.abs(transformed[2]!.close_log_return! - 1) < 0.0001)
-    })
-
-    it('should use specified price field', async () => {
-      const prices = [100, 110, 105]
-      const testData = createTestData(prices)
-      const normalizer = new LogReturnsNormalizer({ 
-        priceField: 'high',
-        outputField: 'high_return'
+      const testData = createTestData([100, 105, 110])
+      const normalizer = new LogReturnsNormalizer({
+        in: ['close'],
+        out: ['close_returns']
       })
 
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // Check that high prices are used (price + 1)
-      strictEqual(transformed[0]!.high_return, 0)
+      strictEqual(transformed.length, 3)
       
-      // ln(111/101) ≈ 0.0943
-      ok(Math.abs(transformed[1]!.high_return! - Math.log(111/101)) < 0.0001)
+      // First item has no previous data, so returns should be 0
+      strictEqual(transformed[0]!.close_returns, 0)
+      
+      // Calculate expected log returns: ln(105/100) and ln(110/105)
+      const expectedReturn1 = Math.log(105 / 100)
+      const expectedReturn2 = Math.log(110 / 105)
+      
+      ok(Math.abs(transformed[1]!.close_returns! - expectedReturn1) < 0.0001)
+      ok(Math.abs(transformed[2]!.close_returns! - expectedReturn2) < 0.0001)
+    })
+
+    it('should calculate log10 returns when specified', async () => {
+      const testData = createTestData([100, 110])
+      const normalizer = new LogReturnsNormalizer({
+        in: ['close'],
+        out: ['close_log10'],
+        base: 'log10'
+      })
+
+      const result = await normalizer.apply(arrayToAsyncIterator(testData))
+      const transformed = await collectResults(result.data)
+
+      strictEqual(transformed[0]!.close_log10, 0) // First item
+      
+      const expectedReturn = Math.log10(110 / 100)
+      ok(Math.abs(transformed[1]!.close_log10! - expectedReturn) < 0.0001)
+    })
+
+    it('should use specified price field', async () => {
+      const testData = createTestData([100, 105])
+      const normalizer = new LogReturnsNormalizer({
+        in: ['open'],
+        out: ['open_returns']
+      })
+
+      const result = await normalizer.apply(arrayToAsyncIterator(testData))
+      const transformed = await collectResults(result.data)
+
+      strictEqual(transformed[0]!.open_returns, 0) // First item
+      
+      // Open values are price - 1, so 99 -> 104
+      const expectedReturn = Math.log(104 / 99)
+      ok(Math.abs(transformed[1]!.open_returns! - expectedReturn) < 0.0001)
     })
 
     it('should handle multiple symbols', async () => {
       const testData: OhlcvDto[] = [
-        {
-          timestamp: 1000,
-          symbol: 'BTCUSD',
-          exchange: 'test',
-          open: 100,
-          high: 102,
-          low: 98,
-          close: 101,
-          volume: 1000,
-        },
-        {
-          timestamp: 2000,
-          symbol: 'ETHUSD',
-          exchange: 'test',
-          open: 50,
-          high: 52,
-          low: 48,
-          close: 51,
-          volume: 500,
-        },
-        {
-          timestamp: 3000,
-          symbol: 'BTCUSD',
-          exchange: 'test',
-          open: 102,
-          high: 104,
-          low: 100,
-          close: 103,
-          volume: 1100,
-        },
-        {
-          timestamp: 4000,
-          symbol: 'ETHUSD',
-          exchange: 'test',
-          open: 51,
-          high: 53,
-          low: 49,
-          close: 52,
-          volume: 600,
-        },
+        { timestamp: 1000, symbol: 'BTCUSD', exchange: 'test', open: 99, high: 101, low: 98, close: 100, volume: 1000 },
+        { timestamp: 2000, symbol: 'BTCUSD', exchange: 'test', open: 104, high: 106, low: 103, close: 105, volume: 1000 },
+        { timestamp: 3000, symbol: 'ETHUSD', exchange: 'test', open: 199, high: 201, low: 198, close: 200, volume: 2000 },
+        { timestamp: 4000, symbol: 'ETHUSD', exchange: 'test', open: 209, high: 211, low: 208, close: 210, volume: 2000 },
       ]
 
-      const normalizer = new LogReturnsNormalizer({})
+      const normalizer = new LogReturnsNormalizer({
+        in: ['close'],
+        out: ['close_returns']
+      })
+
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // First occurrence of each symbol should have 0 return
-      strictEqual(transformed[0]!.close_log_return, 0) // BTC first
-      strictEqual(transformed[1]!.close_log_return, 0) // ETH first
+      // First item of each symbol should have 0 returns
+      strictEqual(transformed[0]!.close_returns, 0) // BTC first
+      strictEqual(transformed[2]!.close_returns, 0) // ETH first
 
-      // Second occurrence should have proper returns
-      ok(Math.abs(transformed[2]!.close_log_return! - Math.log(103/101)) < 0.0001) // BTC
-      ok(Math.abs(transformed[3]!.close_log_return! - Math.log(52/51)) < 0.0001) // ETH
+      // Check BTC return: ln(105/100)
+      const btcReturn = Math.log(105 / 100)
+      ok(Math.abs(transformed[1]!.close_returns! - btcReturn) < 0.0001)
+
+      // Check ETH return: ln(210/200)  
+      const ethReturn = Math.log(210 / 200)
+      ok(Math.abs(transformed[3]!.close_returns! - ethReturn) < 0.0001)
     })
 
     it('should handle zero and negative prices', async () => {
       const testData: OhlcvDto[] = [
-        {
-          timestamp: 1000,
-          symbol: 'TEST',
-          exchange: 'test',
-          open: 100,
-          high: 100,
-          low: 100,
-          close: 100,
-          volume: 1000,
-        },
-        {
-          timestamp: 2000,
-          symbol: 'TEST',
-          exchange: 'test',
-          open: 0,
-          high: 0,
-          low: 0,
-          close: 0,
-          volume: 0,
-        },
-        {
-          timestamp: 3000,
-          symbol: 'TEST',
-          exchange: 'test',
-          open: 50,
-          high: 50,
-          low: 50,
-          close: 50,
-          volume: 500,
-        },
+        { timestamp: 1000, symbol: 'TEST', exchange: 'test', open: 100, high: 101, low: 99, close: 100, volume: 1000 },
+        { timestamp: 2000, symbol: 'TEST', exchange: 'test', open: 0, high: 1, low: -1, close: 0, volume: 1000 },
+        { timestamp: 3000, symbol: 'TEST', exchange: 'test', open: -10, high: -9, low: -11, close: -10, volume: 1000 },
       ]
 
-      const normalizer = new LogReturnsNormalizer({})
-      const result = await normalizer.apply(arrayToAsyncIterator(testData))
-      const transformed = await collectResults(result.data)
-
-      // When current or previous price is 0 or negative, return should be 0
-      strictEqual(transformed[1]!.close_log_return, 0)
-      strictEqual(transformed[2]!.close_log_return, 0)
-    })
-  })
-
-  describe('coefficients', () => {
-    it('should store coefficients on first transform', async () => {
-      const testData = createTestData([100, 110])
-      const normalizer = new LogReturnsNormalizer({ 
-        priceField: 'open',
-        base: 'log10' 
+      const normalizer = new LogReturnsNormalizer({
+        in: ['close'],
+        out: ['close_returns']
       })
 
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
-      
-      // Consume at least one item to trigger coefficient setting
-      const firstItem = await result.data.next()
-      ok(!firstItem.done)
-      
-      // Now check coefficients - they're set on the normalizer instance
-      const coefficients = normalizer['coefficients']
-      ok(coefficients)
-      strictEqual(coefficients.type, 'logReturns')
-      strictEqual(coefficients.symbol, 'BTCUSD')
-      strictEqual(coefficients.values.priceField, 1) // 'open' = 1
-      strictEqual(coefficients.values.base, 10)
-      
-      // Consume remaining data
-      await collectResults(result.data)
+      const transformed = await collectResults(result.data)
+
+      strictEqual(transformed[0]!.close_returns, 0) // First item
+      strictEqual(transformed[1]!.close_returns, 0) // Zero/negative price -> 0 return
+      strictEqual(transformed[2]!.close_returns, 0) // Negative price -> 0 return
     })
   })
 
   describe('getOutputFields and getRequiredFields', () => {
     it('should return correct output fields', () => {
       const normalizer1 = new LogReturnsNormalizer({})
-      deepStrictEqual(normalizer1.getOutputFields(), ['close_log_return'])
+      deepStrictEqual(
+        normalizer1.getOutputFields(),
+        ['open', 'high', 'low', 'close', 'volume']
+      )
 
-      const normalizer2 = new LogReturnsNormalizer({ 
-        priceField: 'high',
-        outputField: 'high_lr' 
+      const normalizer2 = new LogReturnsNormalizer({
+        in: ['close'],
+        out: ['close_returns']
       })
-      deepStrictEqual(normalizer2.getOutputFields(), ['high_lr'])
+      deepStrictEqual(
+        normalizer2.getOutputFields(),
+        ['close_returns']
+      )
     })
 
     it('should return correct required fields', () => {
       const normalizer1 = new LogReturnsNormalizer({})
-      deepStrictEqual(normalizer1.getRequiredFields(), ['close'])
+      deepStrictEqual(
+        normalizer1.getRequiredFields(),
+        ['open', 'high', 'low', 'close', 'volume']
+      )
 
-      const normalizer2 = new LogReturnsNormalizer({ priceField: 'open' })
-      deepStrictEqual(normalizer2.getRequiredFields(), ['open'])
+      const normalizer2 = new LogReturnsNormalizer({
+        in: ['close'],
+        out: ['close_returns']
+      })
+      deepStrictEqual(
+        normalizer2.getRequiredFields(),
+        ['close']
+      )
     })
   })
 
   describe('withParams', () => {
     it('should create new instance with updated params', () => {
-      const original = new LogReturnsNormalizer({ priceField: 'close' })
-      const updated = original.withParams({ priceField: 'open' })
+      const original = new LogReturnsNormalizer({ base: 'natural' })
+      const updated = original.withParams({ base: 'log10' })
 
-      strictEqual(original.params.priceField, 'close')
-      strictEqual(updated.params.priceField, 'open')
+      strictEqual(original.params.base, 'natural')
+      strictEqual(updated.params.base, 'log10')
       ok(original !== updated)
+    })
+  })
+
+  describe('readiness', () => {
+    it('should be ready after processing 2 data points', async () => {
+      const testData = createTestData([100, 105, 110])
+      const normalizer = new LogReturnsNormalizer({
+        in: ['close'],
+        out: ['close_returns']
+      })
+
+      const result = await normalizer.apply(arrayToAsyncIterator(testData))
+      
+      // Process data points
+      const iterator = result.data
+      await iterator.next() // 1st point
+      strictEqual(normalizer.isReady(), false)
+      
+      await iterator.next() // 2nd point - should be ready now
+      strictEqual(normalizer.isReady(), true)
+    })
+  })
+
+  describe('column-driven configuration', () => {
+    it('should overwrite original columns when using same names', async () => {
+      const testData = createTestData([100, 105])
+      const normalizer = new LogReturnsNormalizer({
+        in: ['close'],
+        out: ['close'] // Overwrite close column
+      })
+
+      const result = await normalizer.apply(arrayToAsyncIterator(testData))
+      const transformed = await collectResults(result.data)
+
+      // Close should be overwritten with log returns
+      strictEqual(transformed[0]!.close, 0) // First item
+      const expectedReturn = Math.log(105 / 100)
+      ok(Math.abs(transformed[1]!.close - expectedReturn) < 0.0001)
+    })
+
+    it('should drop columns when output is null', async () => {
+      const testData = createTestData([100, 105])
+      const normalizer = new LogReturnsNormalizer({
+        in: ['close', 'volume'],
+        out: ['close_returns', null] // Drop volume
+      })
+
+      const result = await normalizer.apply(arrayToAsyncIterator(testData))
+      const transformed = await collectResults(result.data)
+
+      ok('close_returns' in transformed[0]!)
+      ok(!('volume' in transformed[0])) // Should be dropped
     })
   })
 
   describe('edge cases', () => {
     it('should handle single data point', async () => {
       const testData = createTestData([100])
-      const normalizer = new LogReturnsNormalizer({})
+      const normalizer = new LogReturnsNormalizer({
+        in: ['close'],
+        out: ['close_returns']
+      })
 
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
       strictEqual(transformed.length, 1)
-      strictEqual(transformed[0]!.close_log_return, 0) // No previous price
-    })
-
-    it('should handle all zero prices', async () => {
-      const testData: OhlcvDto[] = Array(5).fill(null).map((_, i) => ({
-        timestamp: 1000 + i * 1000,
-        symbol: 'TEST',
-        exchange: 'test',
-        open: 0,
-        high: 0,
-        low: 0,
-        close: 0,
-        volume: 0,
-      }))
-
-      const normalizer = new LogReturnsNormalizer({})
-      const result = await normalizer.apply(arrayToAsyncIterator(testData))
-      const transformed = await collectResults(result.data)
-
-      // All returns should be 0 when prices are 0
-      transformed.forEach(item => {
-        strictEqual(item.close_log_return, 0)
-      })
-    })
-
-    it('should handle constant non-zero prices', async () => {
-      const testData: OhlcvDto[] = Array(5).fill(null).map((_, i) => ({
-        timestamp: 1000 + i * 1000,
-        symbol: 'TEST',
-        exchange: 'test',
-        open: 100,
-        high: 100,
-        low: 100,
-        close: 100,
-        volume: 1000,
-      }))
-
-      const normalizer = new LogReturnsNormalizer({})
-      const result = await normalizer.apply(arrayToAsyncIterator(testData))
-      const transformed = await collectResults(result.data)
-
-      // First should be 0, rest should be log(1) = 0
-      strictEqual(transformed[0]!.close_log_return, 0)
-      for (let i = 1; i < transformed.length; i++) {
-        strictEqual(transformed[i]!.close_log_return, 0) // log(100/100) = log(1) = 0
-      }
+      strictEqual(transformed[0]!.close_returns, 0) // No previous data
     })
 
     it('should handle empty data stream', async () => {
-      const normalizer = new LogReturnsNormalizer({})
+      const normalizer = new LogReturnsNormalizer({
+        in: ['close'],
+        out: ['close_returns']
+      })
+
       const result = await normalizer.apply(arrayToAsyncIterator([]))
       const transformed = await collectResults(result.data)
 
       strictEqual(transformed.length, 0)
-    })
-  })
-
-  describe('reverse transform', () => {
-    it('should throw error indicating limitation', async () => {
-      const normalizer = new LogReturnsNormalizer({})
-      const data = arrayToAsyncIterator([])
-      const coefficients = { type: 'logReturns', values: {} }
-
-      try {
-        await normalizer.reverse(data, coefficients).next()
-        ok(false, 'Should have thrown')
-      } catch (error) {
-        ok((error as Error).message.includes('initial price'))
-      }
     })
   })
 })

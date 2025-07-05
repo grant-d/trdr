@@ -11,17 +11,13 @@ interface TestParams extends BaseTransformParams {
 
 class TestTransform extends BaseTransform<TestParams> {
   constructor(params: TestParams) {
-    super('priceCalc', 'Test Transform', 'A test transform', params, true)
+    super('priceCalc', 'Test Transform', 'A test transform', params)
   }
   
   protected async *transform(data: AsyncIterator<OhlcvDto>): AsyncGenerator<OhlcvDto> {
     let item = await data.next()
     while (!item.done) {
       const value = item.value
-      // Store coefficients on first item
-      if (!this.getCoefficients()) {
-        this.setCoefficients(value.symbol, { multiplier: this.params.multiplier })
-      }
       
       yield {
         ...value,
@@ -29,11 +25,6 @@ class TestTransform extends BaseTransform<TestParams> {
       }
       item = await data.next()
     }
-  }
-  
-  // Expose getCoefficients for testing
-  public getCoefficients() {
-    return super.getCoefficients()
   }
   
   public getOutputFields(): string[] {
@@ -47,22 +38,6 @@ class TestTransform extends BaseTransform<TestParams> {
   public withParams(params: Partial<TestParams>): Transform<TestParams> {
     return new TestTransform({ ...this.params, ...params })
   }
-  
-  public async *reverse(
-    data: AsyncIterator<OhlcvDto>,
-    coefficients: any
-  ): AsyncGenerator<OhlcvDto> {
-    const multiplier = coefficients.values.multiplier
-    
-    let item = await data.next()
-    while (!item.done) {
-      yield {
-        ...item.value,
-        close: item.value.close / multiplier
-      }
-      item = await data.next()
-    }
-  }
 }
 
 test('BaseTransform - Constructor and Properties', () => {
@@ -72,7 +47,6 @@ test('BaseTransform - Constructor and Properties', () => {
   assert.equal(transform.type, 'priceCalc')
   assert.equal(transform.name, 'Test Transform')
   assert.equal(transform.description, 'A test transform')
-  assert.equal(transform.isReversible, true)
   assert.deepEqual(transform.params, params)
 })
 
@@ -97,7 +71,7 @@ test('BaseTransform - Apply Transform', async () => {
   const input = transform['arrayToAsyncIterator'](testData)
   const result = await transform.apply(input)
   
-  // Collect results - this will trigger coefficient setting
+  // Collect results
   const transformed: OhlcvDto[] = []
   let item = await result.data.next()
   while (!item.done) {
@@ -107,13 +81,6 @@ test('BaseTransform - Apply Transform', async () => {
   
   assert.equal(transformed.length, 1)
   assert.equal(transformed[0]!.close, 210) // 105 * 2
-  
-  // Check coefficients after transform has been consumed
-  const coefficients = transform.getCoefficients()
-  assert.ok(coefficients, 'Coefficients should be set after transform')
-  assert.equal(coefficients.type, 'priceCalc')
-  assert.equal(coefficients.symbol, 'BTCUSD')
-  assert.equal(coefficients.values.multiplier, 2)
 })
 
 test('BaseTransform - Validation', () => {
@@ -136,82 +103,54 @@ test('BaseTransform - Validation', () => {
   )
 })
 
-test('BaseTransform - Reversible Transform', async () => {
-  const params: TestParams = { multiplier: 3 }
-  const transform = new TestTransform(params)
-  
-  const testData: OhlcvDto[] = [
-    {
-      timestamp: 1640995200000,
-      symbol: 'BTCUSD',
-      exchange: 'test',
-      open: 100,
-      high: 110,
-      low: 95,
-      close: 300, // Already multiplied
-      volume: 1000
-    }
-  ]
-  
-  const input = transform['arrayToAsyncIterator'](testData)
-  const coefficients = {
-    type: 'priceCalc' as TransformType,
-    timestamp: Date.now(),
-    symbol: 'BTCUSD',
-    values: { multiplier: 3 }
-  }
-
-  const reversed = transform.reverse(input, coefficients)
-
-  const result: OhlcvDto[] = []
-  for await (const item of reversed) {
-    result.push(item)
-  }
-  
-  assert.equal(result.length, 1)
-  assert.equal(result[0]!.close, 100) // 300 / 3
-})
-
-test('BaseTransform - Non-Reversible Transform', () => {
-  class NonReversibleTransform extends BaseTransform<TestParams> {
-    constructor(params: TestParams) {
-      super('priceCalc', 'Non-Reversible', 'Cannot be reversed', params, false)
-    }
-    
-    protected async *transform(data: AsyncIterator<OhlcvDto>): AsyncGenerator<OhlcvDto> {
-      let item = await data.next()
-      while (!item.done) {
-        yield item.value
-        item = await data.next()
-      }
-    }
-    
-    public getOutputFields(): string[] {
-      return []
-    }
-    
-    public getRequiredFields(): string[] {
-      return []
-    }
-    
-    public withParams(params: Partial<TestParams>): Transform<TestParams> {
-      return new NonReversibleTransform({ ...this.params, ...params })
-    }
-  }
-  
-  const transform = new NonReversibleTransform({ multiplier: 1 })
-  const coefficients = {
-    type: 'priceCalc' as TransformType,
-    timestamp: Date.now(),
-    symbol: 'TEST',
-    values: {}
-  }
-
+test('BaseTransform - Column Validation', () => {
+  // Test duplicate output columns
   assert.throws(
-    () => transform.reverse!(transform['arrayToAsyncIterator']([]), coefficients),
-    /Transform Non-Reversible is not reversible/
+    () => {
+      const transform = new TestTransform({ 
+        multiplier: 2,
+        in: ['close', 'open'],
+        out: ['result', 'result'] // Duplicate output
+      })
+      transform.validate()
+    },
+    /Output columns must be unique/
+  )
+  
+  // Test that input duplicates are allowed
+  assert.doesNotThrow(() => {
+    const transform = new TestTransform({ 
+      multiplier: 2,
+      in: ['close', 'close'], // Duplicate input - should be allowed
+      out: ['result1', 'result2'] // Unique outputs
+    })
+    transform.validate()
+  })
+  
+  // Test null outputs are handled correctly
+  assert.doesNotThrow(() => {
+    const transform = new TestTransform({ 
+      multiplier: 2,
+      in: ['close', 'open', 'high'],
+      out: ['result', null, 'result2'] // null is allowed
+    })
+    transform.validate()
+  })
+  
+  // Test invalid column names
+  assert.throws(
+    () => {
+      const transform = new TestTransform({ 
+        multiplier: 2,
+        in: ['close-invalid'], // Invalid character
+        out: ['result']
+      })
+      transform.validate()
+    },
+    /Invalid input column name/
   )
 })
+
 
 test('BaseTransform - WithParams Creates New Instance', () => {
   const transform = new TestTransform({ multiplier: 2 })
@@ -220,6 +159,13 @@ test('BaseTransform - WithParams Creates New Instance', () => {
   assert.notEqual(transform, newTransform)
   assert.equal(transform.params.multiplier, 2)
   assert.equal(newTransform.params.multiplier, 3)
+})
+
+test('BaseTransform - Readiness', () => {
+  const transform = new TestTransform({ multiplier: 2 })
+  
+  // Most transforms are ready immediately by default
+  assert.equal(transform.isReady(), true)
 })
 
 test('BaseTransform - Helper Methods', async () => {

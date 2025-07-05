@@ -3,7 +3,7 @@ import { Pipeline } from '../pipeline'
 import type { FileProvider } from '../providers'
 import { AlpacaProvider, CoinbaseProvider, CsvFileProvider, JsonlFileProvider } from '../providers'
 import type { OhlcvRepository } from '../repositories'
-import { CsvRepository, JsonlRepository, SqliteRepository } from '../repositories'
+import { CsvRepository, JsonlRepository } from '../repositories'
 import {
   LogReturnsNormalizer,
   MinMaxNormalizer,
@@ -47,7 +47,7 @@ export class PipelineFactory {
     const transformPipeline = transforms.length > 0
       ? new TransformPipeline({
         transforms,
-        name: config.metadata?.name || 'Data Pipeline',
+        description: config.metadata?.name || 'Data Pipeline',
       })
       : undefined
 
@@ -128,10 +128,10 @@ export class PipelineFactory {
       transform: transformPipeline,
       repository,
       options: {
-        chunkSize: config.options.chunkSize,
-        continueOnError: config.options.continueOnError,
-        maxErrors: config.options.maxErrors,
-        showProgress: config.options.showProgress,
+        chunkSize: config.options?.chunkSize,
+        continueOnError: config.options?.continueOnError,
+        maxErrors: config.options?.maxErrors,
+        showProgress: config.options?.showProgress,
       },
       metadata: config.metadata,
       historicalParams,
@@ -200,7 +200,9 @@ export class PipelineFactory {
    * Create transforms from configuration
    */
   private static createTransforms(configs: TransformConfig[]): Transform[] {
-    return configs.map((config, index) => {
+    return configs
+      .filter(config => !config.disabled)
+      .map((config, index) => {
       const factory = TRANSFORM_FACTORIES[config.type]
 
       if (!factory) {
@@ -226,10 +228,6 @@ export class PipelineFactory {
     let repository: OhlcvRepository
 
     switch (config.format) {
-      case 'sqlite':
-        repository = new SqliteRepository()
-        break
-
       case 'csv':
         repository = new CsvRepository()
         break
@@ -295,7 +293,7 @@ export class PipelineFactory {
    * Get available output formats
    */
   public static getAvailableOutputFormats(): string[] {
-    return ['sqlite', 'csv', 'jsonl']
+    return ['csv', 'jsonl']
   }
 
   /**

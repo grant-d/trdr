@@ -65,7 +65,7 @@ function parseOverride(override: string): ParsedOverride {
  * Converts a string value to the appropriate type based on context
  * Handles common data types: boolean, number, string, arrays
  */
-function convertValue(value: string, _path: string[], original: string): any {
+function convertValue(value: string, _path: string[], original: string): unknown {
   // Handle null/undefined
   if (value.toLowerCase() === 'null') return null
   if (value.toLowerCase() === 'undefined') return undefined
@@ -119,12 +119,12 @@ function convertValue(value: string, _path: string[], original: string): any {
  * Sets a nested property value using dot notation path
  * Creates intermediate objects as needed
  */
-function setNestedProperty(obj: any, path: string[], value: any, original: string): void {
+function setNestedProperty(obj: PipelineConfig, path: string[], value: unknown, original: string): void {
   if (path.length === 0) {
     throw new ConfigOverrideError(`Empty property path in override "${original}"`, original)
   }
 
-  let current = obj
+  let current = obj as any
 
   // Navigate to the parent of the target property
   for (let i = 0; i < path.length - 1; i++) {
@@ -251,7 +251,7 @@ function validateTransformationOverridePath(path: string[], original: string): v
   }
 
   if (path.length > 1) {
-    const validTransformProperties = ['type', 'enabled', 'params']
+    const validTransformProperties = ['type', 'disabled', 'params']
     const property = path[1]!
     if (!validTransformProperties.includes(property)) {
       throw new ConfigOverrideError(
@@ -377,9 +377,9 @@ export function cloneConfig(config: PipelineConfig): PipelineConfig {
  * Gets the current value at a given path in the configuration
  * Useful for debugging and testing
  */
-export function getConfigValue(config: PipelineConfig, path: string): any {
+export function getConfigValue(config: PipelineConfig, path: string): unknown {
   const pathArray = path.split('.').filter(segment => segment.length > 0)
-  let current: any = config
+  let current = config as any
 
   for (const segment of pathArray) {
     if (current === null || current === undefined || typeof current !== 'object') {
@@ -407,7 +407,7 @@ export class ConfigOverrides {
   /**
    * Get value at path
    */
-  public static getValue(config: PipelineConfig, path: string): any {
+  public static getValue(config: PipelineConfig, path: string): unknown {
     return getConfigValue(config, path)
   }
 

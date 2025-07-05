@@ -45,10 +45,10 @@ export interface LogReturnsParams extends BaseTransformParams {
   base?: 'natural' | 'log10'
 
   /** Field to calculate returns on (default: 'close') */
-  priceField?: 'open' | 'high' | 'low' | 'close'
+  // priceField?: 'open' | 'high' | 'low' | 'close'
 
   /** Name of the output field */
-  outputField?: string
+  // outputField?: string
 }
 
 /**
@@ -57,15 +57,6 @@ export interface LogReturnsParams extends BaseTransformParams {
 export interface ZScoreParams extends BaseTransformParams {
   /** Window size for rolling z-score (null for global) */
   windowSize?: number | null
-
-  /** Fields to normalize */
-  fields?: string[]
-
-  /** Whether to add suffix to field names */
-  addSuffix?: boolean
-
-  /** Suffix to add to normalized field names */
-  suffix?: string
 }
 
 /**
@@ -76,17 +67,8 @@ export interface MinMaxParams extends BaseTransformParams {
   windowSize?: number | null
 
   /** Target range for normalization */
-  targetMin?: number
-  targetMax?: number
-
-  /** Fields to normalize */
-  fields?: string[]
-
-  /** Whether to add suffix to field names */
-  addSuffix?: boolean
-
-  /** Suffix to add to normalized field names */
-  suffix?: string
+  min?: number
+  max?: number
 }
 
 /**

@@ -2,7 +2,7 @@
 
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
-import { ArgsParser } from './args-parser'
+import { ArgsParser, CliArgs } from './args-parser'
 import { ConfigLoader } from './config-loader'
 import { ConfigOverrides } from './config-overrides'
 import { ConfigValidator } from './config-validator'
@@ -10,6 +10,7 @@ import { InteractiveMode } from './interactive-mode'
 import { PipelineFactory } from './pipeline-factory'
 import { ProgressIndicator } from './progress-indicator'
 import { ServerMode } from './server-mode'
+import { PipelineConfig } from '../interfaces'
 
 /**
  * Get package version
@@ -72,7 +73,7 @@ async function main(): Promise<void> {
 
     if (!validation.isValid) {
       console.error('Configuration validation failed:')
-      validation.errors.forEach((error: any) => {
+      validation.errors.forEach((error) => {
         console.error(`  ${error.field}: ${error.message}`)
       })
       process.exit(1)
@@ -106,7 +107,7 @@ async function main(): Promise<void> {
 /**
  * Run the pipeline once
  */
-async function runPipeline(config: any, args: any): Promise<void> {
+async function runPipeline(config: PipelineConfig, args: CliArgs): Promise<void> {
   console.log('Creating pipeline...')
   const pipeline = await PipelineFactory.createPipeline(config)
 
@@ -131,9 +132,6 @@ async function runPipeline(config: any, args: any): Promise<void> {
     console.log(`  Errors: ${result.errors}`)
     console.log(`  Duration: ${duration.toFixed(2)}s`)
 
-    if (result.coefficients && result.coefficients.length > 0) {
-      console.log(`  Coefficients saved: ${result.coefficients.length}`)
-    }
   } catch (error) {
     console.error('\nPipeline execution failed:', error instanceof Error ? error.message : error)
     process.exit(1)
@@ -143,7 +141,7 @@ async function runPipeline(config: any, args: any): Promise<void> {
 /**
  * Run in interactive mode
  */
-async function runInteractiveMode(config: any, _args: any): Promise<void> {
+async function runInteractiveMode(config: PipelineConfig, _args: CliArgs): Promise<void> {
   const interactive = new InteractiveMode(config)
   await interactive.start()
 }
@@ -151,7 +149,7 @@ async function runInteractiveMode(config: any, _args: any): Promise<void> {
 /**
  * Run in server mode
  */
-async function runServerMode(config: any, _args: any): Promise<void> {
+async function runServerMode(config: PipelineConfig, _args: CliArgs): Promise<void> {
   const server = new ServerMode(config)
   await server.start()
 }

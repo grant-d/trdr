@@ -163,8 +163,8 @@ describe('ConfigValidator', () => {
           chunkSize: 1000
         },
         output: {
-          path: './output.sqlite',
-          format: 'sqlite'
+          path: './output.csv',
+          format: 'csv'
         }
       }
       

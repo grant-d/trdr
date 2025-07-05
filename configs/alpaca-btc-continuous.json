@@ -7,8 +7,8 @@
     "duration": "continuous"
   },
   "output": {
-    "path": "./data/alpaca-btc-live.db",
-    "format": "sqlite",
+    "path": "./data/alpaca-btc-live.csv",
+    "format": "csv",
     "overwrite": false
   },
   "transformations": [],

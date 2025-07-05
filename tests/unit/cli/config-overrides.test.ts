@@ -90,24 +90,24 @@ describe('Config Overrides', () => {
       config.transformations = [
         {
           type: 'logReturns',
-          enabled: true,
+          disabled: false,
           params: { outputField: 'returns' } as any
         },
         {
           type: 'zScore',
-          enabled: false,
+          disabled: true,
           params: { fields: ['returns'] } as any
         }
       ]
       
       applyOverrides(config, [
-        'transformations.0.enabled=false',
-        'transformations.1.enabled=true',
+        'transformations.0.disabled=true',
+        'transformations.1.disabled=false',
         'transformations.1.params.windowSize=20'
       ])
       
-      strictEqual(config.transformations[0]?.enabled, false)
-      strictEqual(config.transformations[1]?.enabled, true)
+      strictEqual(config.transformations[0]?.disabled, true)
+      strictEqual(config.transformations[1]?.disabled, false)
       strictEqual((config.transformations[1]?.params as any).windowSize, 20)
     })
 
@@ -494,7 +494,7 @@ describe('Config Overrides', () => {
       config.transformations = [
         {
           type: 'logReturns',
-          enabled: true,
+          disabled: false,
           params: { outputField: 'returns' } as any
         }
       ]
@@ -504,10 +504,10 @@ describe('Config Overrides', () => {
         'input.format=jsonl',
         'input.chunkSize=5000',
         'input.columnMapping.timestamp=time',
-        'output.path=/new/output.sqlite',
-        'output.format=sqlite',
+        'output.path=/new/output.jsonl',
+        'output.format=jsonl',
         'output.overwrite=false',
-        'transformations.0.enabled=false',
+        'transformations.0.disabled=true',
         'transformations.0.params.priceField=close',
         'options.chunkSize=10000',
         'options.continueOnError=false',
@@ -525,10 +525,10 @@ describe('Config Overrides', () => {
       strictEqual(fileInput12.format, 'jsonl')
       strictEqual(fileInput12.chunkSize, 5000)
       strictEqual(fileInput12.columnMapping?.timestamp, 'time')
-      strictEqual(config.output.path, '/new/output.sqlite')
-      strictEqual(config.output.format, 'sqlite')
+      strictEqual(config.output.path, '/new/output.jsonl')
+      strictEqual(config.output.format, 'jsonl')
       strictEqual(config.output.overwrite, false)
-      strictEqual(config.transformations[0]?.enabled, false)
+      strictEqual(config.transformations[0]?.disabled, true)
       strictEqual((config.transformations[0]?.params as any).priceField, 'close')
       strictEqual(config.options?.chunkSize, 10000)
       strictEqual(config.options?.continueOnError, false)

@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { isAbsolute, resolve } from 'node:path'
-import type { PipelineConfig } from '../interfaces'
+import { isPipelineConfig, type PipelineConfig } from '../interfaces'
 
 /**
  * Error thrown when configuration loading fails
@@ -38,7 +38,7 @@ function expandEnvironmentVariables(str: string): string {
 /**
  * Recursively expands environment variables in an object
  */
-function expandObjectEnvironmentVariables(obj: any): any {
+function expandObjectEnvironmentVariables(obj: unknown): unknown {
   if (typeof obj === 'string') {
     return expandEnvironmentVariables(obj)
   }
@@ -48,7 +48,7 @@ function expandObjectEnvironmentVariables(obj: any): any {
   }
 
   if (obj && typeof obj === 'object') {
-    const expanded: any = {}
+    const expanded: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(obj)) {
       expanded[key] = expandObjectEnvironmentVariables(value)
     }
@@ -61,9 +61,9 @@ function expandObjectEnvironmentVariables(obj: any): any {
 /**
  * Validates a pipeline configuration object
  */
-function validatePipelineConfig(config: any, filePath: string): asserts config is PipelineConfig {
-  if (!config || typeof config !== 'object') {
-    throw new ConfigValidationError('Configuration must be a valid JSON object', filePath)
+function validatePipelineConfig(config: unknown, filePath: string): asserts config is PipelineConfig {
+  if (!isPipelineConfig(config)) {
+    throw new ConfigValidationError('Configuration must be a valid JSON object with input, output, and transformations sections', filePath)
   }
 
   // Validate input section
@@ -92,7 +92,7 @@ function validatePipelineConfig(config: any, filePath: string): asserts config i
       throw new ConfigValidationError('Provider input configuration must have a valid "timeframe" string', filePath)
     }
   } else {
-    throw new ConfigValidationError(`Invalid input type: ${config.input.type}. Must be "file" or "provider"`, filePath)
+    throw new ConfigValidationError(`Invalid input type: ${(config.input as any).type}. Must be "file" or "provider"`, filePath)
   }
 
   // Validate output section
@@ -104,8 +104,8 @@ function validatePipelineConfig(config: any, filePath: string): asserts config i
     throw new ConfigValidationError('Output configuration must have a valid "path" string', filePath)
   }
 
-  if (!config.output.format || !['csv', 'jsonl', 'sqlite'].includes(config.output.format)) {
-    throw new ConfigValidationError('Output format must be one of: csv, jsonl, sqlite', filePath)
+  if (!config.output.format || !['csv', 'jsonl'].includes(config.output.format)) {
+    throw new ConfigValidationError('Output format must be one of: csv, jsonl', filePath)
   }
 
   // Validate transformations section
@@ -124,8 +124,9 @@ function validatePipelineConfig(config: any, filePath: string): asserts config i
       throw new ConfigValidationError(`Transformation ${i} must have a valid "type" string`, filePath)
     }
 
-    if (!transform.hasOwnProperty('enabled') || typeof transform.enabled !== 'boolean') {
-      throw new ConfigValidationError(`Transformation ${i} must have an "enabled" boolean`, filePath)
+    // disabled is optional - if not present, defaults to false
+    if (transform.hasOwnProperty('disabled') && typeof transform.disabled !== 'boolean') {
+      throw new ConfigValidationError(`Transformation ${i} disabled field must be a boolean if present`, filePath)
     }
 
     if (!transform.params || typeof transform.params !== 'object') {

@@ -56,7 +56,7 @@ describe('Config Loader', () => {
         transformations: [
           {
             type: 'logReturns',
-            enabled: true,
+            disabled: false,
             params: {
               outputField: 'returns'
             }
@@ -82,7 +82,7 @@ describe('Config Loader', () => {
       strictEqual(loaded.output.overwrite, true)
       strictEqual(loaded.transformations.length, 1)
       strictEqual(loaded.transformations[0]!.type, 'logReturns')
-      strictEqual(loaded.transformations[0]!.enabled, true)
+      strictEqual(loaded.transformations[0]!.disabled || false, false)
       strictEqual((loaded.transformations[0]!.params as any).outputField, 'returns')
       strictEqual(loaded.options.chunkSize, 1000)
       strictEqual(loaded.options.continueOnError, true)
@@ -203,7 +203,7 @@ describe('Config Loader', () => {
         throw new Error('Expected ConfigValidationError but no error was thrown')
       } catch (error: any) {
         strictEqual(error.name, 'ConfigValidationError')
-        ok(error.message.includes('must have an "input" section'))
+        ok(error.message.includes('Configuration must be a valid JSON object with input, output, and transformations sections'))
       }
     })
 
@@ -220,7 +220,7 @@ describe('Config Loader', () => {
         throw new Error('Expected ConfigValidationError but no error was thrown')
       } catch (error: any) {
         strictEqual(error.name, 'ConfigValidationError')
-        ok(error.message.includes('must have an "output" section'))
+        ok(error.message.includes('Configuration must be a valid JSON object with input, output, and transformations sections'))
       }
     })
 
@@ -255,7 +255,7 @@ describe('Config Loader', () => {
         throw new Error('Expected ConfigValidationError but no error was thrown')
       } catch (error: any) {
         strictEqual(error.name, 'ConfigValidationError')
-        ok(error.message.includes('must have a "transformations" array'))
+        ok(error.message.includes('Configuration must be a valid JSON object with input, output, and transformations sections'))
       }
     })
 
@@ -266,7 +266,7 @@ describe('Config Loader', () => {
         transformations: [
           {
             type: 'logReturns',
-            // Missing enabled and params
+            // Missing params
           }
         ]
       }
@@ -278,7 +278,7 @@ describe('Config Loader', () => {
         throw new Error('Expected ConfigValidationError but no error was thrown')
       } catch (error: any) {
         strictEqual(error.name, 'ConfigValidationError')
-        ok(error.message.includes('must have an "enabled" boolean'))
+        ok(error.message.includes('must have a "params" object'))
       }
     })
 
@@ -322,14 +322,14 @@ describe('Config Loader', () => {
           symbol: 'BTC-USD'
         },
         output: {
-          path: './output/result.sqlite',
-          format: 'sqlite',
+          path: './output/result.jsonl',
+          format: 'jsonl',
           overwrite: false
         },
         transformations: [
           {
             type: 'logReturns',
-            enabled: true,
+            disabled: false,
             params: {
               outputField: 'returns',
               priceField: 'close'
@@ -337,7 +337,7 @@ describe('Config Loader', () => {
           },
           {
             type: 'zScore',
-            enabled: false,
+            disabled: true,
             params: {
               fields: ['returns'],
               windowSize: 20
@@ -369,12 +369,12 @@ describe('Config Loader', () => {
       strictEqual(fileInput3.exchange, 'test')
       strictEqual(fileInput3.symbol, 'BTC-USD')
       
-      strictEqual(loaded.output.format, 'sqlite')
+      strictEqual(loaded.output.format, 'jsonl')
       strictEqual(loaded.output.overwrite, false)
       
       strictEqual(loaded.transformations.length, 2)
-      strictEqual(loaded.transformations[0]!.enabled, true)
-      strictEqual(loaded.transformations[1]!.enabled, false)
+      strictEqual(loaded.transformations[0]!.disabled, false)
+      strictEqual(loaded.transformations[1]!.disabled, true)
       strictEqual((loaded.transformations[1]!.params as any).windowSize, 20)
       
       strictEqual(loaded.options.continueOnError, false)

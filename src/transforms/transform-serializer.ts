@@ -1,4 +1,4 @@
-import type { Transform, TransformCoefficients, TransformConfig, TransformType } from '../interfaces'
+import type { Transform, TransformConfig, TransformType } from '../interfaces'
 import { LogReturnsNormalizer } from './log-returns-normalizer'
 import { MinMaxNormalizer } from './min-max-normalizer'
 import { MissingValueHandler } from './missing-value-handler'
@@ -15,10 +15,6 @@ export interface SerializedTransform {
   type: TransformType
   /** Transform parameters */
   params: Record<string, any>
-  /** Optional name override */
-  name?: string
-  /** Coefficients if this is a reversible transform */
-  coefficients?: TransformCoefficients
 }
 
 /**
@@ -27,14 +23,13 @@ export interface SerializedTransform {
 export interface SerializedPipeline {
   /** Array of serialized transforms in the pipeline */
   transforms: SerializedTransform[]
-  /** Pipeline name */
-  name?: string
+  /** Pipeline description */
+  description?: string
   /** Pipeline metadata */
   metadata?: {
     createdAt?: string
     updatedAt?: string
     version?: string
-    description?: string
   }
 }
 
@@ -60,16 +55,7 @@ export class TransformSerializer {
   public static serializeTransform(transform: Transform): SerializedTransform {
     const serialized: SerializedTransform = {
       type: transform.type,
-      params: { ...transform.params },
-      name: transform.name
-    }
-
-    // Include coefficients if available (for reversible transforms)
-    if (transform.isReversible && 'getCoefficients' in transform) {
-      const coefficients = (transform as any).getCoefficients()
-      if (coefficients) {
-        serialized.coefficients = coefficients
-      }
+      params: { ...transform.params }
     }
 
     return serialized
@@ -83,7 +69,7 @@ export class TransformSerializer {
     
     return {
       transforms: transforms.map(t => this.serializeTransform(t)),
-      name: pipeline.name,
+      description: pipeline.description,
       metadata: {
         createdAt: new Date().toISOString(),
         version: '1.0.0'
@@ -103,12 +89,6 @@ export class TransformSerializer {
 
     const transform = constructor(serialized.params)
 
-    // Restore coefficients if present
-    if (serialized.coefficients && 'setCoefficients' in transform) {
-      const { symbol, values } = serialized.coefficients
-      ;(transform as any).setCoefficients(symbol, values)
-    }
-
     return transform
   }
 
@@ -120,7 +100,7 @@ export class TransformSerializer {
     
     return new TransformPipeline({
       transforms,
-      name: serialized.name
+      description: serialized.description
     })
   }
 
@@ -131,8 +111,7 @@ export class TransformSerializer {
   public static configToSerialized(config: TransformConfig): SerializedTransform {
     return {
       type: config.type,
-      params: config.params,
-      name: config.params.name
+      params: config.params
     }
   }
 

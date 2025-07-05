@@ -36,9 +36,13 @@ export interface OhlcvDto {
  * @param data The OHLCV data to validate
  * @returns true if valid, false otherwise
  */
-export function isValidOhlcv(data: OhlcvDto): boolean {
+export function isValidOhlcv(data: Partial<OhlcvDto>): boolean {
   // Check required fields exist
   if (!data.exchange || !data.symbol || !data.timestamp) {
+    return false
+  }
+
+  if (!data.open || !data.high || !data.low || !data.close || !data.volume) {
     return false
   }
 

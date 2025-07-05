@@ -7,7 +7,7 @@ A desktop CLI application for processing trading data that handles both historic
 `trdr` is a command-line tool that:
 - Reads market data from CSV/Jsonl files or exchanges (Coinbase, etc.)
 - Transforms data through a configurable pipeline
-- Outputs to CSV/Jsonl/SQLite for analysis
+- Outputs to CSV/Jsonl for analysis
 - Runs as either a one-shot CLI tool or continuous local process
 
 ## Installation
@@ -118,7 +118,6 @@ export COINBASE_API_SECRET=your_api_secret
 ### Storage Options
 - **CSV**: Simple, human-readable output
 - **Jsonl**: Efficient columnar storage
-- **SQLite**: Indexed database for queries
 
 ## License
 

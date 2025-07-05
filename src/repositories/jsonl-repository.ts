@@ -47,7 +47,7 @@ export class JsonlRepository extends FileBasedRepository {
     // Prepare content with abbreviated property names
     let content = ''
     for (const record of data) {
-      const abbreviated = {
+      const abbreviated: any = {
         x: record.exchange,
         s: record.symbol,
         t: record.timestamp,
@@ -57,6 +57,15 @@ export class JsonlRepository extends FileBasedRepository {
         c: record.close,
         v: record.volume
       }
+      
+      // Add any additional fields from transforms
+      const standardKeys = new Set(['timestamp', 'symbol', 'exchange', 'open', 'high', 'low', 'close', 'volume'])
+      for (const [key, value] of Object.entries(record)) {
+        if (!standardKeys.has(key)) {
+          abbreviated[key] = value
+        }
+      }
+      
       content += JSON.stringify(abbreviated) + '\n'
     }
     
@@ -427,7 +436,7 @@ export class JsonlRepository extends FileBasedRepository {
   private normalizeRecord(record: any): OhlcvDto {
     // Handle abbreviated format
     if ('t' in record && 'o' in record) {
-      return {
+      const normalized: any = {
         exchange: record.x || record.e || record.exchange,
         symbol: record.s || record.symbol,
         timestamp: record.t || record.timestamp,
@@ -437,6 +446,16 @@ export class JsonlRepository extends FileBasedRepository {
         close: record.c || record.close,
         volume: record.v || record.volume
       }
+      
+      // Add any additional fields (transform outputs)
+      const abbreviatedKeys = new Set(['x', 'e', 's', 't', 'o', 'h', 'l', 'c', 'v', 'exchange', 'symbol', 'timestamp', 'open', 'high', 'low', 'close', 'volume'])
+      for (const [key, value] of Object.entries(record)) {
+        if (!abbreviatedKeys.has(key)) {
+          normalized[key] = value
+        }
+      }
+      
+      return normalized as OhlcvDto
     }
     
     // Already in full format
@@ -452,7 +471,7 @@ export class JsonlRepository extends FileBasedRepository {
     let content = ''
     for (const record of records) {
       // Write in abbreviated format to save space
-      const abbreviated = {
+      const abbreviated: any = {
         x: record.exchange,
         s: record.symbol,
         t: record.timestamp,
@@ -462,6 +481,15 @@ export class JsonlRepository extends FileBasedRepository {
         c: record.close,
         v: record.volume
       }
+      
+      // Add any additional fields from transforms
+      const standardKeys = new Set(['timestamp', 'symbol', 'exchange', 'open', 'high', 'low', 'close', 'volume'])
+      for (const [key, value] of Object.entries(record)) {
+        if (!standardKeys.has(key)) {
+          abbreviated[key] = value
+        }
+      }
+      
       content += JSON.stringify(abbreviated) + '\n'
     }
     

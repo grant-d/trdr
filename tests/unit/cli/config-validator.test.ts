@@ -25,7 +25,7 @@ describe('Config Validator', () => {
     it('should validate a complete valid configuration', () => {
       const logReturnsTx: TransformConfig<LogReturnsParams> = {
         type: 'logReturns',
-        enabled: true,
+        disabled: false,
         params: { 
           outputField: 'returns'
         }
@@ -33,7 +33,7 @@ describe('Config Validator', () => {
 
       const zScoreTx: TransformConfig<ZScoreParams> = {
         type: 'zScore',
-        enabled: true,
+        disabled: false,
         params: { 
           fields: ['returns'],
           windowSize: 20
@@ -215,16 +215,6 @@ describe('Config Validator', () => {
         strictEqual(result.isValid, false)
         ok(result.errorMessages.some(msg => msg.includes('Output path cannot be the same as input path')))
       })
-
-      it('should warn about CSV to SQLite conversion', () => {
-        const config = createDefaultPipelineConfig()
-        const fileInput = config.input as any
-        fileInput.format = 'csv'
-        config.output.format = 'sqlite'
-
-        const result = validator.validate(config)
-        ok(result.warningMessages.some(msg => msg.includes('Converting from CSV to SQLite')))
-      })
     })
 
     describe('transformation validation', () => {
@@ -250,7 +240,7 @@ describe('Config Validator', () => {
         const config = createDefaultPipelineConfig()
         config.transformations = [
           {
-            enabled: true,
+            disabled: false,
             params: {}
           } as any
         ]
@@ -265,7 +255,7 @@ describe('Config Validator', () => {
         config.transformations = [
           {
             type: 'unsupported',
-            enabled: true,
+            disabled: false,
             params: {}
           } as any
         ]
@@ -275,7 +265,7 @@ describe('Config Validator', () => {
         ok(result.errorMessages.some(msg => msg.includes('Unsupported transform type')))
       })
 
-      it('should reject missing enabled flag', () => {
+      it('should allow missing disabled flag (defaults to false)', () => {
         const config = createDefaultPipelineConfig()
         config.transformations = [
           {
@@ -285,8 +275,8 @@ describe('Config Validator', () => {
         ]
 
         const result = validator.validate(config)
-        strictEqual(result.isValid, false)
-        ok(result.errorMessages.some(msg => msg.includes('enabled flag must be a boolean')))
+        strictEqual(result.isValid, true)
+        strictEqual(result.errors.length, 0)
       })
 
       it('should reject missing params', () => {
@@ -294,7 +284,7 @@ describe('Config Validator', () => {
         config.transformations = [
           {
             type: 'logReturns',
-            enabled: true
+            disabled: false
           } as any
         ]
 
@@ -310,17 +300,15 @@ describe('Config Validator', () => {
         config.transformations = [
           {
             type: 'zScore',
-            enabled: true,
+            disabled: false,
             params: { 
-              fields: [], // Empty array should fail
-              windowSize: -5 // Invalid window size
+              windowSize: -5 // Invalid window size should fail
             } as any
           }
         ]
 
         const result = validator.validate(config)
         strictEqual(result.isValid, false)
-        ok(result.errorMessages.some(msg => msg.includes('Fields array cannot be empty')))
         ok(result.errorMessages.some(msg => msg.includes('Window size must be a positive integer')))
       })
 
@@ -329,7 +317,7 @@ describe('Config Validator', () => {
         
         const invalidMovingAverage: TransformConfig = {
           type: 'movingAverage',
-          enabled: true,
+          disabled: false,
           params: {
             // @ts-ignore - Intentionally invalid
             field: '',
@@ -352,7 +340,7 @@ describe('Config Validator', () => {
         config.transformations = [
           {
             type: 'priceCalc',
-            enabled: true,
+            disabled: false,
             params: { 
               calculation: 'custom'
               // Missing customFormula
@@ -370,7 +358,7 @@ describe('Config Validator', () => {
         config.transformations = [
           {
             type: 'rsi',
-            enabled: true,
+            disabled: false,
             params: { 
               period: -1 // Invalid period
             } as any
@@ -458,7 +446,7 @@ describe('Config Validator', () => {
         config.transformations = [
           {
             type: 'zScore',
-            enabled: true,
+            disabled: false,
             params: { 
               fields: ['non_existent_field'] // This field doesn't exist
             } as any
@@ -475,7 +463,7 @@ describe('Config Validator', () => {
         
         const logReturnsTx: TransformConfig<LogReturnsParams> = {
           type: 'logReturns',
-          enabled: true,
+          disabled: false,
           params: { 
             outputField: 'returns'
           }
@@ -483,7 +471,7 @@ describe('Config Validator', () => {
 
         const zScoreTx: TransformConfig<ZScoreParams> = {
           type: 'zScore',
-          enabled: true,
+          disabled: false,
           params: { 
             fields: ['returns'] // This should work - returns is created by logReturns
           }
@@ -504,7 +492,7 @@ describe('Config Validator', () => {
         config.transformations = [
           {
             type: 'movingAverage',
-            enabled: true,
+            disabled: false,
             params: { 
               field: 'returns', // returns field doesn't exist yet
               windowSize: 20
@@ -512,7 +500,7 @@ describe('Config Validator', () => {
           },
           {
             type: 'logReturns',
-            enabled: true,
+            disabled: false,
             params: { 
               outputField: 'returns'
             } as any
@@ -529,7 +517,7 @@ describe('Config Validator', () => {
         
         const logReturnsTx: TransformConfig<LogReturnsParams> = {
           type: 'logReturns',
-          enabled: false, // Disabled - won't provide returns field
+          disabled: true, // Disabled - won't provide returns field
           params: { 
             outputField: 'returns'
           }
@@ -537,7 +525,7 @@ describe('Config Validator', () => {
 
         const zScoreTx: TransformConfig<ZScoreParams> = {
           type: 'zScore',
-          enabled: true,
+          disabled: false,
           params: { 
             fields: ['returns'] // This should fail - returns not available
           }
@@ -558,7 +546,7 @@ describe('Config Validator', () => {
         
         const priceCalcTx: TransformConfig<PriceCalcParams> = {
           type: 'priceCalc',
-          enabled: true,
+          disabled: false,
           params: { 
             calculation: 'hlc3'
           }
@@ -567,7 +555,7 @@ describe('Config Validator', () => {
         // movingAverage doesn't seem to exist in the codebase, using any for invalid transform test
         const movingAverageTx = {
           type: 'movingAverage' as any,
-          enabled: true,
+          disabled: false,
           params: { 
             field: 'hlc3',
             windowSize: 20,
@@ -577,7 +565,7 @@ describe('Config Validator', () => {
 
         const zScoreTx: TransformConfig<ZScoreParams> = {
           type: 'zScore',
-          enabled: true,
+          disabled: false,
           params: { 
             fields: ['hlc3_sma']
           }

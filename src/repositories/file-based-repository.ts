@@ -1,7 +1,6 @@
 import { mkdir, stat, unlink } from 'node:fs/promises'
 import * as path from 'node:path'
 import type { OhlcvDto } from '../models'
-import { isValidOhlcv } from '../models'
 import logger from '../utils/logger'
 import type { OhlcvQuery, OhlcvRepository, RepositoryConfig } from './ohlcv-repository.interface'
 import { RepositoryConnectionError, RepositoryStorageError, RepositoryValidationError } from './ohlcv-repository.interface'
@@ -269,8 +268,15 @@ export abstract class FileBasedRepository implements OhlcvRepository {
    * Validate OHLCV data
    */
   protected validateOhlcvData(data: OhlcvDto): void {
-    if (!isValidOhlcv(data)) {
-      throw new RepositoryValidationError('Invalid OHLCV data')
+    // Only validate the basic required fields, not the OHLCV relationships
+    // since transforms may have modified the values
+    if (!data.exchange || !data.symbol || typeof data.timestamp !== 'number') {
+      throw new RepositoryValidationError('Missing required fields: exchange, symbol, or timestamp')
+    }
+    
+    // Check that timestamp is valid
+    if (isNaN(data.timestamp) || data.timestamp <= 0) {
+      throw new RepositoryValidationError('Invalid timestamp')
     }
   }
 

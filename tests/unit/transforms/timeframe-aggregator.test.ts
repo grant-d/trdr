@@ -55,7 +55,7 @@ describe('TimeframeAggregator', () => {
     })
 
     it('should set default parameters', () => {
-      const aggregator = new TimeframeAggregator({ targetTimeframe: '5m' })
+      const aggregator = new TimeframeAggregator({ name: 'ta1', targetTimeframe: '5m' })
 
       strictEqual(aggregator.params.alignToMarketOpen, false)
       strictEqual(aggregator.params.marketOpenTime, '09:30')
@@ -64,17 +64,17 @@ describe('TimeframeAggregator', () => {
     })
 
     it('should validate target timeframe is provided', () => {
-      const aggregator = new TimeframeAggregator({ targetTimeframe: '' })
+      const aggregator = new TimeframeAggregator({ name: 'ta1', targetTimeframe: '' })
       throws(() => aggregator.validate(), /Target timeframe is required/)
     })
 
     it('should validate target timeframe is valid', () => {
-      const aggregator = new TimeframeAggregator({ targetTimeframe: '7m' })
+      const aggregator = new TimeframeAggregator({ name: 'ta1', targetTimeframe: '7m' })
       throws(() => aggregator.validate(), /Invalid target timeframe/)
     })
 
     it('should validate market open time format', () => {
-      const aggregator = new TimeframeAggregator({
+      const aggregator = new TimeframeAggregator({ name: 'ta1',
         targetTimeframe: '5m',
         marketOpenTime: '25:00',
       })
@@ -82,7 +82,7 @@ describe('TimeframeAggregator', () => {
     })
 
     it('should validate incomplete bar behavior', () => {
-      const aggregator = new TimeframeAggregator({
+      const aggregator = new TimeframeAggregator({ name: 'ta1',
         targetTimeframe: '5m',
         incompleteBarBehavior: 'invalid' as any, // Intentionally invalid
       })
@@ -93,7 +93,7 @@ describe('TimeframeAggregator', () => {
   describe('aggregation functionality', () => {
     it('should aggregate 1m bars to 5m bars', async () => {
       const testData = createTestData(10, 60000) // 10 1-minute bars
-      const aggregator = new TimeframeAggregator({ targetTimeframe: '5m' })
+      const aggregator = new TimeframeAggregator({ name: 'ta1', targetTimeframe: '5m' })
 
       const result = await aggregator.apply(arrayToAsyncIterator(testData))
       const aggregated = await collectResults(result.data)
@@ -116,7 +116,7 @@ describe('TimeframeAggregator', () => {
 
     it('should aggregate 1m bars to 5m bars with emit behavior', async () => {
       const testData = createTestData(10, 60000) // 10 1-minute bars
-      const aggregator = new TimeframeAggregator({ 
+      const aggregator = new TimeframeAggregator({ name: 'ta1', 
         targetTimeframe: '5m',
         incompleteBarBehavior: 'emit',
       })
@@ -144,7 +144,7 @@ describe('TimeframeAggregator', () => {
 
     it('should handle incomplete bars with drop behavior', async () => {
       const testData = createTestData(7, 60000) // 7 1-minute bars
-      const aggregator = new TimeframeAggregator({
+      const aggregator = new TimeframeAggregator({ name: 'ta1',
         targetTimeframe: '5m',
         incompleteBarBehavior: 'drop',
       })
@@ -158,7 +158,7 @@ describe('TimeframeAggregator', () => {
 
     it('should handle incomplete bars with emit behavior', async () => {
       const testData = createTestData(7, 60000) // 7 1-minute bars
-      const aggregator = new TimeframeAggregator({
+      const aggregator = new TimeframeAggregator({ name: 'ta1',
         targetTimeframe: '5m',
         incompleteBarBehavior: 'emit',
       })
@@ -181,7 +181,7 @@ describe('TimeframeAggregator', () => {
 
     it('should aggregate to hourly bars', async () => {
       const testData = createTestData(121, 60000) // 121 1-minute bars (2 hours + 1 minute to trigger emission)
-      const aggregator = new TimeframeAggregator({ targetTimeframe: '1h' })
+      const aggregator = new TimeframeAggregator({ name: 'ta1', targetTimeframe: '1h' })
 
       const result = await aggregator.apply(arrayToAsyncIterator(testData))
       const aggregated = await collectResults(result.data)
@@ -226,7 +226,7 @@ describe('TimeframeAggregator', () => {
         })
       }
 
-      const aggregator = new TimeframeAggregator({ 
+      const aggregator = new TimeframeAggregator({ name: 'ta1', 
         targetTimeframe: '5m',
         incompleteBarBehavior: 'emit',
       })
@@ -253,7 +253,7 @@ describe('TimeframeAggregator', () => {
     })
 
     it('should handle empty data', async () => {
-      const aggregator = new TimeframeAggregator({ targetTimeframe: '5m' })
+      const aggregator = new TimeframeAggregator({ name: 'ta1', targetTimeframe: '5m' })
       const result = await aggregator.apply(arrayToAsyncIterator([]))
       const aggregated = await collectResults(result.data)
 
@@ -262,7 +262,7 @@ describe('TimeframeAggregator', () => {
 
     it('should handle single data point', async () => {
       const testData = createTestData(1)
-      const aggregator = new TimeframeAggregator({
+      const aggregator = new TimeframeAggregator({ name: 'ta1',
         targetTimeframe: '5m',
         incompleteBarBehavior: 'emit',
       })
@@ -286,13 +286,13 @@ describe('TimeframeAggregator', () => {
 
   describe('getOutputFields and getRequiredFields', () => {
     it('should return empty output fields', () => {
-      const aggregator = new TimeframeAggregator({ targetTimeframe: '5m' })
+      const aggregator = new TimeframeAggregator({ name: 'ta1', targetTimeframe: '5m' })
       const fields = aggregator.getOutputFields()
       strictEqual(fields.length, 0)
     })
 
     it('should return required fields', () => {
-      const aggregator = new TimeframeAggregator({ targetTimeframe: '5m' })
+      const aggregator = new TimeframeAggregator({ name: 'ta1', targetTimeframe: '5m' })
       const fields = aggregator.getRequiredFields()
       deepStrictEqual(fields, ['timestamp', 'symbol', 'exchange', 'open', 'high', 'low', 'close', 'volume'])
     })
@@ -300,7 +300,7 @@ describe('TimeframeAggregator', () => {
 
   describe('withParams', () => {
     it('should create new instance with updated params', () => {
-      const original = new TimeframeAggregator({ targetTimeframe: '5m' })
+      const original = new TimeframeAggregator({ name: 'ta1', targetTimeframe: '5m' })
       const updated = original.withParams({ targetTimeframe: '1h' })
 
       strictEqual(original.params.targetTimeframe, '5m')
@@ -309,7 +309,7 @@ describe('TimeframeAggregator', () => {
     })
 
     it('should preserve other parameters', () => {
-      const original = new TimeframeAggregator({
+      const original = new TimeframeAggregator({ name: 'ta1',
         targetTimeframe: '5m',
         incompleteBarBehavior: 'emit',
       })
@@ -355,7 +355,7 @@ describe('TimeframeAggregator', () => {
         },
       ]
 
-      const aggregator = new TimeframeAggregator({
+      const aggregator = new TimeframeAggregator({ name: 'ta1',
         targetTimeframe: '5m',
         incompleteBarBehavior: 'emit',
       })
@@ -398,7 +398,7 @@ describe('TimeframeAggregator', () => {
         },
       ]
 
-      const aggregator = new TimeframeAggregator({ targetTimeframe: '5m' })
+      const aggregator = new TimeframeAggregator({ name: 'ta1', targetTimeframe: '5m' })
       const result = await aggregator.apply(arrayToAsyncIterator(testData))
       const aggregated = await collectResults(result.data)
 
@@ -435,7 +435,7 @@ describe('TimeframeAggregator', () => {
         },
       ]
 
-      const aggregator = new TimeframeAggregator({ 
+      const aggregator = new TimeframeAggregator({ name: 'ta1', 
         targetTimeframe: '5m',
         incompleteBarBehavior: 'emit',
       })

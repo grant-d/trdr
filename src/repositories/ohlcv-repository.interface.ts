@@ -19,32 +19,14 @@ export interface OhlcvQuery {
 }
 
 /**
- * Coefficient data for storing calculation results
- */
-// export interface CoefficientData {
-//   /** Unique identifier for the coefficient */
-//   name: string
-//   /** The coefficient value */
-//   value: number
-//   /** Optional metadata associated with the coefficient */
-//   metadata?: Record<string, unknown>
-//   /** Timestamp when the coefficient was calculated */
-//   timestamp: number
-//   /** Symbol this coefficient relates to (optional) */
-//   symbol?: string
-//   /** Exchange this coefficient relates to (optional) */
-//   exchange?: string
-// }
-
-/**
  * Attached database configuration for SQLite schemas
  */
-export interface AttachedDatabase {
-  /** Schema name to use for this database */
-  schema: string
-  /** File path to the database */
-  path: string
-}
+// export interface AttachedDatabase {
+//   /** Schema name to use for this database */
+//   schema: string
+//   /** File path to the database */
+//   path: string
+// }
 
 /**
  * Configuration options for repository initialization
@@ -55,7 +37,7 @@ export interface RepositoryConfig {
   /** Additional configuration options specific to the repository type */
   options?: Record<string, unknown>
   /** Attached databases for SQLite schema support */
-  attachedDatabases?: AttachedDatabase[]
+  // attachedDatabases?: AttachedDatabase[]
   /** Default schema to use for tables (defaults to 'main') */
   defaultSchema?: string
 }
@@ -150,57 +132,6 @@ export interface OhlcvRepository {
    * @returns Number of records
    */
   getCount(symbol: string, exchange?: string): Promise<number>
-
-  /**
-   * Save a coefficient value
-   * @param coefficient Coefficient data to save
-   */
-  // saveCoefficient(coefficient: CoefficientData): Promise<void>
-
-  /**
-   * Save multiple coefficient values in a batch
-   * @param coefficients Array of coefficient data to save
-   */
-  // saveCoefficients(coefficients: CoefficientData[]): Promise<void>
-
-  /**
-   * Get a coefficient value by name
-   * @param name Name of the coefficient
-   * @param symbol Optional symbol filter
-   * @param exchange Optional exchange filter
-   * @returns Coefficient data or null if not found
-   */
-  // getCoefficient(
-  //   name: string,
-  //   symbol?: string,
-  //   exchange?: string
-  // ): Promise<CoefficientData | null>
-
-  /**
-   * Get multiple coefficients by name pattern
-   * @param namePattern Pattern to match coefficient names (supports wildcards)
-   * @param symbol Optional symbol filter
-   * @param exchange Optional exchange filter
-   * @returns Array of coefficient data
-   */
-  // getCoefficients(
-  //   namePattern?: string,
-  //   symbol?: string,
-  //   exchange?: string
-  // ): Promise<CoefficientData[]>
-
-  /**
-   * Delete coefficients by name pattern
-   * @param namePattern Pattern to match coefficient names
-   * @param symbol Optional symbol filter
-   * @param exchange Optional exchange filter
-   * @returns Number of deleted coefficients
-   */
-  // deleteCoefficients(
-  //   namePattern: string,
-  //   symbol?: string,
-  //   exchange?: string
-  // ): Promise<number>
 
   /**
    * Get all unique symbols in the repository

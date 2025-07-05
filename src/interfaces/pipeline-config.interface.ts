@@ -37,7 +37,7 @@ export interface OutputConfig {
   /** Output file path */
   path: string
   /** Output format */
-  format: 'csv' | 'jsonl' | 'sqlite'
+  format: 'csv' | 'jsonl'
   /** Whether to overwrite existing files */
   overwrite?: boolean
   /** Column mapping for output (if different from default) */
@@ -86,7 +86,7 @@ export interface PipelineConfig {
   transformations: TransformConfig[]
 
   /** Processing options */
-  options: ProcessingOptions
+  options?: ProcessingOptions
 
   /** Pipeline metadata */
   metadata?: {
@@ -103,4 +103,24 @@ export interface PipelineConfig {
     /** Last modified timestamp */
     modified?: string
   }
+}
+
+/**
+ * Type guard to check if value is a valid PipelineConfig
+ */
+export function isPipelineConfig(val: unknown): val is PipelineConfig {
+  if (!val || typeof val !== 'object') {
+    return false
+  }
+
+  const obj = val as Record<string, unknown>
+
+  return (
+    'input' in obj &&
+    'output' in obj &&
+    'transformations' in obj &&
+    typeof obj.input === 'object' &&
+    typeof obj.output === 'object' &&
+    Array.isArray(obj.transformations)
+  )
 }

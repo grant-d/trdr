@@ -107,7 +107,7 @@ Provider Configuration:
   - timeframe: "1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w", "1M"
 
 Output Options:
-  - format: "csv", "jsonl", "sqlite"
+  - format: "csv", "jsonl"
   - overwrite: true/false (when true, replaces existing file; when false, appends)
   - Single file per symbol/exchange combination enforced
 `)

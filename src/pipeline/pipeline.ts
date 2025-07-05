@@ -65,8 +65,6 @@ export interface PipelineResult {
   errors: number
   /** Execution time in milliseconds */
   executionTime: number
-  /** Transform coefficients if available */
-  coefficients?: any[]
 }
 
 /**
@@ -114,7 +112,6 @@ export class Pipeline {
     const startTime = Date.now()
     let recordsProcessed = 0
     let recordsWritten = 0
-    const coefficients: any[] = []
 
     try {
       // Connect provider if not already connected
@@ -145,10 +142,6 @@ export class Pipeline {
         // Convert AsyncIterator to AsyncIterableIterator if needed
         processedStream = result.data as AsyncIterableIterator<OhlcvDto>
 
-        // Collect coefficients if available
-        if (result.coefficients) {
-          coefficients.push(result.coefficients)
-        }
       } else {
         processedStream = dataStream
       }
@@ -198,7 +191,6 @@ export class Pipeline {
         recordsWritten,
         errors: this.errorCount,
         executionTime,
-        coefficients,
       }
     } catch (error) {
       // Make sure to disconnect on error

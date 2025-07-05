@@ -1,6 +1,5 @@
 import { deepStrictEqual, ok, strictEqual, throws } from 'node:assert'
 import { beforeEach, describe, it } from 'node:test'
-import type { TransformCoefficients } from '../../../src/interfaces'
 import type { OhlcvDto } from '../../../src/models'
 import {
   createPipeline,
@@ -57,9 +56,9 @@ describe('TransformPipeline', () => {
   let priceCalc: PriceCalculations
 
   beforeEach(() => {
-    logReturns = new LogReturnsNormalizer({ outputField: 'returns' })
-    zScore = new ZScoreNormalizer({ fields: ['returns'] })
-    minMax = new MinMaxNormalizer({ fields: ['close'] })
+    logReturns = new LogReturnsNormalizer({ in: ['close'], out: ['returns'] })
+    zScore = new ZScoreNormalizer({ in: ['returns'], out: ['returns_z'], windowSize: 3 })
+    minMax = new MinMaxNormalizer({ in: ['close'], out: ['close_norm'], windowSize: 3 })
     priceCalc = new PriceCalculations({ calculation: 'hlc3' })
   })
 
@@ -69,28 +68,18 @@ describe('TransformPipeline', () => {
       strictEqual(pipeline.type, 'pipeline')
       strictEqual(pipeline.name, 'Transform Pipeline')
       strictEqual(pipeline.description, 'Pipeline of 0 transforms')
-      strictEqual(pipeline.isReversible, true) // Empty pipeline is reversible
       deepStrictEqual(pipeline.getTransforms(), [])
     })
 
     it('should create pipeline with transforms', () => {
       const pipeline = new TransformPipeline({ 
         transforms: [logReturns, zScore],
-        name: 'Test Pipeline'
+        description: 'Test Pipeline'
       })
       
-      strictEqual(pipeline.name, 'Test Pipeline')
-      strictEqual(pipeline.description, 'Pipeline of 2 transforms')
-      strictEqual(pipeline.isReversible, true)
+      strictEqual(pipeline.name, 'Transform Pipeline')
+      strictEqual(pipeline.description, 'Test Pipeline')
       strictEqual(pipeline.getTransforms().length, 2)
-    })
-
-    it('should detect non-reversible pipeline', () => {
-      const pipeline = new TransformPipeline({ 
-        transforms: [priceCalc, zScore] // priceCalc is not reversible
-      })
-      
-      strictEqual(pipeline.isReversible, false)
     })
   })
 
@@ -174,7 +163,6 @@ describe('TransformPipeline', () => {
       const transformed = await collectResults(result.data)
       
       deepStrictEqual(transformed, testData)
-      strictEqual(result.coefficients, undefined)
     })
 
     it('should apply single transform', async () => {
@@ -186,10 +174,9 @@ describe('TransformPipeline', () => {
       
       strictEqual(transformed.length, 3)
       ok(transformed[0]!.hlc3)
-      strictEqual(result.coefficients, undefined) // No coefficients from priceCalc
     })
 
-    it('should apply transform with coefficients', async () => {
+    it('should apply transform', async () => {
       const testData = createTestData(3)
       const pipeline = new TransformPipeline({ transforms: [minMax] })
       
@@ -198,7 +185,6 @@ describe('TransformPipeline', () => {
       
       strictEqual(transformed.length, 3)
       ok(transformed[0]!.close_norm !== undefined)
-      ok(result.coefficients, `Expected coefficients but got: ${JSON.stringify(result.coefficients)}`)
     })
 
     it('should chain multiple transforms', async () => {
@@ -207,8 +193,8 @@ describe('TransformPipeline', () => {
       // Pipeline: calculate HLC3 -> normalize with min-max
       const pipeline = new TransformPipeline({ 
         transforms: [
-          new PriceCalculations({ calculation: 'hlc3' }),
-          new MinMaxNormalizer({ fields: ['hlc3'] })
+          new PriceCalculations({  calculation: 'hlc3' }),
+          new MinMaxNormalizer({ in: ['hlc3'], out: ['hlc3_norm'] })
         ] 
       })
       
@@ -220,21 +206,16 @@ describe('TransformPipeline', () => {
       // Check that both transforms were applied
       ok(transformed[0]!.hlc3) // PriceCalc output
       ok(transformed[0]!.hlc3_norm !== undefined) // MinMax output
-      
-      // Check coefficients were collected (only MinMax produces coefficients)
-      ok(result.coefficients, `Expected coefficients but got: ${JSON.stringify(result.coefficients)}`)
-      ok(result.coefficients.values.t1_hlc3_min !== undefined)
-      ok(result.coefficients.values.t1_hlc3_max !== undefined)
     })
 
-    it('should collect and aggregate coefficients', async () => {
+    it('should collect', async () => {
       const testData = createTestData(10)
       
-      // Pipeline with two normalizers that produce coefficients
+      // Pipeline with two normalizers
       const pipeline = new TransformPipeline({ 
         transforms: [
-          new MinMaxNormalizer({ fields: ['close'] }),
-          new ZScoreNormalizer({ fields: ['open'] })
+          new MinMaxNormalizer({ in: ['close'], out: ['close_norm'] }),
+          new ZScoreNormalizer({ in: ['open'], out: ['open_z'] })
         ] 
       })
       
@@ -242,18 +223,6 @@ describe('TransformPipeline', () => {
       const transformed = await collectResults(result.data)
       
       strictEqual(transformed.length, 10)
-      
-      // Check aggregated coefficients
-      ok(result.coefficients)
-      strictEqual(result.coefficients.type as any, 'pipeline')
-      
-      // MinMax coefficients (transform 0)
-      ok(result.coefficients.values.t0_close_min !== undefined)
-      ok(result.coefficients.values.t0_close_max !== undefined)
-      
-      // ZScore coefficients (transform 1)
-      ok(result.coefficients.values.t1_open_mean !== undefined)
-      ok(result.coefficients.values.t1_open_std !== undefined)
     })
 
     it('should apply complex pipeline', async () => {
@@ -262,9 +231,9 @@ describe('TransformPipeline', () => {
       // Complex pipeline: returns -> z-score -> min-max
       const pipeline = new TransformPipeline({ 
         transforms: [
-          new LogReturnsNormalizer({ outputField: 'returns' }),
-          new ZScoreNormalizer({ fields: ['returns'], windowSize: 10 }),
-          new MinMaxNormalizer({ fields: ['returns_zscore'], targetMin: -1, targetMax: 1 })
+          new LogReturnsNormalizer({ in: ['close'], out: ['returns'] }),
+          new ZScoreNormalizer({ in: ['returns'], out: ['returns_zscore'], windowSize: 10 }),
+          new MinMaxNormalizer({ in: ['returns_zscore'], out: ['returns_zscore_norm'], min: -1, max: 1 })
         ] 
       })
       
@@ -278,15 +247,6 @@ describe('TransformPipeline', () => {
       ok(transformed[0]!.returns !== undefined)
       ok(transformed[0]!.returns_zscore !== undefined)
       ok(transformed[0]!.returns_zscore_norm !== undefined)
-      
-      // Check coefficients from all transforms
-      ok(result.coefficients)
-      // LogReturns coefficients
-      ok(result.coefficients.values.t0_priceField !== undefined)
-      ok(result.coefficients.values.t0_base !== undefined)
-      // ZScore doesn't produce global coefficients with window
-      // MinMax coefficients  
-      ok(result.coefficients.values.t2_returns_zscore_min !== undefined)
     })
   })
 
@@ -298,7 +258,7 @@ describe('TransformPipeline', () => {
 
     it('should validate all transforms', () => {
       // Create invalid transform
-      const invalidPriceCalc = new PriceCalculations({ 
+      const invalidPriceCalc = new PriceCalculations({  
         calculation: 'custom'
         // Missing customFormula
       })
@@ -314,8 +274,8 @@ describe('TransformPipeline', () => {
     })
 
     it('should include transform index in validation errors', () => {
-      const invalid1 = new PriceCalculations({ calculation: 'custom' })
-      const invalid2 = new PriceCalculations({ calculation: 'custom' })
+      const invalid1 = new PriceCalculations({  calculation: 'custom' })
+      const invalid2 = new PriceCalculations({  calculation: 'custom' })
       
       const pipeline = new TransformPipeline({ 
         transforms: [logReturns, invalid1, zScore, invalid2] 
@@ -334,7 +294,7 @@ describe('TransformPipeline', () => {
         transforms: [
           new PriceCalculations({ calculation: 'hlc3' }),
           new PriceCalculations({ calculation: 'ohlc4' }),
-          new MinMaxNormalizer({ fields: ['close'] })
+          new MinMaxNormalizer({ in: ['close'], out: ['close_norm'] })
         ] 
       })
       
@@ -347,8 +307,8 @@ describe('TransformPipeline', () => {
     it('should return required fields from first transform', () => {
       const pipeline = new TransformPipeline({ 
         transforms: [
-          new LogReturnsNormalizer({}), // Requires close
-          new ZScoreNormalizer({ fields: ['returns'] }) // Requires returns
+          new LogReturnsNormalizer({ in: ['close'], out: ['returns'] }), // Requires close
+          new ZScoreNormalizer({ in: ['returns'], out: ['returns_z'] }) // Requires returns
         ] 
       })
       
@@ -362,101 +322,21 @@ describe('TransformPipeline', () => {
     })
   })
 
-  describe('reverse method', () => {
-    it('should throw if pipeline is not reversible', async () => {
-      const pipeline = new TransformPipeline({ 
-        transforms: [priceCalc] // Not reversible
-      })
-      
-      const testData = createTestData(1)
-      const iterator = arrayToAsyncIterator(testData)
-      const dummyCoeff: TransformCoefficients = {
-        type: 'pipeline' as any,
-        timestamp: Date.now(),
-        symbol: 'TEST',
-        values: {}
-      }
-      
-      try {
-        const generator = pipeline.reverse(iterator, dummyCoeff)
-        await generator.next()
-        throw new Error('Expected error was not thrown')
-      } catch (error) {
-        ok(error instanceof Error)
-        ok(error.message.includes('Pipeline contains non-reversible transforms'))
-      }
-    })
-
-    it('should reverse single transform pipeline', async () => {
-      const testData = createTestData(5)
-      const pipeline = new TransformPipeline({ 
-        transforms: [new MinMaxNormalizer({ fields: ['close'] })] 
-      })
-      
-      // Apply forward
-      const result = await pipeline.apply(arrayToAsyncIterator(testData))
-      const transformed = await collectResults(result.data)
-      
-      // Reverse
-      const reversed = pipeline.reverse(
-        arrayToAsyncIterator(transformed), 
-        result.coefficients!
-      )
-      const reversedData = await collectResults(reversed)
-      
-      strictEqual(reversedData.length, 5)
-      // Check close values are restored (approximately due to floating point)
-      for (let i = 0; i < 5; i++) {
-        const diff = Math.abs(reversedData[i]!.close - testData[i]!.close)
-        ok(diff < 0.0001)
-      }
-    })
-
-    it('should reverse multi-transform pipeline', async () => {
-      const testData = createTestData(10)
-      const pipeline = new TransformPipeline({ 
-        transforms: [
-          new MinMaxNormalizer({ fields: ['close'] }),
-          new ZScoreNormalizer({ fields: ['open'] })
-        ] 
-      })
-      
-      // Apply forward
-      const result = await pipeline.apply(arrayToAsyncIterator(testData))
-      const transformed = await collectResults(result.data)
-      
-      // Reverse
-      const reversed = pipeline.reverse(
-        arrayToAsyncIterator(transformed), 
-        result.coefficients!
-      )
-      const reversedData = await collectResults(reversed)
-      
-      strictEqual(reversedData.length, 10)
-      
-      // Check values are restored
-      for (let i = 0; i < 10; i++) {
-        const closeDiff = Math.abs(reversedData[i]!.close - testData[i]!.close)
-        const openDiff = Math.abs(reversedData[i]!.open - testData[i]!.open)
-        ok(closeDiff < 0.0001)
-        ok(openDiff < 0.0001)
-      }
-    })
-  })
-
   describe('withParams', () => {
     it('should create new instance with updated params', () => {
       const pipeline1 = new TransformPipeline({ 
         transforms: [logReturns],
-        name: 'Pipeline 1'
+        description: 'Pipeline 1'
       })
       
       const pipeline2 = pipeline1.withParams({ 
-        name: 'Pipeline 2'
+        description: 'Pipeline 2'
       }) as TransformPipeline
       
-      strictEqual(pipeline1.name, 'Pipeline 1')
-      strictEqual(pipeline2.name, 'Pipeline 2')
+      strictEqual(pipeline1.name, 'Transform Pipeline')
+      strictEqual(pipeline2.name, 'Transform Pipeline')
+      strictEqual(pipeline1.description, 'Pipeline 1')
+      strictEqual(pipeline2.description, 'Pipeline 2')
       strictEqual(pipeline2.getTransforms().length, 1)
     })
   })
@@ -469,10 +349,11 @@ describe('TransformPipeline', () => {
       strictEqual(pipeline.getTransforms().length, 2)
     })
 
-    it('should create pipeline with custom name', () => {
+    it('should create pipeline with custom description', () => {
       const pipeline = createPipeline([logReturns], 'Custom Pipeline')
       
-      strictEqual(pipeline.name, 'Custom Pipeline')
+      strictEqual(pipeline.name, 'Transform Pipeline')
+      strictEqual(pipeline.description, 'Custom Pipeline')
     })
   })
 
@@ -493,7 +374,7 @@ describe('TransformPipeline', () => {
       const pipeline = new TransformPipeline({ 
         transforms: [
           new PriceCalculations({ calculation: 'hlc3' }),
-          new MinMaxNormalizer({ fields: ['hlc3'] })
+          new MinMaxNormalizer({ in: ['hlc3'], out: ['hlc3_norm'] })
         ] 
       })
       
@@ -502,7 +383,7 @@ describe('TransformPipeline', () => {
       
       strictEqual(transformed.length, 1)
       ok(transformed[0]!.hlc3)
-      strictEqual(transformed[0]!.hlc3_norm, 0.5) // Single value normalizes to middle
+      strictEqual(transformed[0]!.hlc3_norm, 0) // Single value with default window=20 outputs 0
     })
 
     it('should handle transform that filters data', async () => {
@@ -511,8 +392,8 @@ describe('TransformPipeline', () => {
       // LogReturns filters out first data point
       const pipeline = new TransformPipeline({ 
         transforms: [
-          new LogReturnsNormalizer({}),
-          new MinMaxNormalizer({ fields: ['returns'] })
+          new LogReturnsNormalizer({ in: ['close'], out: ['returns'] }),
+          new MinMaxNormalizer({ in: ['returns'], out: ['returns_norm'] })
         ] 
       })
       
@@ -527,18 +408,21 @@ describe('TransformPipeline', () => {
       const pipeline = new TransformPipeline({ 
         transforms: [
           new PriceCalculations({ calculation: 'hlc3' }),
-          new MinMaxNormalizer({ fields: ['volume'] }) // Normalize different field
+          new MinMaxNormalizer({ in: ['volume'], out: ['volume_norm'] }) // Normalize different field
         ] 
       })
       
       const result = await pipeline.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
       
-      // Check original fields are preserved
+      // Check original fields are preserved (except volume which was transformed)
       for (let i = 0; i < 3; i++) {
         strictEqual(transformed[i]!.symbol, testData[i]!.symbol)
         strictEqual(transformed[i]!.timestamp, testData[i]!.timestamp)
         strictEqual(transformed[i]!.open, testData[i]!.open)
+        // Volume was normalized, so volume_norm should exist but volume should still be there
+        ok('volume_norm' in transformed[i]!)
+        strictEqual(transformed[i]!.volume_norm, 0) // Insufficient data for rolling window
       }
     })
   })

@@ -171,9 +171,6 @@ Available commands:
       console.log(`  Errors: ${result.errors}`)
       console.log(`  Duration: ${duration.toFixed(2)}s`)
 
-      if (result.coefficients && result.coefficients.length > 0) {
-        console.log(`  Coefficients saved: ${result.coefficients.length}`)
-      }
     } catch (error) {
       console.error('\nPipeline failed:', error instanceof Error ? error.message : error)
     } finally {

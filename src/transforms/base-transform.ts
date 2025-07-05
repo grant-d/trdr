@@ -1,9 +1,9 @@
-import type { BaseTransformParams, Transform, TransformCoefficients, TransformResult, TransformType } from '../interfaces'
+import type { BaseTransformParams, Transform, TransformResult, TransformType } from '../interfaces'
 import type { OhlcvDto } from '../models'
 
 /**
  * Abstract base class for all transforms
- * Provides common functionality for transform type tracking and coefficient storage
+ * Provides common functionality for transform type tracking
  */
 export abstract class BaseTransform<T extends BaseTransformParams = BaseTransformParams>
   implements Transform<T> {
@@ -11,23 +11,18 @@ export abstract class BaseTransform<T extends BaseTransformParams = BaseTransfor
   public readonly type: TransformType
   public readonly name: string
   public readonly description: string
-  public readonly isReversible: boolean
   public readonly params: T
-
-  protected coefficients: TransformCoefficients | null = null
 
   protected constructor(
     type: TransformType,
     name: string,
     description: string,
-    params: T,
-    isReversible = false,
+    params: T
   ) {
     this.type = type
     this.name = name
     this.description = description
     this.params = params
-    this.isReversible = isReversible
   }
 
   /**
@@ -41,13 +36,8 @@ export abstract class BaseTransform<T extends BaseTransformParams = BaseTransfor
     // Create the transformed data stream
     const transformedData = this.transform(data)
 
-    // Return a result that provides live access to coefficients
-    const self = this
     const result: TransformResult = {
-      data: transformedData as AsyncIterator<OhlcvDto>,
-      get coefficients() {
-        return self.coefficients || undefined
-      }
+      data: transformedData as AsyncIterator<OhlcvDto>
     }
 
     return result
@@ -66,6 +56,45 @@ export abstract class BaseTransform<T extends BaseTransformParams = BaseTransfor
     if (!this.params) {
       throw new Error(`Transform ${this.name} requires parameters`)
     }
+    
+    // Validate input/output columns if specified
+    if (this.params.in !== undefined || this.params.out !== undefined) {
+      if (!this.params.in || !this.params.out) {
+        throw new Error(`Transform ${this.name}: Both inputColumns and outputColumns must be specified together`)
+      }
+      
+      if (this.params.in.length !== this.params.out.length) {
+        throw new Error(`Transform ${this.name}: inputColumns and outputColumns must have the same length`)
+      }
+      
+      if (this.params.in.length === 0) {
+        throw new Error(`Transform ${this.name}: inputColumns cannot be empty`)
+      }
+      
+      // Check for duplicate output columns (excluding null values)
+      // Input columns can have duplicates (e.g., transforming same column multiple ways)
+      const outputColumnsNonNull = this.params.out.filter((col): col is string => col !== null)
+      const uniqueOutputColumns = new Set(outputColumnsNonNull)
+      if (uniqueOutputColumns.size !== outputColumnsNonNull.length) {
+        throw new Error(`Transform ${this.name}: Output columns must be unique. Found duplicates in: ${outputColumnsNonNull.join(', ')}`)
+      }
+      
+      // Validate column names (null is allowed for dropping columns)
+      const columnRegex = /^[a-zA-Z0-9_]{1,20}$/
+      for (let i = 0; i < this.params.in.length; i++) {
+        const inputCol = this.params.in[i]!
+        const outputCol = this.params.out[i]
+        
+        if (!columnRegex.test(inputCol)) {
+          throw new Error(`Transform ${this.name}: Invalid input column name '${inputCol}'. Column names must be alphanumeric with underscores and 1-20 characters long`)
+        }
+        
+        // Output column can be null (to drop column) or a valid column name
+        if (outputCol !== null && outputCol !== undefined && !columnRegex.test(outputCol)) {
+          throw new Error(`Transform ${this.name}: Invalid output column name '${outputCol}'. Column names must be alphanumeric with underscores and 1-20 characters long, or null to drop the column`)
+        }
+      }
+    }
   }
 
   /**
@@ -81,41 +110,16 @@ export abstract class BaseTransform<T extends BaseTransformParams = BaseTransfor
   public abstract getRequiredFields(): string[]
 
   /**
-   * Reverse the transformation using stored coefficients
-   * Only implemented by reversible transforms
-   */
-  public reverse?(
-    _data: AsyncIterator<OhlcvDto>,
-    _coefficients: TransformCoefficients
-  ): AsyncGenerator<OhlcvDto> {
-    if (!this.isReversible) {
-      throw new Error(`Transform ${this.name} is not reversible`)
-    }
-    throw new Error(`Reverse method not implemented for ${this.name}`)
-  }
-
-  /**
    * Create a copy of this transform with new parameters
    */
   public abstract withParams(params: Partial<T>): Transform<T>
 
   /**
-   * Store coefficients for this transform
+   * Default implementation: most transforms are ready immediately
+   * Override in subclasses that need buffer periods (like SMA)
    */
-  protected setCoefficients(symbol: string, values: Record<string, number>): void {
-    this.coefficients = {
-      type: this.type,
-      timestamp: Date.now(),
-      symbol,
-      values
-    }
-  }
-
-  /**
-   * Get stored coefficients
-   */
-  protected getCoefficients(): TransformCoefficients | null {
-    return this.coefficients
+  public isReady(): boolean {
+    return true
   }
 
   /**
@@ -143,4 +147,49 @@ export abstract class BaseTransform<T extends BaseTransformParams = BaseTransfor
 
     return result
   }
+
+  /**
+   * Get the input columns for this transform
+   * @returns Array of input column names
+   */
+  protected getInputColumns(): string[] {
+    if (this.params.in && this.params.in.length > 0) {
+      return this.params.in
+    }
+    // Default to standard OHLCV columns
+    return ['open', 'high', 'low', 'close', 'volume']
+  }
+  
+  /**
+   * Get the output columns for this transform
+   * @returns Array of output column names (filtering out null values)
+   */
+  protected getOutputColumns(): string[] {
+    if (this.params.out && this.params.out.length > 0) {
+      // Filter out null values (columns marked for dropping)
+      return this.params.out.filter((col): col is string => col !== null)
+    } else {
+      // Default behavior: overwrite the input columns
+      return this.getInputColumns()
+    }
+  }
+  
+  /**
+   * Get columns that should be dropped (set to null in outputColumns)
+   * @returns Array of column names to drop
+   */
+  protected getDroppedColumns(): string[] {
+    if (!this.params.out || !this.params.in) {
+      return []
+    }
+    
+    const droppedColumns: string[] = []
+    for (let i = 0; i < this.params.out.length; i++) {
+      if (this.params.out[i] === null) {
+        droppedColumns.push(this.params.in[i]!)
+      }
+    }
+    return droppedColumns
+  }
+  
 }

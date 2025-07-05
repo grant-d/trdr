@@ -17,8 +17,7 @@ export class MissingValueHandler extends BaseTransform<MissingValueParams> {
       'missingValues',
       'Missing Value Handler',
       'Handles missing or invalid values in the data stream',
-      params,
-      false, // Not reversible - we lose information about what was missing
+      params
     )
   }
 
