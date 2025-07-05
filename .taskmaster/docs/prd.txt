@@ -88,7 +88,7 @@ A **desktop CLI application** for trading data processing that handles both hist
 
 ### Storage Layer
 - Repository pattern with `OhlcvRepository`
-- DTOs: `OhlcvDto`, `TransformConfigDto`, `CoefficientDto`
+- DTOs: `OhlcvDto`, `TransformConfigDto`, DEPRECATED: `CoefficientDto`
 - Batch inserts with immediate disk writes
 - Index management for performance
 - Append-only writes to prevent memory buildup
@@ -464,7 +464,7 @@ See "Simplified Sequential Development Plan" section for detailed week-by-week i
 - Time bars: retain original period timestamps (e.g., 09:30 for 9:30-9:35 bar)
 - Heikin-Ashi: uses same timestamp as underlying bar
 
-## Transform Reversibility
+## DEPRECATED: Transform Reversibility
 - Coefficients stored with timestamp range validity
 - Lookups by (symbol, transform, timestamp)
 - Not all transforms reversible (e.g., aggregations)
@@ -520,7 +520,7 @@ See "Simplified Sequential Development Plan" section for detailed week-by-week i
 2. Moving averages (SMA, EMA) on any column
 3. RSI and Bollinger Bands
 4. Z-score normalization
-5. Coefficient storage/retrieval
+5. DEPRECATED: Coefficient storage/retrieval
 
 ## Stage 6: Advanced Features (Week 6-7)
 1. Alternative bar generators (tick, volume, dollar)

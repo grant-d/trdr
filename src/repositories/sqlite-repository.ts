@@ -3,7 +3,7 @@ import Database from 'better-sqlite3'
 import type { OhlcvDto } from '../models'
 import { isValidOhlcv } from '../models'
 import logger from '../utils/logger'
-import type { AttachedDatabase, CoefficientData, OhlcvQuery, OhlcvRepository, RepositoryConfig } from './ohlcv-repository.interface'
+import type { AttachedDatabase, OhlcvQuery, OhlcvRepository, RepositoryConfig } from './ohlcv-repository.interface'
 import { RepositoryConnectionError, RepositoryStorageError, RepositoryValidationError } from './ohlcv-repository.interface'
 
 // Database row type definitions
@@ -16,15 +16,6 @@ interface OhlcvRow {
   low: number
   close: number
   volume: number
-}
-
-interface CoefficientRow {
-  name: string
-  symbol: string
-  exchange: string
-  value: number
-  metadata: string | null
-  timestamp: number
 }
 
 interface TimestampRow {
@@ -717,169 +708,6 @@ export class SqliteRepository implements OhlcvRepository {
       logger.error('Failed to get count', { error, symbol })
       throw new RepositoryStorageError(
         `Failed to get count: ${String(error)}`,
-        error instanceof Error ? error : undefined
-      )
-    }
-  }
-
-  /**
-   * Save a coefficient value
-   */
-  async saveCoefficient(coefficient: CoefficientData): Promise<void> {
-    this.ensureReady()
-
-    try {
-      this.statements.insertCoefficient!.run(
-        coefficient.name,
-        coefficient.symbol || '',
-        coefficient.exchange || '',
-        coefficient.value,
-        coefficient.metadata ? JSON.stringify(coefficient.metadata) : null,
-        coefficient.timestamp
-      )
-      return Promise.resolve()
-    } catch (error) {
-      logger.error('Failed to save coefficient', { error, coefficient })
-      throw new RepositoryStorageError(
-        `Failed to save coefficient: ${String(error)}`,
-        error instanceof Error ? error : undefined
-      )
-    }
-  }
-
-  /**
-   * Save multiple coefficient values in a batch
-   */
-  async saveCoefficients(coefficients: CoefficientData[]): Promise<void> {
-    this.ensureReady()
-
-    if (coefficients.length === 0) return
-
-    try {
-      const transaction = this.db!.transaction((items: CoefficientData[]) => {
-        for (const item of items) {
-          this.statements.insertCoefficient!.run(
-            item.name,
-            item.symbol || '',
-            item.exchange || '',
-            item.value,
-            item.metadata ? JSON.stringify(item.metadata) : null,
-            item.timestamp
-          )
-        }
-      })
-
-      transaction(coefficients)
-      logger.debug('Saved coefficients batch', { count: coefficients.length })
-      return Promise.resolve()
-    } catch (error) {
-      logger.error('Failed to save coefficients batch', { error, count: coefficients.length })
-      throw new RepositoryStorageError(
-        `Failed to save coefficients batch: ${String(error)}`,
-        error instanceof Error ? error : undefined
-      )
-    }
-  }
-
-  /**
-   * Get a coefficient value by name
-   */
-  async getCoefficient(
-    name: string,
-    symbol?: string,
-    exchange?: string
-  ): Promise<CoefficientData | null> {
-    this.ensureReady()
-
-    try {
-      const row = this.statements.selectCoefficient!.get(
-        name,
-        symbol || '',
-        symbol || '',
-        exchange || '',
-        exchange || ''
-      ) as CoefficientRow | undefined
-
-      if (!row) return Promise.resolve(null)
-
-      return Promise.resolve({
-        name: row.name,
-        value: row.value,
-        metadata: row.metadata ? JSON.parse(row.metadata) as Record<string, unknown> : undefined,
-        timestamp: row.timestamp,
-        symbol: row.symbol === '' ? undefined : row.symbol,
-        exchange: row.exchange === '' ? undefined : row.exchange
-      })
-    } catch (error) {
-      logger.error('Failed to get coefficient', { error, name })
-      throw new RepositoryStorageError(
-        `Failed to get coefficient: ${String(error)}`,
-        error instanceof Error ? error : undefined
-      )
-    }
-  }
-
-  /**
-   * Get multiple coefficients by name pattern
-   */
-  async getCoefficients(
-    namePattern?: string,
-    symbol?: string,
-    exchange?: string
-  ): Promise<CoefficientData[]> {
-    this.ensureReady()
-
-    try {
-      const rows = this.statements.selectCoefficients!.all(
-        namePattern || '',
-        namePattern || '*',
-        symbol || '',
-        symbol || '',
-        exchange || '',
-        exchange || ''
-      ) as CoefficientRow[]
-
-      return Promise.resolve(rows.map(row => ({
-        name: row.name,
-        value: row.value,
-        metadata: row.metadata ? JSON.parse(row.metadata) as Record<string, unknown> : undefined,
-        timestamp: row.timestamp,
-        symbol: row.symbol === '' ? undefined : row.symbol,
-        exchange: row.exchange === '' ? undefined : row.exchange
-      })))
-    } catch (error) {
-      logger.error('Failed to get coefficients', { error, namePattern })
-      throw new RepositoryStorageError(
-        `Failed to get coefficients: ${String(error)}`,
-        error instanceof Error ? error : undefined
-      )
-    }
-  }
-
-  /**
-   * Delete coefficients by name pattern
-   */
-  async deleteCoefficients(
-    namePattern: string,
-    symbol?: string,
-    exchange?: string
-  ): Promise<number> {
-    this.ensureReady()
-
-    try {
-      const result = this.statements.deleteCoefficients!.run(
-        namePattern,
-        symbol || '',
-        symbol || '',
-        exchange || '',
-        exchange || ''
-      )
-
-      return Promise.resolve(result.changes)
-    } catch (error) {
-      logger.error('Failed to delete coefficients', { error, namePattern })
-      throw new RepositoryStorageError(
-        `Failed to delete coefficients: ${String(error)}`,
         error instanceof Error ? error : undefined
       )
     }

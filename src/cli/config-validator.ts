@@ -266,7 +266,7 @@ export class ConfigValidator {
         if (typeof input.duration !== 'string') {
           this.addError('input.duration', 'Duration must be a string', input.duration)
         } else if (input.duration !== 'continuous') {
-          const durationMatch = input.duration.match(/^(\d+)([mhdwMy]|bars)$/)
+          const durationMatch = /^(\d+)([mhdwMy]|bars)$/.exec(input.duration)
           if (!durationMatch) {
             this.addError('input.duration', 'Duration must be "continuous", or format like "5m", "1h", "7d", "1w", "3M", "1y", "1000bars"', input.duration)
           } else {

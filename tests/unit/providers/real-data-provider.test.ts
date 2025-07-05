@@ -1,4 +1,4 @@
-import assert from 'node:assert'
+import * as assert from 'node:assert'
 import { join } from 'node:path'
 import { describe, it } from 'node:test'
 import type { HistoricalParams } from '../../../src/interfaces/data-provider.interface'

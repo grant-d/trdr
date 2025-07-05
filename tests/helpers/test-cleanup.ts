@@ -82,7 +82,7 @@ export function getActiveHandleCount(): { timeouts: number; intervals: number } 
  * Force process exit if handles are still active after timeout
  * Use as a last resort in test suites
  */
-export function forceExitIfHanging(timeoutMs: number = 5000): NodeJS.Timeout {
+export function forceExitIfHanging(timeoutMs = 5000): NodeJS.Timeout {
   return setTimeout(() => {
     const { timeouts, intervals } = getActiveHandleCount()
     if (timeouts > 0 || intervals > 0) {
@@ -95,7 +95,7 @@ export function forceExitIfHanging(timeoutMs: number = 5000): NodeJS.Timeout {
 /**
  * Safe process exit that cleans up first
  */
-export function safeProcessExit(code: number = 0): void {
+export function safeProcessExit(code = 0): void {
   forceCleanupAsyncHandles()
   
   // Give a small delay for cleanup to complete

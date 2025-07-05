@@ -1,23 +1,17 @@
-import { createWriteStream, promises as fs } from 'node:fs'
-import * as path from 'node:path'
-import type { Writable } from 'node:stream'
+import { promises as fs } from 'node:fs'
 import type { OhlcvDto } from '../models'
-import { formatOhlcv, isValidOhlcv } from '../models'
+import { isValidOhlcv } from '../models'
 import logger from '../utils/logger'
-import type { CoefficientData, OhlcvQuery, OhlcvRepository, RepositoryConfig } from './ohlcv-repository.interface'
-import { RepositoryConnectionError, RepositoryStorageError, RepositoryValidationError } from './ohlcv-repository.interface'
+import { FileBasedRepository } from './file-based-repository'
+import type { OhlcvQuery, RepositoryConfig } from './ohlcv-repository.interface'
+import { RepositoryStorageError } from './ohlcv-repository.interface'
 
 /**
  * CSV-based implementation of the OhlcvRepository interface
- * Organizes data by symbol in separate CSV files with streaming writes
+ * Extends FileBasedRepository to gain deduplication and shared functionality
+ * Organizes data in CSV files with streaming writes
  */
-export class CsvRepository implements OhlcvRepository {
-  private ready = false
-  private basePath = ''
-  private readonly writeStreams = new Map<string, Writable>()
-  private singleSymbol: string | null = null
-  private singleExchange: string | null = null
-
+export class CsvRepository extends FileBasedRepository {
   // CSV configuration
   private readonly csvDelimiter = ','
   private readonly csvHeaders = [
@@ -32,371 +26,67 @@ export class CsvRepository implements OhlcvRepository {
   ]
 
   /**
-   * Initialize the CSV repository and set up directory structure
+   * Get the repository type name for logging
    */
-  async initialize(config: RepositoryConfig): Promise<void> {
-    try {
-      this.basePath = config.connectionString
+  protected getRepositoryType(): string {
+    return 'CSV'
+  }
 
-      // Create parent directory if it doesn't exist
-      const dir = path.dirname(this.basePath)
-      await fs.mkdir(dir, { recursive: true })
 
-      // Handle overwrite option - delete existing file
-      if (config.options?.overwrite && await this.fileExists(this.basePath)) {
-        await fs.unlink(this.basePath)
-        logger.debug('Removed existing CSV file due to overwrite option')
-      }
-
-      this.ready = true
-      logger.info('CSV repository initialized', {
-        basePath: this.basePath,
-        options: config.options
-      })
-    } catch (error) {
-      logger.error('Failed to initialize CSV repository', { error })
-      throw new RepositoryConnectionError(
-        `Failed to initialize CSV repository: ${String(error)}`,
-        error instanceof Error ? error : undefined
-      )
-    }
+  /**
+   * Perform additional initialization specific to CSV format
+   */
+  protected async performAdditionalInitialization(_config: RepositoryConfig): Promise<void> {
+    // No additional initialization needed for CSV
   }
 
   /**
-   * Save a single OHLCV record
+   * Perform additional cleanup specific to CSV format
    */
-  async save(data: OhlcvDto): Promise<void> {
-    this.ensureReady()
-
-    if (!isValidOhlcv(data)) {
-      throw new RepositoryValidationError('Invalid OHLCV data')
-    }
-
-    try {
-      await this.appendToFile(data)
-    } catch (error) {
-      logger.error('Failed to save OHLCV data', { error, data: formatOhlcv(data) })
-      throw new RepositoryStorageError(
-        `Failed to save OHLCV data: ${String(error)}`,
-        error instanceof Error ? error : undefined
-      )
-    }
+  protected async performAdditionalCleanup(): Promise<void> {
+    // No additional cleanup needed - streams are handled by base class
   }
 
   /**
-   * Save multiple OHLCV records in a batch operation
+   * Write a batch of OHLCV records to CSV storage
    */
-  async saveMany(data: OhlcvDto[]): Promise<void> {
-    this.ensureReady()
-
-    if (data.length === 0) return
-
-    // Validate all data first
-    for (const item of data) {
-      if (!isValidOhlcv(item)) {
-        throw new RepositoryValidationError(`Invalid OHLCV data for ${item.symbol}`)
-      }
-    }
-
-    try {
-      // Group data by symbol for efficient file operations
-      const dataBySymbol = this.groupDataBySymbol(data)
-
-      // Write each group to its respective file
-      for (const [symbol, items] of dataBySymbol) {
-        await this.appendManyToFile(symbol, items)
-      }
-
-      logger.debug('Saved OHLCV batch to CSV', { count: data.length })
-    } catch (error) {
-      logger.error('Failed to save OHLCV batch', { error, count: data.length })
-      throw new RepositoryStorageError(
-        `Failed to save OHLCV batch: ${String(error)}`,
-        error instanceof Error ? error : undefined
-      )
-    }
-  }
-
-  /**
-   * Append a batch of OHLCV records (alias for saveMany)
-   */
-  async appendBatch(data: OhlcvDto[]): Promise<void> {
-    return this.saveMany(data)
-  }
-
-  /**
-   * Group OHLCV data by symbol for efficient batch operations
-   */
-  private groupDataBySymbol(data: OhlcvDto[]): Map<string, OhlcvDto[]> {
-    const grouped = new Map<string, OhlcvDto[]>()
-
-    for (const item of data) {
-      const key = this.getSymbolKey(item.symbol, item.exchange)
-      if (!grouped.has(key)) {
-        grouped.set(key, [])
-      }
-      grouped.get(key)!.push(item)
-    }
-
-    return grouped
-  }
-
-  /**
-   * Append a single OHLCV record to the appropriate CSV file
-   */
-  private async appendToFile(data: OhlcvDto): Promise<void> {
-    // Enforce single symbol/exchange per file
-    if (this.singleSymbol === null) {
-      this.singleSymbol = data.symbol
-      this.singleExchange = data.exchange
-    } else if (this.singleSymbol !== data.symbol || this.singleExchange !== data.exchange) {
-      throw new RepositoryValidationError(
-        `CSV file can only contain data for one symbol/exchange. Expected ${this.singleSymbol}/${this.singleExchange}, got ${data.symbol}/${data.exchange}`
-      )
-    }
-
-    const filePath = this.basePath
-
-    // Check if file exists and needs headers
-    const needsHeaders = !(await this.fileExists(filePath))
-
-    // Get or create write stream for this file
-    const stream = await this.getWriteStream('main', filePath)
-
-    // Write headers if this is a new file
-    if (needsHeaders) {
-      await this.writeHeaders(stream)
-    }
-
-    // Convert data to CSV row and write
-    const csvRow = this.formatOhlcvAsCsvRow(data)
-    await this.writeToStream(stream, csvRow + '\n')
-  }
-
-  /**
-   * Append multiple OHLCV records to a CSV file efficiently
-   */
-  private async appendManyToFile(_symbolKey: string, data: OhlcvDto[]): Promise<void> {
-    // Validate all data is for the same symbol/exchange
-    if (data.length > 0) {
-      const firstItem = data[0]!
-      if (this.singleSymbol === null) {
-        this.singleSymbol = firstItem.symbol
-        this.singleExchange = firstItem.exchange
-      }
-      
-      for (const item of data) {
-        if (item.symbol !== this.singleSymbol || item.exchange !== this.singleExchange) {
-          throw new RepositoryValidationError(
-            `CSV file can only contain data for one symbol/exchange. Expected ${this.singleSymbol}/${this.singleExchange}, got ${item.symbol}/${item.exchange}`
-          )
-        }
-      }
-    }
-
-    const filePath = this.basePath
-
-    // Check if file exists and needs headers
-    const needsHeaders = !(await this.fileExists(filePath))
-
-    // Get or create write stream for this file
-    const stream = await this.getWriteStream('main', filePath)
-
-    // Write headers if this is a new file
-    if (needsHeaders) {
-      await this.writeHeaders(stream)
-    }
-
+  protected async writeOhlcvBatch(data: OhlcvDto[]): Promise<void> {
     // Sort data by timestamp for consistent ordering
     const sortedData = [...data].sort((a, b) => a.timestamp - b.timestamp)
-
-    // Write all rows
-    for (const item of sortedData) {
-      const csvRow = this.formatOhlcvAsCsvRow(item)
-      await this.writeToStream(stream, csvRow + '\n')
-    }
-  }
-
-  /**
-   * Get or create a write stream for a symbol
-   */
-  private async getWriteStream(symbolKey: string, filePath: string): Promise<Writable> {
-    if (this.writeStreams.has(symbolKey)) {
-      return this.writeStreams.get(symbolKey)!
-    }
-
-    // Ensure directory exists
-    await fs.mkdir(path.dirname(filePath), { recursive: true })
-
-    // Check if file exists to determine the correct flag
-    const fileExists = await this.fileExists(filePath)
     
-    // Create write stream - use 'w' for new files, 'a' for existing
-    const stream = createWriteStream(filePath, {
-      flags: fileExists ? 'a' : 'w',
-      encoding: 'utf8',
-      highWaterMark: 64 * 1024 // 64KB buffer
-    })
-
-    this.writeStreams.set(symbolKey, stream)
-    return stream
-  }
-
-  /**
-   * Write headers to a CSV file
-   */
-  private async writeHeaders(stream: Writable): Promise<void> {
-    const headerRow = this.csvHeaders.join(this.csvDelimiter) + '\n'
-    await this.writeToStream(stream, headerRow)
-  }
-
-  /**
-   * Write data to a stream with proper error handling
-   */
-  private writeToStream(stream: Writable, data: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      stream.write(data, (error) => {
-        if (error) {
-          reject(error)
-        } else {
-          resolve()
-        }
-      })
-    })
-  }
-
-  /**
-   * Format OHLCV data as a CSV row
-   */
-  private formatOhlcvAsCsvRow(data: OhlcvDto): string {
-    const values = [
-      data.timestamp,
-      this.escapeCsvValue(data.symbol),
-      this.escapeCsvValue(data.exchange),
-      data.open,
-      data.high,
-      data.low,
-      data.close,
-      data.volume
-    ]
-
-    return values.join(this.csvDelimiter)
-  }
-
-  /**
-   * Escape CSV values that contain special characters
-   */
-  private escapeCsvValue(value: string): string {
-    if (value.includes(this.csvDelimiter) || value.includes('"') || value.includes('\n')) {
-      return `"${value.replace(/"/g, '""')}"`
+    // Check if file exists and needs headers
+    const needsHeaders = !(await this.fileExists(this.basePath))
+    
+    // Prepare the content to write
+    let content = ''
+    
+    // Add headers if this is a new file
+    if (needsHeaders) {
+      content += this.csvHeaders.join(this.csvDelimiter) + '\n'
     }
-    return value
-  }
-
-  /**
-   * Generate a unique key for symbol-exchange combination
-   */
-  private getSymbolKey(symbol: string, exchange: string): string {
-    return `${symbol}_${exchange}`.replace(/[^a-zA-Z0-9_-]/g, '_')
-  }
-
-  /**
-   * Get the file path for coefficient data
-   */
-  private getCoefficientFilePath(): string {
-    // Store coefficients in same directory as data file
-    const dir = path.dirname(this.basePath)
-    const basename = path.basename(this.basePath, '.csv')
-    return path.join(dir, `${basename}.coefficients.csv`)
-  }
-
-  /**
-   * Check if a file exists
-   */
-  private async fileExists(filePath: string): Promise<boolean> {
-    try {
-      await fs.access(filePath)
-      return true
-    } catch {
-      return false
+    
+    // Add all rows
+    for (const item of sortedData) {
+      content += this.formatOhlcvAsCsvRow(item) + '\n'
+    }
+    
+    // Write or append based on whether file exists
+    if (needsHeaders) {
+      await this.writeToFile(this.basePath, content)
+    } else {
+      await this.appendToFile(this.basePath, content)
     }
   }
 
-  /**
-   * Get OHLCV data within a specific date range
-   */
-  async getBetweenDates(
-    startTime: number,
-    endTime: number,
-    symbol?: string,
-    exchange?: string
-  ): Promise<OhlcvDto[]> {
-    this.ensureReady()
-
-    try {
-      const files = await this.getRelevantFiles(symbol, exchange)
-      const allData: OhlcvDto[] = []
-
-      for (const file of files) {
-        const data = await this.readCsvFile(file)
-        const filtered = data.filter(
-          item => item.timestamp >= startTime && item.timestamp <= endTime
-        )
-        allData.push(...filtered)
-      }
-
-      // Sort by timestamp
-      return allData.sort((a, b) => a.timestamp - b.timestamp)
-    } catch (error) {
-      logger.error('Failed to get OHLCV data by date range', { error, startTime, endTime })
-      throw new RepositoryStorageError(
-        `Failed to get OHLCV data by date range: ${String(error)}`,
-        error instanceof Error ? error : undefined
-      )
-    }
-  }
-
-  /**
-   * Get OHLCV data for a specific symbol
-   */
-  async getBySymbol(
-    symbol: string,
-    exchange?: string,
-    limit?: number,
-    offset?: number
-  ): Promise<OhlcvDto[]> {
-    this.ensureReady()
-
-    try {
-      const files = await this.getRelevantFiles(symbol, exchange)
-      const allData: OhlcvDto[] = []
-
-      for (const file of files) {
-        const data = await this.readCsvFile(file)
-        allData.push(...data)
-      }
-
-      // Sort by timestamp (most recent first)
-      const sorted = allData.sort((a, b) => b.timestamp - a.timestamp)
-
-      // Apply pagination
-      const start = offset || 0
-      const end = limit ? start + limit : undefined
-      return sorted.slice(start, end)
-    } catch (error) {
-      logger.error('Failed to get OHLCV data by symbol', { error, symbol })
-      throw new RepositoryStorageError(
-        `Failed to get OHLCV data by symbol: ${String(error)}`,
-        error instanceof Error ? error : undefined
-      )
-    }
-  }
 
   /**
    * Get OHLCV data using flexible query parameters
    */
   async query(query: OhlcvQuery): Promise<OhlcvDto[]> {
     this.ensureReady()
+    
+    // Flush buffer before reading to ensure we have all data
+    await this.flush()
 
     try {
       const files = await this.getRelevantFiles(query.symbol, query.exchange)
@@ -404,31 +94,14 @@ export class CsvRepository implements OhlcvRepository {
 
       for (const file of files) {
         const data = await this.readCsvFile(file)
-        let filtered = data
-
-        // Apply filters
-        if (query.startTime) {
-          filtered = filtered.filter(item => item.timestamp >= query.startTime!)
-        }
-        if (query.endTime) {
-          filtered = filtered.filter(item => item.timestamp <= query.endTime!)
-        }
-
+        const filtered = data.filter(item => this.matchesQuery(item, query))
         allData.push(...filtered)
       }
 
       // Sort by timestamp
-      let sorted = allData.sort((a, b) => a.timestamp - b.timestamp)
-
-      // Apply pagination
-      if (query.offset) {
-        sorted = sorted.slice(query.offset)
-      }
-      if (query.limit) {
-        sorted = sorted.slice(0, query.limit)
-      }
-
-      return sorted
+      const sorted = allData.sort((a, b) => a.timestamp - b.timestamp)
+      
+      return this.applyPagination(sorted, query)
     } catch (error) {
       logger.error('Failed to execute query', { error, query })
       throw new RepositoryStorageError(
@@ -563,10 +236,24 @@ export class CsvRepository implements OhlcvRepository {
    */
   async getLastTimestamp(symbol: string, exchange?: string): Promise<number | null> {
     this.ensureReady()
+    
+    // Flush buffer before reading to ensure we have all data
+    await this.flush()
 
     try {
-      const data = await this.getBySymbol(symbol, exchange, 1)
-      return data.length > 0 ? data[0]!.timestamp : null
+      const files = await this.getRelevantFiles(symbol, exchange)
+      let latest: number | null = null
+
+      for (const file of files) {
+        const data = await this.readCsvFile(file)
+        for (const item of data) {
+          if (latest === null || item.timestamp > latest) {
+            latest = item.timestamp
+          }
+        }
+      }
+
+      return latest
     } catch (error) {
       logger.error('Failed to get last timestamp', { error, symbol })
       throw new RepositoryStorageError(
@@ -581,13 +268,24 @@ export class CsvRepository implements OhlcvRepository {
    */
   async getFirstTimestamp(symbol: string, exchange?: string): Promise<number | null> {
     this.ensureReady()
+    
+    // Flush buffer before reading to ensure we have all data
+    await this.flush()
 
     try {
-      const data = await this.getBySymbol(symbol, exchange)
-      if (data.length === 0) return null
+      const files = await this.getRelevantFiles(symbol, exchange)
+      let earliest: number | null = null
 
-      // Find the earliest timestamp
-      return Math.min(...data.map(item => item.timestamp))
+      for (const file of files) {
+        const data = await this.readCsvFile(file)
+        for (const item of data) {
+          if (earliest === null || item.timestamp < earliest) {
+            earliest = item.timestamp
+          }
+        }
+      }
+
+      return earliest
     } catch (error) {
       logger.error('Failed to get first timestamp', { error, symbol })
       throw new RepositoryStorageError(
@@ -602,249 +300,24 @@ export class CsvRepository implements OhlcvRepository {
    */
   async getCount(symbol: string, exchange?: string): Promise<number> {
     this.ensureReady()
+    
+    // Flush buffer before reading to ensure we have all data
+    await this.flush()
 
     try {
-      const data = await this.getBySymbol(symbol, exchange)
-      return data.length
+      const files = await this.getRelevantFiles(symbol, exchange)
+      let count = 0
+
+      for (const file of files) {
+        const data = await this.readCsvFile(file)
+        count += data.length
+      }
+
+      return count
     } catch (error) {
       logger.error('Failed to get count', { error, symbol })
       throw new RepositoryStorageError(
         `Failed to get count: ${String(error)}`,
-        error instanceof Error ? error : undefined
-      )
-    }
-  }
-
-  /**
-   * Save a coefficient value
-   */
-  async saveCoefficient(coefficient: CoefficientData): Promise<void> {
-    this.ensureReady()
-
-    try {
-      await this.appendCoefficientToFile(coefficient)
-    } catch (error) {
-      logger.error('Failed to save coefficient', { error, coefficient })
-      throw new RepositoryStorageError(
-        `Failed to save coefficient: ${String(error)}`,
-        error instanceof Error ? error : undefined
-      )
-    }
-  }
-
-  /**
-   * Save multiple coefficient values in a batch
-   */
-  async saveCoefficients(coefficients: CoefficientData[]): Promise<void> {
-    this.ensureReady()
-
-    if (coefficients.length === 0) return
-
-    try {
-      for (const coefficient of coefficients) {
-        await this.appendCoefficientToFile(coefficient)
-      }
-      logger.debug('Saved coefficients batch to CSV', { count: coefficients.length })
-    } catch (error) {
-      logger.error('Failed to save coefficients batch', { error, count: coefficients.length })
-      throw new RepositoryStorageError(
-        `Failed to save coefficients batch: ${String(error)}`,
-        error instanceof Error ? error : undefined
-      )
-    }
-  }
-
-  /**
-   * Append a coefficient to the coefficients CSV file
-   */
-  private async appendCoefficientToFile(coefficient: CoefficientData): Promise<void> {
-    const filePath = this.getCoefficientFilePath()
-    const needsHeaders = !(await this.fileExists(filePath))
-
-    // Ensure directory exists
-    await fs.mkdir(path.dirname(filePath), { recursive: true })
-
-    // Format coefficient as CSV row
-    const csvRow = [
-      this.escapeCsvValue(coefficient.name),
-      coefficient.symbol ? this.escapeCsvValue(coefficient.symbol) : '',
-      coefficient.exchange ? this.escapeCsvValue(coefficient.exchange) : '',
-      coefficient.value,
-      coefficient.metadata ? this.escapeCsvValue(JSON.stringify(coefficient.metadata)) : '',
-      coefficient.timestamp
-    ].join(this.csvDelimiter)
-
-    let content = csvRow + '\n'
-
-    // Add headers if this is a new file
-    if (needsHeaders) {
-      const headers = ['name', 'symbol', 'exchange', 'value', 'metadata', 'timestamp']
-      content = headers.join(this.csvDelimiter) + '\n' + content
-    }
-
-    // Append to file
-    await fs.appendFile(filePath, content, 'utf8')
-  }
-
-  /**
-   * Get a coefficient value by name (not fully implemented for CSV - would require reading entire file)
-   */
-  async getCoefficient(
-    name: string,
-    symbol?: string,
-    exchange?: string
-  ): Promise<CoefficientData | null> {
-    this.ensureReady()
-
-    // For CSV implementation, this is inefficient as we need to read the entire file
-    // In a production system, you might want to use SQLite for coefficients even with CSV for OHLCV
-    logger.warn('getCoefficient is inefficient with CSV storage - consider using SQLite for coefficients')
-
-    try {
-      const coefficients = await this.getCoefficients(name, symbol, exchange)
-      return coefficients.length > 0 ? coefficients[0]! : null
-    } catch (error) {
-      logger.error('Failed to get coefficient', { error, name })
-      throw new RepositoryStorageError(
-        `Failed to get coefficient: ${String(error)}`,
-        error instanceof Error ? error : undefined,
-      )
-    }
-  }
-
-  /**
-   * Get multiple coefficients by name pattern (basic implementation)
-   */
-  async getCoefficients(
-    namePattern?: string,
-    symbol?: string,
-    exchange?: string
-  ): Promise<CoefficientData[]> {
-    this.ensureReady()
-
-    const filePath = this.getCoefficientFilePath()
-
-    if (!(await this.fileExists(filePath))) {
-      return []
-    }
-
-    try {
-      const content = await fs.readFile(filePath, 'utf8')
-      const lines = content.split('\n').filter(line => line.trim())
-
-      if (lines.length <= 1) return [] // No data or just headers
-
-      const coefficients: CoefficientData[] = []
-      const dataLines = lines.slice(1) // Skip headers
-
-      for (const line of dataLines) {
-        const values = this.parseCsvLine(line)
-        if (values.length >= 6) {
-          const coefficient: CoefficientData = {
-            name: values[0]!,
-            symbol: values[1] || undefined,
-            exchange: values[2] || undefined,
-            value: parseFloat(values[3]!),
-            metadata: values[4] && values[4] !== '' ? JSON.parse(values[4]) as Record<string, unknown> : undefined,
-            timestamp: parseInt(values[5]!, 10)
-          }
-
-          // Apply filters
-          if (namePattern && !this.matchesPattern(coefficient.name, namePattern)) {
-            continue
-          }
-          if (symbol && coefficient.symbol !== symbol) {
-            continue
-          }
-          if (exchange && coefficient.exchange !== exchange) {
-            continue
-          }
-
-          coefficients.push(coefficient)
-        }
-      }
-
-      return coefficients
-    } catch (error) {
-      logger.error('Failed to get coefficients', { error, namePattern })
-      throw new RepositoryStorageError(
-        `Failed to get coefficients: ${String(error)}`,
-        error instanceof Error ? error : undefined
-      )
-    }
-  }
-
-  /**
-   * Simple pattern matching for coefficient names
-   */
-  private matchesPattern(name: string, pattern: string): boolean {
-    // Convert glob pattern to regex
-    const regexPattern = pattern
-      .replace(/\*/g, '.*')
-      .replace(/\?/g, '.')
-
-    const regex = new RegExp(`^${regexPattern}$`, 'i')
-    return regex.test(name)
-  }
-
-  /**
-   * Delete coefficients by name pattern (not efficiently implemented for CSV)
-   */
-  async deleteCoefficients(
-    namePattern: string,
-    symbol?: string,
-    exchange?: string
-  ): Promise<number> {
-    this.ensureReady()
-
-    logger.warn('deleteCoefficients is inefficient with CSV storage - consider using SQLite for coefficients')
-
-    try {
-      const allCoefficients = await this.getCoefficients()
-      const filtered = allCoefficients.filter(coeff => {
-        if (this.matchesPattern(coeff.name, namePattern)) {
-          if (symbol && coeff.symbol !== symbol) return true
-          return !!(exchange && coeff.exchange !== exchange)
-           // This one should be deleted
-        }
-        return true // Keep this one
-      })
-
-      const deletedCount = allCoefficients.length - filtered.length
-
-      // Rewrite the entire file with remaining coefficients
-      if (filtered.length === 0) {
-        // Delete the file
-        const filePath = this.getCoefficientFilePath()
-        if (await this.fileExists(filePath)) {
-          await fs.unlink(filePath)
-        }
-      } else {
-        // Rewrite with remaining data
-        const filePath = this.getCoefficientFilePath()
-        const headers = ['name', 'symbol', 'exchange', 'value', 'metadata', 'timestamp']
-        let content = headers.join(this.csvDelimiter) + '\n'
-
-        for (const coeff of filtered) {
-          const row = [
-            this.escapeCsvValue(coeff.name),
-            coeff.symbol ? this.escapeCsvValue(coeff.symbol) : '',
-            coeff.exchange ? this.escapeCsvValue(coeff.exchange) : '',
-            coeff.value,
-            coeff.metadata ? this.escapeCsvValue(JSON.stringify(coeff.metadata)) : '',
-            coeff.timestamp
-          ].join(this.csvDelimiter)
-          content += row + '\n'
-        }
-
-        await fs.writeFile(filePath, content, 'utf8')
-      }
-
-      return deletedCount
-    } catch (error) {
-      logger.error('Failed to delete coefficients', { error, namePattern })
-      throw new RepositoryStorageError(
-        `Failed to delete coefficients: ${String(error)}`,
         error instanceof Error ? error : undefined
       )
     }
@@ -907,7 +380,7 @@ export class CsvRepository implements OhlcvRepository {
   }
 
   /**
-   * Delete OHLCV data within a specific date range (not efficiently implemented for CSV)
+   * Delete OHLCV data within a specific date range
    */
   async deleteBetweenDates(
     startTime: number,
@@ -916,6 +389,9 @@ export class CsvRepository implements OhlcvRepository {
     exchange?: string
   ): Promise<number> {
     this.ensureReady()
+    
+    // Flush buffer before reading to ensure we have all data
+    await this.flush()
 
     logger.warn('deleteBetweenDates is inefficient with CSV storage - consider using SQLite for deletions')
 
@@ -967,12 +443,6 @@ export class CsvRepository implements OhlcvRepository {
     await fs.writeFile(filePath, content, 'utf8')
   }
 
-  /**
-   * Check if the repository is properly initialized and ready to use
-   */
-  isReady(): boolean {
-    return this.ready
-  }
 
   /**
    * Get repository statistics and health information
@@ -1023,16 +493,6 @@ export class CsvRepository implements OhlcvRepository {
         }
       }
 
-      // Add coefficients file size
-      const coeffPath = this.getCoefficientFilePath()
-      if (await this.fileExists(coeffPath)) {
-        try {
-          const stats = await fs.stat(coeffPath)
-          storageSize += stats.size
-        } catch {
-          // File might not be accessible
-        }
-      }
 
       return {
         totalRecords,
@@ -1050,77 +510,33 @@ export class CsvRepository implements OhlcvRepository {
     }
   }
 
+  // --- Private helper methods specific to CSV ---
+
   /**
-   * Flush any pending writes to ensure data persistence
+   * Format OHLCV data as a CSV row
    */
-  async flush(): Promise<void> {
-    this.ensureReady()
+  private formatOhlcvAsCsvRow(data: OhlcvDto): string {
+    const values = [
+      data.timestamp,
+      this.escapeCsvValue(data.symbol),
+      this.escapeCsvValue(data.exchange),
+      data.open,
+      data.high,
+      data.low,
+      data.close,
+      data.volume
+    ]
 
-    try {
-      // Close and reopen all write streams to flush buffers
-      for (const [, stream] of this.writeStreams) {
-        await new Promise<void>((resolve, reject) => {
-          stream.end((error?: Error) => {
-            if (error) reject(error)
-            else resolve()
-          })
-        })
-      }
-
-      this.writeStreams.clear()
-      logger.debug('Flushed CSV repository write streams')
-    } catch (error) {
-      logger.error('Failed to flush CSV repository', { error })
-      throw new RepositoryStorageError(
-        `Failed to flush repository: ${String(error)}`,
-        error instanceof Error ? error : undefined
-      )
-    }
+    return values.join(this.csvDelimiter)
   }
 
   /**
-   * Close the repository and clean up resources
+   * Escape CSV values that contain special characters
    */
-  async close(): Promise<void> {
-    if (this.ready) {
-      try {
-        await this.flush()
-        this.ready = false
-        logger.info('CSV repository closed')
-      } catch (error) {
-        logger.error('Error closing CSV repository', { error })
-        throw new RepositoryStorageError(
-          `Error closing repository: ${String(error)}`,
-          error instanceof Error ? error : undefined
-        )
-      }
+  private escapeCsvValue(value: string): string {
+    if (value.includes(this.csvDelimiter) || value.includes('"') || value.includes('\n')) {
+      return `"${value.replace(/"/g, '""')}"`
     }
-  }
-
-  /**
-   * Force close all streams immediately without flushing
-   * Use only in test cleanup scenarios
-   */
-  forceClose(): void {
-    for (const [, stream] of this.writeStreams) {
-      try {
-        if (stream && typeof stream.destroy === 'function') {
-          stream.destroy()
-        }
-      } catch {
-        // Ignore errors during force close
-      }
-    }
-    this.writeStreams.clear()
-    this.ready = false
-  }
-
-  /**
-   * Ensure the repository is ready for operations
-   */
-  private ensureReady(): void {
-    if (!this.ready) {
-      throw new RepositoryConnectionError('Repository not initialized')
-    }
+    return value
   }
 }

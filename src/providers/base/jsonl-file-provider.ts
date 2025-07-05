@@ -31,16 +31,16 @@ export class JsonlFileProvider extends FileProvider {
       end: new Date(params.end).toISOString()
     })
 
-    try {
-      const stream = createReadStream(this.filePath, { encoding: 'utf8' })
-      const rl = createInterface({
-        input: stream,
-        crlfDelay: Infinity
-      })
+    const fileStream = createReadStream(this.filePath, { encoding: 'utf8' })
+    const rl = createInterface({
+      input: fileStream,
+      crlfDelay: Infinity
+    })
 
+    try {
       let rowNumber = 0
       let yieldedCount = 0
-      let chunk: OhlcvDto[] = []
+      const chunk: OhlcvDto[] = []
 
       for await (const line of rl) {
         rowNumber++
@@ -68,7 +68,7 @@ export class JsonlFileProvider extends FileProvider {
               yield item
               yieldedCount++
             }
-            chunk = []
+            chunk.length = 0
           }
         } catch (parseError) {
           logger.warn('Failed to parse JSONL line', { 
@@ -92,9 +92,13 @@ export class JsonlFileProvider extends FileProvider {
     } catch (error) {
       logger.error('Error reading JSONL file', { error, path: this.filePath })
       throw error
+    } finally {
+      // Ensure readline interface is closed
+      rl.close()
+      // Destroy the underlying stream
+      fileStream.destroy()
     }
   }
-
 
   /**
    * Checks if OHLCV data matches the query parameters

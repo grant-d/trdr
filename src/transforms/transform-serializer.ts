@@ -1,12 +1,11 @@
-import type { Transform, TransformConfig, TransformCoefficients, TransformType } from '../interfaces'
-import type { CoefficientData } from '../repositories'
+import type { Transform, TransformCoefficients, TransformConfig, TransformType } from '../interfaces'
 import { LogReturnsNormalizer } from './log-returns-normalizer'
 import { MinMaxNormalizer } from './min-max-normalizer'
-import { ZScoreNormalizer } from './z-score-normalizer'
-import { PriceCalculations } from './price-calculations'
 import { MissingValueHandler } from './missing-value-handler'
+import { PriceCalculations } from './price-calculations'
 import { TimeframeAggregator } from './timeframe-aggregator'
 import { TransformPipeline } from './transform-pipeline'
+import { ZScoreNormalizer } from './z-score-normalizer'
 
 /**
  * Serialized representation of a transform
@@ -134,64 +133,6 @@ export class TransformSerializer {
       type: config.type,
       params: config.params,
       name: config.params.name
-    }
-  }
-
-  /**
-   * Convert TransformCoefficients to CoefficientData for repository storage
-   */
-  public static coefficientsToRepositoryFormat(
-    coefficients: TransformCoefficients,
-    transformName: string
-  ): CoefficientData[] {
-    const results: CoefficientData[] = []
-    
-    for (const [key, value] of Object.entries(coefficients.values)) {
-      results.push({
-        name: `${transformName}_${coefficients.type}_${key}`,
-        value,
-        timestamp: coefficients.timestamp,
-        symbol: coefficients.symbol,
-        metadata: {
-          transformType: coefficients.type,
-          coefficientKey: key,
-          transformName
-        }
-      })
-    }
-
-    return results
-  }
-
-  /**
-   * Convert CoefficientData array back to TransformCoefficients
-   */
-  public static repositoryToCoefficients(
-    data: CoefficientData[],
-    transformType: TransformType
-  ): TransformCoefficients | null {
-    if (data.length === 0) return null
-
-    const values: Record<string, number> = {}
-    let symbol = ''
-    let timestamp = 0
-
-    for (const item of data) {
-      const metadata = item.metadata as any
-      if (metadata?.transformType === transformType && metadata?.coefficientKey) {
-        values[metadata.coefficientKey] = item.value
-        symbol = item.symbol || symbol
-        timestamp = item.timestamp
-      }
-    }
-
-    if (Object.keys(values).length === 0) return null
-
-    return {
-      type: transformType,
-      timestamp,
-      symbol,
-      values
     }
   }
 

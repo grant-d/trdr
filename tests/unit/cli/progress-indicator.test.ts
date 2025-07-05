@@ -6,7 +6,7 @@ import { forceCleanupAsyncHandles } from '../../helpers/test-cleanup'
 // Mock stdout to capture output
 let stdoutOutput = ''
 const originalWrite = process.stdout.write
-let activeTimeouts: Set<NodeJS.Timeout> = new Set()
+const activeTimeouts = new Set<NodeJS.Timeout>()
 
 // Helper function to create tracked timeouts
 function createTimeout(callback: () => void, delay: number): Promise<void> {

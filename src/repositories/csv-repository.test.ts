@@ -1,4 +1,4 @@
-import assert from 'node:assert'
+import * as assert from 'node:assert'
 import { describe, it, beforeEach, afterEach } from 'node:test'
 import { promises as fs } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -279,35 +279,6 @@ describe('CsvRepository', () => {
       const content = await fs.readFile(testFile, 'utf-8')
       const lines = content.trim().split('\n')
       assert.strictEqual(lines.length, 3, 'Should have header + 2 data rows')
-    })
-  })
-
-  describe('coefficient storage', () => {
-    it('should store coefficients in separate file', async () => {
-      await repository.initialize({
-        connectionString: testFile,
-        options: {}
-      })
-
-      await repository.saveCoefficient({
-        name: 'test-coefficient',
-        symbol: 'AAPL',
-        exchange: 'test',
-        value: 0.5,
-        timestamp: Date.now()
-      })
-
-      await repository.flush()
-
-      // Check coefficient file exists
-      const coeffFile = path.join(testDir, 'test.coefficients.csv')
-      const stats = await fs.stat(coeffFile)
-      assert.ok(stats.isFile(), 'Should create coefficient file')
-
-      // Read and verify content
-      const content = await fs.readFile(coeffFile, 'utf-8')
-      assert.ok(content.includes('test-coefficient'), 'Should contain coefficient name')
-      assert.ok(content.includes('0.5'), 'Should contain coefficient value')
     })
   })
 })

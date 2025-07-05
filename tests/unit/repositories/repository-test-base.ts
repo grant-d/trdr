@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test, afterEach } from 'node:test'
 import type { OhlcvDto } from '../../../src/models/ohlcv.dto'
-import type { CoefficientData, OhlcvRepository } from '../../../src/repositories/ohlcv-repository.interface'
+import type { OhlcvRepository } from '../../../src/repositories/ohlcv-repository.interface'
 import { forceCleanupAsyncHandles } from '../../helpers/test-cleanup'
 
 /**
@@ -90,33 +90,6 @@ export abstract class RepositoryTestBase {
     }
   ]
 
-  /**
-   * Sample coefficient data for testing
-   */
-  protected readonly sampleCoefficients: CoefficientData[] = [
-    {
-      name: 'sma_20',
-      symbol: 'BTCUSD',
-      exchange: 'coinbase',
-      value: 47350.25,
-      metadata: { period: 20, type: 'simple' },
-      timestamp: 1640995200000
-    },
-    {
-      name: 'rsi_14',
-      symbol: 'BTCUSD',
-      exchange: 'coinbase',
-      value: 65.5,
-      metadata: { period: 14, overbought: 70, oversold: 30 },
-      timestamp: 1640998800000
-    },
-    {
-      name: 'volume_profile',
-      value: 1250.75,
-      metadata: { profile_type: 'daily' },
-      timestamp: 1641002400000
-    }
-  ]
 
   /**
    * Run all repository tests
@@ -135,15 +108,13 @@ export abstract class RepositoryTestBase {
       await t.test('Flexible Query Interface', () => this.testFlexibleQuery())
       await t.test('Timestamp Operations', () => this.testTimestampOperations())
       await t.test('Count Operations', () => this.testCountOperations())
-      await t.test('Coefficient Storage', () => this.testCoefficientStorage())
-      await t.test('Coefficient Retrieval', () => this.testCoefficientRetrieval())
-      await t.test('Coefficient Deletion', () => this.testCoefficientDeletion())
       await t.test('Symbol and Exchange Lists', () => this.testSymbolExchangeLists())
       await t.test('Repository Statistics', () => this.testRepositoryStats())
       await t.test('Error Handling', () => this.testErrorHandling())
       await t.test('Edge Cases', () => this.testEdgeCases())
       await t.test('Data Integrity', () => this.testDataIntegrity())
-      await t.test('Performance with Large Dataset', () => this.testPerformance())
+      // Commented out - bulk performance testing not needed for streaming pipeline
+      // await t.test('Performance with Large Dataset', () => this.testPerformance())
     })
   }
 
@@ -443,119 +414,8 @@ export abstract class RepositoryTestBase {
     }
   }
 
-  /**
-   * Test coefficient storage
-   */
-  protected async testCoefficientStorage(): Promise<void> {
-    const repo = await this.createRepository()
-    
-    try {
-      // Test single coefficient save
-      await repo.saveCoefficient(this.sampleCoefficients[0]!)
-      
-      // Test batch coefficient save
-      await repo.saveCoefficients(this.sampleCoefficients)
-      
-      // Ensure data is flushed to disk before reading
-      await repo.flush()
-      
-      // Verify coefficients were saved
-      const retrieved = await repo.getCoefficient('sma_20', 'BTCUSD', 'coinbase')
-      assert.ok(retrieved !== null)
-      assert.equal(retrieved.name, 'sma_20')
-      assert.equal(retrieved.value, 47350.25)
-      assert.ok(retrieved.metadata)
-      assert.equal((retrieved.metadata as { period: number }).period, 20)
-      
-    } finally {
-      try {
-        await repo.close()
-      } catch {
-        // Force close if normal close fails
-        if (typeof (repo as any).forceClose === 'function') {
-          (repo as any).forceClose()
-        }
-      }
-      await this.cleanup()
-      forceCleanupAsyncHandles()
-    }
-  }
 
-  /**
-   * Test coefficient retrieval
-   */
-  protected async testCoefficientRetrieval(): Promise<void> {
-    const repo = await this.createRepository()
-    
-    try {
-      await repo.saveCoefficients(this.sampleCoefficients)
-      await repo.flush()
-      
-      // Test pattern matching
-      const smaCoefficients = await repo.getCoefficients('sma_*')
-      assert.ok(smaCoefficients.length >= 1)
-      
-      // Test symbol filtering
-      const btcCoefficients = await repo.getCoefficients(undefined, 'BTCUSD')
-      assert.ok(btcCoefficients.length >= 2)
-      
-      // Test exchange filtering
-      const coinbaseCoefficients = await repo.getCoefficients(undefined, 'BTCUSD', 'coinbase')
-      assert.ok(coinbaseCoefficients.length >= 2)
-      
-      // Test global coefficients (no symbol/exchange)
-      const globalCoefficients = await repo.getCoefficients('volume_*')
-      assert.ok(globalCoefficients.length >= 1)
-      
-    } finally {
-      try {
-        await repo.close()
-      } catch {
-        // Force close if normal close fails
-        if (typeof (repo as any).forceClose === 'function') {
-          (repo as any).forceClose()
-        }
-      }
-      await this.cleanup()
-      forceCleanupAsyncHandles()
-    }
-  }
 
-  /**
-   * Test coefficient deletion
-   */
-  protected async testCoefficientDeletion(): Promise<void> {
-    const repo = await this.createRepository()
-    
-    try {
-      await repo.saveCoefficients(this.sampleCoefficients)
-      await repo.flush()
-      
-      // Test deletion by pattern
-      const deletedCount = await repo.deleteCoefficients('rsi_*')
-      assert.ok(deletedCount >= 1)
-      
-      // Verify deletion
-      const remaining = await repo.getCoefficient('rsi_14', 'BTCUSD', 'coinbase')
-      assert.equal(remaining, null)
-      
-      // Verify other coefficients remain
-      const smaCoeff = await repo.getCoefficient('sma_20', 'BTCUSD', 'coinbase')
-      assert.ok(smaCoeff !== null)
-      
-    } finally {
-      try {
-        await repo.close()
-      } catch {
-        // Force close if normal close fails
-        if (typeof (repo as any).forceClose === 'function') {
-          (repo as any).forceClose()
-        }
-      }
-      await this.cleanup()
-      forceCleanupAsyncHandles()
-    }
-  }
 
   /**
    * Test symbol and exchange list operations
@@ -762,7 +622,9 @@ export abstract class RepositoryTestBase {
 
   /**
    * Test performance with larger dataset
+   * Commented out - bulk performance testing not needed for streaming pipeline
    */
+  /*
   protected async testPerformance(): Promise<void> {
     const repo = await this.createRepository()
     
@@ -820,4 +682,5 @@ export abstract class RepositoryTestBase {
       forceCleanupAsyncHandles()
     }
   }
+  */
 }

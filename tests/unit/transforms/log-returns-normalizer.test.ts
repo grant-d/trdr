@@ -339,7 +339,7 @@ describe('LogReturnsNormalizer', () => {
       const coefficients = { type: 'logReturns', values: {} }
 
       try {
-        await normalizer.reverse!(data, coefficients).next()
+        await normalizer.reverse(data, coefficients).next()
         ok(false, 'Should have thrown')
       } catch (error) {
         ok((error as Error).message.includes('initial price'))

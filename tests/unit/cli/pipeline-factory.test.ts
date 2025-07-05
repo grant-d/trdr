@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, it } from 'node:test'
 import { PipelineFactory } from '../../../src/cli/pipeline-factory'
 import type { PipelineConfig, TransformConfig } from '../../../src/interfaces'
 import { forceCleanupAsyncHandles } from '../../helpers/test-cleanup'
-import { LogReturnsParams, MissingValueParams, PriceCalcParams, ZScoreParams, MinMaxParams } from '../../../src/transforms'
+import type { LogReturnsParams, MissingValueParams, PriceCalcParams, ZScoreParams, MinMaxParams } from '../../../src/transforms'
 
 describe('Pipeline Factory', () => {
   let tempDir: string

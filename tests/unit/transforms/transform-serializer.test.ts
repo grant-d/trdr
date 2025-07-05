@@ -1,21 +1,21 @@
+import { deepStrictEqual, ok, strictEqual, throws } from 'node:assert'
 import { describe, it } from 'node:test'
-import { strictEqual, deepStrictEqual, ok, throws } from 'node:assert'
-import { 
-  TransformSerializer,
-  type SerializedTransform,
-  type SerializedPipeline
-} from '../../../src/transforms/transform-serializer'
 import type {
-  TransformPipeline,
-  LogReturnsParams} from '../../../src/transforms'
+  LogReturnsParams,
+  TransformPipeline
+} from '../../../src/transforms'
 import {
   LogReturnsNormalizer,
   MinMaxNormalizer,
-  ZScoreNormalizer,
   PriceCalculations,
+  ZScoreNormalizer,
   createPipeline
 } from '../../../src/transforms'
-import type { TransformCoefficients } from '../../../src/interfaces'
+import {
+  TransformSerializer,
+  type SerializedPipeline,
+  type SerializedTransform
+} from '../../../src/transforms/transform-serializer'
 
 describe('Transform Serializer', () => {
   describe('serializeTransform', () => {
@@ -247,116 +247,7 @@ describe('Transform Serializer', () => {
     })
   })
 
-  describe('coefficientsToRepositoryFormat', () => {
-    it('should convert transform coefficients to repository format', () => {
-      const coefficients: TransformCoefficients = {
-        type: 'minMax',
-        timestamp: Date.now(),
-        symbol: 'BTC-USD',
-        values: {
-          close_min: 30000,
-          close_max: 40000,
-          volume_min: 1000000,
-          volume_max: 5000000
-        }
-      }
 
-      const repositoryData = TransformSerializer.coefficientsToRepositoryFormat(
-        coefficients,
-        'price_normalizer'
-      )
-
-      strictEqual(repositoryData.length, 4)
-      
-      const closeMin = repositoryData.find(d => d.name.includes('close_min'))!
-      strictEqual(closeMin.name, 'price_normalizer_minMax_close_min')
-      strictEqual(closeMin.value, 30000)
-      strictEqual(closeMin.symbol, 'BTC-USD')
-      strictEqual(closeMin.metadata?.transformType, 'minMax')
-      strictEqual(closeMin.metadata?.coefficientKey, 'close_min')
-    })
-  })
-
-  describe('repositoryToCoefficients', () => {
-    it('should convert repository data back to transform coefficients', () => {
-      const repositoryData = [
-        {
-          name: 'normalizer_minMax_close_min',
-          value: 30000,
-          timestamp: Date.now(),
-          symbol: 'BTC-USD',
-          metadata: {
-            transformType: 'minMax',
-            coefficientKey: 'close_min',
-            transformName: 'normalizer'
-          }
-        },
-        {
-          name: 'normalizer_minMax_close_max',
-          value: 40000,
-          timestamp: Date.now(),
-          symbol: 'BTC-USD',
-          metadata: {
-            transformType: 'minMax',
-            coefficientKey: 'close_max',
-            transformName: 'normalizer'
-          }
-        }
-      ]
-
-      const coefficients = TransformSerializer.repositoryToCoefficients(
-        repositoryData,
-        'minMax'
-      )
-
-      ok(coefficients)
-      strictEqual(coefficients.type, 'minMax')
-      strictEqual(coefficients.symbol, 'BTC-USD')
-      strictEqual(coefficients.values.close_min, 30000)
-      strictEqual(coefficients.values.close_max, 40000)
-    })
-
-    it('should return null for empty data', () => {
-      const coefficients = TransformSerializer.repositoryToCoefficients([], 'minMax')
-      strictEqual(coefficients, null)
-    })
-
-    it('should filter by transform type', () => {
-      const repositoryData = [
-        {
-          name: 'normalizer_minMax_value',
-          value: 100,
-          timestamp: Date.now(),
-          symbol: 'BTC-USD',
-          metadata: {
-            transformType: 'minMax',
-            coefficientKey: 'value',
-            transformName: 'normalizer'
-          }
-        },
-        {
-          name: 'other_zScore_mean',
-          value: 50,
-          timestamp: Date.now(),
-          symbol: 'BTC-USD',
-          metadata: {
-            transformType: 'zScore',
-            coefficientKey: 'mean',
-            transformName: 'other'
-          }
-        }
-      ]
-
-      const coefficients = TransformSerializer.repositoryToCoefficients(
-        repositoryData,
-        'minMax'
-      )
-
-      ok(coefficients)
-      strictEqual(Object.keys(coefficients.values).length, 1)
-      strictEqual(coefficients.values.value, 100)
-    })
-  })
 
   describe('validateSerialized', () => {
     it('should validate correct serialized transform', () => {

@@ -2,7 +2,6 @@ import type { DataProvider, HistoricalParams, Transform } from '../interfaces'
 import type { OhlcvDto } from '../models'
 import type { FileProvider } from '../providers'
 import type { OhlcvRepository } from '../repositories'
-import { TransformSerializer } from '../transforms'
 
 /**
  * Pipeline options
@@ -189,11 +188,6 @@ export class Pipeline {
       // Flush repository to ensure all data is persisted
       await this.config.repository.flush()
 
-      // Store coefficients if repository supports it
-      if (coefficients.length > 0 && this.config.transform) {
-        await this.storeCoefficients(coefficients)
-      }
-
       const executionTime = Date.now() - startTime
 
       // Disconnect provider
@@ -248,26 +242,6 @@ export class Pipeline {
       current,
       message: `Processing record ${current}`,
     })
-  }
-
-  /**
-   * Store transform coefficients in repository
-   */
-  private async storeCoefficients(coefficients: any[]): Promise<void> {
-    if (!this.config.transform) return
-
-    // Use imported TransformSerializer
-
-    for (const coeff of coefficients) {
-      if (!coeff) continue
-
-      const coeffData = TransformSerializer.coefficientsToRepositoryFormat(
-        coeff,
-        this.config.transform.name || 'transform',
-      )
-
-      await this.config.repository.saveCoefficients(coeffData)
-    }
   }
 
   /**

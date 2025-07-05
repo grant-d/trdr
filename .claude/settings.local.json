@@ -58,7 +58,11 @@
       "Bash(gtimeout:*)",
       "Bash(yarn run tsc:*)",
       "Bash(yarn tc:tests:*)",
-      "Bash(yarn tc:all:*)"
+      "Bash(yarn tc:all:*)",
+      "Bash(awk:*)",
+      "Bash(yarn run typecheck)",
+      "Bash(NODE_OPTIONS=\"--max-old-space-size=512\" yarn tsx --test src/repositories/csv-repository.test.ts)",
+      "Bash(NODE_OPTIONS=\"--max-old-space-size=512\" yarn tsx --test src/repositories/jsonl-repository.test.ts)"
     ],
     "deny": []
   }

@@ -1,4 +1,4 @@
-import assert from 'node:assert'
+import * as assert from 'node:assert'
 import { describe, it, beforeEach, afterEach } from 'node:test'
 import { promises as fs } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -339,36 +339,6 @@ describe('JsonlRepository', () => {
       assert.strictEqual(results.length, 2, 'Should read both formats')
       assert.strictEqual(results[0]!.timestamp, 1704067200000)
       assert.strictEqual(results[1]!.timestamp, 1704067201000)
-    })
-  })
-
-  describe('coefficient storage', () => {
-    it('should store coefficients in separate JSONL file', async () => {
-      await repository.initialize({
-        connectionString: testFile,
-        options: {}
-      })
-
-      await repository.saveCoefficient({
-        name: 'test-coefficient',
-        symbol: 'AAPL',
-        exchange: 'test',
-        value: 0.5,
-        timestamp: Date.now()
-      })
-
-      await repository.flush()
-
-      // Check coefficient file exists
-      const coeffFile = path.join(testDir, 'test.coefficients.jsonl')
-      const stats = await fs.stat(coeffFile)
-      assert.ok(stats.isFile(), 'Should create coefficient file')
-
-      // Read and verify content
-      const content = await fs.readFile(coeffFile, 'utf-8')
-      const parsed = JSON.parse(content.trim())
-      assert.strictEqual(parsed.name, 'test-coefficient')
-      assert.strictEqual(parsed.value, 0.5)
     })
   })
 })
