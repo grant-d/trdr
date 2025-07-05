@@ -214,7 +214,7 @@ describe('PriceCalculations', () => {
         throw new Error('Expected error was not thrown')
       } catch (error) {
         ok(error instanceof Error)
-        ok(/Invalid characters in formula/.test(error.message))
+        ok(error.message.includes('Invalid characters in formula'))
       }
     })
 
@@ -232,7 +232,7 @@ describe('PriceCalculations', () => {
         throw new Error('Expected error was not thrown')
       } catch (error) {
         ok(error instanceof Error)
-        ok(/Formula did not produce a valid number/.test(error.message))
+        ok(error.message.includes('Formula did not produce a valid number'))
       }
     })
   })

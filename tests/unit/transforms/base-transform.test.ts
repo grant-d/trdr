@@ -111,9 +111,9 @@ test('BaseTransform - Apply Transform', async () => {
   // Check coefficients after transform has been consumed
   const coefficients = transform.getCoefficients()
   assert.ok(coefficients, 'Coefficients should be set after transform')
-  assert.equal(coefficients!.type, 'priceCalc')
-  assert.equal(coefficients!.symbol, 'BTCUSD')
-  assert.equal(coefficients!.values.multiplier, 2)
+  assert.equal(coefficients.type, 'priceCalc')
+  assert.equal(coefficients.symbol, 'BTCUSD')
+  assert.equal(coefficients.values.multiplier, 2)
 })
 
 test('BaseTransform - Validation', () => {
@@ -160,9 +160,9 @@ test('BaseTransform - Reversible Transform', async () => {
     symbol: 'BTCUSD',
     values: { multiplier: 3 }
   }
-  
-  const reversed = transform.reverse!(input, coefficients)
-  
+
+  const reversed = transform.reverse(input, coefficients)
+
   const result: OhlcvDto[] = []
   for await (const item of reversed) {
     result.push(item)
@@ -206,7 +206,7 @@ test('BaseTransform - Non-Reversible Transform', () => {
     symbol: 'TEST',
     values: {}
   }
-  
+
   assert.throws(
     () => transform.reverse!(transform['arrayToAsyncIterator']([]), coefficients),
     /Transform Non-Reversible is not reversible/
@@ -224,12 +224,12 @@ test('BaseTransform - WithParams Creates New Instance', () => {
 
 test('BaseTransform - Helper Methods', async () => {
   const transform = new TestTransform({ multiplier: 1 })
-  
+
   // Test arrayToAsyncIterator
   const data = [1, 2, 3]
   const iterator = transform['arrayToAsyncIterator'](data)
   const collected: number[] = []
-  
+
   for await (const item of iterator) {
     collected.push(item)
   }

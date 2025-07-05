@@ -37,7 +37,9 @@
       "mcp__taskmaster-ai__next_task",
       "Bash(timeout 10 yarn test:*)",
       "Bash(chmod:*)",
-      "Bash(tsx scripts/convert-csv-to-jsonl.ts:*)"
+      "Bash(tsx scripts/convert-csv-to-jsonl.ts:*)",
+      "Bash(timeout 30 npm run test:unit:*)",
+      "Bash(yarn cli:*)"
     ],
     "deny": []
   }

@@ -10,7 +10,7 @@ import type { OhlcvRepository } from '../../../src/repositories/ohlcv-repository
  * CSV Repository Tests
  */
 class CsvRepositoryTest extends RepositoryTestBase {
-  private testDir: string = ''
+  private testDir = ''
 
   public async createRepository(): Promise<OhlcvRepository> {
     // Create a unique test directory

@@ -1,0 +1,49 @@
+{
+  "input": {
+    "type": "csv",
+    "path": "./data/BTCUSD-feed.csv",
+    "columnMapping": {
+      "timestamp": "Date",
+      "open": "Open",
+      "high": "High", 
+      "low": "Low",
+      "close": "Close",
+      "volume": "Volume"
+    }
+  },
+  "output": {
+    "path": "./data/output.jsonl",
+    "format": "jsonl",
+    "overwrite": true
+  },
+  "transformations": [
+    {
+      "type": "logReturns",
+      "enabled": true,
+      "params": {
+        "outputField": "returns",
+        "priceField": "close"
+      }
+    },
+    {
+      "type": "zScore",
+      "enabled": true,
+      "params": {
+        "fields": ["returns"],
+        "windowSize": 20
+      }
+    }
+  ],
+  "options": {
+    "chunkSize": 1000,
+    "continueOnError": true,
+    "maxErrors": 10,
+    "showProgress": true
+  },
+  "metadata": {
+    "name": "BTC Price Analysis",
+    "version": "1.0.0",
+    "description": "Analyzes BTC price data with log returns and z-score normalization",
+    "created": "2024-01-01T00:00:00Z"
+  }
+}

@@ -223,8 +223,8 @@ describe('TransformPipeline', () => {
       
       // Check coefficients were collected (only MinMax produces coefficients)
       ok(result.coefficients, `Expected coefficients but got: ${JSON.stringify(result.coefficients)}`)
-      ok(result.coefficients!.values['t1_hlc3_min'] !== undefined)
-      ok(result.coefficients!.values['t1_hlc3_max'] !== undefined)
+      ok(result.coefficients.values.t1_hlc3_min !== undefined)
+      ok(result.coefficients.values.t1_hlc3_max !== undefined)
     })
 
     it('should collect and aggregate coefficients', async () => {
@@ -245,15 +245,15 @@ describe('TransformPipeline', () => {
       
       // Check aggregated coefficients
       ok(result.coefficients)
-      strictEqual(result.coefficients!.type as any, 'pipeline')
+      strictEqual(result.coefficients.type as any, 'pipeline')
       
       // MinMax coefficients (transform 0)
-      ok(result.coefficients!.values['t0_close_min'] !== undefined)
-      ok(result.coefficients!.values['t0_close_max'] !== undefined)
+      ok(result.coefficients.values.t0_close_min !== undefined)
+      ok(result.coefficients.values.t0_close_max !== undefined)
       
       // ZScore coefficients (transform 1)
-      ok(result.coefficients!.values['t1_open_mean'] !== undefined)
-      ok(result.coefficients!.values['t1_open_std'] !== undefined)
+      ok(result.coefficients.values.t1_open_mean !== undefined)
+      ok(result.coefficients.values.t1_open_std !== undefined)
     })
 
     it('should apply complex pipeline', async () => {
@@ -282,11 +282,11 @@ describe('TransformPipeline', () => {
       // Check coefficients from all transforms
       ok(result.coefficients)
       // LogReturns coefficients
-      ok(result.coefficients!.values['t0_priceField'] !== undefined)
-      ok(result.coefficients!.values['t0_base'] !== undefined)
+      ok(result.coefficients.values.t0_priceField !== undefined)
+      ok(result.coefficients.values.t0_base !== undefined)
       // ZScore doesn't produce global coefficients with window
       // MinMax coefficients  
-      ok(result.coefficients!.values['t2_returns_zscore_min'] !== undefined)
+      ok(result.coefficients.values.t2_returns_zscore_min !== undefined)
     })
   })
 
@@ -383,7 +383,7 @@ describe('TransformPipeline', () => {
         throw new Error('Expected error was not thrown')
       } catch (error) {
         ok(error instanceof Error)
-        ok(/Pipeline contains non-reversible transforms/.test(error.message))
+        ok(error.message.includes('Pipeline contains non-reversible transforms'))
       }
     })
 

@@ -99,10 +99,10 @@ describe('ZScoreNormalizer', () => {
 
       // Check that all fields have z-score versions
       ok('open_zscore' in transformed[0]!)
-      ok('close_zscore' in transformed[0]!)
-      ok('volume_zscore' in transformed[0]!)
-      ok(!('high_zscore' in transformed[0]!))
-      ok(!('low_zscore' in transformed[0]!))
+      ok('close_zscore' in transformed[0])
+      ok('volume_zscore' in transformed[0])
+      ok(!('high_zscore' in transformed[0]))
+      ok(!('low_zscore' in transformed[0]))
     })
 
     it('should handle constant values (std=0)', async () => {
@@ -205,7 +205,7 @@ describe('ZScoreNormalizer', () => {
       const transformed = await collectResults(result.data)
 
       ok('close_z' in transformed[0]!)
-      ok(!('close_zscore' in transformed[0]!))
+      ok(!('close_zscore' in transformed[0]))
     })
 
     it('should not add suffix when disabled', async () => {
@@ -296,7 +296,7 @@ describe('ZScoreNormalizer', () => {
 
       // Then reverse it
       const reversed = await collectResults(
-        normalizer.reverse!(arrayToAsyncIterator(normalized), coefficients)
+        normalizer.reverse(arrayToAsyncIterator(normalized), coefficients)
       )
 
       // Check that original values are restored

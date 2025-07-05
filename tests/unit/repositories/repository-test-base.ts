@@ -481,7 +481,7 @@ export abstract class RepositoryTestBase {
       assert.ok(stats.uniqueExchanges >= 2)
       assert.ok(stats.dataDateRange.earliest !== null)
       assert.ok(stats.dataDateRange.latest !== null)
-      assert.ok(stats.dataDateRange.earliest! <= stats.dataDateRange.latest!)
+      assert.ok(stats.dataDateRange.earliest <= stats.dataDateRange.latest)
       
     } finally {
       await repo.close()

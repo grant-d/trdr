@@ -18,8 +18,7 @@ export default [{
     "**/*.js",
     "**/node_modules",
     "**/dist",
-    "**/coverage",
-    "**/*.test.ts"
+    "**/coverage"
   ],
 }, {
   files: ["**/*.ts"],
@@ -40,7 +39,7 @@ export default [{
     sourceType: "module",
 
     parserOptions: {
-      projectService: true,
+      project: "./tsconfig.eslint.json",
       tsconfigRootDir: __dirname,
     },
   },

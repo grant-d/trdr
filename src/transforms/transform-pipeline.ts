@@ -20,7 +20,7 @@ export class TransformPipeline implements Transform<TransformPipelineParams> {
   public readonly isReversible: boolean
   public readonly params: TransformPipelineParams
 
-  private transforms: Transform[]
+  private readonly transforms: Transform[]
 
   constructor(params: TransformPipelineParams) {
     this.params = params
@@ -309,7 +309,7 @@ export class TransformPipeline implements Transform<TransformPipelineParams> {
     const groupedValues: Record<number, Record<string, number>> = {}
     
     for (const [key, value] of Object.entries(aggregated.values || {})) {
-      const match = key.match(/^t(\d+)_(.+)$/)
+      const match = /^t(\d+)_(.+)$/.exec(key)
       if (match) {
         const index = parseInt(match[1]!, 10)
         const fieldKey = match[2]!
@@ -317,7 +317,7 @@ export class TransformPipeline implements Transform<TransformPipelineParams> {
         if (!groupedValues[index]) {
           groupedValues[index] = {}
         }
-        groupedValues[index]![fieldKey] = value
+        groupedValues[index][fieldKey] = value
       }
     }
     

@@ -111,10 +111,10 @@ describe('MinMaxNormalizer', () => {
 
       // Check that all fields have normalized versions
       ok('open_norm' in transformed[0]!)
-      ok('close_norm' in transformed[0]!)
-      ok('volume_norm' in transformed[0]!)
-      ok(!('high_norm' in transformed[0]!))
-      ok(!('low_norm' in transformed[0]!))
+      ok('close_norm' in transformed[0])
+      ok('volume_norm' in transformed[0])
+      ok(!('high_norm' in transformed[0]))
+      ok(!('low_norm' in transformed[0]))
     })
 
     it('should handle constant values (range=0)', async () => {
@@ -225,7 +225,7 @@ describe('MinMaxNormalizer', () => {
       const transformed = await collectResults(result.data)
 
       ok('close_scaled' in transformed[0]!)
-      ok(!('close_norm' in transformed[0]!))
+      ok(!('close_norm' in transformed[0]))
     })
 
     it('should not add suffix when disabled', async () => {
@@ -318,7 +318,7 @@ describe('MinMaxNormalizer', () => {
 
       // Then reverse it
       const reversed = await collectResults(
-        normalizer.reverse!(arrayToAsyncIterator(normalized), coefficients)
+        normalizer.reverse(arrayToAsyncIterator(normalized), coefficients)
       )
 
       // Check that original values are restored
@@ -364,7 +364,7 @@ describe('MinMaxNormalizer', () => {
       }]
 
       const reversed = await collectResults(
-        normalizer.reverse!(arrayToAsyncIterator(normalized), coefficients)
+        normalizer.reverse(arrayToAsyncIterator(normalized), coefficients)
       )
 
       // Should return min value when targetRange is 0

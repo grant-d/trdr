@@ -5,6 +5,9 @@
   "type": "module",
   "main": "dist/index.js",
   "private": false,
+  "bin": {
+    "trdr": "dist/cli/cli.js"
+  },
   "scripts": {
     "up": "git gc && yarn global upgrade && yarn && yarn outdated",
     "build": "rimraf dist && tsc",
@@ -20,7 +23,8 @@
     "format": "prettier --write 'src/**/*.ts' 'scripts/**/*.ts' 'tests/**/*.ts'",
     "format:check": "prettier --check 'src/**/*.ts' 'scripts/**/*.ts' 'tests/**/*.ts'",
     "clean": "rimraf dist node_modules coverage",
-    "csv-to-jsonl": "tsx scripts/csv-to-jsonl.ts"
+    "cli": "tsx src/cli/cli.ts",
+    "cli:build": "npm run build && node dist/cli/cli.js"
   },
   "keywords": [],
   "author": "",
@@ -35,13 +39,14 @@
     "eslint": "^9.30.0",
     "prettier": "^3.6.2",
     "rimraf": "^6.0.1",
-    "task-master-ai": "^0.18.0",
+    "task-master-ai": "^0.19.0",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3"
   },
   "dependencies": {
     "@coinbase-sample/core-ts": "^0.2.0",
     "better-sqlite3": "^12.2.0",
+    "commander": "^14.0.0",
     "winston": "^3.17.0"
   }
 }

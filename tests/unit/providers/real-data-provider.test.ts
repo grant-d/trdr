@@ -5,7 +5,7 @@ import type { HistoricalParams } from '../../../src/interfaces/data-provider.int
 import type { OhlcvDto } from '../../../src/models/ohlcv.dto'
 import { CsvFileProvider } from '../../../src/providers/base/csv-file-provider'
 import { JsonlFileProvider } from '../../../src/providers/base/jsonl-file-provider'
-import { FileProviderConfig } from '../../../src/providers/base/types'
+import type { FileProviderConfig } from '../../../src/providers/base/types'
 
 describe('Real Data Provider Tests', () => {
   const testDir = join(process.cwd(), 'tests/unit/providers')

@@ -1,4 +1,4 @@
-import { OhlcvDto } from '../../../src/models'
+import type { OhlcvDto } from '../../../src/models'
 
 /**
  * Type for OHLCV data with additional transform fields

@@ -3,7 +3,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { after, before, describe, it } from 'node:test'
 import type { HistoricalParams } from '../../../src/interfaces'
-import { OhlcvDto } from '../../../src/models'
+import type { OhlcvDto } from '../../../src/models'
 import type { FileProviderConfig } from '../../../src/providers'
 import { CsvFileProvider } from '../../../src/providers/base'
 

@@ -23,7 +23,7 @@ export class JsonlRepository implements OhlcvRepository {
   private coefficientBuffer: CoefficientData[] = []
   
   // Active write streams
-  private activeStreams = new Map<string, NodeJS.WritableStream>()
+  private readonly activeStreams = new Map<string, NodeJS.WritableStream>()
 
   /**
    * Initialize the JSONL repository and set up directory structure
@@ -528,7 +528,7 @@ export class JsonlRepository implements OhlcvRepository {
       // Write records
       for (const record of records) {
         await new Promise<void>((resolve, reject) => {
-          stream!.write(JSON.stringify(record) + '\n', (err) => {
+          stream.write(JSON.stringify(record) + '\n', (err) => {
             if (err) reject(err)
             else resolve()
           })
@@ -550,7 +550,7 @@ export class JsonlRepository implements OhlcvRepository {
     // Write records
     for (const record of data) {
       await new Promise<void>((resolve, reject) => {
-        stream!.write(JSON.stringify(record) + '\n', (err) => {
+        stream.write(JSON.stringify(record) + '\n', (err) => {
           if (err) reject(err)
           else resolve()
         })

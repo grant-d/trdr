@@ -10,7 +10,7 @@ import type { OhlcvRepository } from '../../../src/repositories/ohlcv-repository
  * SQLite Repository Tests
  */
 class SqliteRepositoryTest extends RepositoryTestBase {
-  private testDbPath: string = ''
+  private testDbPath = ''
 
   public async createRepository(): Promise<OhlcvRepository> {
     // Create a unique test database file

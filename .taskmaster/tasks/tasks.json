@@ -333,8 +333,81 @@
           3,
           4
         ],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement Command-Line Argument Parser",
+            "description": "Create a robust command-line argument parser that handles all required CLI options including config file path, overrides, mode selection, and help display.",
+            "dependencies": [],
+            "details": "Use a library like 'commander' or 'yargs' to implement argument parsing. Define all command options with proper help text, default values, and type validation. Include options for: config file path, override values, execution mode (interactive/server), verbosity level, and help. Implement a clean help display that shows usage examples.",
+            "status": "done",
+            "testStrategy": "Write unit tests with mock arguments to verify correct parsing of different command combinations. Test error handling for invalid arguments."
+          },
+          {
+            "id": 2,
+            "title": "Implement Configuration File Loading",
+            "description": "Create a module to load and parse pipeline configuration from JSON files with proper error handling.",
+            "dependencies": [],
+            "details": "Implement a function that takes a file path from CLI arguments and loads the JSON configuration. Handle file system errors gracefully (file not found, permission issues, etc.). Support both absolute and relative paths. Add support for environment variable expansion in config values. Parse the JSON into the PipelineConfig interface structure.",
+            "status": "done",
+            "testStrategy": "Test with valid configs, malformed JSON files, and non-existent files. Verify environment variable expansion works correctly."
+          },
+          {
+            "id": 3,
+            "title": "Implement Configuration Validator",
+            "description": "Complete the ConfigValidator class to thoroughly validate pipeline configurations and provide clear error messages.",
+            "dependencies": [],
+            "details": "Implement validation logic for all required fields in PipelineConfig. Check that input and output configurations are valid. Verify that transformation configurations are compatible with each other (output of one can be input to the next). Validate that referenced plugins exist. Return detailed validation errors that help users fix their configurations.",
+            "status": "done",
+            "testStrategy": "Create test cases with various invalid configurations to ensure all validation rules are properly enforced. Test with missing fields, incompatible transforms, and other edge cases."
+          },
+          {
+            "id": 4,
+            "title": "Implement Command-Line Override System",
+            "description": "Create a system to override configuration values via command-line arguments.",
+            "dependencies": [],
+            "details": "Implement the applyOverrides function to modify loaded configuration based on command-line arguments. Support dot notation for nested properties (e.g., 'input.path=/new/path'). Handle type conversion appropriately (strings, numbers, booleans). Validate that overrides target valid configuration properties. Document the override syntax for users.",
+            "status": "done",
+            "testStrategy": "Test overriding various configuration properties including nested ones. Verify type conversion works correctly. Test with invalid override syntax."
+          },
+          {
+            "id": 5,
+            "title": "Implement Pipeline Factory",
+            "description": "Complete the PipelineFactory class to construct pipeline instances from validated configurations.",
+            "dependencies": [],
+            "details": "Implement the createPipeline method to instantiate the correct input provider based on input config. Create transformation chain from transformation configs, ensuring proper ordering. Set up the output repository from output config. Wire everything together into a functional Pipeline instance. Handle plugin loading if external transforms are referenced.",
+            "status": "done",
+            "testStrategy": "Test pipeline creation with various configurations. Verify that the created pipeline has the correct components and structure. Mock components to test factory logic in isolation."
+          },
+          {
+            "id": 6,
+            "title": "Implement Progress Indicators",
+            "description": "Add progress indicators for long-running operations to improve user experience.",
+            "dependencies": [],
+            "details": "Integrate a progress bar library (like 'progress' or 'ora'). Add hooks in the Pipeline class to report progress during execution. Display different indicators for different operation types (loading, processing, saving). Ensure progress indicators work in both interactive and server modes. Add an option to disable progress indicators for CI environments.",
+            "status": "done",
+            "testStrategy": "Test progress reporting with mock long-running operations. Verify indicators display correctly in different terminal environments."
+          },
+          {
+            "id": 7,
+            "title": "Implement Interactive and Server Execution Modes",
+            "description": "Complete the implementation of both one-time (interactive) and continuous (server) execution modes.",
+            "dependencies": [],
+            "details": "Implement the pipeline.run() method for one-time execution that processes data and exits. Implement pipeline.runContinuously() for server mode that keeps running and processes new data as it arrives. Add proper signal handling (SIGINT, SIGTERM) for clean shutdown. Implement appropriate logging for each mode. Add configuration options to control polling interval in server mode.",
+            "status": "done",
+            "testStrategy": "Test both execution modes with mock pipelines. Verify proper startup, execution, and shutdown behavior. Test signal handling to ensure clean termination."
+          },
+          {
+            "id": 8,
+            "title": "Integrate CLI Components and Create Main Entry Point",
+            "description": "Connect all CLI components and implement the main entry point function with proper error handling.",
+            "dependencies": [],
+            "details": "Implement the main() function that orchestrates the entire CLI flow. Add comprehensive error handling throughout the execution flow. Implement proper exit codes for different error scenarios. Add logging at appropriate levels. Create a clean startup script that users can call to run the application. Package the CLI for easy installation (e.g., via npm).",
+            "status": "done",
+            "testStrategy": "Create integration tests that exercise the entire CLI with various configurations and arguments. Test error scenarios to verify proper error messages and exit codes."
+          }
+        ]
       },
       {
         "id": 6,
@@ -383,7 +456,7 @@
     ],
     "metadata": {
       "created": "2025-07-04T20:49:04.828Z",
-      "updated": "2025-07-05T02:46:55.551Z",
+      "updated": "2025-07-05T07:35:44.981Z",
       "description": "Tasks for master context"
     }
   }

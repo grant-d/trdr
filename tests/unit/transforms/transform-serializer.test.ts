@@ -5,12 +5,13 @@ import {
   type SerializedTransform,
   type SerializedPipeline
 } from '../../../src/transforms/transform-serializer'
+import type {
+  TransformPipeline} from '../../../src/transforms'
 import {
   LogReturnsNormalizer,
   MinMaxNormalizer,
   ZScoreNormalizer,
   PriceCalculations,
-  TransformPipeline,
   createPipeline
 } from '../../../src/transforms'
 import type { TransformCoefficients } from '../../../src/interfaces'
