@@ -109,4 +109,17 @@ export interface PercentChangeParams extends BaseTransformParams {
   /** Name of the output field */
   // outputField?: string
 }
+
+/**
+ * Parameters for fractional differentiation
+ */
+export interface FractionalDiffParams extends BaseTransformParams {
+  /** Differencing parameter d (typically between 0 and 1) */
+  d: number
+  
+  /** Maximum number of weights to use (truncation threshold) */
+  maxWeights?: number
+  
+  /** Minimum weight threshold (stop when weight magnitude < this) */
+  minWeight?: number
 }

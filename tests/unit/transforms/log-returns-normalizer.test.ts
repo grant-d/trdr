@@ -62,17 +62,17 @@ describe('LogReturnsNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      strictEqual(transformed.length, 3)
-      
-      // First item has no previous data, so returns should be 0
-      strictEqual(transformed[0]!.close_returns, 0)
+      // Transform now doesn't yield until ready (needs 2 data points)
+      strictEqual(transformed.length, 2)
       
       // Calculate expected log returns: ln(105/100) and ln(110/105)
       const expectedReturn1 = Math.log(105 / 100)
       const expectedReturn2 = Math.log(110 / 105)
       
-      ok(Math.abs((transformed[1]! as any).close_returns - expectedReturn1) < 0.0001)
-      ok(Math.abs((transformed[2]! as any).close_returns - expectedReturn2) < 0.0001)
+      // First yielded item (was second item)
+      ok(Math.abs((transformed[0]! as any).close_returns - expectedReturn1) < 0.0001)
+      // Second yielded item (was third item)
+      ok(Math.abs((transformed[1]! as any).close_returns - expectedReturn2) < 0.0001)
     })
 
     it('should calculate log10 returns when specified', async () => {
@@ -86,10 +86,11 @@ describe('LogReturnsNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      strictEqual(transformed[0]!.close_log10, 0) // First item
+      // Only yields after 2 data points
+      strictEqual(transformed.length, 1)
       
       const expectedReturn = Math.log10(110 / 100)
-      ok(Math.abs((transformed[1]! as any).close_log10 - expectedReturn) < 0.0001)
+      ok(Math.abs((transformed[0]! as any).close_log10 - expectedReturn) < 0.0001)
     })
 
     it('should use specified price field', async () => {
@@ -102,11 +103,12 @@ describe('LogReturnsNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      strictEqual(transformed[0]!.open_returns, 0) // First item
+      // Only yields after 2 data points
+      strictEqual(transformed.length, 1)
       
       // Open values are price - 1, so 99 -> 104
       const expectedReturn = Math.log(104 / 99)
-      ok(Math.abs((transformed[1]! as any).open_returns - expectedReturn) < 0.0001)
+      ok(Math.abs((transformed[0]! as any).open_returns - expectedReturn) < 0.0001)
     })
 
     it('should handle multiple symbols', async () => {
@@ -125,17 +127,16 @@ describe('LogReturnsNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // First item of each symbol should have 0 returns
-      strictEqual(transformed[0]!.close_returns, 0) // BTC first
-      strictEqual(transformed[2]!.close_returns, 0) // ETH first
+      // Only yields after 2 data points per symbol - should get 2 items total
+      strictEqual(transformed.length, 2)
 
-      // Check BTC return: ln(105/100)
+      // BTC return: ln(105/100)
       const btcReturn = Math.log(105 / 100)
-      ok(Math.abs((transformed[1]! as any).close_returns - btcReturn) < 0.0001)
+      ok(Math.abs((transformed[0]! as any).close_returns - btcReturn) < 0.0001)
 
-      // Check ETH return: ln(210/200)  
+      // ETH return: ln(210/200)  
       const ethReturn = Math.log(210 / 200)
-      ok(Math.abs((transformed[3]! as any).close_returns - ethReturn) < 0.0001)
+      ok(Math.abs((transformed[1]! as any).close_returns - ethReturn) < 0.0001)
     })
 
     it('should handle zero and negative prices', async () => {
@@ -153,9 +154,10 @@ describe('LogReturnsNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      strictEqual(transformed[0]!.close_returns, 0) // First item
-      strictEqual(transformed[1]!.close_returns, 0) // Zero/negative price -> 0 return
-      strictEqual(transformed[2]!.close_returns, 0) // Negative price -> 0 return
+      // Only yields after 2 data points, so 2 items total
+      strictEqual(transformed.length, 2)
+      strictEqual(transformed[0]!.close_returns, 0) // Zero/negative price -> 0 return
+      strictEqual(transformed[1]!.close_returns, 0) // Negative price -> 0 return
     })
   })
 
@@ -216,13 +218,12 @@ describe('LogReturnsNormalizer', () => {
 
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       
-      // Process data points
+      // Process data points - the transform processes internally, so we need to consume output
       const iterator = result.data
-      await iterator.next() // 1st point
-      strictEqual(normalizer.isReady(), false)
+      strictEqual(normalizer.isReady(), false) // Not ready initially
       
-      await iterator.next() // 2nd point - should be ready now
-      strictEqual(normalizer.isReady(), true)
+      await iterator.next() // This processes 2 data points and yields the first result
+      strictEqual(normalizer.isReady(), true) // Should be ready now
     })
   })
 
@@ -237,10 +238,11 @@ describe('LogReturnsNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
+      // Only yields after 2 data points
+      strictEqual(transformed.length, 1)
       // Close should be overwritten with log returns
-      strictEqual(transformed[0]!.close, 0) // First item
       const expectedReturn = Math.log(105 / 100)
-      ok(Math.abs(transformed[1]!.close - expectedReturn) < 0.0001)
+      ok(Math.abs(transformed[0]!.close - expectedReturn) < 0.0001)
     })
 
     it('should drop columns when output is null', async () => {
@@ -260,7 +262,7 @@ describe('LogReturnsNormalizer', () => {
 
   describe('edge cases', () => {
     it('should handle single data point', async () => {
-      const testData = createTestData([100])
+      const testData = createTestData([100, 105])
       const normalizer = new LogReturnsNormalizer({
         in: ['close'],
         out: ['close_returns']
@@ -269,8 +271,9 @@ describe('LogReturnsNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
+      // With 2 data points, transform yields 1 result (log return from first to second)
       strictEqual(transformed.length, 1)
-      strictEqual(transformed[0]!.close_returns, 0) // No previous data
+      ok(typeof transformed[0]!.close_returns === 'number')
     })
 
     it('should handle empty data stream', async () => {

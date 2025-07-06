@@ -65,15 +65,16 @@ describe('Pipeline Factory', () => {
       const logReturnsTx: TransformConfig<LogReturnsParams> = {
         type: 'logReturns',
         params: {
-          outputField: 'returns',
-          priceField: 'close'
+          in: ['close'],
+          out: ['returns']
         }
       }
 
       const minMaxTx: TransformConfig<MinMaxParams> = {
         type: 'minMax',
         params: {
-          fields: ['returns']
+          in: ['returns'],
+          out: ['returns_zscore']
         }
       }
 
@@ -323,10 +324,10 @@ describe('Pipeline Factory', () => {
 
     it('should get transform parameters', () => {
       const logReturnsParams = PipelineFactory.getTransformParams('logReturns')
-      deepStrictEqual(logReturnsParams, ['outputField', 'priceField'])
+      deepStrictEqual(logReturnsParams, ['in', 'out', 'base'])
       
       const minMaxParams = PipelineFactory.getTransformParams('minMax')
-      deepStrictEqual(minMaxParams, ['fields', 'targetMin', 'targetMax'])
+      deepStrictEqual(minMaxParams, ['in', 'out', 'windowSize', 'min', 'max'])
       
       const unknownParams = PipelineFactory.getTransformParams('unknownTransform')
       deepStrictEqual(unknownParams, [])
@@ -349,7 +350,8 @@ describe('Pipeline Factory', () => {
         type: 'missingValues',
         params: {
           strategy: 'forward',
-          fields: ['open', 'high', 'low', 'close', 'volume']
+          in: ['open', 'high', 'low', 'close', 'volume'],
+          out: ['open_minmax', 'high_minmax', 'low_minmax', 'close_minmax', 'volume_minmax']
         }
       }
 
@@ -363,15 +365,16 @@ describe('Pipeline Factory', () => {
       const logReturnsTx: TransformConfig<LogReturnsParams> = {
         type: 'logReturns',
         params: {
-          outputField: 'returns',
-          priceField: 'close'
+          in: ['close'],
+          out: ['returns']
         }
       }
 
       const zScoreTx: TransformConfig<ZScoreParams> = {
         type: 'zScore',
         params: {
-          fields: ['returns'],
+          in: ['returns'],
+          out: ['returns_zscore'],
           windowSize: 20
         }
       }

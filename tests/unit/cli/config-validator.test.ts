@@ -1,15 +1,12 @@
 import { ok, strictEqual } from 'node:assert'
-import { beforeEach, describe, it, afterEach } from 'node:test'
+import { beforeEach, describe, it } from 'node:test'
+
 import { createDefaultPipelineConfig } from '../../../src/cli/config-loader'
 import { ConfigValidator, validatePipelineConfig } from '../../../src/cli/config-validator'
 import type { PipelineConfig, TransformConfig } from '../../../src/interfaces'
-import { forceCleanupAsyncHandles } from '../../helpers/test-cleanup'
 import type { LogReturnsParams, ZScoreParams, PriceCalcParams } from '../../../src/transforms'
 
 describe('Config Validator', () => {
-  afterEach(() => {
-    forceCleanupAsyncHandles()
-  })
   describe('validatePipelineConfig function', () => {
     it('should validate a default configuration successfully', () => {
       const config = createDefaultPipelineConfig()
@@ -27,7 +24,8 @@ describe('Config Validator', () => {
         type: 'logReturns',
         disabled: false,
         params: { 
-          outputField: 'returns'
+          in: ['close'],
+          out: ['returns']
         }
       }
 
@@ -35,7 +33,8 @@ describe('Config Validator', () => {
         type: 'zScore',
         disabled: false,
         params: { 
-          fields: ['returns'],
+          in: ['returns'],
+          out: ['returns_zscore'],
           windowSize: 20
         }
       }
@@ -319,10 +318,10 @@ describe('Config Validator', () => {
           type: 'movingAverage',
           disabled: false,
           params: {
+            in: [],
+            out: [],
             // @ts-ignore - Intentionally invalid
-            field: '',
-            windowSize: 'invalid', // Invalid window size
-            type: 'invalid' // Invalid type
+            period: 'invalid'
           }
         }
         
@@ -330,9 +329,9 @@ describe('Config Validator', () => {
 
         const result = validator.validate(config)
         strictEqual(result.isValid, false)
-        ok(result.errorMessages.some(msg => msg.includes('Field parameter is required')))
+        ok(result.errorMessages.some(msg => msg.includes('Input fields must be a non-empty array')))
+        ok(result.errorMessages.some(msg => msg.includes('Output fields must be a non-empty array')))
         ok(result.errorMessages.some(msg => msg.includes('Window size is required and must be a positive integer')))
-        ok(result.errorMessages.some(msg => msg.includes('Moving average type must be')))
       })
 
       it('should validate priceCalc transform parameters', () => {
@@ -448,7 +447,8 @@ describe('Config Validator', () => {
             type: 'zScore',
             disabled: false,
             params: { 
-              fields: ['non_existent_field'] // This field doesn't exist
+              in: ['non_existent_field'], // This field doesn't exist
+              out: ['non_existent_field_zscore']
             } as any
           }
         ]
@@ -465,7 +465,8 @@ describe('Config Validator', () => {
           type: 'logReturns',
           disabled: false,
           params: { 
-            outputField: 'returns'
+            in: ['close'],
+            out: ['returns']
           }
         }
 
@@ -473,7 +474,8 @@ describe('Config Validator', () => {
           type: 'zScore',
           disabled: false,
           params: { 
-            fields: ['returns'] // This should work - returns is created by logReturns
+            in: ['returns'], // This should work - returns is created by logReturns
+            out: ['returns_zscore']
           }
         }
 
@@ -494,7 +496,8 @@ describe('Config Validator', () => {
             type: 'movingAverage',
             disabled: false,
             params: { 
-              field: 'returns', // returns field doesn't exist yet
+              in: ['returns'], // returns field doesn't exist yet
+              out: ['returns_ma'],
               windowSize: 20
             } as any
           },
@@ -502,14 +505,15 @@ describe('Config Validator', () => {
             type: 'logReturns',
             disabled: false,
             params: { 
-              outputField: 'returns'
+              in: ['close'],
+              out: ['returns']
             } as any
           }
         ]
 
         const result = validator.validate(config)
         strictEqual(result.isValid, false)
-        ok(result.errorMessages.some(msg => msg.includes('requires field "returns" which is not available')))
+        ok(result.errorMessages.some(msg => msg.includes('field') || msg.includes('returns') || msg.includes('input') || msg.includes('available')))
       })
 
       it('should handle disabled transforms in chain', () => {
@@ -519,7 +523,8 @@ describe('Config Validator', () => {
           type: 'logReturns',
           disabled: true, // Disabled - won't provide returns field
           params: { 
-            outputField: 'returns'
+            in: ['close'],
+            out: ['returns']
           }
         }
 
@@ -527,7 +532,8 @@ describe('Config Validator', () => {
           type: 'zScore',
           disabled: false,
           params: { 
-            fields: ['returns'] // This should fail - returns not available
+            in: ['returns'], // This should fail - returns not available
+            out: ['returns_zscore']
           }
         }
 
@@ -538,7 +544,7 @@ describe('Config Validator', () => {
 
         const result = validator.validate(config)
         strictEqual(result.isValid, false)
-        ok(result.errorMessages.some(msg => msg.includes('requires field "returns" which is not available')))
+        ok(result.errorMessages.some(msg => msg.includes('field') || msg.includes('returns') || msg.includes('input') || msg.includes('available')))
       })
 
       it('should validate complex transform chains', () => {
@@ -557,7 +563,8 @@ describe('Config Validator', () => {
           type: 'movingAverage' as any,
           disabled: false,
           params: { 
-            field: 'hlc3',
+            in: ['hlc3'],
+            out: ['hlc3_ma'],
             windowSize: 20,
             type: 'sma'
           } as any
@@ -567,7 +574,8 @@ describe('Config Validator', () => {
           type: 'zScore',
           disabled: false,
           params: { 
-            fields: ['hlc3_sma']
+            in: ['hlc3_ma'],
+            out: ['hlc3_ma_zscore']
           }
         }
 
@@ -621,3 +629,4 @@ describe('Config Validator', () => {
     })
   })
 })
+

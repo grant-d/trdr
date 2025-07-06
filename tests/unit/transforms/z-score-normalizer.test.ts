@@ -68,13 +68,10 @@ describe('ZScoreNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      strictEqual(transformed.length, 5)
+      // Transform now doesn't yield until ready (windowSize=3)
+      strictEqual(transformed.length, 3)
 
-      // First two items have insufficient data, so output 0
-      strictEqual(transformed[0]!.close_zscore, 0)
-      strictEqual(transformed[1]!.close_zscore, 0)
-
-      // For items 2, 3, 4 we have full windows to check
+      // All transformed items now have full windows to check
       // Window [102, 112, 122]: close values from testData
       const window1 = [102, 112, 122]
       const mean1 = window1.reduce((a, b) => a + b) / 3 // 112
@@ -82,7 +79,8 @@ describe('ZScoreNormalizer', () => {
       const std1 = Math.sqrt(variance1)
       const expected2 = (122 - mean1) / std1
       
-      ok(Math.abs(transformed[2]!.close_zscore! - expected2) < 0.0001)
+      // Since first 2 items are not yielded, the 3rd item is now at index 0
+      ok(Math.abs(transformed[0]!.close_zscore! - expected2) < 0.0001)
     })
 
     it('should handle multiple fields', async () => {
@@ -95,6 +93,10 @@ describe('ZScoreNormalizer', () => {
 
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
+
+      // Transform now doesn't yield until ready (windowSize=3)
+      // With 3 data points and windowSize=3, we get 1 result
+      strictEqual(transformed.length, 1)
 
       // Check that all fields have z-score versions
       ok('open_zscore' in transformed[0]!)
@@ -125,12 +127,12 @@ describe('ZScoreNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // First two items have insufficient data
-      strictEqual(transformed[0]!.close_zscore, 0)
-      strictEqual(transformed[1]!.close_zscore, 0)
+      // Transform now doesn't yield until ready (windowSize=3)
+      // So we should get 3 items
+      strictEqual(transformed.length, 3)
       
-      // Remaining items: when std=0, all z-scores should be 0
-      for (let i = 2; i < transformed.length; i++) {
+      // When std=0 (all values same), all z-scores should be 0
+      for (let i = 0; i < transformed.length; i++) {
         strictEqual(transformed[i]!.close_zscore, 0)
       }
     })
@@ -146,20 +148,14 @@ describe('ZScoreNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // All data should be processed and returned
-      strictEqual(transformed.length, 3)
+      // Only yields after windowSize=3 data points, so 1 result
+      strictEqual(transformed.length, 1)
       
       // Check that output column exists
       ok('close_zscore' in transformed[0]!)
-      ok('close_zscore' in transformed[1]!)
-      ok('close_zscore' in transformed[2]!)
       
-      // First two items should have 0 (insufficient data)
-      strictEqual(transformed[0].close_zscore, 0)
-      strictEqual(transformed[1].close_zscore, 0)
-      
-      // Third item should have a calculated z-score
-      ok(typeof transformed[2].close_zscore === 'number')
+      // Item should have a calculated z-score (not 0 since it has sufficient data)
+      ok(typeof transformed[0]!.close_zscore === 'number')
     })
   })
 
@@ -175,11 +171,8 @@ describe('ZScoreNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      strictEqual(transformed.length, 10)
-
-      // First two items have insufficient data
-      strictEqual(transformed[0]!.close_zscore, 0)
-      strictEqual(transformed[1]!.close_zscore, 0)
+      // Transform now doesn't yield until ready (windowSize=3)
+      strictEqual(transformed.length, 8) // 10 - 2 items that are not ready
 
       // Check a specific window (items 2, 3, 4 with closes 102, 112, 122)
       // Window for item at index 4 would be [112, 122, 132]
@@ -188,13 +181,13 @@ describe('ZScoreNormalizer', () => {
       const variance = window.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / 3
       const std = Math.sqrt(variance)
 
-      // Item at index 4 has value 132, should be normalized based on this window
+      // Item at index 2 (which was 4 before) has value 132, should be normalized based on this window
       const expectedZ = (132 - mean) / std
-      ok(Math.abs(transformed[4]!.close_zscore! - expectedZ) < 0.01)
+      ok(Math.abs(transformed[2]!.close_zscore! - expectedZ) < 0.01)
     })
 
     it('should handle insufficient data gracefully', async () => {
-      const testData = createTestData(1)
+      const testData = createTestData(3)
       const normalizer = new ZScoreNormalizer({ 
         in: ['close'],
         out: ['close_zscore'],
@@ -204,8 +197,8 @@ describe('ZScoreNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // With only 1 data point and window size 5, should output 0
-      strictEqual(transformed[0]!.close_zscore, 0)
+      // With only 3 data points and window size 5, nothing will be yielded
+      strictEqual(transformed.length, 0)
     })
   })
 
@@ -236,14 +229,14 @@ describe('ZScoreNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // First two items have insufficient data
-      strictEqual(transformed[0]!.volume, 0)
-      strictEqual(transformed[1]!.volume, 0)
+      // Transform now doesn't yield until ready (windowSize=3)
+      // With 3 data points and windowSize=3, we get 1 result
+      strictEqual(transformed.length, 1)
       
-      // Third item should have normalized value (z-score)
-      ok(typeof transformed[2]!.volume === 'number')
+      // Item should have normalized value (z-score)
+      ok(typeof transformed[0]!.volume === 'number')
       // Volume should be transformed to z-score, not original value
-      ok(transformed[2]!.volume !== 1200) // Original would be 1200
+      ok(transformed[0]!.volume !== 1000) // Original would be 1000
     })
 
     it('should drop columns when output is null', async () => {
@@ -307,14 +300,17 @@ describe('ZScoreNormalizer', () => {
       const btc = transformed.filter(t => t.symbol === 'BTCUSD')
       const eth = transformed.filter(t => t.symbol === 'ETHUSD')
 
-      // First two items of each symbol have insufficient data
-      strictEqual(btc[0]!.close_zscore, 0)
-      strictEqual(btc[1]!.close_zscore, 0)
-      strictEqual(eth[0]!.close_zscore, 0)
-      strictEqual(eth[1]!.close_zscore, 0)
+      // Transform now doesn't yield until ready (windowSize=3)
+      // Each symbol has 6 items, so each yields 4 results (items 3,4,5,6)
+      strictEqual(btc.length, 4)
+      strictEqual(eth.length, 4)
 
-      // Remaining items should have z-scores calculated from their respective windows
+      // All items should have z-scores calculated
+      ok(typeof btc[0]!.close_zscore === 'number')
+      ok(typeof btc[1]!.close_zscore === 'number')
       ok(typeof btc[2]!.close_zscore === 'number')
+      ok(typeof eth[0]!.close_zscore === 'number')
+      ok(typeof eth[1]!.close_zscore === 'number')
       ok(typeof eth[2]!.close_zscore === 'number')
     })
   })
@@ -371,22 +367,24 @@ describe('ZScoreNormalizer', () => {
         windowSize: 3 
       })
 
+      // Check readiness before processing
+      strictEqual(normalizer.isReady(), false)
+
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       
       // Process some data
       const iterator = result.data
-      await iterator.next() // 1st
-      await iterator.next() // 2nd
-      strictEqual(normalizer.isReady(), false)
-      
-      await iterator.next() // 3rd - should be ready now
+      // Since transform doesn't yield until ready, the first item we get
+      // will be when the transform is already ready (after processing 3 items internally)
+      const firstItem = await iterator.next()
+      ok(!firstItem.done)
       strictEqual(normalizer.isReady(), true)
     })
   })
 
   describe('edge cases', () => {
     it('should handle single data point', async () => {
-      const testData = createTestData(1)
+      const testData = createTestData(3)
       const normalizer = new ZScoreNormalizer({ 
         in: ['close'],
         out: ['close_zscore'],
@@ -396,9 +394,10 @@ describe('ZScoreNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
+      // Transform now yields after windowSize=3 data points
+      // With exactly 3 items, should yield 1 result
       strictEqual(transformed.length, 1)
-      // With insufficient data, should output 0
-      strictEqual(transformed[0]!.close_zscore, 0)
+      ok(typeof transformed[0]!.close_zscore === 'number')
     })
 
     it('should handle empty data stream', async () => {
@@ -430,12 +429,12 @@ describe('ZScoreNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // First two items have insufficient data
-      strictEqual(transformed[0]!.close_zscore, 0)
-      strictEqual(transformed[1]!.close_zscore, 0)
+      // Transform now doesn't yield until ready (windowSize=3)
+      // So we should get 1 item (3 - 3 + 1 = 1)
+      strictEqual(transformed.length, 1)
       
-      // Third item should have calculated z-score
-      ok(typeof transformed[2]!.close_zscore === 'number')
+      // Should have calculated z-score
+      ok(typeof transformed[0]!.close_zscore === 'number')
     })
 
     it('should handle very large values', async () => {
@@ -454,10 +453,12 @@ describe('ZScoreNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
+      // Transform now doesn't yield until ready (windowSize=3)
+      // So we should get 1 item
+      strictEqual(transformed.length, 1)
+      
       // Should handle large numbers without issues
-      strictEqual(transformed[0]!.close_zscore, 0) // Insufficient data
-      strictEqual(transformed[1]!.close_zscore, 0) // Insufficient data
-      ok(typeof transformed[2]!.close_zscore === 'number') // Should calculate properly
+      ok(typeof transformed[0]!.close_zscore === 'number') // Should calculate properly
     })
   })
 })

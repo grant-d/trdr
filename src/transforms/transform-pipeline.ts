@@ -129,7 +129,8 @@ export class TransformPipeline implements Transform<TransformPipelineParams> {
   }
 
   /**
-   * Creates a streaming pipeline that waits for all transforms to be ready before emitting
+   * Creates a streaming pipeline that chains transforms together
+   * Each transform handles its own readiness internally
    */
   private async* createReadinessAwareStream(data: AsyncIterator<OhlcvDto>): AsyncGenerator<OhlcvDto> {
     // Create a chain of transform streams
@@ -140,35 +141,11 @@ export class TransformPipeline implements Transform<TransformPipelineParams> {
       currentStream = this.streamFromIterator(result.data)
     }
     
-    // Buffer output until all transforms are ready
-    const buffer: OhlcvDto[] = []
-    let readinessAchieved = false
-    
-    for await (const item of currentStream) {
-      if (!readinessAchieved && !this.isReady()) {
-        // Still waiting for readiness, buffer the item
-        buffer.push(item)
-      } else {
-        if (!readinessAchieved) {
-          // Just became ready, emit all buffered items first
-          for (const bufferedItem of buffer) {
-            yield bufferedItem
-          }
-          buffer.length = 0 // Clear buffer
-          readinessAchieved = true
-        }
-        // Emit current item
-        yield item
-      }
-    }
-    
-    // If we never achieved readiness, emit buffered items anyway
-    if (!readinessAchieved) {
-      for (const bufferedItem of buffer) {
-        yield bufferedItem
-      }
-    }
+    // Simply pass through the final stream
+    // Individual transforms are responsible for not yielding until they're ready
+    yield* currentStream
   }
+
 
   /**
    * Convert AsyncIterator to AsyncGenerator

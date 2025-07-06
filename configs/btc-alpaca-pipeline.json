@@ -1,0 +1,67 @@
+{
+  "input": {
+    "type": "provider",
+    "provider": "alpaca",
+    "symbols": ["BTC/USD"],
+    "timeframe": "4h",
+    "duration": "6M"
+  },
+  "output": {
+    "path": "./output/btc-alpaca-1M.csv",
+    "format": "csv",
+    "overwrite": true
+  },
+  "transformations": [
+    {
+      "type": "missingValues",
+      "disabled": false,
+      "params": {
+        "strategy": "forward"
+      }
+    },
+    {
+      "type": "fractionalDiff",
+      "disabled": false,
+      "params": {
+        "d": 0.3
+      }
+    },
+    {
+      "type": "zScore",
+      "disabled": false,
+      "params": {
+        "windowSize": 29
+      }
+    },
+    {
+      "type": "rsi",
+      "disabled": true,
+      "params": {
+        "in": ["close"],
+        "out": ["rsi"],
+        "period": 14
+      }
+    },
+    {
+      "type": "map",
+      "disabled": false,
+      "params": {
+        "in": ["close"],
+        "out": ["adj close"]
+      }
+    }
+  ],
+  "options": {
+    "chunkSize": 1000,
+    "continueOnError": true,
+    "maxErrors": 10,
+    "showProgress": true
+  },
+  "metadata": {
+    "name": "BTC Lorentzian Distance Analysis",
+    "version": "1.0.0",
+    "description": "Fetches 1 year of daily BTC data from Alpaca, applies fractional differentiation, z-score normalization, and generates Lorentzian distance bars",
+    "author": "Trading System",
+    "created": "2025-01-06T00:00:00Z"
+  }
+}

@@ -6,12 +6,14 @@ import type { OhlcvRepository } from '../repositories'
 import { CsvRepository, JsonlRepository } from '../repositories'
 import {
   LogReturnsNormalizer,
+  MappingTransform,
   MinMaxNormalizer,
   MissingValueHandler,
   PriceCalculations,
   TimeframeAggregator,
   TransformPipeline,
   ZScoreNormalizer,
+  FractionalDiffNormalizer,
   SimpleMovingAverage,
   ExponentialMovingAverage,
   RelativeStrengthIndex,
@@ -25,6 +27,9 @@ import {
   TickImbalanceBarGenerator,
   TickRunBarGenerator,
   HeikinAshiGenerator,
+  StatisticalRegimeBarGenerator,
+  LorentzianDistanceBarGenerator,
+  ShannonInformationBarGenerator,
 } from '../transforms'
 import { ConfigLoader } from './config-loader'
 import type { ValidatedConfig } from './config-validator'
@@ -35,8 +40,10 @@ import { ConfigValidator } from './config-validator'
  */
 const TRANSFORM_FACTORIES: Record<string, (params: any) => Transform> = {
   logReturns: (params) => new LogReturnsNormalizer(params),
+  map: (params) => new MappingTransform(params),
   minMax: (params) => new MinMaxNormalizer(params),
   zScore: (params) => new ZScoreNormalizer(params),
+  fractionalDiff: (params) => new FractionalDiffNormalizer(params),
   priceCalc: (params) => new PriceCalculations(params),
   missingValues: (params) => new MissingValueHandler(params),
   timeframeAggregation: (params) => new TimeframeAggregator(params),
@@ -53,6 +60,9 @@ const TRANSFORM_FACTORIES: Record<string, (params: any) => Transform> = {
   tickImbalanceBars: (params) => new TickImbalanceBarGenerator(params),
   tickRunBars: (params) => new TickRunBarGenerator(params),
   heikinAshi: (params) => new HeikinAshiGenerator(params),
+  statisticalRegime: (params) => new StatisticalRegimeBarGenerator(params),
+  lorentzianDistance: (params) => new LorentzianDistanceBarGenerator(params),
+  shannonInformation: (params) => new ShannonInformationBarGenerator(params),
 }
 
 /**
@@ -336,15 +346,19 @@ export class PipelineFactory {
   public static getTransformParams(type: string): string[] {
     switch (type) {
       case 'logReturns':
-        return ['outputField', 'priceField']
+        return ['in', 'out', 'base']
+      case 'map':
+        return ['in', 'out']
       case 'minMax':
-        return ['fields', 'targetMin', 'targetMax']
+        return ['in', 'out', 'windowSize', 'min', 'max']
       case 'zScore':
-        return ['fields', 'windowSize', 'suffix', 'addSuffix']
+        return ['in', 'out', 'windowSize']
+      case 'fractionalDiff':
+        return ['in', 'out', 'd', 'maxWeights', 'minWeight']
       case 'priceCalc':
         return ['calculation']
       case 'missingValues':
-        return ['strategy', 'fields', 'fillValue']
+        return ['in', 'out', 'strategy', 'fillValue', 'maxFillGap']
       case 'timeframeAggregation':
         return ['targetTimeframe', 'aggregationMethod']
       case 'sma':

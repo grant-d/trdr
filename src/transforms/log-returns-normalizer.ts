@@ -9,7 +9,7 @@ import type { LogReturnsParams } from './transform-params'
  */
 export class LogReturnsNormalizer extends BaseTransform<LogReturnsParams> {
   private readonly logFunction: (x: number) => number
-  private dataPointsProcessed = 0
+  private readonly symbolDataPoints = new Map<string, number>()
 
   constructor(params: LogReturnsParams) {
     super(
@@ -46,8 +46,9 @@ export class LogReturnsNormalizer extends BaseTransform<LogReturnsParams> {
       const lastRecord = lastValues.get(symbolKey)
       const droppedColumns = this.getDroppedColumns()
 
-      // Increment data points processed for readiness tracking
-      this.dataPointsProcessed++
+      // Increment data points processed for readiness tracking per symbol
+      const currentCount = this.symbolDataPoints.get(symbolKey) || 0
+      this.symbolDataPoints.set(symbolKey, currentCount + 1)
 
       // Calculate log returns for specified input/output pairs
       if (this.params.in && this.params.out) {
@@ -108,7 +109,10 @@ export class LogReturnsNormalizer extends BaseTransform<LogReturnsParams> {
         delete result[colToDrop]
       }
 
-      yield result as OhlcvDto
+      // Only yield after we have at least 2 data points for this symbol (when ready)
+      if ((this.symbolDataPoints.get(symbolKey) || 0) >= 2) {
+        yield result as OhlcvDto
+      }
 
       item = await data.next()
     }
@@ -131,7 +135,8 @@ export class LogReturnsNormalizer extends BaseTransform<LogReturnsParams> {
 
   public isReady(): boolean {
     // Log returns need at least 2 data points (current and previous)
-    return this.dataPointsProcessed >= 2
+    // Consider ready if any symbol has at least 2 data points
+    return Array.from(this.symbolDataPoints.values()).some(count => count >= 2)
   }
 
   public withParams(params: Partial<LogReturnsParams>): Transform<LogReturnsParams> {

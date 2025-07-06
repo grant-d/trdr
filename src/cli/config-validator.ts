@@ -120,6 +120,26 @@ const TRANSFORM_FIELD_MAPPINGS: Record<string, {
     requiredFields: ['open', 'high', 'low', 'close'],
     outputFields: []
   },
+  statisticalRegime: {
+    requiredFields: ['open', 'high', 'low', 'close', 'volume'],
+    outputFields: []
+  },
+  lorentzianDistance: {
+    requiredFields: ['open', 'high', 'low', 'close', 'volume'],
+    outputFields: []
+  },
+  shannonInformation: {
+    requiredFields: ['open', 'high', 'low', 'close', 'volume'],
+    outputFields: []
+  },
+  fractionalDiff: {
+    requiredFields: [], // Specified dynamically via params.in
+    outputFields: [] // Generated dynamically via params.out
+  },
+  map: {
+    requiredFields: [], // Specified dynamically via params.in
+    outputFields: [] // Generated dynamically via params.out
+  }
 }
 
 /**
@@ -452,7 +472,19 @@ export class ConfigValidator {
 
       case 'zScore':
       case 'minMax':
-        // Fields parameter is now optional - transforms apply to all OHLCV fields by default
+        // Check new in/out parameters
+        if (params.in !== undefined) {
+          if (!Array.isArray(params.in)) {
+            this.addError(`${prefix}.in`, 'Input fields parameter must be an array', params.in)
+          }
+        }
+        if (params.out !== undefined) {
+          if (!Array.isArray(params.out)) {
+            this.addError(`${prefix}.out`, 'Output fields parameter must be an array', params.out)
+          }
+        }
+        
+        // Also support legacy fields parameter for backward compatibility
         if (params.fields !== undefined) {
           if (!Array.isArray(params.fields)) {
             this.addError(`${prefix}.fields`, 'Fields parameter must be an array if provided', params.fields)
@@ -473,9 +505,26 @@ export class ConfigValidator {
         break
 
       case 'movingAverage':
-        if (!params.field || typeof params.field !== 'string') {
-          this.addError(`${prefix}.field`, 'Field parameter is required and must be a string', params.field)
+        // Check new in/out parameters if present
+        if (params.in !== undefined) {
+          if (!Array.isArray(params.in) || params.in.length === 0) {
+            this.addError(`${prefix}.in`, 'Input fields must be a non-empty array', params.in)
+          }
         }
+        if (params.out !== undefined) {
+          if (!Array.isArray(params.out) || params.out.length === 0) {
+            this.addError(`${prefix}.out`, 'Output fields must be a non-empty array', params.out)
+          }
+        }
+        
+        // Also support legacy field parameter
+        if (!params.in && !params.field) {
+          this.addError(`${prefix}`, 'Either "in" array or "field" parameter is required', params)
+        }
+        if (params.field && typeof params.field !== 'string') {
+          this.addError(`${prefix}.field`, 'Field parameter must be a string', params.field)
+        }
+        
         if (!Number.isInteger(params.windowSize) || params.windowSize <= 0) {
           this.addError(`${prefix}.windowSize`, 'Window size is required and must be a positive integer', params.windowSize)
         }
@@ -509,6 +558,22 @@ export class ConfigValidator {
         }
         if (params.period !== undefined && (!Number.isInteger(params.period) || params.period <= 0)) {
           this.addError(`${prefix}.period`, 'RSI period must be a positive integer', params.period)
+        }
+        break
+
+      case 'fractionalDiff':
+        if (!params.d || typeof params.d !== 'number') {
+          this.addError(`${prefix}.d`, 'Differencing parameter d is required and must be a number', params.d)
+        } else if (params.d < 0 || params.d > 2) {
+          this.addError(`${prefix}.d`, 'Differencing parameter d must be between 0 and 2', params.d)
+        }
+        
+        if (params.maxWeights !== undefined && (!Number.isInteger(params.maxWeights) || params.maxWeights <= 0)) {
+          this.addError(`${prefix}.maxWeights`, 'maxWeights must be a positive integer', params.maxWeights)
+        }
+        
+        if (params.minWeight !== undefined && (typeof params.minWeight !== 'number' || params.minWeight <= 0)) {
+          this.addError(`${prefix}.minWeight`, 'minWeight must be a positive number', params.minWeight)
         }
         break
 
@@ -643,9 +708,10 @@ export class ConfigValidator {
     switch (transform.type) {
       case 'zScore':
       case 'minMax':
-        return params.fields || []
+      case 'fractionalDiff':
+        return params.in || params.fields || []
       case 'movingAverage':
-        return params.field ? [params.field] : []
+        return params.in || (params.field ? [params.field] : [])
       default:
         return mapping.requiredFields
     }
@@ -662,12 +728,18 @@ export class ConfigValidator {
     const params = transform.params as any
     switch (transform.type) {
       case 'zScore':
-        const fields = params.fields || []
-        return fields.map((field: string) => `${field}_zscore`)
+        const fields = params.out || (params.fields || []).map((field: string) => `${field}_zscore`)
+        return Array.isArray(fields) ? fields : []
       case 'minMax':
-        const minMaxFields = params.fields || []
-        return minMaxFields.map((field: string) => `${field}_norm`)
+        const minMaxOut = params.out || (params.fields || []).map((field: string) => `${field}_norm`)
+        return Array.isArray(minMaxOut) ? minMaxOut : []
+      case 'fractionalDiff':
+        const fracDiffOut = params.out || params.in || []
+        return Array.isArray(fracDiffOut) ? fracDiffOut : []
       case 'movingAverage':
+        if (params.out) {
+          return Array.isArray(params.out) ? params.out : []
+        }
         const field = params.field
         const maType = params.type || 'sma'
         return field ? [`${field}_${maType}`] : []

@@ -50,7 +50,7 @@ export class JsonlRepository extends FileBasedRepository {
       const abbreviated: any = {
         x: record.exchange,
         s: record.symbol,
-        t: record.timestamp,
+        t: new Date(record.timestamp).toISOString(),
         o: record.open,
         h: record.high,
         l: record.low,
@@ -439,7 +439,7 @@ export class JsonlRepository extends FileBasedRepository {
       const normalized: any = {
         exchange: record.x || record.e || record.exchange,
         symbol: record.s || record.symbol,
-        timestamp: record.t || record.timestamp,
+        timestamp: this.parseTimestamp(record.t || record.timestamp),
         open: record.o || record.open,
         high: record.h || record.high,
         low: record.l || record.low,
@@ -458,10 +458,42 @@ export class JsonlRepository extends FileBasedRepository {
       return normalized as OhlcvDto
     }
     
-    // Already in full format
-    return record as OhlcvDto
+    // Already in full format - just parse timestamp
+    return {
+      ...record,
+      timestamp: this.parseTimestamp(record.timestamp)
+    } as OhlcvDto
   }
 
+  /**
+   * Parse timestamp from various formats (number or ISO string) to Unix milliseconds
+   */
+  private parseTimestamp(value: any): number {
+    if (typeof value === 'number') {
+      // Handle both seconds and milliseconds
+      const SECONDS_THRESHOLD = 978307200000 // Year 2001 in milliseconds
+      return value > 0 && value < SECONDS_THRESHOLD ? value * 1000 : value
+    }
+
+    if (typeof value === 'string') {
+      // If it looks like a number, parse as epoch milliseconds
+      const numericValue = Number(value)
+      if (!isNaN(numericValue)) {
+        const SECONDS_THRESHOLD = 978307200000 // Year 2001 in milliseconds
+        return numericValue > 0 && numericValue < SECONDS_THRESHOLD ? numericValue * 1000 : numericValue
+      }
+
+      // Try to parse as ISO date string
+      const date = new Date(value)
+      if (isNaN(date.getTime())) {
+        throw new Error(`Invalid timestamp format: ${value}`)
+      }
+
+      return date.getTime()
+    }
+
+    throw new Error(`Invalid timestamp type: ${typeof value}`)
+  }
 
   private async rewriteFile(filePath: string, records: OhlcvDto[]): Promise<void> {
     // Write to temp file first
@@ -474,7 +506,7 @@ export class JsonlRepository extends FileBasedRepository {
       const abbreviated: any = {
         x: record.exchange,
         s: record.symbol,
-        t: record.timestamp,
+        t: new Date(record.timestamp).toISOString(),
         o: record.open,
         h: record.high,
         l: record.low,

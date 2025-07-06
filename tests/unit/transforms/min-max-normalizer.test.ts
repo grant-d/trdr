@@ -75,14 +75,11 @@ describe('MinMaxNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      strictEqual(transformed.length, 3)
+      strictEqual(transformed.length, 1)
 
-      // First two items have insufficient data (window < 3), so output 0
-      strictEqual(transformed[0]!.open_norm, 0)
-      strictEqual(transformed[1]!.open_norm, 0)
-      
+      // Only yields after windowSize=3 data points, so only the 3rd item
       // Third item has full window [0, 50, 100]: min=0, max=100, value=100
-      strictEqual(transformed[2]!.open_norm, 1)    // (100-0)/(100-0) = 1
+      strictEqual(transformed[0]!.open_norm, 1)    // (100-0)/(100-0) = 1
     })
 
     it('should normalize to custom range', async () => {
@@ -98,13 +95,12 @@ describe('MinMaxNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // First two items have insufficient data, so output 0
-      strictEqual(transformed[0]!.open_norm, 0)
-      strictEqual(transformed[1]!.open_norm, 0)
+      strictEqual(transformed.length, 1)
       
-      // Third item has window [10, 20, 30]: min=10, max=30, value=30
-      // Formula: (x-min)/range * targetRange + targetMin = (30-10)/20 * 2 + (-1) = 1
-      strictEqual(transformed[2]!.open_norm, 1)
+      // Only yields after windowSize=3 data points, so only the 3rd item
+      // Third item has window [9, 19, 29]: min=9, max=29, value=29
+      // Formula: (x-min)/range * targetRange + targetMin = (29-9)/20 * 2 + (-1) = 1
+      strictEqual(transformed[0]!.open_norm, 1)
     })
 
     it('should handle multiple fields', async () => {
@@ -118,17 +114,14 @@ describe('MinMaxNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // First item has insufficient data (window size 2 needs 2 items)
-      strictEqual(transformed[0]!.open_norm, 0)
-      strictEqual(transformed[0]!.close_norm, 0)
-      strictEqual(transformed[0]!.volume_norm, 0)
+      strictEqual(transformed.length, 1)
       
-      // Second item should have normalized values  
-      ok('open_norm' in transformed[1]!)
-      ok('close_norm' in transformed[1])
-      ok('volume_norm' in transformed[1])
-      ok(!('high_norm' in transformed[1]))
-      ok(!('low_norm' in transformed[1]))
+      // Only yields after windowSize=2 data points, so only the 2nd item
+      ok('open_norm' in transformed[0]!)
+      ok('close_norm' in transformed[0]!)
+      ok('volume_norm' in transformed[0]!)
+      ok(!('high_norm' in transformed[0]!))
+      ok(!('low_norm' in transformed[0]!))
     })
 
     it('should handle constant values (range=0)', async () => {
@@ -152,12 +145,11 @@ describe('MinMaxNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // First two items have insufficient data
-      strictEqual(transformed[0]!.close_norm, 0)
-      strictEqual(transformed[1]!.close_norm, 0)
+      // Only yields after windowSize=3 data points, so 3 results (items 3,4,5)
+      strictEqual(transformed.length, 3)
       
-      // Remaining items: when all values in window are the same, should use middle of target range
-      for (let i = 2; i < transformed.length; i++) {
+      // When all values in window are the same, should use middle of target range
+      for (let i = 0; i < transformed.length; i++) {
         strictEqual(transformed[i]!.close_norm, 0.5) // Middle of [0, 1]
       }
     })
@@ -175,26 +167,23 @@ describe('MinMaxNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      strictEqual(transformed.length, 5)
+      strictEqual(transformed.length, 3)
 
-      // First two items have insufficient data
-      strictEqual(transformed[0]!.open_norm, 0)
-      strictEqual(transformed[1]!.open_norm, 0)
+      // Only yields after windowSize=3 data points, so 3 results
+      // Window [9, 19, 29]: min=9, max=29, value=29
+      strictEqual(transformed[0]!.open_norm, 1) // (29-9)/(29-9) = 1
       
-      // Window [10, 20, 30]: min=10, max=30, value=30
-      strictEqual(transformed[2]!.open_norm, 1) // (30-10)/(30-10) = 1
-      
-      // Window [20, 30, 25]: min=20, max=30, value=25
-      const expected3 = (25 - 20) / (30 - 20) // 0.5
-      strictEqual(transformed[3]!.open_norm, expected3)
+      // Window [19, 29, 24]: min=19, max=29, value=24  
+      const expected1 = (24 - 19) / (29 - 19) // 0.5
+      strictEqual(transformed[1]!.open_norm, expected1)
 
-      // Window [30, 25, 15]: min=15, max=30, value=15
-      const expected4 = (15 - 15) / (30 - 15) // 0
-      strictEqual(transformed[4]!.open_norm, expected4)
+      // Window [29, 24, 14]: min=14, max=29, value=14
+      const expected2 = (14 - 14) / (29 - 14) // 0
+      strictEqual(transformed[2]!.open_norm, expected2)
     })
 
     it('should handle insufficient data gracefully', async () => {
-      const testData = createTestData([100])
+      const testData = createTestData([100, 105, 110])
       const normalizer = new MinMaxNormalizer({  
         in: ['open'],
         out: ['open_norm'],
@@ -204,8 +193,8 @@ describe('MinMaxNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // With only 1 data point (less than window size), should output 0
-      strictEqual(transformed[0]!.open_norm, 0)
+      // With only 3 data points (less than window size 5), should not yield anything
+      strictEqual(transformed.length, 0)
     })
   })
 
@@ -236,14 +225,13 @@ describe('MinMaxNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // First two items will have zero values (not enough data)
-      strictEqual(transformed[0]!.volume, 0)
-      strictEqual(transformed[1]!.volume, 0)
+      strictEqual(transformed.length, 1)
       
+      // Only yields after windowSize=3 data points, so only the 3rd item
       // Third item should have normalized value based on window [10, 20, 30]
       // Volume: 300, window volumes: [100, 200, 300], min=100, max=300, range=200
       // (300-100)/200 = 1
-      strictEqual(transformed[2]!.volume, 1)
+      strictEqual(transformed[0]!.volume, 1)
     })
 
     it('should drop columns when output is null', async () => {
@@ -303,17 +291,16 @@ describe('MinMaxNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // BTC data - first 2 items insufficient data, then windows available
+      // Each symbol only yields after windowSize=3 data points
+      // BTC should have 4 results (items 3,4,5,6), ETH should have 4 results (items 3,4,5,6)
       const btc = transformed.filter(t => t.symbol === 'BTCUSD')
-      strictEqual(btc[0]!.open_norm, 0)   // Insufficient data
-      strictEqual(btc[1]!.open_norm, 0)   // Insufficient data
-      strictEqual(btc[2]!.open_norm, 1)   // Window [40k, 50k, 60k], value=60k
+      strictEqual(btc.length, 4)
+      strictEqual(btc[0]!.open_norm, 1)   // Window [40k, 50k, 60k], value=60k
 
       // ETH data - same pattern
       const eth = transformed.filter(t => t.symbol === 'ETHUSD')
-      strictEqual(eth[0]!.open_norm, 0)   // Insufficient data
-      strictEqual(eth[1]!.open_norm, 0)   // Insufficient data
-      strictEqual(eth[2]!.open_norm, 1)   // Window [2000, 2100, 2200], value=2200
+      strictEqual(eth.length, 4) 
+      strictEqual(eth[0]!.open_norm, 1)   // Window [2000, 2100, 2200], value=2200
     })
   })
 
@@ -371,20 +358,18 @@ describe('MinMaxNormalizer', () => {
 
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       
-      // Process some data
+      // Process some data - need to consume results to trigger internal processing
       const iterator = result.data
-      await iterator.next() // 1st
-      await iterator.next() // 2nd
-      strictEqual(normalizer.isReady(), false)
+      strictEqual(normalizer.isReady(), false) // Not ready initially
       
-      await iterator.next() // 3rd - should be ready now
-      strictEqual(normalizer.isReady(), true)
+      await iterator.next() // This should yield the 3rd item (1st result)
+      strictEqual(normalizer.isReady(), true) // Should be ready after 3 data points processed
     })
   })
 
   describe('edge cases', () => {
     it('should handle single data point', async () => {
-      const testData = createTestData([100])
+      const testData = createTestData([100, 105])
       const normalizer = new MinMaxNormalizer({  
         in: ['close'],
         out: ['close_norm'],
@@ -395,8 +380,8 @@ describe('MinMaxNormalizer', () => {
       const transformed = await collectResults(result.data)
 
       strictEqual(transformed.length, 1)
-      // With insufficient data (1 item but window size 2), should output 0
-      strictEqual(transformed[0]!.close_norm, 0)
+      // With 2 data points and window size 2, should yield 1 result
+      ok(typeof transformed[0]!.close_norm === 'number')
     })
 
     it('should handle empty data stream', async () => {
@@ -433,14 +418,11 @@ describe('MinMaxNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // First two items have insufficient data
-      for (let i = 0; i < 2; i++) {
-        strictEqual(transformed[i]!.close_norm, 0)
-        strictEqual(transformed[i]!.volume_norm, 0)
-      }
+      // Only yields after windowSize=3 data points, so 3 results (items 3,4,5)
+      strictEqual(transformed.length, 3)
       
-      // Remaining items: all values same, should use middle of range
-      for (let i = 2; i < transformed.length; i++) {
+      // All values same (0), should use middle of range
+      for (let i = 0; i < transformed.length; i++) {
         strictEqual(transformed[i]!.close_norm, 0.5)
         strictEqual(transformed[i]!.volume_norm, 0.5)
       }
@@ -457,13 +439,12 @@ describe('MinMaxNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // First two items have insufficient data
-      strictEqual(transformed[0]!.open_norm, 0)
-      strictEqual(transformed[1]!.open_norm, 0)
+      strictEqual(transformed.length, 1)
       
+      // Only yields after windowSize=3 data points, so only the 3rd item
       // Window [-100, -50, -200]: min=-200, max=-50, value=-200
       // (-200-(-200))/(-50-(-200)) = 0/150 = 0
-      strictEqual(transformed[2]!.open_norm, 0)
+      strictEqual(transformed[0]!.open_norm, 0)
     })
 
     it('should handle very large values', async () => {
@@ -499,10 +480,11 @@ describe('MinMaxNormalizer', () => {
       const result = await normalizer.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
-      // First item has insufficient data
-      strictEqual(transformed[0]!.open_norm, 0)
+      strictEqual(transformed.length, 1)
+      
+      // Only yields after windowSize=2 data points, so only the 2nd item
       // Second item has window of 2, should normalize properly
-      strictEqual(transformed[1]!.open_norm, 1)
+      strictEqual(transformed[0]!.open_norm, 1)
     })
   })
 })

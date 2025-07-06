@@ -119,6 +119,12 @@ export class Pipeline {
         await this.config.provider.connect()
       }
 
+      // Set expected output fields on repository if transform is present
+      if (this.config.transform && 'setExpectedOutputFields' in this.config.repository) {
+        const outputFields = this.config.transform.getOutputFields()
+        ;(this.config.repository as any).setExpectedOutputFields(outputFields)
+      }
+
       // Get data stream from provider
       let dataStream: AsyncIterableIterator<OhlcvDto>
       

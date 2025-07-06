@@ -92,6 +92,11 @@ export class RelativeStrengthIndex extends BaseTechnicalIndicator {
     }
   }
 
+  public isReady(): boolean {
+    // RSI is ready when any field has enough data points for calculation
+    return Array.from(this.initialCounts.values()).some(count => count >= this.period - 1)
+  }
+
   withParams(params: Partial<RsiParams>): RelativeStrengthIndex {
     return new RelativeStrengthIndex({ ...this.params, ...params })
   }

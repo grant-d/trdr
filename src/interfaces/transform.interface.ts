@@ -7,9 +7,11 @@ export type TransformType =
   | 'missingValues'
   | 'timeframeAggregation'
   | 'logReturns'
+  | 'map'
   | 'zScore'
   | 'minMax'
   | 'percentChange'
+  | 'fractionalDiff'
   | 'tickBars'
   | 'volumeBars'
   | 'dollarBars'
@@ -27,6 +29,9 @@ export type TransformType =
   | 'percentileRank'
   | 'bucket'
   | 'pipeline'
+  | 'statisticalRegime'
+  | 'lorentzianDistance'
+  | 'shannonInformation'
 
 /**
  * Base parameters interface that all transform parameters extend

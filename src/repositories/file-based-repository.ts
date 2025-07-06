@@ -22,6 +22,9 @@ export abstract class FileBasedRepository implements OhlcvRepository {
   protected lastPendingRecord: OhlcvDto | null = null
   protected buffer: OhlcvDto[] = []
   
+  // Expected output fields from transforms (if any)
+  protected expectedOutputFields: string[] = []
+  
 
   /**
    * Initialize the repository with common setup logic
@@ -207,6 +210,14 @@ export abstract class FileBasedRepository implements OhlcvRepository {
       offset
     }
     return this.query(query)
+  }
+
+  /**
+   * Set expected output fields from transform pipeline
+   * This should be called before any data is written to ensure correct headers
+   */
+  public setExpectedOutputFields(fields: string[]): void {
+    this.expectedOutputFields = [...fields]
   }
 
   /**

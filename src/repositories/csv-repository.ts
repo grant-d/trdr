@@ -62,8 +62,10 @@ export class CsvRepository extends FileBasedRepository {
     
     // Add headers if this is a new file
     if (needsHeaders && sortedData.length > 0) {
-      // Generate headers dynamically based on the first record
-      const headers = this.generateHeaders(sortedData[0]!)
+      // Generate headers using expected fields if available, otherwise from first record
+      const headers = this.expectedOutputFields.length > 0 
+        ? this.generateHeadersFromExpected()
+        : this.generateHeaders(sortedData[0]!)
       content += headers.join(this.csvDelimiter) + '\n'
     }
     
@@ -179,7 +181,7 @@ export class CsvRepository extends FileBasedRepository {
       }
 
       const ohlcv: Partial<OhlcvDto> = {
-        timestamp: parseInt(values[0]!, 10),
+        timestamp: this.parseTimestamp(values[0]!),
         symbol: values[1]!,
         exchange: values[2]!,
         open: parseFloat(values[3]!),
@@ -535,6 +537,25 @@ export class CsvRepository extends FileBasedRepository {
   // --- Private helper methods specific to CSV ---
 
   /**
+   * Generate CSV headers from expected output fields
+   */
+  private generateHeadersFromExpected(): string[] {
+    // Standard headers in order
+    const headers = [...this.csvHeaders]
+    
+    // Add expected additional fields
+    const standardKeys = new Set(['timestamp', 'symbol', 'exchange', 'open', 'high', 'low', 'close', 'volume'])
+    
+    // Get additional fields that aren't standard OHLCV
+    const additionalFields = this.expectedOutputFields.filter(field => !standardKeys.has(field))
+    
+    // Add additional fields to headers
+    headers.push(...additionalFields)
+    
+    return headers
+  }
+
+  /**
    * Generate CSV headers dynamically based on data fields
    */
   private generateHeaders(data: OhlcvDto): string[] {
@@ -592,7 +613,7 @@ export class CsvRepository extends FileBasedRepository {
   private formatOhlcvAsCsvRow(data: OhlcvDto): string {
     // Always include standard fields first
     const standardValues = [
-      data.timestamp,
+      new Date(data.timestamp).toISOString(),
       this.escapeCsvValue(data.symbol),
       this.escapeCsvValue(data.exchange),
       data.open,
@@ -653,6 +674,28 @@ export class CsvRepository extends FileBasedRepository {
     // Combine standard and additional values
     const allValues = [...standardValues, ...additionalFields]
     return allValues.join(this.csvDelimiter)
+  }
+
+  /**
+   * Parse timestamp from various formats (number or ISO string) to Unix milliseconds
+   */
+  private parseTimestamp(value: string): number {
+    // If it looks like a number, parse as epoch milliseconds
+    const numericValue = Number(value)
+    if (!isNaN(numericValue)) {
+      // Handle both seconds and milliseconds
+      // If the number is less than year 2001 in milliseconds, it's likely seconds
+      const SECONDS_THRESHOLD = 978307200000 // Year 2001 in milliseconds
+      return numericValue > 0 && numericValue < SECONDS_THRESHOLD ? numericValue * 1000 : numericValue
+    }
+
+    // Try to parse as ISO date string
+    const date = new Date(value)
+    if (isNaN(date.getTime())) {
+      throw new Error(`Invalid timestamp format: ${value}`)
+    }
+
+    return date.getTime()
   }
 
   /**

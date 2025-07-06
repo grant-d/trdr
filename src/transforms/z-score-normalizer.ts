@@ -13,8 +13,8 @@ export class ZScoreNormalizer extends BaseTransform<ZScoreParams> {
   // For rolling window normalization
   private readonly windowBuffers = new Map<string, OhlcvDto[]>()
   
-  // Track total data points processed for readiness
-  private dataPointsProcessed = 0
+  // Track data points processed per symbol for readiness
+  private readonly symbolDataPoints = new Map<string, number>()
 
   constructor(params: ZScoreParams) {
     super(
@@ -45,7 +45,8 @@ export class ZScoreNormalizer extends BaseTransform<ZScoreParams> {
 
   public isReady(): boolean {
     // Rolling window normalization is ready after windowSize data points
-    return this.dataPointsProcessed >= this.windowSize
+    // Consider ready if any symbol has at least windowSize data points
+    return Array.from(this.symbolDataPoints.values()).some(count => count >= this.windowSize)
   }
 
   protected async* transform(data: AsyncIterator<OhlcvDto>): AsyncGenerator<OhlcvDto> {
@@ -80,46 +81,15 @@ export class ZScoreNormalizer extends BaseTransform<ZScoreParams> {
         buffer.shift()
       }
 
-      // Increment data points processed for readiness tracking
-      this.dataPointsProcessed++
+      // Increment data points processed for readiness tracking per symbol
+      const currentCount = this.symbolDataPoints.get(symbolKey) || 0
+      this.symbolDataPoints.set(symbolKey, currentCount + 1)
 
-      // Calculate z-scores if we have enough data
-      if (buffer.length >= this.windowSize) {
+      // Only yield when we have enough data for this symbol (when ready)
+      if ((this.symbolDataPoints.get(symbolKey) || 0) >= this.windowSize) {
         yield this.normalizeItemWithWindow(current, buffer)
-      } else {
-        // Not enough data yet, output with zero z-scores for new fields
-        const inputColumns = this.getInputColumns()
-        const outputColumns = this.getOutputColumns()
-        const droppedColumns = this.getDroppedColumns()
-        const result = { ...current } as any
-        
-        // Add zero values for specified transforms
-        if (this.params.in && this.params.out) {
-          for (let i = 0; i < inputColumns.length; i++) {
-            const outputCol: string | null | undefined = this.params.out[i]
-            
-            // Skip if output column is null (will be dropped later)
-            if (outputCol === null) {
-              continue
-            }
-            
-            const actualOutputCol = outputCol || inputColumns[i]!
-            result[actualOutputCol] = 0
-          }
-        } else {
-          // Default behavior: zero out all OHLCV columns
-          for (let i = 0; i < inputColumns.length; i++) {
-            result[outputColumns[i]!] = 0
-          }
-        }
-        
-        // Drop columns marked for dropping
-        for (const colToDrop of droppedColumns) {
-          delete result[colToDrop]
-        }
-        
-        yield result as OhlcvDto
       }
+      // Don't yield anything until ready - just continue processing
 
       item = await data.next()
     }

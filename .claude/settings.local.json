@@ -67,7 +67,11 @@
       "Bash(tsx tests/unit/transforms/z-score-normalizer.test.ts:*)",
       "mcp__taskmaster-ai__expand_task",
       "mcp__taskmaster-ai__update_task",
-      "Bash(tsx tests:*)"
+      "Bash(tsx tests:*)",
+      "Bash(/tmp/test-with-timeout.sh:*)",
+      "Bash(./run-btc-pipeline.sh:*)",
+      "Bash(yarn run:config:*)",
+      "Bash(tsx:*)"
     ],
     "deny": []
   }

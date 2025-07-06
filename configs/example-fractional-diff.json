@@ -1,0 +1,49 @@
+{
+  "input": {
+    "type": "provider",
+    "provider": "alpaca",
+    "symbols": ["SPY"],
+    "timeframe": "1h",
+    "duration": "30d"
+  },
+  "output": {
+    "path": "./output/spy-fractional-diff.csv",
+    "format": "csv",
+    "overwrite": true
+  },
+  "transformations": [
+    {
+      "type": "missingValues",
+      "disabled": false,
+      "params": {
+        "strategy": "forward",
+        "in": ["open", "high", "low", "close", "volume"],
+        "out": ["open", "high", "low", "close", "volume"]
+      }
+    },
+    {
+      "type": "fractionalDiff",
+      "disabled": false,
+      "params": {
+        "d": 0.3,
+        "maxWeights": 50,
+        "minWeight": 0.001,
+        "in": ["close"],
+        "out": ["close_fd"]
+      }
+    }
+  ],
+  "options": {
+    "chunkSize": 1000,
+    "continueOnError": true,
+    "maxErrors": 10,
+    "showProgress": true
+  },
+  "metadata": {
+    "name": "SPY Fractional Differentiation Example",
+    "version": "1.0.0",
+    "description": "Demonstrates fractional differentiation on SPY hourly data to achieve stationarity while preserving memory",
+    "author": "Trading System",
+    "created": "2025-01-06T00:00:00Z"
+  }
+}

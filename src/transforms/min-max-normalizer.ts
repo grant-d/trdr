@@ -81,42 +81,11 @@ export class MinMaxNormalizer extends BaseTransform<MinMaxParams> {
       }
 
       // Normalize if we have enough data
+      // Only yield when we have enough data (when ready)
       if (buffer.length >= this.windowSize) {
         yield this.normalizeItemWithWindow(current, buffer)
-      } else {
-        // Not enough data yet, output with zeros for all output fields
-        const inputColumns = this.getInputColumns()
-        const outputColumns = this.getOutputColumns()
-        const droppedColumns = this.getDroppedColumns()
-        const result = { ...current } as any
-        
-        // Add zero values for specified transforms
-        if (this.params.in && this.params.out) {
-          for (let i = 0; i < inputColumns.length; i++) {
-            const outputCol: string | null | undefined = this.params.out[i]
-            
-            // Skip if output column is null (will be dropped later)
-            if (outputCol === null) {
-              continue
-            }
-            
-            const actualOutputCol = outputCol || inputColumns[i]!
-            result[actualOutputCol] = 0
-          }
-        } else {
-          // Default behavior: zero out all OHLCV columns
-          for (let i = 0; i < inputColumns.length; i++) {
-            result[outputColumns[i]!] = 0
-          }
-        }
-        
-        // Drop columns marked for dropping
-        for (const colToDrop of droppedColumns) {
-          delete result[colToDrop]
-        }
-        
-        yield result as OhlcvDto
       }
+      // Don't yield anything until ready - just continue processing
 
       item = await data.next()
     }
