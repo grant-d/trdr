@@ -6,6 +6,15 @@ import { PriceCalculations } from './price-calculations'
 import { TimeframeAggregator } from './timeframe-aggregator'
 import { TransformPipeline } from './transform-pipeline'
 import { ZScoreNormalizer } from './z-score-normalizer'
+import {
+  SimpleMovingAverage,
+  ExponentialMovingAverage,
+  RelativeStrengthIndex,
+  BollingerBands,
+  Macd,
+  AverageTrueRange,
+  VolumeWeightedAveragePrice,
+} from './technical-indicators'
 
 /**
  * Serialized representation of a transform
@@ -43,6 +52,13 @@ const TRANSFORM_REGISTRY: Record<string, (params: any) => Transform> = {
   priceCalc: (params) => new PriceCalculations(params),
   missingValues: (params) => new MissingValueHandler(params),
   timeframeAggregation: (params) => new TimeframeAggregator(params),
+  sma: (params) => new SimpleMovingAverage(params),
+  ema: (params) => new ExponentialMovingAverage(params),
+  rsi: (params) => new RelativeStrengthIndex(params),
+  bollinger: (params) => new BollingerBands(params),
+  macd: (params) => new Macd(params),
+  atr: (params) => new AverageTrueRange(params),
+  vwap: (params) => new VolumeWeightedAveragePrice(params),
 }
 
 /**

@@ -64,7 +64,10 @@
       "Bash(NODE_OPTIONS=\"--max-old-space-size=512\" yarn tsx --test src/repositories/csv-repository.test.ts)",
       "Bash(NODE_OPTIONS=\"--max-old-space-size=512\" yarn tsx --test src/repositories/jsonl-repository.test.ts)",
       "Bash(sqlite3:*)",
-      "Bash(tsx tests/unit/transforms/z-score-normalizer.test.ts:*)"
+      "Bash(tsx tests/unit/transforms/z-score-normalizer.test.ts:*)",
+      "mcp__taskmaster-ai__expand_task",
+      "mcp__taskmaster-ai__update_task",
+      "Bash(tsx tests:*)"
     ],
     "deny": []
   }

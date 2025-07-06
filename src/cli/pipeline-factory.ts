@@ -12,6 +12,13 @@ import {
   TimeframeAggregator,
   TransformPipeline,
   ZScoreNormalizer,
+  SimpleMovingAverage,
+  ExponentialMovingAverage,
+  RelativeStrengthIndex,
+  BollingerBands,
+  Macd,
+  AverageTrueRange,
+  VolumeWeightedAveragePrice,
 } from '../transforms'
 import { ConfigLoader } from './config-loader'
 import type { ValidatedConfig } from './config-validator'
@@ -27,6 +34,13 @@ const TRANSFORM_FACTORIES: Record<string, (params: any) => Transform> = {
   priceCalc: (params) => new PriceCalculations(params),
   missingValues: (params) => new MissingValueHandler(params),
   timeframeAggregation: (params) => new TimeframeAggregator(params),
+  sma: (params) => new SimpleMovingAverage(params),
+  ema: (params) => new ExponentialMovingAverage(params),
+  rsi: (params) => new RelativeStrengthIndex(params),
+  bollinger: (params) => new BollingerBands(params),
+  macd: (params) => new Macd(params),
+  atr: (params) => new AverageTrueRange(params),
+  vwap: (params) => new VolumeWeightedAveragePrice(params),
 }
 
 /**
@@ -321,6 +335,20 @@ export class PipelineFactory {
         return ['strategy', 'fields', 'fillValue']
       case 'timeframeAggregation':
         return ['targetTimeframe', 'aggregationMethod']
+      case 'sma':
+        return ['in', 'out', 'period']
+      case 'ema':
+        return ['in', 'out', 'period']
+      case 'rsi':
+        return ['in', 'out', 'period']
+      case 'bollinger':
+        return ['in', 'out', 'period', 'stdDev']
+      case 'macd':
+        return ['in', 'out', 'fastPeriod', 'slowPeriod', 'signalPeriod']
+      case 'atr':
+        return ['out', 'period']
+      case 'vwap':
+        return ['out', 'anchorPeriod']
       default:
         return []
     }

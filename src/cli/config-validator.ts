@@ -64,6 +64,14 @@ const TRANSFORM_FIELD_MAPPINGS: Record<string, {
     requiredFields: [], // Specified dynamically via params.fields
     outputFields: [] // Generated dynamically
   },
+  sma: {
+    requiredFields: [], // Specified dynamically via params.in
+    outputFields: [] // Generated dynamically via params.out
+  },
+  ema: {
+    requiredFields: [], // Specified dynamically via params.in
+    outputFields: [] // Generated dynamically via params.out
+  },
   rsi: {
     requiredFields: ['close'],
     outputFields: ['rsi']
