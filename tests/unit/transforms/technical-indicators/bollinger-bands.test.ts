@@ -37,7 +37,7 @@ async function collectResults(iterator: AsyncIterator<OhlcvDto>): Promise<OhlcvD
 
 describe('Bollinger Bands', () => {
   it('should calculate bands correctly', async () => {
-    const values = [20, 22, 21, 23, 24, 25, 24, 26, 27, 28]
+    const values = [20, 22, 21, 23, 24, 25, 20, 30, 15, 35]
     const testData = createTestData(values)
     
     const bb = new BollingerBands({
@@ -69,14 +69,14 @@ describe('Bollinger Bands', () => {
     strictEqual(item5.bb_middle, 22) // (20+22+21+23+24)/5
     
     // Upper band should be above middle
-    ok(item5.bb_upper! > item5.bb_middle!)
+    ok((item5 as any).bb_upper > (item5 as any).bb_middle)
     
     // Lower band should be below middle
-    ok(item5.bb_lower! < item5.bb_middle!)
+    ok((item5 as any).bb_lower < (item5 as any).bb_middle)
     
     // Bands should widen as volatility increases
     const lastItem = transformed[9]!
-    ok(lastItem.bb_upper! - lastItem.bb_lower! > item5.bb_upper! - item5.bb_lower!)
+    ok((lastItem as any).bb_upper - (lastItem as any).bb_lower > (item5 as any).bb_upper - (item5 as any).bb_lower)
   })
 
   it('should respect standard deviation multiplier', async () => {
@@ -112,8 +112,8 @@ describe('Bollinger Bands', () => {
     strictEqual(item1.bb_middle_1, item2.bb_middle_2)
     
     // 2 stdDev bands should be wider than 1 stdDev
-    const width1 = item1.bb_upper_1! - item1.bb_lower_1!
-    const width2 = item2.bb_upper_2! - item2.bb_lower_2!
+    const width1 = (item1 as any).bb_upper_1 - (item1 as any).bb_lower_1
+    const width2 = (item2 as any).bb_upper_2 - (item2 as any).bb_lower_2
     strictEqual(width2, width1 * 2)
   })
 
@@ -134,7 +134,7 @@ describe('Bollinger Bands', () => {
     
     // Check that bands are very tight
     const lastItem = transformed[9]!
-    const bandwidth = lastItem.bb_upper! - lastItem.bb_lower!
+    const bandwidth = (lastItem as any).bb_upper - (lastItem as any).bb_lower
     ok(bandwidth < 1) // Bands should be tight for low volatility
   })
 

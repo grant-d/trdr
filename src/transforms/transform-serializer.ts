@@ -15,6 +15,14 @@ import {
   AverageTrueRange,
   VolumeWeightedAveragePrice,
 } from './technical-indicators'
+import {
+  TickBarGenerator,
+  VolumeBarGenerator,
+  DollarBarGenerator,
+  TickImbalanceBarGenerator,
+  TickRunBarGenerator,
+  HeikinAshiGenerator,
+} from './bar-generators'
 
 /**
  * Serialized representation of a transform
@@ -59,6 +67,12 @@ const TRANSFORM_REGISTRY: Record<string, (params: any) => Transform> = {
   macd: (params) => new Macd(params),
   atr: (params) => new AverageTrueRange(params),
   vwap: (params) => new VolumeWeightedAveragePrice(params),
+  tickBars: (params) => new TickBarGenerator(params),
+  volumeBars: (params) => new VolumeBarGenerator(params),
+  dollarBars: (params) => new DollarBarGenerator(params),
+  tickImbalanceBars: (params) => new TickImbalanceBarGenerator(params),
+  tickRunBars: (params) => new TickRunBarGenerator(params),
+  heikinAshi: (params) => new HeikinAshiGenerator(params),
 }
 
 /**

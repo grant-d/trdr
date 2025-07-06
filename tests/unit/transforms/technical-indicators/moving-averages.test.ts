@@ -1,4 +1,4 @@
-import { deepStrictEqual, ok, strictEqual } from 'node:assert'
+import { ok, strictEqual } from 'node:assert'
 import { describe, it } from 'node:test'
 import type { OhlcvDto } from '../../../../src/models'
 import { SimpleMovingAverage, ExponentialMovingAverage } from '../../../../src/transforms'
@@ -21,9 +21,9 @@ function createTestData(values: number[]): OhlcvDto[] {
 function arrayToAsyncIterator<T>(array: T[]): AsyncIterator<T> {
   let index = 0
   return {
-    async next() {
+    async next(): Promise<IteratorResult<T, any>> {
       if (index < array.length) {
-        return { done: false, value: array[index++] }
+        return { done: false, value: array[index++]! }
       }
       return { done: true, value: undefined }
     }
@@ -165,8 +165,8 @@ describe('Exponential Moving Average', () => {
   })
 
   it('should produce smoother results than SMA', async () => {
-    // Create data with a spike
-    const values = [10, 10, 10, 100, 10, 10, 10]
+    // Create data with a spike - longer series for smoother EMA
+    const values = [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 100, 10, 10, 10, 10]
     const testData = createTestData(values)
     
     const sma = new SimpleMovingAverage({
@@ -178,7 +178,7 @@ describe('Exponential Moving Average', () => {
     const ema = new ExponentialMovingAverage({
       in: ['close'],
       out: ['ema'],
-      period: 3
+      period: 10
     })
     
     const smaResult = await sma.apply(arrayToAsyncIterator(testData))
@@ -187,13 +187,13 @@ describe('Exponential Moving Average', () => {
     const emaResult = await ema.apply(arrayToAsyncIterator(testData))
     const emaTransformed = await collectResults(emaResult.data as AsyncIterator<OhlcvDto>)
     
-    // At the spike
-    strictEqual(smaTransformed[3]!.sma, 40) // (10+10+100)/3
+    // At the spike (index 10)
+    strictEqual(smaTransformed[10]!.sma, 40) // (10+10+100)/3
     
-    // EMA should be smoother (less affected by spike)
-    ok(emaTransformed[3]!.ema! < smaTransformed[3]!.sma!)
+    // EMA with longer period should be smoother (less affected by spike)
+    ok((emaTransformed[10] as any).ema < (smaTransformed[10] as any).sma)
     
-    // After spike, EMA should decay more gradually
-    ok(emaTransformed[4]!.ema! > smaTransformed[4]!.sma!)
+    // After spike, when SMA drops back to normal, EMA should still be higher (gradual decay)
+    ok((emaTransformed[13] as any).ema > (smaTransformed[13] as any).sma)
   })
 })

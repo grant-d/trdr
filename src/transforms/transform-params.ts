@@ -1,5 +1,7 @@
 import type { BaseTransformParams } from '../interfaces'
 
+export type { BaseTransformParams }
+
 /**
  * Parameters for missing value handling
  */

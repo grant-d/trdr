@@ -92,6 +92,34 @@ const TRANSFORM_FIELD_MAPPINGS: Record<string, {
     requiredFields: ['high', 'low', 'close', 'volume'],
     outputFields: ['vwap']
   },
+  missingValues: {
+    requiredFields: [],
+    outputFields: []
+  },
+  timeframeAggregation: {
+    requiredFields: ['timestamp', 'open', 'high', 'low', 'close', 'volume'],
+    outputFields: []
+  },
+  tickBars: {
+    requiredFields: ['open', 'high', 'low', 'close', 'volume'],
+    outputFields: []
+  },
+  volumeBars: {
+    requiredFields: ['open', 'high', 'low', 'close', 'volume'],
+    outputFields: []
+  },
+  dollarBars: {
+    requiredFields: ['open', 'high', 'low', 'close', 'volume'],
+    outputFields: []
+  },
+  tickImbalanceBars: {
+    requiredFields: ['open', 'high', 'low', 'close', 'volume'],
+    outputFields: []
+  },
+  heikinAshi: {
+    requiredFields: ['open', 'high', 'low', 'close'],
+    outputFields: []
+  },
 }
 
 /**
@@ -456,7 +484,29 @@ export class ConfigValidator {
         }
         break
 
+      case 'sma':
+      case 'ema':
+        if (!params.in || !Array.isArray(params.in) || params.in.length === 0) {
+          this.addError(`${prefix}.in`, 'Input fields (in) are required and must be a non-empty array', params.in)
+        }
+        if (!params.out || !Array.isArray(params.out) || params.out.length === 0) {
+          this.addError(`${prefix}.out`, 'Output fields (out) are required and must be a non-empty array', params.out)
+        }
+        if (params.in && params.out && params.in.length !== params.out.length) {
+          this.addError(`${prefix}`, 'Number of input fields must match number of output fields', params)
+        }
+        if (!params.period || !Number.isInteger(params.period) || params.period <= 0) {
+          this.addError(`${prefix}.period`, 'Period must be a positive integer', params.period)
+        }
+        break
+
       case 'rsi':
+        if (!params.in || !Array.isArray(params.in) || params.in.length === 0) {
+          this.addError(`${prefix}.in`, 'Input fields (in) are required and must be a non-empty array', params.in)
+        }
+        if (!params.out || !Array.isArray(params.out) || params.out.length === 0) {
+          this.addError(`${prefix}.out`, 'Output fields (out) are required and must be a non-empty array', params.out)
+        }
         if (params.period !== undefined && (!Number.isInteger(params.period) || params.period <= 0)) {
           this.addError(`${prefix}.period`, 'RSI period must be a positive integer', params.period)
         }

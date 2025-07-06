@@ -545,8 +545,112 @@
           5,
           6
         ],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement TickBarGenerator transform",
+            "description": "Create a TickBarGenerator class that extends BarGeneratorTransform to generate bars based on a specific number of trades/ticks.",
+            "dependencies": [],
+            "details": "Implement the TickBarGenerator class with a ticksPerBar parameter. Override the isBarComplete method to track the number of ticks and return true when the threshold is reached. Implement createNewBar to initialize a new bar and reset the tick counter. Implement updateBar to update OHLCV values while maintaining the tick count.",
+            "status": "done",
+            "testStrategy": "Test with sample tick data to verify bars are created exactly when the tick count reaches the threshold. Verify OHLCV values are correctly aggregated across ticks."
+          },
+          {
+            "id": 2,
+            "title": "Implement VolumeBarGenerator transform",
+            "description": "Complete the implementation of the VolumeBarGenerator class to create bars based on accumulated volume thresholds.",
+            "dependencies": [],
+            "details": "Finalize the VolumeBarGenerator implementation by adding proper volume tracking and reset logic. When accumulated volume exceeds volumePerBar, reset the counter but carry over excess volume to the next bar. Ensure proper handling of edge cases like very large individual volumes.",
+            "status": "done",
+            "testStrategy": "Test with various volume scenarios including volumes that exactly match the threshold and volumes that exceed it by different amounts."
+          },
+          {
+            "id": 3,
+            "title": "Implement DollarBarGenerator transform",
+            "description": "Create a DollarBarGenerator class that creates bars based on accumulated dollar value of trades.",
+            "dependencies": [],
+            "details": "Implement DollarBarGenerator extending BarGeneratorTransform with a dollarValuePerBar parameter. Track the accumulated dollar value (price * volume) for each symbol. Override isBarComplete to check if the dollar threshold is reached, createNewBar to initialize tracking, and updateBar to maintain OHLCV values while accumulating dollar value.",
+            "status": "done",
+            "testStrategy": "Test with price and volume combinations to verify bars are created when dollar value (price * volume) reaches the threshold."
+          },
+          {
+            "id": 4,
+            "title": "Implement TickImbalanceBarGenerator transform",
+            "description": "Create a TickImbalanceBarGenerator that creates bars based on buy/sell tick imbalance.",
+            "dependencies": [],
+            "details": "Implement TickImbalanceBarGenerator with a threshold parameter. Track the tick imbalance (difference between buy and sell ticks) for each symbol. Determine tick direction based on price movement. Override isBarComplete to check if absolute imbalance reaches the threshold, createNewBar to reset imbalance tracking, and updateBar to update OHLCV values and imbalance count.",
+            "status": "done",
+            "testStrategy": "Test with sequences of up and down ticks to verify bars are created when imbalance reaches the threshold in either direction."
+          },
+          {
+            "id": 5,
+            "title": "Implement HeikinAshiGenerator transform",
+            "description": "Create a HeikinAshiGenerator that converts regular OHLC bars to Heikin-Ashi bars for smoother trend visualization.",
+            "dependencies": [],
+            "details": "Implement HeikinAshiGenerator extending BarGeneratorTransform. Store the previous Heikin-Ashi bar for each symbol. Override isBarComplete to pass through completion from input bars, createNewBar to initialize the first Heikin-Ashi bar, and updateBar to apply the Heikin-Ashi formula: HA_close = (open + high + low + close)/4, HA_open = (prev_HA_open + prev_HA_close)/2, HA_high = max(high, HA_open, HA_close), HA_low = min(low, HA_open, HA_close).",
+            "status": "done",
+            "testStrategy": "Test with a sequence of regular OHLC bars and verify the Heikin-Ashi calculations match expected values. Compare with known Heikin-Ashi implementations."
+          },
+          {
+            "id": 6,
+            "title": "Implement Pipeline server mode",
+            "description": "Enhance the Pipeline class to support continuous operation in server mode with proper lifecycle management.",
+            "dependencies": [],
+            "details": "Expand the runContinuously method to handle long-running operations. Implement proper error handling and recovery mechanisms. Add event emitters for pipeline status updates. Implement graceful shutdown handling that responds to SIGINT and SIGTERM signals. Add logging for operational visibility.",
+            "status": "done",
+            "testStrategy": "Test server mode with mock data provider that simulates continuous data flow. Verify the pipeline can run for extended periods without memory leaks or performance degradation."
+          },
+          {
+            "id": 7,
+            "title": "Implement gap detection mechanism",
+            "description": "Create a system to detect gaps in historical data when running in server mode.",
+            "dependencies": [
+              6
+            ],
+            "details": "Implement a gap detection algorithm in the backfill method. Query the repository for the latest stored bar timestamp for each symbol. Compare with the expected data frequency to identify gaps. Create a data structure to track detected gaps for backfilling. Add configuration options to specify acceptable gap thresholds.",
+            "status": "done",
+            "testStrategy": "Test with repository containing data with known gaps. Verify the system correctly identifies gaps of various sizes and across symbol boundaries."
+          },
+          {
+            "id": 8,
+            "title": "Implement backfill mechanism",
+            "description": "Create a system to fetch and process missing historical data to fill gaps.",
+            "dependencies": [
+              7
+            ],
+            "details": "Complete the backfill method to request historical data for detected gaps. Process backfilled data through the same transform pipeline as real-time data. Implement prioritization for backfill requests based on gap size and recency. Add rate limiting to prevent overloading data providers during backfill operations. Implement progress tracking and reporting for backfill operations.",
+            "status": "done",
+            "testStrategy": "Test backfill with mock data provider and repository. Verify gaps are correctly filled and data is properly transformed and stored."
+          },
+          {
+            "id": 9,
+            "title": "Implement state persistence",
+            "description": "Add functionality to save and restore the internal state of transforms for graceful restarts.",
+            "dependencies": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "details": "Add methods to each BarGenerator class to serialize and deserialize its internal state. Implement state persistence in the Pipeline class to periodically save transform states to a durable store. Add state restoration during pipeline initialization. Ensure all maps and counters in the transforms can be properly serialized and restored.",
+            "status": "done",
+            "testStrategy": "Test saving state during operation and restoring it after a restart. Verify that bars continue to be generated correctly after state restoration without duplicates or gaps."
+          },
+          {
+            "id": 10,
+            "title": "Add configuration and monitoring interface",
+            "description": "Create a configuration system and monitoring interface for the pipeline and transforms.",
+            "dependencies": [
+              6,
+              9
+            ],
+            "details": "Implement a configuration system that allows dynamic updates to transform parameters. Create a monitoring interface that exposes metrics about pipeline performance, backfill status, and transform operations. Add health check endpoints for operational monitoring. Implement a simple API to query current transform states and pipeline status. Add visualization helpers for the different bar types.",
+            "status": "done",
+            "testStrategy": "Test configuration changes during runtime and verify they take effect. Test monitoring interface with simulated load and verify metrics accuracy."
+          }
+        ]
       },
       {
         "id": 9,
@@ -660,7 +764,7 @@
     ],
     "metadata": {
       "created": "2025-07-04T20:49:04.828Z",
-      "updated": "2025-07-05T16:06:19.690Z",
+      "updated": "2025-07-06T17:49:23.100Z",
       "description": "Tasks for master context"
     }
   }

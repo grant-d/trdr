@@ -1,1 +1,6 @@
 export * from './pipeline'
+export * from './pipeline-server'
+export * from './gap-detector'
+export * from './backfill-manager'
+export * from './state-manager'
+export * from './monitoring'

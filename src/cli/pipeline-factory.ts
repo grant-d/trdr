@@ -19,6 +19,12 @@ import {
   Macd,
   AverageTrueRange,
   VolumeWeightedAveragePrice,
+  TickBarGenerator,
+  VolumeBarGenerator,
+  DollarBarGenerator,
+  TickImbalanceBarGenerator,
+  TickRunBarGenerator,
+  HeikinAshiGenerator,
 } from '../transforms'
 import { ConfigLoader } from './config-loader'
 import type { ValidatedConfig } from './config-validator'
@@ -41,6 +47,12 @@ const TRANSFORM_FACTORIES: Record<string, (params: any) => Transform> = {
   macd: (params) => new Macd(params),
   atr: (params) => new AverageTrueRange(params),
   vwap: (params) => new VolumeWeightedAveragePrice(params),
+  tickBars: (params) => new TickBarGenerator(params),
+  volumeBars: (params) => new VolumeBarGenerator(params),
+  dollarBars: (params) => new DollarBarGenerator(params),
+  tickImbalanceBars: (params) => new TickImbalanceBarGenerator(params),
+  tickRunBars: (params) => new TickRunBarGenerator(params),
+  heikinAshi: (params) => new HeikinAshiGenerator(params),
 }
 
 /**

@@ -48,6 +48,7 @@ describe('Average True Range', () => {
     const testData = createTestData(ohlcData)
     
     const atr = new AverageTrueRange({
+      in: ['high', 'low', 'close'],
       out: ['atr'],
       period: 3
     })
@@ -65,12 +66,12 @@ describe('Average True Range', () => {
     // TR values: 10, 8, 7
     // Initial ATR = (10 + 8 + 7) / 3 = 8.33...
     const expectedInitialAtr = (10 + 8 + 7) / 3
-    ok(Math.abs(transformed[2]!.atr! - expectedInitialAtr) < 0.01)
+    ok(Math.abs((transformed[2] as any).atr - expectedInitialAtr) < 0.01)
     
     // Fourth item uses Wilder's smoothing
     // ATR = ((Previous ATR * 2) + Current TR) / 3
     const expectedAtr4 = ((expectedInitialAtr * 2) + 7) / 3
-    ok(Math.abs(transformed[3]!.atr! - expectedAtr4) < 0.01)
+    ok(Math.abs((transformed[3] as any).atr - expectedAtr4) < 0.01)
   })
 
   it('should handle gaps correctly', async () => {
@@ -84,6 +85,7 @@ describe('Average True Range', () => {
     const testData = createTestData(ohlcData)
     
     const atr = new AverageTrueRange({
+      in: ['high', 'low', 'close'],
       out: ['atr'],
       period: 2
     })
@@ -97,13 +99,14 @@ describe('Average True Range', () => {
     ok('atr' in transformed[1]!)
     
     // ATR should reflect the increased volatility from gaps
-    ok(transformed[2]!.atr! > 5) // Should be higher due to gaps
+    ok((transformed[2] as any).atr > 5) // Should be higher due to gaps
   })
 
   it('should validate parameters', () => {
     // Should require exactly 1 output field
     try {
       const atr = new AverageTrueRange({
+        in: ['high', 'low', 'close'],
         out: ['atr1', 'atr2'], // Too many output fields
         period: 14
       })
@@ -123,6 +126,7 @@ describe('Average True Range', () => {
     const testData = createTestData(ohlcData)
     
     const atr = new AverageTrueRange({
+      in: ['high', 'low', 'close'],
       out: ['atr'],
       period: 1
     })
@@ -131,11 +135,11 @@ describe('Average True Range', () => {
     const transformed = await collectResults(result.data)
     
     // With period=1, first item should have ATR = high - low
-    strictEqual(transformed[0]!.atr, 20) // 110 - 90
+    strictEqual((transformed[0] as any).atr, 20) // 110 - 90
     
     // Second item should use true range calculation
     // TR = max(115-95=20, |115-105|=10, |95-105|=10) = 20
-    strictEqual(transformed[1]!.atr, 20)
+    strictEqual((transformed[1] as any).atr, 20)
   })
 
   it('should smooth volatility over time', async () => {
@@ -150,6 +154,7 @@ describe('Average True Range', () => {
     const testData = createTestData(ohlcData)
     
     const atr = new AverageTrueRange({
+      in: ['high', 'low', 'close'],
       out: ['atr'],
       period: 3
     })
@@ -158,9 +163,9 @@ describe('Average True Range', () => {
     const transformed = await collectResults(result.data)
     
     // ATR should smooth out the spike
-    const atr3 = transformed[2]!.atr! // Should include the spike
-    const atr4 = transformed[3]!.atr! // Should be smoothed
-    const atr5 = transformed[4]!.atr! // Should continue smoothing
+    const atr3 = (transformed[2] as any).atr // Should include the spike
+    const atr4 = (transformed[3] as any).atr // Should be smoothed
+    const atr5 = (transformed[4] as any).atr // Should continue smoothing
     
     // ATR should decrease after spike but not immediately
     ok(atr4 < atr3)
