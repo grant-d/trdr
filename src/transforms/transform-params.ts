@@ -59,6 +59,9 @@ export interface LogReturnsParams extends BaseTransformParams {
 export interface ZScoreParams extends BaseTransformParams {
   /** Window size for rolling z-score (null for global) */
   windowSize?: number | null
+
+  /** Fields to normalize (default: all numeric fields) */
+  // fields?: string[]
 }
 
 /**
@@ -71,6 +74,9 @@ export interface MinMaxParams extends BaseTransformParams {
   /** Target range for normalization */
   min?: number
   max?: number
+
+  /** Fields to normalize (default: all numeric fields) */
+  // fields?: string[]
 }
 
 /**
@@ -98,8 +104,9 @@ export interface PercentChangeParams extends BaseTransformParams {
   periods?: number
 
   /** Field to calculate percent change on */
-  priceField?: 'open' | 'high' | 'low' | 'close'
+  // priceField?: 'open' | 'high' | 'low' | 'close'
 
   /** Name of the output field */
-  outputField?: string
+  // outputField?: string
+}
 }

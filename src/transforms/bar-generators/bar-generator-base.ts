@@ -20,8 +20,8 @@ export interface BarState {
  * Base class for bar generators that aggregate tick/trade data into bars
  */
 export abstract class BarGeneratorTransform<T extends BarGeneratorParams = BarGeneratorParams> extends BaseTransform<T> {
-  protected symbolState: Map<string, BarState> = new Map()
-  protected lastResetTime: number = 0
+  protected symbolState = new Map<string, BarState>()
+  protected lastResetTime = 0
 
   constructor(params: T, type: TransformType, name: string) {
     super(type, name, `${name} bar generator`, params)
@@ -48,7 +48,7 @@ export abstract class BarGeneratorTransform<T extends BarGeneratorParams = BarGe
   abstract resetState(state: BarState): void
 
   protected async *transform(data: AsyncIterator<OhlcvDto>): AsyncGenerator<OhlcvDto> {
-    const pendingNewBars: Map<string, boolean> = new Map()
+    const pendingNewBars = new Map<string, boolean>()
     
     let result = await data.next()
     while (!result.done) {

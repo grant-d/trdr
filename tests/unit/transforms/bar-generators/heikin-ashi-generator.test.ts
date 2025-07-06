@@ -271,7 +271,7 @@ describe('HeikinAshiGenerator', () => {
     generator.restoreState(mockState)
     const state = generator.getState()
     
-    const testState = state['TEST'] as any
+    const testState = state.TEST as any
     strictEqual(testState.previousHAOpen, 105.5)
     strictEqual(testState.previousHAClose, 106.25)
   })

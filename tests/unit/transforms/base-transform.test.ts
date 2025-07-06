@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import { strict as assert } from 'node:assert'
 import { BaseTransform } from '../../../src/transforms/base-transform'
 import type { OhlcvDto } from '../../../src/models'
-import type { Transform, TransformType, BaseTransformParams } from '../../../src/interfaces/transform.interface'
+import type { Transform, BaseTransformParams } from '../../../src/interfaces/transform.interface'
 
 // Test implementation of BaseTransform
 interface TestParams extends BaseTransformParams {
@@ -38,6 +38,15 @@ class TestTransform extends BaseTransform<TestParams> {
   public withParams(params: Partial<TestParams>): Transform<TestParams> {
     return new TestTransform({ ...this.params, ...params })
   }
+
+  // Expose protected methods for testing
+  public testArrayToAsyncIterator<T>(data: T[]): AsyncIterator<T> {
+    return this.arrayToAsyncIterator(data)
+  }
+
+  public testCollectAsyncIterator<T>(iterator: AsyncIterator<T>): Promise<T[]> {
+    return this.collectAsyncIterator(iterator)
+  }
 }
 
 test('BaseTransform - Constructor and Properties', () => {
@@ -68,7 +77,7 @@ test('BaseTransform - Apply Transform', async () => {
   ]
   
   // Apply the transform
-  const input = transform['arrayToAsyncIterator'](testData)
+  const input = transform.testArrayToAsyncIterator(testData)
   const result = await transform.apply(input)
   
   // Collect results
@@ -173,18 +182,20 @@ test('BaseTransform - Helper Methods', async () => {
 
   // Test arrayToAsyncIterator
   const data = [1, 2, 3]
-  const iterator = transform['arrayToAsyncIterator'](data)
+  const iterator = transform.testArrayToAsyncIterator(data)
   const collected: number[] = []
 
-  for await (const item of iterator) {
-    collected.push(item)
+  let item = await iterator.next()
+  while (!item.done) {
+    collected.push(item.value)
+    item = await iterator.next()
   }
   
   assert.deepEqual(collected, data)
   
   // Test collectAsyncIterator
-  const iterator2 = transform['arrayToAsyncIterator']([4, 5, 6])
-  const result = await transform['collectAsyncIterator'](iterator2)
+  const iterator2 = transform.testArrayToAsyncIterator([4, 5, 6])
+  const result = await transform.testCollectAsyncIterator(iterator2)
   
   assert.deepEqual(result, [4, 5, 6])
 })

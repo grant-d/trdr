@@ -222,7 +222,7 @@ describe('TickBarGenerator', () => {
     generator.restoreState(mockState)
     const state = generator.getState()
     
-    strictEqual(state['TEST']!.tickCount, 2)
-    strictEqual(state['TEST']!.complete, false)
+    strictEqual(state.TEST!.tickCount, 2)
+    strictEqual(state.TEST!.complete, false)
   })
 })

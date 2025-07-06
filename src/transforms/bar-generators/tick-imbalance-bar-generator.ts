@@ -2,8 +2,20 @@ import { BarGeneratorTransform, type BarGeneratorParams, type BarState } from '.
 import type { OhlcvDto } from '../../models'
 
 export interface TickImbalanceBarParams extends BarGeneratorParams {
+  /** 
+   * Imbalance threshold that triggers bar completion
+   * @example 10 // Complete bars when imbalance reaches ±10 ticks or volume units
+   * @minimum 0 (exclusive)
+   */
   imbalanceThreshold: number
-  useVolume?: boolean // Use volume imbalance instead of tick count imbalance
+  
+  /** 
+   * Use volume imbalance instead of tick count imbalance
+   * @default false
+   * - false: Count buy vs sell ticks
+   * - true: Sum buy vs sell volume
+   */
+  useVolume?: boolean
 }
 
 interface TickImbalanceState extends BarState {
@@ -15,8 +27,68 @@ interface TickImbalanceState extends BarState {
 }
 
 /**
- * Generates bars based on tick imbalance (buy ticks - sell ticks)
- * A tick is classified as buy if price > previous price, sell if price < previous price
+ * Tick Imbalance Bar Generator
+ * 
+ * Generates bars based on tick imbalance - the difference between buy-side and sell-side
+ * activity. This advanced bar type is particularly useful for detecting order flow imbalances
+ * and market microstructure patterns.
+ * 
+ * ## Algorithm
+ * 
+ * 1. **Tick Classification**: Classify each tick as buy, sell, or neutral based on price movement
+ *    - Buy tick: current price > previous price  
+ *    - Sell tick: current price < previous price
+ *    - Neutral: current price = previous price
+ * 
+ * 2. **Imbalance Calculation**: Track imbalance using either:
+ *    - Tick Count: |buyTicks - sellTicks|
+ *    - Volume: |buyVolume - sellVolume|
+ * 
+ * 3. **Bar Completion**: When imbalance >= threshold, complete the bar
+ * 4. **Bar Reset**: Start new bar with fresh imbalance tracking
+ * 
+ * ## Use Cases
+ * 
+ * - **Order Flow Analysis**: Detect buying and selling pressure
+ * - **Market Microstructure**: Analyze tick-by-tick market dynamics
+ * - **Momentum Detection**: Identify periods of directional pressure
+ * - **Liquidity Studies**: Understand market maker vs. taker activity
+ * - **High-Frequency Trading**: Detect short-term imbalances for arbitrage
+ * 
+ * ## Advantages over Time-Based Bars
+ * 
+ * - **Directional Sensitivity**: Captures periods of strong directional flow
+ * - **Market Pressure**: Highlights buying/selling pressure imbalances
+ * - **Natural Breakpoints**: Bars form at natural inflection points
+ * - **Microstructure Insights**: Reveals hidden order flow patterns
+ * 
+ * ## Considerations
+ * 
+ * - **Direction Dependent**: Bars form based on directional imbalance strength
+ * - **Market Regime Sensitivity**: Threshold may need adjustment for different assets
+ * - **Neutral Ticks**: Price-unchanged ticks don't contribute to imbalance
+ * - **Volatility Impact**: High volatility may cause frequent direction changes
+ * 
+ * @example
+ * ```typescript
+ * // Detect imbalances of 20 ticks in either direction
+ * const tickImbalanceBars = new TickImbalanceBarGenerator({
+ *   imbalanceThreshold: 20,
+ *   useVolume: false // Count ticks, not volume
+ * })
+ * 
+ * // Use volume-weighted imbalance for institutional flow detection
+ * const volumeImbalanceBars = new TickImbalanceBarGenerator({
+ *   imbalanceThreshold: 100000, // 100K volume imbalance
+ *   useVolume: true
+ * })
+ * 
+ * // High-frequency micro-imbalance detection
+ * const microImbalanceBars = new TickImbalanceBarGenerator({
+ *   imbalanceThreshold: 5, // Very sensitive
+ *   useVolume: false
+ * })
+ * ```
  */
 export class TickImbalanceBarGenerator extends BarGeneratorTransform<TickImbalanceBarParams> {
   constructor(params: TickImbalanceBarParams) {

@@ -12,18 +12,18 @@ export interface MacdParams extends TechnicalIndicatorParams {
  * Shows the relationship between two moving averages of prices
  */
 export class Macd extends BaseTechnicalIndicator {
-  private fastPeriod: number
-  private slowPeriod: number
-  private signalPeriod: number
-  private fastEmas: Map<string, number | undefined> = new Map()
-  private slowEmas: Map<string, number | undefined> = new Map()
-  private signalEmas: Map<string, number | undefined> = new Map()
-  private fastMultiplier: number
-  private slowMultiplier: number
-  private signalMultiplier: number
-  private fastBuffers: Map<string, number[]> = new Map()
-  private slowBuffers: Map<string, number[]> = new Map()
-  private macdBuffers: Map<string, number[]> = new Map()
+  private readonly fastPeriod: number
+  private readonly slowPeriod: number
+  private readonly signalPeriod: number
+  private readonly fastEmas = new Map<string, number | undefined>()
+  private readonly slowEmas = new Map<string, number | undefined>()
+  private readonly signalEmas = new Map<string, number | undefined>()
+  private readonly fastMultiplier: number
+  private readonly slowMultiplier: number
+  private readonly signalMultiplier: number
+  private readonly fastBuffers = new Map<string, number[]>()
+  private readonly slowBuffers = new Map<string, number[]>()
+  private readonly macdBuffers = new Map<string, number[]>()
 
   constructor(params: MacdParams) {
     super(params, 'macd' as any, 'MACD')

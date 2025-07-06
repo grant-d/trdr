@@ -9,7 +9,7 @@ export interface MovingAverageParams extends TechnicalIndicatorParams {
  * Simple Moving Average (SMA) indicator
  */
 export class SimpleMovingAverage extends BaseTechnicalIndicator {
-  private buffers: Map<string, number[]> = new Map()
+  private readonly buffers = new Map<string, number[]>()
 
   constructor(params: MovingAverageParams) {
     super(params, 'sma' as any, 'Simple Moving Average')
@@ -63,8 +63,8 @@ export class SimpleMovingAverage extends BaseTechnicalIndicator {
  * Exponential Moving Average (EMA) indicator
  */
 export class ExponentialMovingAverage extends BaseTechnicalIndicator {
-  private emas: Map<string, number | undefined> = new Map()
-  private multiplier: number
+  private readonly emas = new Map<string, number | undefined>()
+  private readonly multiplier: number
 
   constructor(params: MovingAverageParams) {
     super(params, 'ema' as any, 'Exponential Moving Average')
@@ -78,7 +78,7 @@ export class ExponentialMovingAverage extends BaseTechnicalIndicator {
     }
 
     let count = 0
-    const smaBuffers: Map<string, number[]> = new Map()
+    const smaBuffers = new Map<string, number[]>()
     for (const field of this.params.in) {
       smaBuffers.set(field, [])
     }

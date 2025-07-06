@@ -49,11 +49,11 @@ export interface GapDetectorConfig {
  */
 export class GapDetector {
   private readonly config: Required<GapDetectorConfig>
-  private symbolState: Map<string, {
+  private readonly symbolState = new Map<string, {
     lastRecord?: OhlcvDto
     volumeHistory: Array<{ time: number; volume: number }>
     gaps: Gap[]
-  }> = new Map()
+  }>()
 
   constructor(config: GapDetectorConfig = {}) {
     this.config = {

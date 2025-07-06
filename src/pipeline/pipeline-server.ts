@@ -57,7 +57,7 @@ export class PipelineServer extends EventEmitter {
   private healthCheckTimer?: NodeJS.Timeout
   private realtimeSubscription?: AsyncIterableIterator<OhlcvDto>
   private abortController?: AbortController
-  private stats = {
+  private readonly stats = {
     startTime: 0,
     recordsProcessed: 0,
     errors: 0,

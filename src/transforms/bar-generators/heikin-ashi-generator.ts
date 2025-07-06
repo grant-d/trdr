@@ -4,7 +4,12 @@ import type { TransformType } from '../../interfaces'
 import type { BaseTransformParams } from '../transform-params'
 
 export interface HeikinAshiParams extends BaseTransformParams {
-  outputPrefix?: string // Prefix for output fields (e.g., 'ha_' results in ha_open, ha_high, etc.)
+  /** 
+   * Prefix for output fields
+   * @default 'ha_'
+   * @example 'ha_' results in ha_open, ha_high, ha_low, ha_close fields
+   */
+  outputPrefix?: string
 }
 
 interface HeikinAshiState {
@@ -13,16 +18,75 @@ interface HeikinAshiState {
 }
 
 /**
- * Converts regular OHLC bars to Heikin-Ashi bars for smoother trend visualization
+ * Heikin-Ashi Generator
+ * 
+ * Converts regular OHLC bars to Heikin-Ashi (HA) bars for smoother trend visualization
+ * and noise reduction. Heikin-Ashi is a Japanese candlestick technique that creates
+ * more readable charts by filtering out market noise.
+ * 
+ * ## Algorithm
  * 
  * Heikin-Ashi formulas:
- * - HA_Close = (Open + High + Low + Close) / 4
- * - HA_Open = (Previous HA_Open + Previous HA_Close) / 2
- * - HA_High = Max(High, HA_Open, HA_Close)
- * - HA_Low = Min(Low, HA_Open, HA_Close)
+ * 1. **HA_Close = (Open + High + Low + Close) / 4** - Average price of the period
+ * 2. **HA_Open = (Previous HA_Open + Previous HA_Close) / 2** - Midpoint of previous HA bar
+ * 3. **HA_High = Max(High, HA_Open, HA_Close)** - Highest of period high and HA values
+ * 4. **HA_Low = Min(Low, HA_Open, HA_Close)** - Lowest of period low and HA values
+ * 
+ * ## Special Case: First Bar
+ * For the first bar where no previous HA values exist:
+ * - HA_Open = (Open + Close) / 2
+ * - Other formulas remain the same
+ * 
+ * ## Use Cases
+ * 
+ * - **Trend Analysis**: Smoother visualization of price trends
+ * - **Noise Reduction**: Filters out small price fluctuations and whipsaws
+ * - **Signal Generation**: Clearer buy/sell signals with reduced false positives
+ * - **Momentum Detection**: Easier identification of trend strength
+ * - **Support/Resistance**: More reliable levels due to smoothing effect
+ * 
+ * ## Advantages over Regular OHLC
+ * 
+ * - **Trend Clarity**: Smoother representation of price action
+ * - **Noise Filtering**: Reduces market noise and false signals
+ * - **Visual Appeal**: More readable and interpretable charts
+ * - **Momentum Visualization**: Stronger trends show as longer, more consistent candles
+ * 
+ * ## Considerations
+ * 
+ * - **Lagging Indicator**: HA values lag actual prices due to averaging
+ * - **Gap Handling**: Gaps are naturally smoothed out, which may obscure important information
+ * - **Real Price**: HA prices don't represent actual tradeable prices
+ * - **Historical Only**: Best used for analysis, not real-time entry/exit decisions
+ * 
+ * ## Visual Characteristics
+ * 
+ * - **Uptrend**: Long green/white candles with small lower wicks
+ * - **Downtrend**: Long red/black candles with small upper wicks  
+ * - **Consolidation**: Candles with both upper and lower wicks
+ * - **Trend Change**: Color changes and wick patterns shift
+ * 
+ * @example
+ * ```typescript
+ * // Basic Heikin-Ashi conversion with default prefix
+ * const heikinAshi = new HeikinAshiGenerator({
+ *   in: ['open', 'high', 'low', 'close'],
+ *   out: ['ha_open', 'ha_high', 'ha_low', 'ha_close']
+ * })
+ * 
+ * // Custom prefix for multiple timeframes
+ * const ha5min = new HeikinAshiGenerator({
+ *   outputPrefix: 'ha5_' // Creates ha5_open, ha5_high, etc.
+ * })
+ * 
+ * // For trend analysis systems
+ * const smoothedBars = new HeikinAshiGenerator({
+ *   outputPrefix: 'smooth_'
+ * })
+ * ```
  */
 export class HeikinAshiGenerator extends BaseTransform<HeikinAshiParams> {
-  private symbolState: Map<string, HeikinAshiState> = new Map()
+  private readonly symbolState = new Map<string, HeikinAshiState>()
 
   constructor(params: HeikinAshiParams = {}) {
     super('heikinAshi' as TransformType, 'Heikin-Ashi Generator', 'Converts OHLC to Heikin-Ashi bars', params)

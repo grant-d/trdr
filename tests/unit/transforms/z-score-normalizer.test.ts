@@ -155,11 +155,11 @@ describe('ZScoreNormalizer', () => {
       ok('close_zscore' in transformed[2]!)
       
       // First two items should have 0 (insufficient data)
-      strictEqual(transformed[0]!.close_zscore, 0)
-      strictEqual(transformed[1]!.close_zscore, 0)
+      strictEqual(transformed[0].close_zscore, 0)
+      strictEqual(transformed[1].close_zscore, 0)
       
       // Third item should have a calculated z-score
-      ok(typeof transformed[2]!.close_zscore === 'number')
+      ok(typeof transformed[2].close_zscore === 'number')
     })
   })
 

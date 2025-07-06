@@ -106,10 +106,10 @@ export interface Alert {
  */
 export class PipelineMonitor extends EventEmitter {
   private readonly config: Required<MonitoringConfig>
-  private metrics: Map<string, Metric> = new Map()
-  private transformMetrics: Map<string, TransformMetrics> = new Map()
+  private readonly metrics = new Map<string, Metric>()
+  private readonly transformMetrics = new Map<string, TransformMetrics>()
   private metricsTimer?: NodeJS.Timeout
-  private performanceData = {
+  private readonly performanceData = {
     recordsProcessed: 0,
     startTime: Date.now(),
     errors: 0,
@@ -427,7 +427,7 @@ export class PipelineMonitor extends EventEmitter {
  * Create a monitoring dashboard
  */
 export class MonitoringDashboard {
-  private monitor: PipelineMonitor
+  private readonly monitor: PipelineMonitor
   private updateInterval?: NodeJS.Timeout
 
   constructor(monitor: PipelineMonitor) {

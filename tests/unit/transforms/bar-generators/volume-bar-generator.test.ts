@@ -220,7 +220,7 @@ describe('VolumeBarGenerator', () => {
     generator.restoreState(mockState)
     const state = generator.getState()
     
-    const testState = state['TEST'] as any
+    const testState = state.TEST as any
     strictEqual(testState.accumulatedVolume, 750)
     strictEqual(testState.complete, false)
   })

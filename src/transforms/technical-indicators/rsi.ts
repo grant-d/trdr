@@ -10,10 +10,10 @@ export interface RsiParams extends TechnicalIndicatorParams {
  * Measures momentum by comparing magnitude of recent gains to recent losses
  */
 export class RelativeStrengthIndex extends BaseTechnicalIndicator {
-  private previousValues: Map<string, number | undefined> = new Map()
-  private avgGains: Map<string, number> = new Map()
-  private avgLosses: Map<string, number> = new Map()
-  private initialCounts: Map<string, number> = new Map()
+  private readonly previousValues = new Map<string, number | undefined>()
+  private readonly avgGains = new Map<string, number>()
+  private readonly avgLosses = new Map<string, number>()
+  private readonly initialCounts = new Map<string, number>()
 
   constructor(params: RsiParams) {
     super(params, 'rsi' as any, 'Relative Strength Index')

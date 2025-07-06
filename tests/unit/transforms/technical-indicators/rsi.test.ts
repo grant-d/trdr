@@ -122,7 +122,7 @@ describe('Relative Strength Index', () => {
     
     // Should calculate RSI for both fields
     ok('open_rsi' in transformed[3]!)
-    ok('close_rsi' in transformed[3]!)
+    ok('close_rsi' in transformed[3])
     
     // Values should be reasonable
     ok((transformed[3] as any).open_rsi > 0 && (transformed[3] as any).open_rsi < 100)

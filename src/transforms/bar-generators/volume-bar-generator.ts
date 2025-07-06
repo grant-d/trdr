@@ -2,11 +2,66 @@ import { BarGeneratorTransform, type BarGeneratorParams, type BarState } from '.
 import type { OhlcvDto } from '../../models'
 
 export interface VolumeBarParams extends BarGeneratorParams {
+  /** 
+   * Volume threshold that triggers bar completion
+   * @example 10000 // Complete bars when 10,000 shares/units have been traded
+   * @minimum 0 (exclusive)
+   */
   volumePerBar: number
 }
 
 /**
- * Generates bars based on accumulated volume thresholds
+ * Volume Bar Generator
+ * 
+ * Generates bars based on accumulated volume rather than time or tick count. This creates
+ * bars that represent equal liquidity consumption, making them particularly useful for
+ * analyzing market microstructure and institutional trading patterns.
+ * 
+ * ## Algorithm
+ * 
+ * 1. **Volume Accumulation**: Sum the volume of each incoming tick
+ * 2. **Threshold Check**: When accumulated volume >= volumePerBar, complete the bar
+ * 3. **Bar Reset**: Start a new bar with volume accumulation reset
+ * 
+ * ## Use Cases
+ * 
+ * - **Liquidity Analysis**: Each bar represents equal liquidity consumption
+ * - **Institutional Trading**: Detect large block trading patterns
+ * - **Market Impact Studies**: Analyze price impact per unit of volume
+ * - **Volume Profile Analysis**: Understand volume distribution patterns
+ * - **Execution Algorithms**: TWAP/VWAP strategy development
+ * 
+ * ## Advantages over Time-Based Bars
+ * 
+ * - **Liquidity-Normalized**: Each bar represents similar liquidity impact
+ * - **Market Structure**: Better reflects actual market participation
+ * - **Volume Clustering**: Naturally groups periods of similar volume activity
+ * - **Institutional Focus**: Highlights periods of large institutional activity
+ * 
+ * ## Considerations
+ * 
+ * - **Variable Time Spans**: High-volume periods create faster bars
+ * - **Tick Count Variation**: Each bar may contain different numbers of trades
+ * - **Price Range Variation**: Volume doesn't guarantee price movement
+ * - **Market Regime Sensitivity**: May need adjustment for different market conditions
+ * 
+ * @example
+ * ```typescript
+ * // Create bars when 50,000 shares are traded
+ * const volumeBars = new VolumeBarGenerator({
+ *   volumePerBar: 50000
+ * })
+ * 
+ * // For crypto or high-volume assets
+ * const cryptoBars = new VolumeBarGenerator({
+ *   volumePerBar: 1000000 // 1M units
+ * })
+ * 
+ * // For low-volume assets  
+ * const smallCapBars = new VolumeBarGenerator({
+ *   volumePerBar: 5000 // 5K shares
+ * })
+ * ```
  */
 export class VolumeBarGenerator extends BarGeneratorTransform<VolumeBarParams> {
   constructor(params: VolumeBarParams) {

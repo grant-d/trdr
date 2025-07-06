@@ -300,8 +300,8 @@ export function createStatefulTransform<T extends Transform>(
  * State checkpoint utility
  */
 export class StateCheckpoint {
-  private checkpoints: Map<string, PipelineState> = new Map()
-  private maxCheckpoints: number
+  private readonly checkpoints = new Map<string, PipelineState>()
+  private readonly maxCheckpoints: number
 
   constructor(maxCheckpoints = 10) {
     this.maxCheckpoints = maxCheckpoints

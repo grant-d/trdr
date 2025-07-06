@@ -58,9 +58,9 @@ export interface BackfillEvents {
 export class BackfillManager extends EventEmitter {
   private readonly config: Required<BackfillConfig>
   private readonly provider: DataProvider
-  private requests: Map<string, BackfillRequest> = new Map()
-  private queue: BackfillRequest[] = []
-  private activeRequests: Set<string> = new Set()
+  private readonly requests = new Map<string, BackfillRequest>()
+  private readonly queue: BackfillRequest[] = []
+  private readonly activeRequests = new Set<string>()
   private nextRequestId = 1
 
   constructor(provider: DataProvider, config: BackfillConfig = {}) {
@@ -88,7 +88,7 @@ export class BackfillManager extends EventEmitter {
           symbol: gap.symbol,
           startTime: gap.startTime,
           endTime: gap.endTime,
-          priority: gap.severity as 'low' | 'medium' | 'high'
+          priority: gap.severity
         })
         requests.push(request)
       }

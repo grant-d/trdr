@@ -209,7 +209,7 @@ describe('TickRunBarGenerator', () => {
     generator.restoreState(mockState)
     const state = generator.getState()
     
-    const testState = state['TEST'] as any
+    const testState = state.TEST as any
     strictEqual(testState.currentRunLength, 2)
     strictEqual(testState.currentRunDirection, 'up')
     strictEqual(testState.previousClose, 101)

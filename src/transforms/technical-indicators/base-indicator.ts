@@ -15,7 +15,7 @@ export abstract class BaseTechnicalIndicator extends BaseTransform<TechnicalIndi
   protected period: number
 
   constructor(params: TechnicalIndicatorParams, type: TransformType, name: string) {
-    super(type as TransformType, name, `${name} with period ${params.period ?? 14}`, params)
+    super(type, name, `${name} with period ${params.period ?? 14}`, params)
     this.period = params.period ?? 14
   }
 

@@ -11,8 +11,8 @@ export interface BollingerBandsParams extends TechnicalIndicatorParams {
  * Creates upper and lower bands based on standard deviation from a moving average
  */
 export class BollingerBands extends BaseTechnicalIndicator {
-  private buffers: Map<string, number[]> = new Map()
-  private stdDev: number
+  private readonly buffers = new Map<string, number[]>()
+  private readonly stdDev: number
 
   constructor(params: BollingerBandsParams) {
     super(params, 'bollinger' as any, 'Bollinger Bands')

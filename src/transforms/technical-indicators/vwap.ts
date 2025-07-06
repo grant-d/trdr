@@ -11,11 +11,11 @@ export interface VwapParams extends TechnicalIndicatorParams {
  * Shows the average price weighted by volume
  */
 export class VolumeWeightedAveragePrice extends BaseTechnicalIndicator {
-  private cumulativeTypicalPriceVolume: number = 0
-  private cumulativeVolume: number = 0
-  private lastResetTimestamp: number = 0
-  private anchorPeriod: 'session' | 'day' | 'week' | 'month' | 'rolling'
-  private rollingPeriod: number
+  private cumulativeTypicalPriceVolume = 0
+  private cumulativeVolume = 0
+  private lastResetTimestamp = 0
+  private readonly anchorPeriod: 'session' | 'day' | 'week' | 'month' | 'rolling'
+  private readonly rollingPeriod: number
 
   constructor(params: VwapParams) {
     super({ ...params, in: [], out: params.out }, 'vwap', 'Volume Weighted Average Price')

@@ -2,8 +2,20 @@ import { BarGeneratorTransform, type BarGeneratorParams, type BarState } from '.
 import type { OhlcvDto } from '../../models'
 
 export interface TickRunBarParams extends BarGeneratorParams {
-  runLength: number // Number of consecutive ticks in same direction to trigger a new bar
-  useVolume?: boolean // Use volume runs instead of tick count runs
+  /** 
+   * Number of consecutive ticks in same direction to trigger a new bar
+   * @example 5 // Complete bars after 5 consecutive up or down ticks
+   * @minimum 0 (exclusive)
+   */
+  runLength: number
+  
+  /** 
+   * Use volume runs instead of tick count runs
+   * @default false
+   * - false: Count consecutive ticks in same direction
+   * - true: Accumulate volume units in same direction runs
+   */
+  useVolume?: boolean
 }
 
 interface TickRunState extends BarState {
@@ -14,9 +26,69 @@ interface TickRunState extends BarState {
 }
 
 /**
- * Generates bars based on tick runs (consecutive ticks in the same direction)
- * A new bar is created when we see a run of N ticks in the same direction
- * This helps capture momentum and directional moves
+ * Tick Run Bar Generator
+ * 
+ * Generates bars based on tick runs - consecutive ticks moving in the same direction.
+ * This advanced bar type is particularly effective for capturing momentum periods
+ * and directional market moves.
+ * 
+ * ## Algorithm
+ * 
+ * 1. **Direction Classification**: For each tick, determine movement direction:
+ *    - Up: current price > previous price
+ *    - Down: current price < previous price  
+ *    - Neutral: current price = previous price
+ * 
+ * 2. **Run Tracking**: Track consecutive ticks in the same direction:
+ *    - Same direction: increment run length
+ *    - Direction change: reset run length to 1
+ *    - Neutral: maintain current direction (doesn't break run)
+ * 
+ * 3. **Bar Completion**: When run length >= runLength threshold, complete the bar
+ * 4. **Bar Reset**: Start new bar with fresh run tracking
+ * 
+ * ## Use Cases
+ * 
+ * - **Momentum Analysis**: Capture periods of sustained directional movement
+ * - **Trend Detection**: Identify the start and end of trending moves
+ * - **Breakout Analysis**: Detect when price starts running in one direction
+ * - **Market Microstructure**: Analyze tick-level momentum patterns
+ * - **Reversal Studies**: Identify when momentum exhausts and reverses
+ * 
+ * ## Advantages over Time-Based Bars
+ * 
+ * - **Momentum Sensitive**: Bars form during periods of sustained movement
+ * - **Natural Breakpoints**: Bars end when directional momentum changes
+ * - **Trend Alignment**: Each bar represents a cohesive directional move
+ * - **Volatility Adaptive**: More bars during volatile (trending) periods
+ * 
+ * ## Considerations
+ * 
+ * - **Momentum Dependent**: Requires sustained directional movement to form bars
+ * - **Neutral Ticks**: Price-unchanged ticks don't break runs but don't extend them
+ * - **Market Regime Sensitivity**: Run length may need adjustment for different assets
+ * - **Choppy Markets**: May produce few bars in sideways/choppy conditions
+ * 
+ * @example
+ * ```typescript
+ * // Capture runs of 10 consecutive directional ticks
+ * const tickRunBars = new TickRunBarGenerator({
+ *   runLength: 10,
+ *   useVolume: false // Count ticks, not volume
+ * })
+ * 
+ * // Use volume-weighted runs for institutional momentum
+ * const volumeRunBars = new TickRunBarGenerator({
+ *   runLength: 50000, // 50K volume in same direction
+ *   useVolume: true
+ * })
+ * 
+ * // High-sensitivity momentum detection
+ * const microRunBars = new TickRunBarGenerator({
+ *   runLength: 3, // Very short runs
+ *   useVolume: false
+ * })
+ * ```
  */
 export class TickRunBarGenerator extends BarGeneratorTransform<TickRunBarParams> {
   constructor(params: TickRunBarParams) {

@@ -32,6 +32,9 @@ export type TransformType =
  * Base parameters interface that all transform parameters extend
  */
 export interface BaseTransformParams {
+  /** Optional custom name for this transform instance */
+  // name?: string
+
   /** Optional description of what this transform does */
   description?: string
   

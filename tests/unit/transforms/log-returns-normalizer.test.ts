@@ -1,4 +1,4 @@
-import { deepStrictEqual, ok, strictEqual, throws } from 'node:assert'
+import { deepStrictEqual, ok, strictEqual } from 'node:assert'
 import { describe, it } from 'node:test'
 import type { OhlcvDto } from '../../../src/models'
 import { LogReturnsNormalizer } from '../../../src/transforms'
@@ -71,8 +71,8 @@ describe('LogReturnsNormalizer', () => {
       const expectedReturn1 = Math.log(105 / 100)
       const expectedReturn2 = Math.log(110 / 105)
       
-      ok(Math.abs(transformed[1]!.close_returns! - expectedReturn1) < 0.0001)
-      ok(Math.abs(transformed[2]!.close_returns! - expectedReturn2) < 0.0001)
+      ok(Math.abs((transformed[1]! as any).close_returns - expectedReturn1) < 0.0001)
+      ok(Math.abs((transformed[2]! as any).close_returns - expectedReturn2) < 0.0001)
     })
 
     it('should calculate log10 returns when specified', async () => {
@@ -89,7 +89,7 @@ describe('LogReturnsNormalizer', () => {
       strictEqual(transformed[0]!.close_log10, 0) // First item
       
       const expectedReturn = Math.log10(110 / 100)
-      ok(Math.abs(transformed[1]!.close_log10! - expectedReturn) < 0.0001)
+      ok(Math.abs((transformed[1]! as any).close_log10 - expectedReturn) < 0.0001)
     })
 
     it('should use specified price field', async () => {
@@ -106,7 +106,7 @@ describe('LogReturnsNormalizer', () => {
       
       // Open values are price - 1, so 99 -> 104
       const expectedReturn = Math.log(104 / 99)
-      ok(Math.abs(transformed[1]!.open_returns! - expectedReturn) < 0.0001)
+      ok(Math.abs((transformed[1]! as any).open_returns - expectedReturn) < 0.0001)
     })
 
     it('should handle multiple symbols', async () => {
@@ -131,11 +131,11 @@ describe('LogReturnsNormalizer', () => {
 
       // Check BTC return: ln(105/100)
       const btcReturn = Math.log(105 / 100)
-      ok(Math.abs(transformed[1]!.close_returns! - btcReturn) < 0.0001)
+      ok(Math.abs((transformed[1]! as any).close_returns - btcReturn) < 0.0001)
 
       // Check ETH return: ln(210/200)  
       const ethReturn = Math.log(210 / 200)
-      ok(Math.abs(transformed[3]!.close_returns! - ethReturn) < 0.0001)
+      ok(Math.abs((transformed[3]! as any).close_returns - ethReturn) < 0.0001)
     })
 
     it('should handle zero and negative prices', async () => {

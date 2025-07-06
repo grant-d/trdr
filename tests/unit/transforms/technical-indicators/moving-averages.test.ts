@@ -53,7 +53,7 @@ describe('Simple Moving Average', () => {
     })
     
     const result = await sma.apply(arrayToAsyncIterator(testData))
-    const transformed = await collectResults(result.data as AsyncIterator<OhlcvDto>)
+    const transformed = await collectResults(result.data)
     
     strictEqual(transformed.length, 10)
     
@@ -78,7 +78,7 @@ describe('Simple Moving Average', () => {
     })
     
     const result = await sma.apply(arrayToAsyncIterator(testData))
-    const transformed = await collectResults(result.data as AsyncIterator<OhlcvDto>)
+    const transformed = await collectResults(result.data)
     
     // Check that both fields are calculated
     ok(!('open_sma' in transformed[0]!))
@@ -117,7 +117,7 @@ describe('Exponential Moving Average', () => {
     })
     
     const result = await ema.apply(arrayToAsyncIterator(testData))
-    const transformed = await collectResults(result.data as AsyncIterator<OhlcvDto>)
+    const transformed = await collectResults(result.data)
     
     strictEqual(transformed.length, 10)
     
@@ -147,7 +147,7 @@ describe('Exponential Moving Average', () => {
     })
     
     const result = await ema.apply(arrayToAsyncIterator(testData))
-    const transformed = await collectResults(result.data as AsyncIterator<OhlcvDto>)
+    const transformed = await collectResults(result.data)
     
     // First item shouldn't have EMA
     ok(!('open_ema' in transformed[0]!))
@@ -182,10 +182,10 @@ describe('Exponential Moving Average', () => {
     })
     
     const smaResult = await sma.apply(arrayToAsyncIterator(testData))
-    const smaTransformed = await collectResults(smaResult.data as AsyncIterator<OhlcvDto>)
+    const smaTransformed = await collectResults(smaResult.data)
     
     const emaResult = await ema.apply(arrayToAsyncIterator(testData))
-    const emaTransformed = await collectResults(emaResult.data as AsyncIterator<OhlcvDto>)
+    const emaTransformed = await collectResults(emaResult.data)
     
     // At the spike (index 10)
     strictEqual(smaTransformed[10]!.sma, 40) // (10+10+100)/3

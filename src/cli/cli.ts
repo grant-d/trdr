@@ -2,7 +2,8 @@
 
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
-import { ArgsParser, CliArgs } from './args-parser'
+import type { CliArgs } from './args-parser'
+import { ArgsParser } from './args-parser'
 import { ConfigLoader } from './config-loader'
 import { ConfigOverrides } from './config-overrides'
 import { ConfigValidator } from './config-validator'
@@ -10,7 +11,7 @@ import { InteractiveMode } from './interactive-mode'
 import { PipelineFactory } from './pipeline-factory'
 import { ProgressIndicator } from './progress-indicator'
 import { ServerMode } from './server-mode'
-import { PipelineConfig } from '../interfaces'
+import type { PipelineConfig } from '../interfaces'
 
 /**
  * Get package version

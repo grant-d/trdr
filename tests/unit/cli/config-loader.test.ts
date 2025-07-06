@@ -84,10 +84,10 @@ describe('Config Loader', () => {
       strictEqual(loaded.transformations[0]!.type, 'logReturns')
       strictEqual(loaded.transformations[0]!.disabled || false, false)
       strictEqual((loaded.transformations[0]!.params as any).outputField, 'returns')
-      strictEqual(loaded.options.chunkSize, 1000)
-      strictEqual(loaded.options.continueOnError, true)
-      strictEqual(loaded.options.maxErrors, 50)
-      strictEqual(loaded.options.showProgress, false)
+      strictEqual(loaded.options?.chunkSize, 1000)
+      strictEqual(loaded.options?.continueOnError, true)
+      strictEqual(loaded.options?.maxErrors, 50)
+      strictEqual(loaded.options?.showProgress, false)
     })
 
     it('should load minimal valid configuration', async () => {
@@ -377,7 +377,7 @@ describe('Config Loader', () => {
       strictEqual(loaded.transformations[1]!.disabled, true)
       strictEqual((loaded.transformations[1]!.params as any).windowSize, 20)
       
-      strictEqual(loaded.options.continueOnError, false)
+      strictEqual(loaded.options?.continueOnError, false)
       
       strictEqual(loaded.metadata?.name, 'Complex Test Pipeline')
       strictEqual(loaded.metadata?.version, '2.1.0')

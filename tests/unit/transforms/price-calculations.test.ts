@@ -44,16 +44,15 @@ async function collectResults(iterator: AsyncIterator<OhlcvDto>): Promise<OhlcvD
 describe('PriceCalculations', () => {
   describe('constructor and validation', () => {
     it('should create instance with required parameters', () => {
-      const calc = new PriceCalculations({ name: 'pc1', calculation: 'hlc3' })
+      const calc = new PriceCalculations({ calculation: 'hlc3' })
       strictEqual(calc.type, 'priceCalc')
       strictEqual(calc.name, 'Price Calculations')
-      ok(!calc.isReversible)
     })
 
     it('should validate custom calculation requires formula', () => {
       throws(
         () => {
-          const calc = new PriceCalculations({ name: 'pc1', calculation: 'custom' })
+          const calc = new PriceCalculations({ calculation: 'custom' })
           calc.validate()
         },
         /Custom formula is required/
@@ -63,7 +62,7 @@ describe('PriceCalculations', () => {
     it('should validate formula only with custom calculation', () => {
       throws(
         () => {
-          const calc = new PriceCalculations({ name: 'pc1', 
+          const calc = new PriceCalculations({ 
             calculation: 'hlc3',
             customFormula: '(high + low) / 2' 
           })
@@ -77,7 +76,7 @@ describe('PriceCalculations', () => {
   describe('HLC3 calculation', () => {
     it('should calculate HLC3 correctly', async () => {
       const testData = createTestData(100, 110, 90, 105)
-      const calc = new PriceCalculations({ name: 'pc1', calculation: 'hlc3' })
+      const calc = new PriceCalculations({ calculation: 'hlc3' })
 
       const result = await calc.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
@@ -89,7 +88,7 @@ describe('PriceCalculations', () => {
 
     it('should use custom output field', async () => {
       const testData = createTestData(100, 110, 90, 105)
-      const calc = new PriceCalculations({ name: 'pc1', 
+      const calc = new PriceCalculations({ 
         calculation: 'hlc3',
         outputField: 'typical' 
       })
@@ -105,7 +104,7 @@ describe('PriceCalculations', () => {
   describe('OHLC4 calculation', () => {
     it('should calculate OHLC4 correctly', async () => {
       const testData = createTestData(100, 110, 90, 105)
-      const calc = new PriceCalculations({ name: 'pc1', calculation: 'ohlc4' })
+      const calc = new PriceCalculations({ calculation: 'ohlc4' })
 
       const result = await calc.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
@@ -118,7 +117,7 @@ describe('PriceCalculations', () => {
   describe('Typical price calculation', () => {
     it('should calculate typical price (same as HLC3)', async () => {
       const testData = createTestData(100, 110, 90, 105)
-      const calc = new PriceCalculations({ name: 'pc1', calculation: 'typical' })
+      const calc = new PriceCalculations({ calculation: 'typical' })
 
       const result = await calc.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
@@ -131,7 +130,7 @@ describe('PriceCalculations', () => {
   describe('Weighted close calculation', () => {
     it('should calculate weighted close correctly', async () => {
       const testData = createTestData(100, 110, 90, 105)
-      const calc = new PriceCalculations({ name: 'pc1', calculation: 'weighted' })
+      const calc = new PriceCalculations({ calculation: 'weighted' })
 
       const result = await calc.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
@@ -145,7 +144,7 @@ describe('PriceCalculations', () => {
   describe('Median price calculation', () => {
     it('should calculate median price correctly', async () => {
       const testData = createTestData(100, 110, 90, 105)
-      const calc = new PriceCalculations({ name: 'pc1', calculation: 'median' })
+      const calc = new PriceCalculations({ calculation: 'median' })
 
       const result = await calc.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
@@ -158,7 +157,7 @@ describe('PriceCalculations', () => {
   describe('Custom formula calculation', () => {
     it('should evaluate simple custom formula', async () => {
       const testData = createTestData(100, 110, 90, 105)
-      const calc = new PriceCalculations({ name: 'pc1', 
+      const calc = new PriceCalculations({ 
         calculation: 'custom',
         customFormula: '(high + low) / 2' 
       })
@@ -172,7 +171,7 @@ describe('PriceCalculations', () => {
 
     it('should evaluate complex custom formula', async () => {
       const testData = createTestData(100, 110, 90, 105, 1000)
-      const calc = new PriceCalculations({ name: 'pc1', 
+      const calc = new PriceCalculations({ 
         calculation: 'custom',
         customFormula: '(open + 2 * close) / 3 + volume * 0.001' 
       })
@@ -187,7 +186,7 @@ describe('PriceCalculations', () => {
 
     it('should handle formula with all OHLCV fields', async () => {
       const testData = createTestData(100, 110, 90, 105, 2000)
-      const calc = new PriceCalculations({ name: 'pc1', 
+      const calc = new PriceCalculations({ 
         calculation: 'custom',
         customFormula: '(open + high + low + close) / 4 * (volume / 1000)',
         outputField: 'volume_weighted_avg'
@@ -202,7 +201,7 @@ describe('PriceCalculations', () => {
 
     it('should reject invalid formula characters', async () => {
       const testData = createTestData(100, 110, 90, 105)
-      const calc = new PriceCalculations({ name: 'pc1', 
+      const calc = new PriceCalculations({ 
         calculation: 'custom',
         customFormula: 'high; alert("hack")' 
       })
@@ -220,7 +219,7 @@ describe('PriceCalculations', () => {
 
     it('should handle division by zero', async () => {
       const testData = createTestData(100, 110, 90, 105, 0)
-      const calc = new PriceCalculations({ name: 'pc1', 
+      const calc = new PriceCalculations({ 
         calculation: 'custom',
         customFormula: 'close / volume' 
       })
@@ -240,7 +239,7 @@ describe('PriceCalculations', () => {
   describe('keepOriginal option', () => {
     it('should keep original OHLC fields by default', async () => {
       const testData = createTestData(100, 110, 90, 105)
-      const calc = new PriceCalculations({ name: 'pc1', calculation: 'hlc3' })
+      const calc = new PriceCalculations({ calculation: 'hlc3' })
 
       const result = await calc.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
@@ -254,7 +253,7 @@ describe('PriceCalculations', () => {
 
     it('should remove original fields when keepOriginal is false', async () => {
       const testData = createTestData(100, 110, 90, 105)
-      const calc = new PriceCalculations({ name: 'pc1', 
+      const calc = new PriceCalculations({ 
         calculation: 'hlc3',
         keepOriginal: false 
       })
@@ -279,7 +278,7 @@ describe('PriceCalculations', () => {
         createTestData(110, 120, 100, 115)[0]!,
       ]
       
-      const calc = new PriceCalculations({ name: 'pc1', calculation: 'hlc3' })
+      const calc = new PriceCalculations({ calculation: 'hlc3' })
       const result = await calc.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
 
@@ -292,10 +291,10 @@ describe('PriceCalculations', () => {
 
   describe('getOutputFields and getRequiredFields', () => {
     it('should return correct output fields', () => {
-      const calc1 = new PriceCalculations({ name: 'pc1', calculation: 'hlc3' })
+      const calc1 = new PriceCalculations({ calculation: 'hlc3' })
       deepStrictEqual(calc1.getOutputFields(), ['hlc3'])
 
-      const calc2 = new PriceCalculations({ name: 'pc1', 
+      const calc2 = new PriceCalculations({ 
         calculation: 'ohlc4',
         outputField: 'avg_price' 
       })
@@ -303,14 +302,14 @@ describe('PriceCalculations', () => {
     })
 
     it('should return required OHLC fields', () => {
-      const calc = new PriceCalculations({ name: 'pc1', calculation: 'hlc3' })
+      const calc = new PriceCalculations({ calculation: 'hlc3' })
       deepStrictEqual(calc.getRequiredFields(), ['open', 'high', 'low', 'close'])
     })
   })
 
   describe('withParams', () => {
     it('should create new instance with updated params', () => {
-      const calc1 = new PriceCalculations({ name: 'pc1', calculation: 'hlc3' })
+      const calc1 = new PriceCalculations({ calculation: 'hlc3' })
       const calc2 = calc1.withParams({ calculation: 'ohlc4' }) as PriceCalculations
 
       strictEqual(calc1.params.calculation, 'hlc3')
@@ -321,7 +320,7 @@ describe('PriceCalculations', () => {
   describe('edge cases', () => {
     it('should handle zero prices', async () => {
       const testData = createTestData(0, 0, 0, 0, 0)
-      const calc = new PriceCalculations({ name: 'pc1', calculation: 'hlc3' })
+      const calc = new PriceCalculations({ calculation: 'hlc3' })
 
       const result = await calc.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
@@ -331,7 +330,7 @@ describe('PriceCalculations', () => {
 
     it('should handle negative prices', async () => {
       const testData = createTestData(-10, -5, -20, -15)
-      const calc = new PriceCalculations({ name: 'pc1', calculation: 'ohlc4' })
+      const calc = new PriceCalculations({ calculation: 'ohlc4' })
 
       const result = await calc.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
@@ -341,7 +340,7 @@ describe('PriceCalculations', () => {
 
     it('should handle very large prices', async () => {
       const testData = createTestData(1e10, 1.1e10, 0.9e10, 1.05e10)
-      const calc = new PriceCalculations({ name: 'pc1', calculation: 'hlc3' })
+      const calc = new PriceCalculations({ calculation: 'hlc3' })
 
       const result = await calc.apply(arrayToAsyncIterator(testData))
       const transformed = await collectResults(result.data)
@@ -352,7 +351,7 @@ describe('PriceCalculations', () => {
     })
 
     it('should handle empty data stream', async () => {
-      const calc = new PriceCalculations({ name: 'pc1', calculation: 'hlc3' })
+      const calc = new PriceCalculations({ calculation: 'hlc3' })
       const result = await calc.apply(arrayToAsyncIterator([]))
       const transformed = await collectResults(result.data)
 

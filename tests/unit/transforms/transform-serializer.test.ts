@@ -81,8 +81,8 @@ describe('Transform Serializer', () => {
       const transform = TransformSerializer.deserializeTransform(serialized)
 
       strictEqual(transform.type, 'minMax')
-      strictEqual(transform.params.min, -1)
-      strictEqual(transform.params.max, 1)
+      strictEqual((transform.params as any).min, -1)
+      strictEqual((transform.params as any).max, 1)
       deepStrictEqual(transform.params.in, ['close', 'volume'])
       deepStrictEqual(transform.params.out, ['close_norm', 'volume_norm'])
     })

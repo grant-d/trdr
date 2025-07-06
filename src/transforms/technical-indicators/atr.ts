@@ -12,7 +12,7 @@ export interface AtrParams extends TechnicalIndicatorParams {
 export class AverageTrueRange extends BaseTechnicalIndicator {
   private previousClose: number | undefined
   private atr: number | undefined
-  private trValues: number[] = []
+  private readonly trValues: number[] = []
 
   constructor(params: AtrParams) {
     super({ ...params, in: [], out: params.out }, 'atr' as any, 'Average True Range')

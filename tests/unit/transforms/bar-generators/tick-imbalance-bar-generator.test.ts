@@ -268,7 +268,7 @@ describe('TickImbalanceBarGenerator', () => {
     generator.restoreState(mockState)
     const state = generator.getState()
     
-    const testState = state['TEST'] as any
+    const testState = state.TEST as any
     strictEqual(testState.buyTicks, 3)
     strictEqual(testState.sellTicks, 1)
     strictEqual(testState.buyVolume, 300)

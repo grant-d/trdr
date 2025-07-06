@@ -54,34 +54,26 @@ describe('DollarBarGenerator', () => {
     const result = await generator.apply(arrayToAsyncIterator(testData))
     const bars = await collectResults(result.data)
     
-    // Expected bars with non-overlapping behavior:
+    // Corrected behavior:
     // Tick 0: $1000 (10*100), accumulated = $1000
-    // Tick 1: $1000 (20*50), accumulated = $2000
-    // Tick 2: $1200 (30*40), would make $3200 > $2500, so bar 1 completes
-    // Bar 1: ticks 0,1 with $2000 total
-    // Bar 2 starts with tick 2
-    // Tick 2: $1200, accumulated = $1200
-    // Tick 3: $1200 (40*30), accumulated = $2400
-    // Tick 4: $1000 (50*20), would make $3400 > $2500, so bar 2 completes
-    // Bar 2: ticks 2,3 with $2400 total
-    // Bar 3 starts with tick 4 (incomplete)
+    // Tick 1: $1000 (20*50), accumulated = $2000  
+    // Tick 2: $1200 (30*40), accumulated = $3200 >= $2500, bar completes WITH tick 2
+    // Bar 1: ticks 0,1,2 with $3200 total
+    // Bar 2 starts with tick 3
+    // Tick 3: $1200 (40*30), accumulated = $1200
+    // Tick 4: $1000 (50*20), accumulated = $2200 (incomplete)
     
-    strictEqual(bars.length, 3)
+    strictEqual(bars.length, 2)
     
-    // First bar: ticks 0,1
+    // First bar: ticks 0,1,2
     strictEqual(bars[0]!.open, 10)
-    strictEqual(bars[0]!.close, 20)
-    strictEqual(bars[0]!.volume, 150)   // 100 + 50
+    strictEqual(bars[0]!.close, 30)
+    strictEqual(bars[0]!.volume, 190)   // 100 + 50 + 40
     
-    // Second bar: ticks 2,3
-    strictEqual(bars[1]!.open, 30)
-    strictEqual(bars[1]!.close, 40)
-    strictEqual(bars[1]!.volume, 70)    // 40 + 30
-    
-    // Third bar: tick 4 (incomplete)
-    strictEqual(bars[2]!.open, 50)
-    strictEqual(bars[2]!.close, 50)
-    strictEqual(bars[2]!.volume, 20)
+    // Second bar: ticks 3,4 (incomplete)
+    strictEqual(bars[1]!.open, 40)
+    strictEqual(bars[1]!.close, 50)  
+    strictEqual(bars[1]!.volume, 50)    // 30 + 20
   })
 
   it('should handle exact dollar value matches', async () => {
@@ -130,19 +122,19 @@ describe('DollarBarGenerator', () => {
     const result = await generator.apply(arrayToAsyncIterator(testData))
     const bars = await collectResults(result.data)
     
-    // Non-overlapping bars:
+    // Corrected behavior:
     // Tick 0: $1000, accumulated = $1000
-    // Tick 1: $1000, accumulated = $2000
-    // Tick 2: $1000, would make $3000, bar completes WITHOUT tick 2
-    // Bar 1: ticks 0,1 with volume 1001
-    // Bar 2 starts with tick 2
-    // Tick 3: $1000, accumulated = $2000 (incomplete)
+    // Tick 1: $1000, accumulated = $2000  
+    // Tick 2: $1000, accumulated = $3000 (>= $3000), bar completes WITH tick 2
+    // Bar 1: ticks 0,1,2 with volume 1003 (1 + 1000 + 2)
+    // Bar 2 starts with tick 3
+    // Tick 3: $1000, accumulated = $1000 (incomplete)
     strictEqual(bars.length, 2)
     
-    // Price range should be extreme due to different price levels
-    strictEqual(bars[0]!.high, 1000.5)  // High price tick
-    strictEqual(bars[0]!.low, 0.5)       // Low price tick
-    strictEqual(bars[0]!.volume, 1001)   // 1 + 1000
+    // Price range should be extreme due to different price levels  
+    strictEqual(bars[0]!.high, 1000.5)  // High price tick (tick 0)
+    strictEqual(bars[0]!.low, 0.5)       // Low price tick (tick 1)
+    strictEqual(bars[0]!.volume, 1003)   // 1 + 1000 + 2
   })
 
   it('should handle multiple symbols independently', async () => {
@@ -251,7 +243,7 @@ describe('DollarBarGenerator', () => {
     generator.restoreState(mockState)
     const state = generator.getState()
     
-    const testState = state['TEST'] as any
+    const testState = state.TEST as any
     strictEqual(testState.accumulatedValue, 7500)
     strictEqual(testState.complete, false)
   })

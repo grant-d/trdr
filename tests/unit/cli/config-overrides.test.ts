@@ -437,7 +437,7 @@ describe('Config Overrides', () => {
       // Modify clone
       const cloneFileInput = clone.input as FileInputConfig
       cloneFileInput.path = '/modified/path'
-      clone.options.chunkSize = 9999
+      clone.options!.chunkSize = 9999
       
       // Original should be unchanged
       const originalFileInput = original.input as FileInputConfig
