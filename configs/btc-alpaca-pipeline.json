@@ -35,7 +35,7 @@
     },
     {
       "type": "rsi",
-      "disabled": true,
+      "disabled": false,
       "params": {
         "in": ["close"],
         "out": ["rsi"],
@@ -47,7 +47,7 @@
       "disabled": false,
       "params": {
         "in": ["close"],
-        "out": ["adj close"]
+        "out": ["adj_close"]
       }
     }
   ],

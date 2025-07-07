@@ -130,20 +130,49 @@ export class TransformPipeline implements Transform<TransformPipelineParams> {
 
   /**
    * Creates a streaming pipeline that chains transforms together
-   * Each transform handles its own readiness internally
+   * Each transform only processes data when it and all its ancestors are ready
    */
   private async* createReadinessAwareStream(data: AsyncIterator<OhlcvDto>): AsyncGenerator<OhlcvDto> {
-    // Create a chain of transform streams
+    // Create a chain of transform streams with readiness awareness
     let currentStream: AsyncGenerator<OhlcvDto> = this.streamFromIterator(data)
     
-    for (const transform of this.transforms) {
-      const result = await transform.apply(this.iteratorFromStream(currentStream))
-      currentStream = this.streamFromIterator(result.data)
+    for (let i = 0; i < this.transforms.length; i++) {
+      const transform = this.transforms[i]!
+      const previousTransforms = this.transforms.slice(0, i)
+      
+      // Create a readiness-aware wrapper for this transform
+      currentStream = this.createReadinessWrapper(
+        currentStream, 
+        transform, 
+        previousTransforms
+      )
     }
     
-    // Simply pass through the final stream
-    // Individual transforms are responsible for not yielding until they're ready
     yield* currentStream
+  }
+
+  /**
+   * Wraps a transform to only yield data when it and all ancestors are ready
+   */
+  private async* createReadinessWrapper(
+    inputStream: AsyncGenerator<OhlcvDto>,
+    transform: Transform,
+    ancestors: Transform[]
+  ): AsyncGenerator<OhlcvDto> {
+    const result = await transform.apply(this.iteratorFromStream(inputStream))
+    
+    for await (const item of this.streamFromIterator(result.data)) {
+      // Check if all ancestors are ready
+      const ancestorsReady = ancestors.every(t => t.isReady())
+      // Check if this transform is ready
+      const selfReady = transform.isReady()
+      
+      if (ancestorsReady && selfReady) {
+        yield item
+      }
+      // If not ready, consume but don't yield
+      // This allows transforms to build up their internal state
+    }
   }
 
 

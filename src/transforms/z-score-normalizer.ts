@@ -45,8 +45,9 @@ export class ZScoreNormalizer extends BaseTransform<ZScoreParams> {
 
   public isReady(): boolean {
     // Rolling window normalization is ready after windowSize data points
-    // Consider ready if any symbol has at least windowSize data points
-    return Array.from(this.symbolDataPoints.values()).some(count => count >= this.windowSize)
+    // Consider ready if ALL symbols have at least windowSize data points
+    const counts = Array.from(this.symbolDataPoints.values())
+    return counts.length > 0 && counts.every(count => count >= this.windowSize)
   }
 
   protected async* transform(data: AsyncIterator<OhlcvDto>): AsyncGenerator<OhlcvDto> {

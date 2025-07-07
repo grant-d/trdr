@@ -93,8 +93,9 @@ export class RelativeStrengthIndex extends BaseTechnicalIndicator {
   }
 
   public isReady(): boolean {
-    // RSI is ready when any field has enough data points for calculation
-    return Array.from(this.initialCounts.values()).some(count => count >= this.period - 1)
+    // RSI is ready when ALL fields have enough data points for calculation
+    const counts = Array.from(this.initialCounts.values())
+    return counts.length > 0 && counts.every(count => count >= this.period - 1)
   }
 
   withParams(params: Partial<RsiParams>): RelativeStrengthIndex {

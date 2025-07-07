@@ -135,8 +135,9 @@ export class LogReturnsNormalizer extends BaseTransform<LogReturnsParams> {
 
   public isReady(): boolean {
     // Log returns need at least 2 data points (current and previous)
-    // Consider ready if any symbol has at least 2 data points
-    return Array.from(this.symbolDataPoints.values()).some(count => count >= 2)
+    // Consider ready if ALL symbols have at least 2 data points
+    const counts = Array.from(this.symbolDataPoints.values())
+    return counts.length > 0 && counts.every(count => count >= 2)
   }
 
   public withParams(params: Partial<LogReturnsParams>): Transform<LogReturnsParams> {
