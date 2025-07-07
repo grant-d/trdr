@@ -34,7 +34,7 @@ describe('Args Parser', () => {
   describe('default arguments', () => {
     it('should return default values when no arguments provided', () => {
       const args = parseArgs(['node', 'cli.js'])
-      
+
       strictEqual(args.config, DEFAULT_ARGS.config)
       strictEqual(args.mode, 'pipeline')
       deepStrictEqual(args.override, DEFAULT_ARGS.override)
@@ -51,12 +51,22 @@ describe('Args Parser', () => {
     })
 
     it('should parse long config option', () => {
-      const args = parseArgs(['node', 'cli.js', '--config', 'my-pipeline.json'])
+      const args = parseArgs([
+        'node',
+        'cli.js',
+        '--config',
+        'my-pipeline.json'
+      ])
       strictEqual(args.config, 'my-pipeline.json')
     })
 
     it('should handle config with spaces in path', () => {
-      const args = parseArgs(['node', 'cli.js', '-c', '/path/with spaces/config.json'])
+      const args = parseArgs([
+        'node',
+        'cli.js',
+        '-c',
+        '/path/with spaces/config.json'
+      ])
       strictEqual(args.config, '/path/with spaces/config.json')
     })
   })
@@ -81,10 +91,10 @@ describe('Args Parser', () => {
       throws(() => {
         parseArgs(['node', 'cli.js', '-m', 'invalid'])
       }, /Process exit with code 1/)
-      
+
       strictEqual(exitCode, 1)
       strictEqual(errorOutput.length > 0, true)
-      ok(errorOutput.some(msg => msg.includes('Invalid mode')))
+      ok(errorOutput.some((msg) => msg.includes('Invalid mode')))
     })
   })
 
@@ -95,23 +105,57 @@ describe('Args Parser', () => {
     })
 
     it('should parse multiple overrides with short option', () => {
-      const args = parseArgs(['node', 'cli.js', '-o', 'input.path=/new/path', '-o', 'output.format=jsonl'])
-      deepStrictEqual(args.override, ['input.path=/new/path', 'output.format=jsonl'])
+      const args = parseArgs([
+        'node',
+        'cli.js',
+        '-o',
+        'input.path=/new/path',
+        '-o',
+        'output.format=jsonl'
+      ])
+      deepStrictEqual(args.override, [
+        'input.path=/new/path',
+        'output.format=jsonl'
+      ])
     })
 
     it('should parse multiple overrides with long option', () => {
-      const args = parseArgs(['node', 'cli.js', '--override', 'input.path=/data', '--override', 'options.chunkSize=1000'])
-      deepStrictEqual(args.override, ['input.path=/data', 'options.chunkSize=1000'])
+      const args = parseArgs([
+        'node',
+        'cli.js',
+        '--override',
+        'input.path=/data',
+        '--override',
+        'options.chunkSize=1000'
+      ])
+      deepStrictEqual(args.override, [
+        'input.path=/data',
+        'options.chunkSize=1000'
+      ])
     })
 
     it('should handle complex override values', () => {
-      const args = parseArgs(['node', 'cli.js', '-o', 'transformations.0.params.windowSize=50'])
-      deepStrictEqual(args.override, ['transformations.0.params.windowSize=50'])
+      const args = parseArgs([
+        'node',
+        'cli.js',
+        '-o',
+        'transformations.0.params.windowSize=50'
+      ])
+      deepStrictEqual(args.override, [
+        'transformations.0.params.windowSize=50'
+      ])
     })
 
     it('should handle overrides with special characters', () => {
-      const args = parseArgs(['node', 'cli.js', '-o', 'input.path=/path/with-dashes_and.dots/file.csv'])
-      deepStrictEqual(args.override, ['input.path=/path/with-dashes_and.dots/file.csv'])
+      const args = parseArgs([
+        'node',
+        'cli.js',
+        '-o',
+        'input.path=/path/with-dashes_and.dots/file.csv'
+      ])
+      deepStrictEqual(args.override, [
+        'input.path=/path/with-dashes_and.dots/file.csv'
+      ])
     })
   })
 
@@ -152,30 +196,42 @@ describe('Args Parser', () => {
   describe('combined options', () => {
     it('should parse multiple options correctly', () => {
       const args = parseArgs([
-        'node', 'cli.js',
-        '-c', 'custom.json',
-        '-m', 'server',
-        '-o', 'input.path=/data',
-        '-o', 'output.format=jsonl',
+        'node',
+        'cli.js',
+        '-c',
+        'custom.json',
+        '-m',
+        'server',
+        '-o',
+        'input.path=/data',
+        '-o',
+        'output.format=jsonl',
         '-vv',
         '--no-progress'
       ])
 
       strictEqual(args.config, 'custom.json')
       strictEqual(args.mode, 'server')
-      deepStrictEqual(args.override, ['input.path=/data', 'output.format=jsonl'])
+      deepStrictEqual(args.override, [
+        'input.path=/data',
+        'output.format=jsonl'
+      ])
       strictEqual(args.verbose, 2)
       strictEqual(args.noProgress, true)
     })
 
     it('should handle options in different order', () => {
       const args = parseArgs([
-        'node', 'cli.js',
+        'node',
+        'cli.js',
         '--no-progress',
         '-vv',
-        '--mode', 'server',
-        '--override', 'input.path=/data',
-        '--config', 'test.json'
+        '--mode',
+        'server',
+        '--override',
+        'input.path=/data',
+        '--config',
+        'test.json'
       ])
 
       strictEqual(args.config, 'test.json')
@@ -198,7 +254,12 @@ describe('Args Parser', () => {
     })
 
     it('should handle paths with equals signs', () => {
-      const args = parseArgs(['node', 'cli.js', '-o', 'input.query=symbol=BTCUSD'])
+      const args = parseArgs([
+        'node',
+        'cli.js',
+        '-o',
+        'input.query=symbol=BTCUSD'
+      ])
       deepStrictEqual(args.override, ['input.query=symbol=BTCUSD'])
     })
 
@@ -213,7 +274,7 @@ describe('Args Parser', () => {
       throws(() => {
         parseArgs(['node', 'cli.js', '--mode', 'invalid-mode'])
       }, /Process exit with code 1/)
-      
+
       strictEqual(exitCode, 1)
     })
 

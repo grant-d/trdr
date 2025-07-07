@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test'
-import assert from 'node:assert'
-import { AlpacaProvider } from '../../../src/providers/alpaca'
+import * as assert from 'node:assert'
+import { AlpacaProvider } from '../../../src/providers'
 import type { HistoricalParams } from '../../../src/interfaces'
 import { forceCleanupAsyncHandles } from '../../helpers/test-cleanup'
 

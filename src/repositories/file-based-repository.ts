@@ -1,6 +1,8 @@
 import { mkdir, stat, unlink } from 'node:fs/promises'
 import * as path from 'node:path'
 import type { OhlcvDto } from '../models'
+import type { ColumnDefinition } from '../utils'
+import { DataBuffer } from '../utils'
 import logger from '../utils/logger'
 import type { OhlcvQuery, OhlcvRepository, RepositoryConfig } from './ohlcv-repository.interface'
 import { RepositoryConnectionError, RepositoryStorageError, RepositoryValidationError } from './ohlcv-repository.interface'
@@ -13,18 +15,17 @@ export abstract class FileBasedRepository implements OhlcvRepository {
   protected ready = false
   protected basePath = ''
   protected batchSize = 1000
-  
+
   // Single symbol/exchange enforcement
   protected singleSymbol: string | null = null
   protected singleExchange: string | null = null
-  
-  // Deduplication using JSONL's superior strategy
-  protected lastPendingRecord: OhlcvDto | null = null
-  protected buffer: OhlcvDto[] = []
-  
+
+  // DataBuffer for memory-efficient operations
+  protected dataBuffer?: DataBuffer
+  protected columnDefinitions?: Record<string, ColumnDefinition>
+
   // Expected output fields from transforms (if any)
   protected expectedOutputFields: string[] = []
-  
 
   /**
    * Initialize the repository with common setup logic
@@ -32,28 +33,32 @@ export abstract class FileBasedRepository implements OhlcvRepository {
   async initialize(config: RepositoryConfig): Promise<void> {
     try {
       this.basePath = config.connectionString
-      this.batchSize = (config.options?.batchSize as number | undefined) || 1000
-      
+      this.batchSize =
+        (config.options?.batchSize as number | undefined) || 1000
+
       // Ensure the directory exists
       const dir = path.dirname(this.basePath)
       await mkdir(dir, { recursive: true })
-      
+
       // Clear existing file if overwrite is requested
-      if (config.options?.overwrite && await this.fileExists(this.basePath)) {
+      if (config.options?.overwrite && (await this.fileExists(this.basePath))) {
         await unlink(this.basePath)
         logger.debug('Removed existing file due to overwrite option')
       }
-      
+
       // Allow subclasses to perform additional initialization
       await this.performAdditionalInitialization(config)
-      
+
       this.ready = true
       logger.info(`${this.getRepositoryType()} repository initialized`, {
         basePath: this.basePath,
         options: config.options
       })
     } catch (error) {
-      logger.error(`Failed to initialize ${this.getRepositoryType()} repository`, { error })
+      logger.error(
+        `Failed to initialize ${this.getRepositoryType()} repository`,
+        { error }
+      )
       throw new RepositoryConnectionError(
         `Failed to initialize ${this.getRepositoryType()} repository: ${String(error)}`,
         error instanceof Error ? error : undefined
@@ -62,37 +67,82 @@ export abstract class FileBasedRepository implements OhlcvRepository {
   }
 
   /**
-   * Save a single OHLCV record with deduplication
+   * Initialize the data buffer based on expected output fields
+   */
+  protected initializeDataBuffer(): void {
+    // Create column definitions from expected fields or default OHLCV
+    const columns: Record<string, ColumnDefinition> = {
+      timestamp: { index: 0 },
+      open: { index: 1 },
+      high: { index: 2 },
+      low: { index: 3 },
+      close: { index: 4 },
+      volume: { index: 5 }
+    }
+
+    // Add any additional expected fields
+    if (this.expectedOutputFields.length > 0) {
+      const standardFields = new Set([
+        'timestamp',
+        'open',
+        'high',
+        'low',
+        'close',
+        'volume'
+      ])
+      let nextIndex = 6
+
+      for (const field of this.expectedOutputFields) {
+        if (!standardFields.has(field)) {
+          columns[field] = { index: nextIndex++ }
+        }
+      }
+    }
+
+    this.columnDefinitions = columns
+    this.dataBuffer = new DataBuffer({ columns })
+  }
+
+  /**
+   * Save a single OHLCV record using DataBuffer
    */
   async save(data: OhlcvDto): Promise<void> {
     this.ensureReady()
     this.validateOhlcvData(data)
     this.enforceSingleSymbolExchange(data)
-    
+
+    // Initialize buffer if not already done
+    if (!this.dataBuffer) {
+      this.initializeDataBuffer()
+    }
+
     try {
-      // Apply JSONL's superior deduplication strategy
-      if (this.lastPendingRecord) {
-        const lastKey = this.generateRecordKey(this.lastPendingRecord)
-        const newKey = this.generateRecordKey(data)
-        
-        if (lastKey === newKey) {
-          // Same key - just overwrite the pending record (deduplication)
-          this.lastPendingRecord = data
-        } else {
-          // Different key - write the pending record and store new one
-          this.buffer.push(this.lastPendingRecord)
-          this.lastPendingRecord = data
-          
-          if (this.buffer.length >= this.batchSize) {
-            await this.flush()
-          }
+      // Convert OhlcvDto to Row format for DataBuffer
+      const row: Record<string, any> = {
+        timestamp: data.timestamp,
+        open: data.open,
+        high: data.high,
+        low: data.low,
+        close: data.close,
+        volume: data.volume
+      }
+
+      // Add any additional fields
+      for (const key in data) {
+        if (!(key in row)) {
+          row[key] = (data as any)[key]
         }
-      } else {
-        // First record - just store it
-        this.lastPendingRecord = data
+      }
+
+      // Push to DataBuffer
+      this.dataBuffer!.push(row)
+
+      // Check if we should flush
+      if (this.dataBuffer!.length() >= this.batchSize) {
+        await this.flush()
       }
     } catch (error) {
-      logger.error('Failed to save OHLCV data', { error, symbol: data.symbol })
+      logger.error('Failed to save OHLCV data', { error })
       throw new RepositoryStorageError(
         `Failed to save OHLCV data: ${String(error)}`,
         error instanceof Error ? error : undefined
@@ -105,61 +155,37 @@ export abstract class FileBasedRepository implements OhlcvRepository {
    */
   async saveMany(data: OhlcvDto[]): Promise<void> {
     this.ensureReady()
-    
+
     if (data.length === 0) return
-    
+
     // Validate all data first
     for (const item of data) {
       this.validateOhlcvData(item)
     }
-    
+
     // Validate all data is for the same symbol/exchange
     if (data.length > 0) {
-      const firstItem = data[0]!
       if (this.singleSymbol === null) {
-        this.singleSymbol = firstItem.symbol
-        this.singleExchange = firstItem.exchange
+        this.singleSymbol = 'UNKNOWN'
+        this.singleExchange = 'UNKNOWN'
       }
-      
+
       for (const item of data) {
         this.enforceSingleSymbolExchange(item)
       }
     }
-    
+
     try {
-      // Process each record through deduplication logic to maintain streaming behavior
-      // Bulk optimization commented out - pipeline emulates streaming/live data service
-      /*
-      if (data.length > 100) {
-        // Sort by timestamp to improve deduplication
-        const sortedData = [...data].sort((a, b) => a.timestamp - b.timestamp)
-        
-        // Deduplicate using a map
-        const deduplicatedMap = new Map<string, OhlcvDto>()
-        for (const item of sortedData) {
-          const key = this.generateRecordKey(item)
-          deduplicatedMap.set(key, item)
-        }
-        
-        // Convert back to array
-        const deduplicated = Array.from(deduplicatedMap.values())
-        
-        // Write in batches
-        for (let i = 0; i < deduplicated.length; i += this.batchSize) {
-          const batch = deduplicated.slice(i, i + this.batchSize)
-          await this.writeOhlcvBatch(batch)
-        }
-      } else {
-      */
-      
-      // Process each record individually to maintain streaming semantics
+      // Process each record through the buffer
       for (const item of data) {
         await this.save(item)
       }
       // Ensure everything is flushed at the end
       await this.flush()
-      
-      logger.debug(`Saved OHLCV batch to ${this.getRepositoryType()}`, { count: data.length })
+
+      logger.debug(`Saved OHLCV batch to ${this.getRepositoryType()}`, {
+        count: data.length
+      })
     } catch (error) {
       logger.error('Failed to save OHLCV batch', { error, count: data.length })
       throw new RepositoryStorageError(
@@ -218,6 +244,7 @@ export abstract class FileBasedRepository implements OhlcvRepository {
    */
   public setExpectedOutputFields(fields: string[]): void {
     this.expectedOutputFields = [...fields]
+    this.initializeDataBuffer()
   }
 
   /**
@@ -228,19 +255,44 @@ export abstract class FileBasedRepository implements OhlcvRepository {
   }
 
   /**
-   * Flush any pending writes including the last pending record
+   * Flush the DataBuffer by popping items and writing them
    */
   async flush(): Promise<void> {
-    // Write any pending record first (JSONL's strategy)
-    if (this.lastPendingRecord) {
-      this.buffer.push(this.lastPendingRecord)
-      this.lastPendingRecord = null
+    if (!this.dataBuffer || this.dataBuffer.isEmpty()) {
+      return
     }
-    
-    // Flush OHLCV data
-    if (this.buffer.length > 0) {
-      await this.writeOhlcvBatch(this.buffer)
-      this.buffer = []
+
+    // Pop all items from buffer and convert back to OhlcvDto
+    const items: OhlcvDto[] = []
+
+    while (!this.dataBuffer.isEmpty()) {
+      const row = this.dataBuffer.pop()
+      if (row) {
+        // Convert Row back to OhlcvDto
+        const ohlcv: OhlcvDto = {
+          timestamp: row.timestamp!,
+          open: row.open!,
+          high: row.high!,
+          low: row.low!,
+          close: row.close!,
+          volume: row.volume!
+        }
+
+        // Add any additional fields
+        for (const key in row) {
+          if (!(key in ohlcv)) {
+            (ohlcv as any)[key] = row[key]
+          }
+        }
+
+        items.push(ohlcv)
+      }
+    }
+
+    // Write the batch
+    if (items.length > 0) {
+      await this.writeOhlcvBatch(items)
+      logger.debug(`Flushed ${items.length} items from buffer`)
     }
   }
 
@@ -255,7 +307,9 @@ export abstract class FileBasedRepository implements OhlcvRepository {
         this.ready = false
         logger.info(`${this.getRepositoryType()} repository closed`)
       } catch (error) {
-        logger.error(`Error closing ${this.getRepositoryType()} repository`, { error })
+        logger.error(`Error closing ${this.getRepositoryType()} repository`, {
+          error
+        })
         throw new RepositoryStorageError(
           `Error closing repository: ${String(error)}`,
           error instanceof Error ? error : undefined
@@ -281,10 +335,12 @@ export abstract class FileBasedRepository implements OhlcvRepository {
   protected validateOhlcvData(data: OhlcvDto): void {
     // Only validate the basic required fields, not the OHLCV relationships
     // since transforms may have modified the values
-    if (!data.exchange || !data.symbol || typeof data.timestamp !== 'number') {
-      throw new RepositoryValidationError('Missing required fields: exchange, symbol, or timestamp')
+    if (typeof data.timestamp !== 'number') {
+      throw new RepositoryValidationError(
+        'Missing required field: timestamp'
+      )
     }
-    
+
     // Check that timestamp is valid
     if (isNaN(data.timestamp) || data.timestamp <= 0) {
       throw new RepositoryValidationError('Invalid timestamp')
@@ -294,22 +350,21 @@ export abstract class FileBasedRepository implements OhlcvRepository {
   /**
    * Enforce single symbol/exchange per repository instance
    */
-  protected enforceSingleSymbolExchange(data: OhlcvDto): void {
+  protected enforceSingleSymbolExchange(_data: OhlcvDto): void {
+    // Symbol and exchange are no longer part of OhlcvDto
+    // This validation is now simplified since we track symbol/exchange at the repository level
     if (this.singleSymbol === null) {
-      this.singleSymbol = data.symbol
-      this.singleExchange = data.exchange
-    } else if (this.singleSymbol !== data.symbol || this.singleExchange !== data.exchange) {
-      throw new RepositoryValidationError(
-        `${this.getRepositoryType()} file can only contain data for one symbol/exchange. Expected ${this.singleSymbol}/${this.singleExchange}, got ${data.symbol}/${data.exchange}`
-      )
+      this.singleSymbol = 'UNKNOWN'
+      this.singleExchange = 'UNKNOWN'
     }
+    // No need to validate individual records since symbol/exchange are not in the data
   }
 
   /**
    * Generate a unique key for deduplication
    */
   protected generateRecordKey(data: OhlcvDto): string {
-    return `${data.timestamp}:${data.symbol}:${data.exchange}`
+    return `${data.timestamp}`
   }
 
   /**
@@ -329,10 +384,8 @@ export abstract class FileBasedRepository implements OhlcvRepository {
    */
   protected matchesPattern(name: string, pattern: string): boolean {
     // Convert glob pattern to regex
-    const regexPattern = pattern
-      .replace(/\*/g, '.*')
-      .replace(/\?/g, '.')
-    
+    const regexPattern = pattern.replace(/\*/g, '.*').replace(/\?/g, '.')
+
     const regex = new RegExp(`^${regexPattern}$`, 'i')
     return regex.test(name)
   }
@@ -345,7 +398,7 @@ export abstract class FileBasedRepository implements OhlcvRepository {
     if (query.endTime && record.timestamp > query.endTime) return false
     if (query.symbol && record.symbol !== query.symbol) return false
     if (query.exchange && record.exchange !== query.exchange) return false
-    
+
     return true
   }
 
@@ -354,17 +407,17 @@ export abstract class FileBasedRepository implements OhlcvRepository {
    */
   protected applyPagination<T>(results: T[], query: OhlcvQuery): T[] {
     let filtered = results
-    
+
     // Apply offset
     if (query.offset) {
       filtered = filtered.slice(query.offset)
     }
-    
+
     // Apply limit
     if (query.limit) {
       filtered = filtered.slice(0, query.limit)
     }
-    
+
     return filtered
   }
 
@@ -384,58 +437,65 @@ export abstract class FileBasedRepository implements OhlcvRepository {
     await writeFile(filePath, data, 'utf8')
   }
 
-
   // --- Abstract methods that subclasses must implement ---
 
   /**
    * Get the repository type name for logging
    */
-  protected abstract getRepositoryType(): string
+  protected abstract getRepositoryType(): string;
 
   /**
    * Perform additional initialization specific to the storage format
    */
-  protected abstract performAdditionalInitialization(config: RepositoryConfig): Promise<void>
+  protected abstract performAdditionalInitialization(
+    config: RepositoryConfig
+  ): Promise<void>;
 
   /**
    * Perform additional cleanup specific to the storage format
    */
-  protected abstract performAdditionalCleanup(): Promise<void>
+  protected abstract performAdditionalCleanup(): Promise<void>;
 
   /**
    * Write a batch of OHLCV records to storage
    */
-  protected abstract writeOhlcvBatch(data: OhlcvDto[]): Promise<void>
+  protected abstract writeOhlcvBatch(data: OhlcvDto[]): Promise<void>;
 
   /**
    * Execute a query against the storage backend
    */
-  public abstract query(query: OhlcvQuery): Promise<OhlcvDto[]>
+  public abstract query(query: OhlcvQuery): Promise<OhlcvDto[]>;
 
   /**
    * Get the most recent timestamp for a specific symbol
    */
-  public abstract getLastTimestamp(symbol: string, exchange?: string): Promise<number | null>
+  public abstract getLastTimestamp(
+    symbol: string,
+    exchange?: string
+  ): Promise<number | null>;
 
   /**
    * Get the earliest timestamp for a specific symbol
    */
-  public abstract getFirstTimestamp(symbol: string, exchange?: string): Promise<number | null>
+  public abstract getFirstTimestamp(
+    symbol: string,
+    exchange?: string
+  ): Promise<number | null>;
 
   /**
    * Get count of records for a symbol
    */
-  public abstract getCount(symbol: string, exchange?: string): Promise<number>
+  public abstract getCount(symbol: string, exchange?: string): Promise<number>;
 
   /**
    * Get all unique symbols in the repository
    */
-  public abstract getSymbols(exchange?: string): Promise<string[]>
+  public abstract getSymbols(exchange?: string): Promise<string[]>;
 
   /**
    * Get all unique exchanges in the repository
    */
-  public abstract getExchanges(): Promise<string[]>
+  public abstract getExchanges(): Promise<string[]>;
 
   /**
    * Delete OHLCV data within a specific date range
@@ -445,21 +505,44 @@ export abstract class FileBasedRepository implements OhlcvRepository {
     endTime: number,
     symbol?: string,
     exchange?: string
-  ): Promise<number>
+  ): Promise<number>;
 
   /**
    * Get repository statistics and health information
    */
   public abstract getStats(): Promise<{
-    totalRecords: number
-    uniqueSymbols: number
-    uniqueExchanges: number
+    totalRecords: number;
+    uniqueSymbols: number;
+    uniqueExchanges: number;
     dataDateRange: {
-      earliest: number | null
-      latest: number | null
+      earliest: number | null;
+      latest: number | null;
+    };
+    storageSize?: number;
+  }>;
+
+  /**
+   * Get buffer statistics
+   */
+  public getBufferStats(): {
+    currentSize: number;
+    columns: string[];
+    isEmpty: boolean;
+  } {
+    if (!this.dataBuffer) {
+      return {
+        currentSize: 0,
+        columns: [],
+        isEmpty: true
+      }
     }
-    storageSize?: number
-  }>
+
+    return {
+      currentSize: this.dataBuffer.length(),
+      columns: [...this.dataBuffer.getColumns()],
+      isEmpty: this.dataBuffer.isEmpty()
+    }
+  }
 
   /**
    * Force close all resources immediately without flushing

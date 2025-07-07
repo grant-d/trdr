@@ -1,7 +1,7 @@
+import { EventEmitter } from 'node:events'
 import type { DataProvider, HistoricalParams } from '../interfaces'
 import type { OhlcvDto } from '../models'
 import type { Gap } from './gap-detector'
-import { EventEmitter } from 'node:events'
 
 /**
  * Backfill request
@@ -121,7 +121,7 @@ export class BackfillManager extends EventEmitter {
     this.requests.set(request.id, request)
     this.queue.push(request)
     this.sortQueue()
-    
+
     this.emit('requestCreated', request)
     this.processQueue()
 
@@ -132,12 +132,18 @@ export class BackfillManager extends EventEmitter {
    * Process the backfill queue
    */
   private async processQueue(): Promise<void> {
-    while (this.activeRequests.size < this.config.maxConcurrent && this.queue.length > 0) {
+    while (
+      this.activeRequests.size < this.config.maxConcurrent &&
+      this.queue.length > 0
+      ) {
       const request = this.queue.shift()
       if (request) {
         this.activeRequests.add(request.id)
-        this.processRequest(request).catch(error => {
-          console.error(`Error processing backfill request ${request.id}:`, error)
+        this.processRequest(request).catch((error) => {
+          console.error(
+            `Error processing backfill request ${request.id}:`,
+            error
+          )
         })
       }
     }
@@ -167,7 +173,10 @@ export class BackfillManager extends EventEmitter {
 
       // Set up timeout
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Request timeout')), this.config.requestTimeout)
+        setTimeout(
+          () => reject(new Error('Request timeout')),
+          this.config.requestTimeout
+        )
       })
 
       // Fetch data with timeout
@@ -178,16 +187,15 @@ export class BackfillManager extends EventEmitter {
       request.recordsReceived = records.length
       request.status = 'completed'
       request.completedAt = Date.now()
-      
+
       this.emit('requestCompleted', request)
       this.emit('data', records)
-
     } catch (error) {
       await this.handleRequestError(request, error as Error)
     } finally {
       this.activeRequests.delete(request.id)
       await this.delay(this.config.rateLimitDelay)
-      this.processQueue()
+      await this.processQueue()
     }
   }
 
@@ -200,7 +208,7 @@ export class BackfillManager extends EventEmitter {
 
     for await (const record of stream) {
       records.push(record)
-      
+
       if (records.length >= this.config.batchSize) {
         break
       }
@@ -212,14 +220,17 @@ export class BackfillManager extends EventEmitter {
   /**
    * Handle request error
    */
-  private async handleRequestError(request: BackfillRequest, error: Error): Promise<void> {
+  private async handleRequestError(
+    request: BackfillRequest,
+    error: Error
+  ): Promise<void> {
     request.retries++
     request.error = error.message
 
     if (request.retries < request.maxRetries) {
       request.status = 'pending'
       this.emit('requestRetrying', request, request.retries)
-      
+
       // Add back to queue with delay
       await this.delay(this.config.retryDelay * request.retries)
       this.queue.push(request)
@@ -236,11 +247,12 @@ export class BackfillManager extends EventEmitter {
    */
   private sortQueue(): void {
     const priorityWeight = { high: 3, medium: 2, low: 1 }
-    
+
     this.queue.sort((a, b) => {
-      const priorityDiff = priorityWeight[b.priority] - priorityWeight[a.priority]
+      const priorityDiff =
+        priorityWeight[b.priority] - priorityWeight[a.priority]
       if (priorityDiff !== 0) return priorityDiff
-      
+
       return a.createdAt - b.createdAt
     })
   }
@@ -270,12 +282,12 @@ export class BackfillManager extends EventEmitter {
     total: number
   } {
     const requests = this.getAllRequests()
-    
+
     return {
-      pending: requests.filter(r => r.status === 'pending').length,
-      active: requests.filter(r => r.status === 'in_progress').length,
-      completed: requests.filter(r => r.status === 'completed').length,
-      failed: requests.filter(r => r.status === 'failed').length,
+      pending: requests.filter((r) => r.status === 'pending').length,
+      active: requests.filter((r) => r.status === 'in_progress').length,
+      completed: requests.filter((r) => r.status === 'completed').length,
+      failed: requests.filter((r) => r.status === 'failed').length,
       total: requests.length
     }
   }
@@ -290,7 +302,7 @@ export class BackfillManager extends EventEmitter {
     }
 
     // Remove from queue
-    const index = this.queue.findIndex(r => r.id === id)
+    const index = this.queue.findIndex((r) => r.id === id)
     if (index !== -1) {
       this.queue.splice(index, 1)
     }
@@ -307,8 +319,9 @@ export class BackfillManager extends EventEmitter {
    * Clear completed requests
    */
   clearCompleted(): number {
-    const completed = Array.from(this.requests.entries())
-      .filter(([_, request]) => request.status === 'completed')
+    const completed = Array.from(this.requests.entries()).filter(
+      ([_, request]) => request.status === 'completed'
+    )
 
     for (const [id] of completed) {
       this.requests.delete(id)
@@ -321,7 +334,7 @@ export class BackfillManager extends EventEmitter {
    * Utility delay function
    */
   private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms))
+    return new Promise((resolve) => setTimeout(resolve, ms))
   }
 
   /**

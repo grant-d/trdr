@@ -1,166 +1,274 @@
-import { BarGeneratorTransform, type BarGeneratorParams, type BarState } from './bar-generator-base'
-import type { OhlcvDto } from '../../models'
-import type { Transform } from '../../interfaces'
+import { z } from 'zod/v4'
+import type { BaseTransformParams } from '../../interfaces'
+import type { DataSlice } from '../../utils'
+import type { BaseBarState } from './base-bar-generator'
+import { BaseBarGenerator, baseBarSchema } from './base-bar-generator'
 
-export interface LorentzianDistanceBarParams extends BarGeneratorParams {
-  /** 
-   * Scaling factor for time component in Lorentzian distance
-   * @example 1.0 // Standard scaling factor
-   * @minimum 0.1
-   */
-  cFactor: number
-  
-  /** 
-   * Distance threshold for bar completion
-   * @example 50.0 // Complete bar when distance exceeds 50
-   * @minimum 10.0
-   */
-  threshold: number
+/**
+ * Schema for Lorentzian distance bar configuration
+ * @property {number} cFactor - Scaling factor for time component (min: 0.1)
+ * @property {number} threshold - Distance threshold for bar completion (min: 10.0)
+ */
+const txSchema = z.object({
+  cFactor: z.number().min(0.1),
+  threshold: z.number().min(10.0)
+})
+
+/**
+ * Main schema for LorentzianDistanceBarGenerator transform
+ */
+const schema = baseBarSchema.extend({
+  tx: z.union([txSchema, z.array(txSchema)])
+})
+
+interface LorentzianDistanceBarParams
+  extends z.infer<typeof schema>,
+          BaseTransformParams {
 }
 
-interface LorentzianDistanceState extends BarState {
+interface LorentzianDistanceBarState extends BaseBarState {
   /** Anchor point price for distance calculation */
-  anchorPrice: number
+  anchorPrice: number;
   /** Anchor point volume for distance calculation */
-  anchorVolume: number
+  anchorVolume: number;
   /** Anchor point time (bar index) for distance calculation */
-  anchorTime: number
+  anchorTime: number;
   /** Current time index */
-  currentTime: number
+  currentTime: number;
 }
 
 /**
  * Lorentzian Distance Bar Generator
- * 
+ *
  * Calculates Lorentzian distance between current state and anchor point
  * in price-time-volume space using relativistic geometry.
- * 
- * Formula: d = √(c²Δt² - Δp² - Δv²) where c is a scaling factor
- * 
- * - Captures relativistic "warping" of market spacetime during high volatility
- * - More sensitive to rapid moves than Euclidean distance
- * - When distance is "space-like" (negative under square root), uses 
- *   Euclidean distance in price-volume space
- * - New bar forms when distance from anchor exceeds threshold
- * - Excels at capturing acceleration/deceleration dynamics
- * 
- * ## Algorithm
+ *
+ * **Formula**: d = √(c²Δt² - Δp² - Δv²) where c is a scaling factor
+ *
+ * **Algorithm**:
  * 1. Set anchor point at bar start (price, volume, time)
  * 2. For each new tick, calculate deltas from anchor
  * 3. Compute Lorentzian distance using relativistic formula
  * 4. If space-like interval (negative), use Euclidean fallback
  * 5. Create new bar when distance exceeds threshold
- * 
- * ## Use Cases
+ *
+ * **Key Properties**:
+ * - Captures relativistic "warping" of market spacetime
+ * - More sensitive to rapid moves than Euclidean distance
+ * - Handles extreme market conditions with relativistic approach
+ * - Excels at capturing acceleration/deceleration dynamics
+ *
+ * **Use Cases**:
  * - High-frequency trading algorithms
  * - Volatility regime detection
  * - Acceleration/deceleration analysis
  * - Market microstructure studies
- * 
- * ## Advantages
- * - Captures temporal dynamics missed by traditional bars
- * - Sensitive to velocity and acceleration changes
- * - Relativistic approach handles extreme market conditions
- * - Adaptive to different timeframes and volatility regimes
- * 
+ * - Temporal dynamics analysis
+ *
  * @example
  * ```typescript
- * const generator = new LorentzianDistanceBarGenerator({
- *   cFactor: 1.0,        // Time scaling factor
- *   threshold: 50.0      // Distance threshold
- * })
+ * const lorentzianBars = new LorentzianDistanceBarGenerator({
+ *   tx: {
+ *     cFactor: 1.0,      // Time scaling factor
+ *     threshold: 50.0    // Distance threshold
+ *   }
+ * }, inputBuffer)
  * ```
+ *
+ * @note Space-like intervals use Euclidean fallback
+ * @note Time index increments with each tick
+ * @note State maintained across batch boundaries
  */
-export class LorentzianDistanceBarGenerator extends BarGeneratorTransform<LorentzianDistanceBarParams> {
-  constructor(params: LorentzianDistanceBarParams) {
-    super(params, 'lorentzianDistance', 'Lorentzian Distance Bar Generator')
-    this.validate()
-  }
+export class LorentzianDistanceBarGenerator extends BaseBarGenerator<
+  LorentzianDistanceBarParams,
+  LorentzianDistanceBarState
+> {
+  // Configuration
+  private readonly _cFactor: number
+  private readonly _threshold: number
+  // Track time index
+  private _timeIndex = 0
 
-  public validate(): void {
-    super.validate()
-    
-    if (this.params.cFactor < 0.1) {
-      throw new Error('Lorentzian Distance Bar Generator: cFactor must be at least 0.1')
+  constructor(config: LorentzianDistanceBarParams, inputSlice: DataSlice) {
+    // Validate config
+    const parsed = schema.parse(config)
+
+    // Base class constructor
+    super(
+      'lorentzianBars',
+      'LorentzianBars',
+      config.description || 'Lorentzian Distance Bar Generator',
+      parsed,
+      inputSlice
+    )
+
+    // Use first config
+    const tx = Array.isArray(parsed.tx) ? parsed.tx : [parsed.tx]
+    const txConfig = tx[0]
+    if (!txConfig) {
+      throw new Error('At least one configuration is required')
     }
-    
-    if (this.params.threshold < 10.0) {
-      throw new Error('Lorentzian Distance Bar Generator: threshold must be at least 10.0')
+
+    this._cFactor = txConfig.cFactor
+    this._threshold = txConfig.threshold
+  }
+
+  /**
+   * Override processBatch to track time index
+   */
+  protected processBatch(): { from: number; to: number } {
+    let firstValidRow = -1
+    const rowCount = this.inputSlice.length()
+
+    for (let rid = 0; rid < rowCount; rid++) {
+      this._timeIndex++
+      this._totalRowsProcessed++
+
+      // Get tick data
+      const tickData = this.extractTickData(rid)
+
+      // Process tick
+      if (!this._currentBar) {
+        // Start new bar
+        this._currentBar = this.createNewBar(tickData, rid)
+      } else {
+        // Update current bar
+        this.updateBar(this._currentBar, tickData, rid)
+
+        // Check if bar is complete
+        if (this.isBarComplete(this._currentBar, tickData, rid)) {
+          // Emit completed bar to output buffer
+          this.emitBar(rid, this._currentBar)
+
+          // Track first valid row (in absolute buffer coordinates)
+          if (firstValidRow === -1) {
+            firstValidRow = this.inputSlice.from + rid
+          }
+
+          // Reset for next bar
+          this._currentBar = undefined
+          this._barsGenerated++
+        }
+      }
     }
-  }
 
-  isBarComplete(_symbol: string, tick: OhlcvDto, state: LorentzianDistanceState): boolean {
-    // Calculate Lorentzian distance from anchor point
-    const distance = this.calculateLorentzianDistance(tick, state)
-    return distance >= this.params.threshold
-  }
+    // Mark as ready after processing first batch
+    this._isReady = true
 
-  createNewBar(symbol: string, tick: OhlcvDto): LorentzianDistanceState {
+    // Return the range of rows that were processed
     return {
-      currentBar: {
-        timestamp: tick.timestamp,
-        symbol,
-        exchange: tick.exchange,
-        open: tick.close,
-        high: tick.high,
-        low: tick.low,
-        close: tick.close,
-        volume: tick.volume
-      },
-      complete: false,
+      from: firstValidRow === -1 ? this.inputSlice.to : firstValidRow,
+      to: this.inputSlice.to
+    }
+  }
+
+  /**
+   * Create a new bar from the first tick
+   */
+  protected createNewBar(tick: any, _rid: number): LorentzianDistanceBarState {
+    return {
+      open: tick.open,
+      high: tick.high,
+      low: tick.low,
+      close: tick.close,
+      volume: tick.volume,
+      firstTimestamp: tick.timestamp,
+      lastTimestamp: tick.timestamp,
+      tickCount: 1,
       anchorPrice: tick.close,
       anchorVolume: tick.volume,
-      anchorTime: 0, // Will be set by the calling code
-      currentTime: 0
+      anchorTime: this._timeIndex,
+      currentTime: this._timeIndex
     }
   }
 
-  updateBar(_symbol: string, currentBar: OhlcvDto, tick: OhlcvDto, state: LorentzianDistanceState): OhlcvDto {
-    // Increment time index (simulating bar_index progression)
-    state.currentTime++
-    
-    // Update bar OHLCV
-    return {
-      timestamp: currentBar.timestamp,
-      symbol: currentBar.symbol,
-      exchange: currentBar.exchange,
-      open: currentBar.open,
-      high: Math.max(currentBar.high, tick.high),
-      low: Math.min(currentBar.low, tick.low),
-      close: tick.close,
-      volume: currentBar.volume + tick.volume
-    }
+  /**
+   * Update the current bar with new tick data
+   */
+  protected updateBar(
+    bar: LorentzianDistanceBarState,
+    tick: any,
+    _rid: number
+  ): void {
+    // Update current time
+    bar.currentTime = this._timeIndex
+
+    // Update OHLCV values
+    bar.high = Math.max(bar.high, tick.high)
+    bar.low = Math.min(bar.low, tick.low)
+    bar.close = tick.close
+    bar.volume += tick.volume
+    bar.lastTimestamp = tick.timestamp
+    bar.tickCount++
   }
 
-  resetState(state: LorentzianDistanceState): void {
-    // Reset anchor point to current state
-    const currentBar = state.currentBar
-    state.anchorPrice = currentBar.close
-    state.anchorVolume = currentBar.volume
-    state.anchorTime = state.currentTime
-    state.complete = false
+  /**
+   * Check if the current bar is complete
+   */
+  protected isBarComplete(
+    bar: LorentzianDistanceBarState,
+    tick: any,
+    _rid: number
+  ): boolean {
+    // Calculate Lorentzian distance from anchor point
+    const distance = this.calculateLorentzianDistance(tick, bar)
+    return distance >= this._threshold
   }
 
-  private calculateLorentzianDistance(tick: OhlcvDto, state: LorentzianDistanceState): number {
+  /**
+   * Override to reset anchor point when new bar starts
+   */
+  protected emitBar(sourceRid: number, bar: LorentzianDistanceBarState): void {
+    // Call parent implementation
+    super.emitBar(sourceRid, bar)
+  }
+
+  /**
+   * Override to add distance metrics to emitted bars
+   */
+  protected addAdditionalBarFields(
+    row: Record<string, number>,
+    bar: LorentzianDistanceBarState
+  ): void {
+    // Calculate final distance for the bar
+    const finalDistance = this.calculateLorentzianDistance(
+      { close: bar.close, volume: bar.volume } as any,
+      bar
+    )
+
+    // Add distance metrics
+    row.lorentzian_distance = finalDistance
+    row.time_elapsed = bar.currentTime - bar.anchorTime
+  }
+
+  /**
+   * Calculate Lorentzian distance from anchor point
+   */
+  private calculateLorentzianDistance(
+    tick: any,
+    state: LorentzianDistanceBarState
+  ): number {
     // Calculate deltas from anchor point
     const deltaTime = state.currentTime - state.anchorTime
-    
+
     // Normalize price delta as percentage
-    const deltaPrice = state.anchorPrice !== 0 
-      ? (tick.close - state.anchorPrice) / state.anchorPrice * 100 
-      : 0
-    
+    const deltaPrice =
+      state.anchorPrice !== 0
+        ? ((tick.close - state.anchorPrice) / state.anchorPrice) * 100
+        : 0
+
     // Log-normalize volume delta to handle large variations
-    const deltaVolume = state.anchorVolume > 0 
-      ? Math.log(tick.volume / state.anchorVolume + 1) * 10
-      : 0
-    
+    const deltaVolume =
+      state.anchorVolume > 0
+        ? Math.log(tick.volume / state.anchorVolume + 1) * 10
+        : 0
+
     // Calculate Lorentzian distance: d = √(c²Δt² - Δp² - Δv²)
-    const lorentzianComponent = 
-      this.params.cFactor * this.params.cFactor * deltaTime * deltaTime 
-      - deltaPrice * deltaPrice 
-      - deltaVolume * deltaVolume
-    
+    const lorentzianComponent =
+      this._cFactor * this._cFactor * deltaTime * deltaTime -
+      deltaPrice * deltaPrice -
+      deltaVolume * deltaVolume
+
     // If component is negative (space-like interval), use Euclidean distance in price-volume space
     if (lorentzianComponent > 0) {
       return Math.sqrt(lorentzianComponent)
@@ -168,9 +276,5 @@ export class LorentzianDistanceBarGenerator extends BarGeneratorTransform<Lorent
       // Euclidean fallback
       return Math.sqrt(deltaPrice * deltaPrice + deltaVolume * deltaVolume)
     }
-  }
-
-  public withParams(params: Partial<LorentzianDistanceBarParams>): Transform<LorentzianDistanceBarParams> {
-    return new LorentzianDistanceBarGenerator({ ...this.params, ...params })
   }
 }

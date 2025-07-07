@@ -7,7 +7,7 @@ export enum GapType {
   TIME_GAP = 'time_gap',
   PRICE_GAP = 'price_gap',
   VOLUME_GAP = 'volume_gap',
-  MISSING_DATA = 'missing_data'
+  MISSING_DATA = 'missing_data',
 }
 
 /**
@@ -49,11 +49,14 @@ export interface GapDetectorConfig {
  */
 export class GapDetector {
   private readonly config: Required<GapDetectorConfig>
-  private readonly symbolState = new Map<string, {
-    lastRecord?: OhlcvDto
-    volumeHistory: Array<{ time: number; volume: number }>
-    gaps: Gap[]
-  }>()
+  private readonly symbolState = new Map<
+    string,
+    {
+      lastRecord?: OhlcvDto
+      volumeHistory: Array<{ time: number; volume: number }>
+      gaps: Gap[]
+    }
+  >()
 
   constructor(config: GapDetectorConfig = {}) {
     this.config = {
@@ -71,20 +74,20 @@ export class GapDetector {
   /**
    * Process a record and detect gaps
    */
-  processRecord(record: OhlcvDto): Gap[] {
+  processRecord(record: OhlcvDto, symbol = 'UNKNOWN'): Gap[] {
     const gaps: Gap[] = []
-    const state = this.getOrCreateState(record.symbol)
+    const state = this.getOrCreateState(symbol)
 
     if (state.lastRecord) {
       // Detect time gaps
       if (this.config.detectTimeGaps) {
-        const timeGap = this.detectTimeGap(state.lastRecord, record)
+        const timeGap = this.detectTimeGap(state.lastRecord, record, symbol)
         if (timeGap) gaps.push(timeGap)
       }
 
       // Detect price gaps
       if (this.config.detectPriceGaps) {
-        const priceGap = this.detectPriceGap(state.lastRecord, record)
+        const priceGap = this.detectPriceGap(state.lastRecord, record, symbol)
         if (priceGap) gaps.push(priceGap)
       }
     }
@@ -92,7 +95,7 @@ export class GapDetector {
     // Update volume history and detect volume anomalies
     this.updateVolumeHistory(state, record)
     if (this.config.detectVolumeGaps) {
-      const volumeGap = this.detectVolumeGap(state, record)
+      const volumeGap = this.detectVolumeGap(state, record, symbol)
       if (volumeGap) gaps.push(volumeGap)
     }
 
@@ -106,18 +109,23 @@ export class GapDetector {
   /**
    * Detect time gaps between records
    */
-  private detectTimeGap(lastRecord: OhlcvDto, currentRecord: OhlcvDto): Gap | null {
+  private detectTimeGap(
+    lastRecord: OhlcvDto,
+    currentRecord: OhlcvDto,
+    symbol: string
+  ): Gap | null {
     const timeDiff = currentRecord.timestamp - lastRecord.timestamp
     const expectedDiff = this.config.expectedInterval
     const tolerance = expectedDiff * this.config.timeGapTolerance
 
     if (timeDiff > tolerance) {
       const missedIntervals = Math.floor(timeDiff / expectedDiff) - 1
-      const severity = missedIntervals > 10 ? 'high' : missedIntervals > 3 ? 'medium' : 'low'
+      const severity =
+        missedIntervals > 10 ? 'high' : missedIntervals > 3 ? 'medium' : 'low'
 
       return {
         type: GapType.TIME_GAP,
-        symbol: currentRecord.symbol,
+        symbol: symbol,
         startTime: lastRecord.timestamp,
         endTime: currentRecord.timestamp,
         expectedRecords: missedIntervals,
@@ -133,15 +141,21 @@ export class GapDetector {
   /**
    * Detect price gaps
    */
-  private detectPriceGap(lastRecord: OhlcvDto, currentRecord: OhlcvDto): Gap | null {
-    const gapPercent = Math.abs(currentRecord.open - lastRecord.close) / lastRecord.close
+  private detectPriceGap(
+    lastRecord: OhlcvDto,
+    currentRecord: OhlcvDto,
+    symbol: string
+  ): Gap | null {
+    const gapPercent =
+      Math.abs(currentRecord.open - lastRecord.close) / lastRecord.close
 
     if (gapPercent > this.config.priceGapThreshold) {
-      const severity = gapPercent > 0.15 ? 'high' : gapPercent > 0.10 ? 'medium' : 'low'
+      const severity =
+        gapPercent > 0.15 ? 'high' : gapPercent > 0.1 ? 'medium' : 'low'
 
       return {
         type: GapType.PRICE_GAP,
-        symbol: currentRecord.symbol,
+        symbol: symbol,
         startTime: lastRecord.timestamp,
         endTime: currentRecord.timestamp,
         severity,
@@ -155,22 +169,27 @@ export class GapDetector {
   /**
    * Detect volume anomalies
    */
-  private detectVolumeGap(state: ReturnType<typeof this.getOrCreateState>, record: OhlcvDto): Gap | null {
+  private detectVolumeGap(
+    state: ReturnType<typeof this.getOrCreateState>,
+    record: OhlcvDto,
+    symbol: string
+  ): Gap | null {
     const recentVolumes = state.volumeHistory
-      .filter(v => v.time > record.timestamp - this.config.volumeWindow)
-      .map(v => v.volume)
+      .filter((v) => v.time > record.timestamp - this.config.volumeWindow)
+      .map((v) => v.volume)
 
     if (recentVolumes.length < 5) {
       return null // Not enough history
     }
 
-    const avgVolume = recentVolumes.reduce((sum, v) => sum + v, 0) / recentVolumes.length
-    const volumeDrop = 1 - (record.volume / avgVolume)
+    const avgVolume =
+      recentVolumes.reduce((sum, v) => sum + v, 0) / recentVolumes.length
+    const volumeDrop = 1 - record.volume / avgVolume
 
     if (volumeDrop > this.config.volumeDropThreshold) {
       return {
         type: GapType.VOLUME_GAP,
-        symbol: record.symbol,
+        symbol: symbol,
         startTime: record.timestamp,
         endTime: record.timestamp,
         severity: volumeDrop > 0.95 ? 'high' : 'medium',
@@ -184,12 +203,15 @@ export class GapDetector {
   /**
    * Update volume history
    */
-  private updateVolumeHistory(state: ReturnType<typeof this.getOrCreateState>, record: OhlcvDto): void {
+  private updateVolumeHistory(
+    state: ReturnType<typeof this.getOrCreateState>,
+    record: OhlcvDto
+  ): void {
     state.volumeHistory.push({ time: record.timestamp, volume: record.volume })
-    
+
     // Remove old entries outside the window
     const cutoff = record.timestamp - this.config.volumeWindow
-    state.volumeHistory = state.volumeHistory.filter(v => v.time > cutoff)
+    state.volumeHistory = state.volumeHistory.filter((v) => v.time > cutoff)
   }
 
   /**
@@ -287,7 +309,7 @@ export function createGapDetectionTransform(config?: GapDetectorConfig) {
     data: AsyncIterator<OhlcvDto>
   ): AsyncGenerator<OhlcvDto & { gaps?: Gap[] }> {
     let result = await data.next()
-    
+
     while (!result.done) {
       const record = result.value
       const gaps = detector.processRecord(record)

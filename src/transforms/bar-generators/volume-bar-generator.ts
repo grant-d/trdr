@@ -1,124 +1,185 @@
-import { BarGeneratorTransform, type BarGeneratorParams, type BarState } from './bar-generator-base'
-import type { OhlcvDto } from '../../models'
+import { z } from 'zod/v4'
+import type { BaseTransformParams } from '../../interfaces'
+import type { DataSlice } from '../../utils'
+import type { BaseBarState } from './base-bar-generator'
+import { BaseBarGenerator, baseBarSchema } from './base-bar-generator'
 
-export interface VolumeBarParams extends BarGeneratorParams {
-  /** 
-   * Volume threshold that triggers bar completion
-   * @example 10000 // Complete bars when 10,000 shares/units have been traded
-   * @minimum 0 (exclusive)
-   */
-  volumePerBar: number
+/**
+ * Schema for volume bar configuration
+ * @property {number} volume - Volume threshold that triggers bar completion
+ * @property {string} [volumeField] - Field name for volume data (default: 'volume')
+ */
+const txSchema = z.object({
+  volume: z.number().positive(),
+  volumeField: z
+    .string()
+    .regex(/^[a-zA-Z0-9_]{1,20}$/)
+    .default('volume')
+})
+
+/**
+ * Main schema for VolumeBarGenerator transform
+ */
+const schema = baseBarSchema.extend({
+  tx: z.union([txSchema, z.array(txSchema)])
+})
+
+interface VolumeBarParams extends z.infer<typeof schema>, BaseTransformParams {
+}
+
+interface VolumeBarState extends BaseBarState {
+  accumulatedVolume: number;
 }
 
 /**
  * Volume Bar Generator
- * 
+ *
  * Generates bars based on accumulated volume rather than time or tick count. This creates
  * bars that represent equal liquidity consumption, making them particularly useful for
  * analyzing market microstructure and institutional trading patterns.
- * 
- * ## Algorithm
- * 
- * 1. **Volume Accumulation**: Sum the volume of each incoming tick
- * 2. **Threshold Check**: When accumulated volume >= volumePerBar, complete the bar
- * 3. **Bar Reset**: Start a new bar with volume accumulation reset
- * 
- * ## Use Cases
- * 
- * - **Liquidity Analysis**: Each bar represents equal liquidity consumption
- * - **Institutional Trading**: Detect large block trading patterns
- * - **Market Impact Studies**: Analyze price impact per unit of volume
- * - **Volume Profile Analysis**: Understand volume distribution patterns
- * - **Execution Algorithms**: TWAP/VWAP strategy development
- * 
- * ## Advantages over Time-Based Bars
- * 
- * - **Liquidity-Normalized**: Each bar represents similar liquidity impact
- * - **Market Structure**: Better reflects actual market participation
- * - **Volume Clustering**: Naturally groups periods of similar volume activity
- * - **Institutional Focus**: Highlights periods of large institutional activity
- * 
- * ## Considerations
- * 
- * - **Variable Time Spans**: High-volume periods create faster bars
- * - **Tick Count Variation**: Each bar may contain different numbers of trades
- * - **Price Range Variation**: Volume doesn't guarantee price movement
- * - **Market Regime Sensitivity**: May need adjustment for different market conditions
- * 
+ *
+ * **Algorithm**:
+ * 1. Accumulate volume from each incoming tick
+ * 2. When accumulated volume ≥ threshold, complete the bar
+ * 3. Start new bar with volume accumulation reset
+ *
+ * **Key Properties**:
+ * - Each bar represents equal liquidity consumption
+ * - More bars during high-volume periods
+ * - Better reflects actual market participation
+ * - Highlights institutional trading activity
+ *
+ * **Use Cases**:
+ * - Liquidity analysis and profiling
+ * - Institutional flow detection
+ * - Market impact studies
+ * - TWAP/VWAP algorithm development
+ * - Volume cluster analysis
+ *
  * @example
  * ```typescript
  * // Create bars when 50,000 shares are traded
  * const volumeBars = new VolumeBarGenerator({
- *   volumePerBar: 50000
- * })
- * 
- * // For crypto or high-volume assets
+ *   tx: { volume: 50000 }
+ * }, inputBuffer)
+ *
+ * // Using custom volume field
+ * const customVolumeBars = new VolumeBarGenerator({
+ *   tx: { volume: 100000, volumeField: 'vol' }
+ * }, inputBuffer)
+ *
+ * // For high-volume assets
  * const cryptoBars = new VolumeBarGenerator({
- *   volumePerBar: 1000000 // 1M units
- * })
- * 
- * // For low-volume assets  
- * const smallCapBars = new VolumeBarGenerator({
- *   volumePerBar: 5000 // 5K shares
- * })
+ *   tx: { volume: 1000000, volumeField: 'v' } // 1M units
+ * }, inputBuffer)
  * ```
+ *
+ * @note Volume doesn't guarantee price movement
+ * @note Each bar may contain different numbers of ticks
+ * @note State is maintained across batch boundaries
  */
-export class VolumeBarGenerator extends BarGeneratorTransform<VolumeBarParams> {
-  constructor(params: VolumeBarParams) {
-    super(params, 'volumeBars' as any, 'Volume Bar Generator')
-    
-    if (!params.volumePerBar || params.volumePerBar <= 0) {
-      throw new Error('volumePerBar must be greater than 0')
+export class VolumeBarGenerator extends BaseBarGenerator<
+  VolumeBarParams,
+  VolumeBarState
+> {
+  // Configuration
+  private readonly _volumePerBar: number
+  private readonly _volumeFieldName: string
+  private readonly _volumeFieldIndex: number
+
+  constructor(config: VolumeBarParams, inputSlice: DataSlice) {
+    // Validate config
+    const parsed = schema.parse(config)
+
+    // Base class constructor
+    super(
+      'volumeBars',
+      'VolumeBars',
+      config.description || 'Volume Bar Generator',
+      parsed,
+      inputSlice
+    )
+
+    // Use first config
+    const tx = Array.isArray(parsed.tx) ? parsed.tx : [parsed.tx]
+    const txConfig = tx[0]
+    if (!txConfig) {
+      throw new Error('At least one configuration is required')
     }
+
+    this._volumePerBar = txConfig.volume
+    this._volumeFieldName = txConfig.volumeField
+
+    // Get volume field index
+    const volumeCol = inputSlice.getColumn(this._volumeFieldName)
+    if (!volumeCol) {
+      throw new Error(
+        `Volume field '${this._volumeFieldName}' not found in input slice`
+      )
+    }
+    this._volumeFieldIndex = volumeCol.index
   }
 
-  isBarComplete(_symbol: string, _tick: OhlcvDto, state: BarState): boolean {
-    // Check accumulated volume (already updated in updateBar)
-    return (state.accumulatedVolume || 0) >= this.params.volumePerBar
+  /**
+   * Extract tick data including custom volume field
+   */
+  protected extractTickData(rid: number): any {
+    const baseData = super.extractTickData(rid)
+
+    // Override volume with custom field if different
+    if (this._volumeFieldName !== 'volume') {
+      baseData.customVolume = this.inputSlice.getValue(
+        rid,
+        this._volumeFieldIndex
+      )!
+    }
+
+    return baseData
   }
 
-  createNewBar(_symbol: string, tick: OhlcvDto): BarState {
+  /**
+   * Create a new bar from the first tick
+   */
+  protected createNewBar(tick: any, _rid: number): VolumeBarState {
+    const volume = tick.customVolume ?? tick.volume
+
     return {
-      currentBar: {
-        ...tick,
-        timestamp: tick.timestamp
-      },
-      accumulatedVolume: tick.volume,
-      complete: false
+      open: tick.open,
+      high: tick.high,
+      low: tick.low,
+      close: tick.close,
+      volume: volume,
+      firstTimestamp: tick.timestamp,
+      lastTimestamp: tick.timestamp,
+      tickCount: 1,
+      accumulatedVolume: volume
     }
   }
 
-  updateBar(_symbol: string, currentBar: OhlcvDto, tick: OhlcvDto, state: BarState): OhlcvDto {
-    // Update accumulated volume
-    state.accumulatedVolume = (state.accumulatedVolume || 0) + tick.volume
+  /**
+   * Update the current bar with new tick data
+   */
+  protected updateBar(bar: VolumeBarState, tick: any, _rid: number): void {
+    const volume = tick.customVolume ?? tick.volume
 
     // Update OHLCV values
-    return {
-      ...currentBar,
-      high: Math.max(currentBar.high, tick.high),
-      low: Math.min(currentBar.low, tick.low),
-      close: tick.close,
-      volume: currentBar.volume + tick.volume,
-      // Keep the timestamp of the last tick
-      timestamp: tick.timestamp
-    }
+    bar.high = Math.max(bar.high, tick.high)
+    bar.low = Math.min(bar.low, tick.low)
+    bar.close = tick.close
+    bar.volume += volume
+    bar.lastTimestamp = tick.timestamp
+    bar.tickCount++
+    bar.accumulatedVolume += volume
   }
 
-  resetState(state: BarState): void {
-    state.accumulatedVolume = 0
-    state.complete = false
-  }
-
-  withParams(params: Partial<VolumeBarParams>): VolumeBarGenerator {
-    return new VolumeBarGenerator({ ...this.params, ...params })
-  }
-
-  validate(): void {
-    // Skip base validation that checks for input columns
-    // Bar generators use standard OHLCV fields instead
-    
-    if (this.params.volumePerBar <= 0) {
-      throw new Error('volumePerBar must be greater than 0')
-    }
+  /**
+   * Check if the current bar is complete
+   */
+  protected isBarComplete(
+    bar: VolumeBarState,
+    _tick: any,
+    _rid: number
+  ): boolean {
+    return bar.accumulatedVolume >= this._volumePerBar
   }
 }

@@ -2,13 +2,8 @@ import { deepStrictEqual, ok, strictEqual } from 'node:assert'
 import { mkdir, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, it } from 'node:test'
-import {
-  ConfigLoadError,
-  ConfigValidationError,
-  createDefaultPipelineConfig,
-  loadPipelineConfig
-} from '../../../src/cli/config-loader'
-import type { FileInputConfig } from '../../../src/interfaces/pipeline-config.interface'
+import { ConfigLoadError, ConfigValidationError, createDefaultPipelineConfig, loadPipelineConfig } from '../../../src/cli/config-loader'
+import type { FileInputConfig } from '../../../src/interfaces'
 
 describe('Config Loader', () => {
   const testDir = join(process.cwd(), 'test-configs')
@@ -32,7 +27,10 @@ describe('Config Loader', () => {
     createdFiles = []
   })
 
-  async function createTestConfig(filename: string, content: any): Promise<string> {
+  async function createTestConfig(
+    filename: string,
+    content: any
+  ): Promise<string> {
     const filePath = join(testDir, filename)
     await writeFile(filePath, JSON.stringify(content, null, 2))
     createdFiles.push(filePath)
@@ -83,7 +81,10 @@ describe('Config Loader', () => {
       strictEqual(loaded.transformations.length, 1)
       strictEqual(loaded.transformations[0]!.type, 'logReturns')
       strictEqual(loaded.transformations[0]!.disabled || false, false)
-      strictEqual((loaded.transformations[0]!.params as any).outputField, 'returns')
+      strictEqual(
+        (loaded.transformations[0]!.params as any).outputField,
+        'returns'
+      )
       strictEqual(loaded.options?.chunkSize, 1000)
       strictEqual(loaded.options?.continueOnError, true)
       strictEqual(loaded.options?.maxErrors, 50)
@@ -132,7 +133,10 @@ describe('Config Loader', () => {
         transformations: []
       }
 
-      const configPath = await createTestConfig('with-env.json', configWithEnvVars)
+      const configPath = await createTestConfig(
+        'with-env.json',
+        configWithEnvVars
+      )
       const loaded = await loadPipelineConfig(configPath)
 
       const fileInput2 = loaded.input as FileInputConfig
@@ -142,7 +146,7 @@ describe('Config Loader', () => {
 
       // Clean up environment variables
       delete process.env.TEST_INPUT_PATH
-      delete process.env.TEST_OUTPUT_PATH  
+      delete process.env.TEST_OUTPUT_PATH
       delete process.env.TEST_CHUNK_SIZE
     })
 
@@ -154,9 +158,11 @@ describe('Config Loader', () => {
       }
 
       const configPath = await createTestConfig('paths.json', config)
-      
+
       // Test with relative path
-      const loadedRelative = await loadPipelineConfig('test-configs/paths.json')
+      const loadedRelative = await loadPipelineConfig(
+        'test-configs/paths.json'
+      )
       const fileInputRel = loadedRelative.input as FileInputConfig
       ok(fileInputRel.path)
 
@@ -200,10 +206,16 @@ describe('Config Loader', () => {
 
       try {
         await loadPipelineConfig(configPath)
-        throw new Error('Expected ConfigValidationError but no error was thrown')
+        throw new Error(
+          'Expected ConfigValidationError but no error was thrown'
+        )
       } catch (error: any) {
         strictEqual(error.name, 'ConfigValidationError')
-        ok(error.message.includes('Configuration must be a valid JSON object with input, output, and transformations sections'))
+        ok(
+          error.message.includes(
+            'Configuration must be a valid JSON object with input, output, and transformations sections'
+          )
+        )
       }
     })
 
@@ -213,14 +225,23 @@ describe('Config Loader', () => {
         transformations: []
       }
 
-      const configPath = await createTestConfig('no-output.json', invalidConfig)
+      const configPath = await createTestConfig(
+        'no-output.json',
+        invalidConfig
+      )
 
       try {
         await loadPipelineConfig(configPath)
-        throw new Error('Expected ConfigValidationError but no error was thrown')
+        throw new Error(
+          'Expected ConfigValidationError but no error was thrown'
+        )
       } catch (error: any) {
         strictEqual(error.name, 'ConfigValidationError')
-        ok(error.message.includes('Configuration must be a valid JSON object with input, output, and transformations sections'))
+        ok(
+          error.message.includes(
+            'Configuration must be a valid JSON object with input, output, and transformations sections'
+          )
+        )
       }
     })
 
@@ -231,11 +252,16 @@ describe('Config Loader', () => {
         transformations: []
       }
 
-      const configPath = await createTestConfig('invalid-format.json', invalidConfig)
+      const configPath = await createTestConfig(
+        'invalid-format.json',
+        invalidConfig
+      )
 
       try {
         await loadPipelineConfig(configPath)
-        throw new Error('Expected ConfigValidationError but no error was thrown')
+        throw new Error(
+          'Expected ConfigValidationError but no error was thrown'
+        )
       } catch (error: any) {
         strictEqual(error.name, 'ConfigValidationError')
         ok(error.message.includes('Output format must be one of'))
@@ -248,14 +274,23 @@ describe('Config Loader', () => {
         output: { path: './output.jsonl', format: 'jsonl' }
       }
 
-      const configPath = await createTestConfig('no-transforms.json', invalidConfig)
+      const configPath = await createTestConfig(
+        'no-transforms.json',
+        invalidConfig
+      )
 
       try {
         await loadPipelineConfig(configPath)
-        throw new Error('Expected ConfigValidationError but no error was thrown')
+        throw new Error(
+          'Expected ConfigValidationError but no error was thrown'
+        )
       } catch (error: any) {
         strictEqual(error.name, 'ConfigValidationError')
-        ok(error.message.includes('Configuration must be a valid JSON object with input, output, and transformations sections'))
+        ok(
+          error.message.includes(
+            'Configuration must be a valid JSON object with input, output, and transformations sections'
+          )
+        )
       }
     })
 
@@ -265,20 +300,26 @@ describe('Config Loader', () => {
         output: { path: './output.jsonl', format: 'jsonl' },
         transformations: [
           {
-            type: 'logReturns',
+            type: 'logReturns'
             // Missing params
           }
         ]
       }
 
-      const configPath = await createTestConfig('invalid-transform.json', invalidConfig)
+      const configPath = await createTestConfig(
+        'invalid-transform.json',
+        invalidConfig
+      )
 
       try {
         await loadPipelineConfig(configPath)
-        throw new Error('Expected ConfigValidationError but no error was thrown')
+        throw new Error(
+          'Expected ConfigValidationError but no error was thrown'
+        )
       } catch (error: any) {
         strictEqual(error.name, 'ConfigValidationError')
-        ok(error.message.includes('must have a "params" object'))
+        ok(error.message.includes('must have a "params" object'
+      ))
       }
     })
 
@@ -292,11 +333,16 @@ describe('Config Loader', () => {
         }
       }
 
-      const configPath = await createTestConfig('invalid-options.json', invalidConfig)
+      const configPath = await createTestConfig(
+        'invalid-options.json',
+        invalidConfig
+      )
 
       try {
         await loadPipelineConfig(configPath)
-        throw new Error('Expected ConfigValidationError but no error was thrown')
+        throw new Error(
+          'Expected ConfigValidationError but no error was thrown'
+        )
       } catch (error: any) {
         strictEqual(error.name, 'ConfigValidationError')
         ok(error.message.includes('chunkSize must be a positive integer'))
@@ -366,19 +412,17 @@ describe('Config Loader', () => {
       const fileInput3 = loaded.input as FileInputConfig
       strictEqual(fileInput3.columnMapping?.timestamp, 'ts')
       strictEqual(fileInput3.columnMapping?.close, 'c')
-      strictEqual(fileInput3.exchange, 'test')
-      strictEqual(fileInput3.symbol, 'BTC-USD')
-      
+
       strictEqual(loaded.output.format, 'jsonl')
       strictEqual(loaded.output.overwrite, false)
-      
+
       strictEqual(loaded.transformations.length, 2)
       strictEqual(loaded.transformations[0]!.disabled, false)
       strictEqual(loaded.transformations[1]!.disabled, true)
       strictEqual((loaded.transformations[1]!.params as any).windowSize, 20)
-      
+
       strictEqual(loaded.options?.continueOnError, false)
-      
+
       strictEqual(loaded.metadata?.name, 'Complex Test Pipeline')
       strictEqual(loaded.metadata?.version, '2.1.0')
     })
@@ -400,18 +444,18 @@ describe('Config Loader', () => {
       strictEqual(fileInput.path, './data/input.csv')
       strictEqual(fileInput.format, 'csv')
       strictEqual(fileInput.chunkSize, 1000)
-      
+
       strictEqual(defaultConfig.output.path, './data/output.jsonl')
       strictEqual(defaultConfig.output.format, 'jsonl')
       strictEqual(defaultConfig.output.overwrite, true)
-      
+
       strictEqual(defaultConfig.transformations.length, 0)
-      
+
       strictEqual(defaultConfig.options.chunkSize, 1000)
       strictEqual(defaultConfig.options.continueOnError, true)
       strictEqual(defaultConfig.options.maxErrors, 100)
       strictEqual(defaultConfig.options.showProgress, true)
-      
+
       strictEqual(defaultConfig.metadata?.name, 'Default Pipeline')
       strictEqual(defaultConfig.metadata?.version, '1.0.0')
       ok(defaultConfig.metadata?.created)
@@ -419,8 +463,11 @@ describe('Config Loader', () => {
 
     it('should create configuration that passes validation', async () => {
       const defaultConfig = createDefaultPipelineConfig()
-      const configPath = await createTestConfig('default-test.json', defaultConfig)
-      
+      const configPath = await createTestConfig(
+        'default-test.json',
+        defaultConfig
+      )
+
       // Should load without errors
       const loaded = await loadPipelineConfig(configPath)
       deepStrictEqual(loaded, defaultConfig)
@@ -430,7 +477,7 @@ describe('Config Loader', () => {
   describe('error handling', () => {
     it('should preserve error chain for file read errors', async () => {
       const nonExistentPath = join(testDir, 'definitely-does-not-exist.json')
-      
+
       try {
         await loadPipelineConfig(nonExistentPath)
       } catch (error) {
@@ -442,8 +489,11 @@ describe('Config Loader', () => {
 
     it('should include file path in validation errors', async () => {
       const invalidConfig = { not: 'valid' }
-      const configPath = await createTestConfig('validation-error.json', invalidConfig)
-      
+      const configPath = await createTestConfig(
+        'validation-error.json',
+        invalidConfig
+      )
+
       try {
         await loadPipelineConfig(configPath)
       } catch (error) {
@@ -467,7 +517,10 @@ describe('Config Loader', () => {
         transformations: []
       }
 
-      const configPath = await createTestConfig('missing-env.json', configWithMissingEnv)
+      const configPath = await createTestConfig(
+        'missing-env.json',
+        configWithMissingEnv
+      )
       const loaded = await loadPipelineConfig(configPath)
 
       // Missing env var should be replaced with empty string

@@ -8,19 +8,19 @@
 export interface CoinbaseConfig {
   /** API key for authentication */
   apiKey?: string
-  
+
   /** API secret for authentication */
   apiSecret?: string
-  
+
   /** Whether to use sandbox/test environment */
   sandbox?: boolean
-  
+
   /** Rate limit per second */
   rateLimitPerSecond?: number
-  
+
   /** Maximum number of retries for failed requests */
   maxRetries?: number
-  
+
   /** Delay between retries in milliseconds */
   retryDelayMs?: number
 }
@@ -34,7 +34,7 @@ export enum WebSocketMessageType {
   HEARTBEAT = 'heartbeat',
   TICKER = 'ticker',
   CANDLES = 'candles',
-  ERROR = 'error'
+  ERROR = 'error',
 }
 
 /**

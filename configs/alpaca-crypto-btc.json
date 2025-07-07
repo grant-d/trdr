@@ -2,7 +2,9 @@
   "input": {
     "type": "provider",
     "provider": "alpaca",
-    "symbols": ["BTC/USD"],
+    "symbols": [
+      "BTC/USD"
+    ],
     "timeframe": "5m",
     "duration": "1h"
   },
@@ -14,10 +16,12 @@
   "transformations": [
     {
       "type": "logReturns",
-      "enabled": true,
+      "disabled": false,
       "params": {
-        "outputField": "returns",
-        "priceField": "close"
+        "tx": {
+          "in": "close",
+          "out": "returns"
+        }
       }
     }
   ],

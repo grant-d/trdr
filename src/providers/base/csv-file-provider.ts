@@ -1,129 +1,105 @@
-import { createReadStream } from 'node:fs'
-import { createInterface } from 'node:readline'
 import type { HistoricalParams } from '../../interfaces'
-import type { OhlcvDto } from '../../models'
 import logger from '../../utils/logger'
 import { FileProvider } from './file-provider.base'
 import type { FileProviderConfig } from './types'
 
 /**
  * CSV file provider implementation
- * Handles streaming large CSV files with configurable chunk processing
+ * Reads CSV data and pushes directly to buffer
  */
 export class CsvFileProvider extends FileProvider {
   private headers: string[] = []
+  private headersParsed = false
   private readonly delimiter: string
+  private pipeline?: { next(from: number, to: number): void }
 
   constructor(config: FileProviderConfig) {
     super(config)
-
-    // Allow custom delimiter
-    this.delimiter = ('delimiter' in config && typeof config.delimiter === 'string')
-      ? config.delimiter
-      : ','
+    this.delimiter =
+      'delimiter' in config && typeof config.delimiter === 'string'
+        ? config.delimiter
+        : ','
   }
 
   /**
-   * Streams historical data from CSV file
+   * Set the pipeline to notify when rows are added
    */
-  async* getHistoricalData(params: HistoricalParams): AsyncIterableIterator<OhlcvDto> {
+  setPipeline(pipeline: { next(from: number, to: number): void }): void {
+    this.pipeline = pipeline
+  }
+
+  /**
+   * Process historical data from CSV file
+   */
+  async processHistoricalData(params: HistoricalParams): Promise<void> {
     if (!this.connected) {
       throw new Error('Provider not connected. Call connect() first.')
     }
 
-    logger.info('Starting CSV data stream', {
+    logger.info('Processing CSV data', {
       path: this.filePath,
       symbols: params.symbols,
       start: new Date(params.start).toISOString(),
       end: new Date(params.end).toISOString()
     })
 
-    const fileStream = createReadStream(this.filePath, { encoding: 'utf8' })
-    const rl = createInterface({
-      input: fileStream,
-      crlfDelay: Infinity
-    })
+    await this.processFile(this.pipeline!)
+  }
 
-    try {
-      let rowNumber = 0
-      let headersParsed = false
-      let yieldedCount = 0
-      const chunk: OhlcvDto[] = []
+  /**
+   * Process a single CSV line
+   */
+  protected processLine(line: string): boolean {
+    const values = this.parseCsvLine(line)
 
-      for await (const line of rl) {
-        if (!line.trim()) continue
+    if (!this.headersParsed) {
+      this.headers = values
+      this.headersParsed = true
+      logger.debug('CSV headers parsed', { headers: this.headers })
+      return false // Headers don't count as data
+    }
 
-        rowNumber++
-
-        // Parse headers from first row
-        if (!headersParsed) {
-          this.headers = this.parseCsvLine(line)
-          headersParsed = true
-          logger.debug('CSV headers parsed', { headers: this.headers })
-          continue
-        }
-
-        // Parse data row
-        const values = this.parseCsvLine(line)
-        if (values.length !== this.headers.length) {
-          logger.warn('Skipping malformed row', {
-            row: rowNumber,
-            expected: this.headers.length,
-            actual: values.length
-          })
-          continue
-        }
-
-        // Create object from headers and values
-        const rawData: Record<string, string> = {}
-        for (let i = 0; i < this.headers.length; i++) {
-          rawData[this.headers[i]!] = values[i] || ''
-        }
-
-        // Transform to OHLCV
-        const ohlcv = this.validateAndTransform(rawData, rowNumber)
-        if (!ohlcv) continue
-
-        // Filter by params
-        if (!this.matchesParams(ohlcv, params)) continue
-
-        // Add to chunk
-        chunk.push(ohlcv)
-
-        // Yield chunk when it reaches configured size
-        if (chunk.length >= this.chunkSize) {
-          for (const item of chunk) {
-            yield item
-            yieldedCount++
-          }
-          chunk.length = 0
-        }
-      }
-
-      // Yield remaining items in chunk
-      for (const item of chunk) {
-        yield item
-        yieldedCount++
-      }
-
-      logger.info('CSV streaming completed', {
-        path: this.filePath,
-        rowsProcessed: rowNumber,
-        rowsYielded: yieldedCount
+    if (values.length !== this.headers.length) {
+      logger.warn('Skipping malformed row', {
+        expected: this.headers.length,
+        actual: values.length
       })
+      return false
+    }
+
+    // Create object from headers and values
+    const rawData: Record<string, string> = {}
+    for (let i = 0; i < this.headers.length; i++) {
+      rawData[this.headers[i]!] = values[i] || ''
+    }
+
+    // Transform and push to buffer
+    try {
+      const timestamp = this.parseTimestamp(rawData[this.columnMapping.timestamp])
+      const open = this.parseNumber(rawData[this.columnMapping.open], 'open')
+      const high = this.parseNumber(rawData[this.columnMapping.high], 'high')
+      const low = this.parseNumber(rawData[this.columnMapping.low], 'low')
+      const close = this.parseNumber(rawData[this.columnMapping.close], 'close')
+      const volume = this.parseNumber(rawData[this.columnMapping.volume], 'volume')
+
+      this._buffer!.push({
+        timestamp,
+        open,
+        high,
+        low,
+        close,
+        volume
+      })
+
+      return true
     } catch (error) {
-      logger.error('Error reading CSV file', { error, path: this.filePath })
-      throw error
-    } finally {
-      // Ensure readline interface is closed
-      rl.close()
-      // Destroy the underlying stream
-      fileStream.destroy()
+      logger.error('Failed to parse CSV row', { error })
+      return false
     }
   }
 
   /**
-   * Parses a CSV line handling quoted values and escaped characters
+   * Parse a CSV line handling quoted values
    */
   private parseCsvLine(line: string): string[] {
     const values: string[] = []
@@ -148,7 +124,7 @@ export class CsvFileProvider extends FileProvider {
       }
 
       if (char === this.delimiter && !inQuotes) {
-        values.push(current)
+        values.push(current.trim())
         current = ''
         i++
         continue
@@ -159,28 +135,44 @@ export class CsvFileProvider extends FileProvider {
     }
 
     // Add last value
-    values.push(current)
+    values.push(current.trim())
 
-    // Clean up values - remove quotes if present
-    return values.map(val => {
-      val = val.trim()
-      if (val.startsWith('"') && val.endsWith('"')) {
-        return val.slice(1, -1)
-      }
-      return val
-    })
+    return values
   }
 
   /**
-   * Checks if OHLCV data matches the query parameters
+   * Parse timestamp helper (delegates to base class)
    */
-  private matchesParams(ohlcv: OhlcvDto, params: HistoricalParams): boolean {
-    // Check timestamp range
-    if (ohlcv.timestamp < params.start || ohlcv.timestamp > params.end) {
-      return false
-    }
+  protected parseTimestamp(value: unknown): number {
+    return super.parseTimestamp(value, 0)
+  }
 
-    // Check symbol filter
-    return !(params.symbols.length > 0 && !params.symbols.includes(ohlcv.symbol))
+  /**
+   * Parse number helper (delegates to base class)
+   */
+  protected parseNumber(value: unknown, field: string): number {
+    return super.parseNumber(value, field, 0)
+  }
+
+  /**
+   * Required by FileProvider interface - just processes the data
+   */
+  async* getHistoricalData(
+    params: HistoricalParams
+  ): AsyncIterableIterator<any> {
+    // Process all data into buffer
+    await this.processHistoricalData(params)
+
+    // Don't yield anything - data is in buffer
+    return
+  }
+
+  /**
+   * Override disconnect to reset CSV-specific state
+   */
+  async disconnect(): Promise<void> {
+    this.headers = []
+    this.headersParsed = false
+    await super.disconnect()
   }
 }

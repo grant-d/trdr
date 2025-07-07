@@ -1,121 +1,146 @@
-import { BarGeneratorTransform, type BarGeneratorParams, type BarState } from './bar-generator-base'
-import type { OhlcvDto } from '../../models'
-import type { Transform } from '../../interfaces'
+import { z } from 'zod/v4'
+import type { BaseTransformParams } from '../../interfaces'
+import type { DataSlice } from '../../utils'
+import type { BaseBarState } from './base-bar-generator'
+import { BaseBarGenerator, baseBarSchema } from './base-bar-generator'
 
-export interface StatisticalRegimeBarParams extends BarGeneratorParams {
-  /** 
-   * Lookback period for statistical calculations 
-   * @example 20 // Use 20 periods for statistical analysis
-   * @minimum 10
-   */
-  lookback: number
-  
-  /** 
-   * Z-score threshold for combined statistical metrics
-   * @example 2.5 // Trigger new bar when combined Z-score exceeds 2.5
-   * @minimum 1.0
-   */
-  threshold: number
+/**
+ * Schema for statistical regime bar configuration
+ * @property {number} lookback - Lookback period for statistical calculations (min: 10)
+ * @property {number} threshold - Z-score threshold for combined metrics (min: 1.0)
+ */
+const txSchema = z.object({
+  lookback: z.number().min(10),
+  threshold: z.number().min(1.0)
+})
+
+/**
+ * Main schema for StatisticalRegimeBarGenerator transform
+ */
+const schema = baseBarSchema.extend({
+  tx: z.union([txSchema, z.array(txSchema)])
+})
+
+interface StatisticalRegimeBarParams
+  extends z.infer<typeof schema>,
+          BaseTransformParams {
 }
 
-interface StatisticalRegimeState extends BarState {
+interface StatisticalRegimeBarState extends BaseBarState {
   /** Historical close prices for statistical calculations */
-  priceHistory: number[]
+  priceHistory: number[];
   /** Historical returns for calculations */
-  returnHistory: number[]
+  returnHistory: number[];
   /** Kurtosis values for Z-score calculation */
-  kurtosisHistory: number[]
+  kurtosisHistory: number[];
   /** Skewness values for Z-score calculation */
-  skewnessHistory: number[]
+  skewnessHistory: number[];
   /** Hurst exponent values for Z-score calculation */
-  hurstHistory: number[]
+  hurstHistory: number[];
   /** Entropy values for Z-score calculation */
-  entropyHistory: number[]
+  entropyHistory: number[];
 }
 
 /**
  * Statistical Regime Bar Generator
- * 
- * Monitors rolling window of multiple statistical moments to detect regime changes:
- * - Kurtosis (tail risk) - measures extreme events and fat tails
- * - Skewness (directional bias) - captures asymmetry in returns  
- * - Hurst exponent (trending vs mean-reverting) - persistence of trends
- * - Entropy (randomness/uncertainty) - disorder in price movements
- * 
+ *
+ * Monitors rolling window of multiple statistical moments to detect regime changes.
  * Creates new bar when combined Z-score of these metrics exceeds threshold.
- * Adapts to changing market personality rather than single metric.
- * Bars cluster during regime transitions, sparse during stable periods.
- * 
- * ## Algorithm
+ *
+ * **Statistical Metrics**:
+ * - Kurtosis: Measures extreme events and fat tails
+ * - Skewness: Captures asymmetry in returns
+ * - Hurst exponent: Trending vs mean-reverting behavior
+ * - Entropy: Disorder/randomness in price movements
+ *
+ * **Algorithm**:
  * 1. Maintain rolling window of close prices and returns
- * 2. Calculate statistical moments: kurtosis, skewness, hurst, entropy
- * 3. Calculate Z-scores for each metric using rolling mean/stdev  
- * 4. Combine Z-scores using Euclidean distance in Z-space
+ * 2. Calculate statistical moments for recent window
+ * 3. Calculate Z-scores for each metric using rolling stats
+ * 4. Combine Z-scores using Euclidean distance
  * 5. Create new bar when combined Z-score exceeds threshold
- * 
- * ## Use Cases
- * - Regime change detection in algorithmic trading
- * - Risk management during market transitions
- * - Adaptive strategy parameter adjustment
+ *
+ * **Key Properties**:
+ * - Multi-dimensional statistical view
+ * - Adapts to changing market personality
+ * - Bars cluster during regime transitions
+ * - Sparse bars during stable periods
+ *
+ * **Use Cases**:
+ * - Regime change detection
+ * - Risk management during transitions
+ * - Adaptive strategy adjustment
  * - Market microstructure analysis
- * 
- * ## Advantages
- * - Multi-dimensional statistical view of market state
- * - Adaptive to different market personalities  
- * - Early detection of regime shifts
- * - Robust to single-metric false signals
- * 
+ * - Volatility regime identification
+ *
  * @example
  * ```typescript
- * const generator = new StatisticalRegimeBarGenerator({
- *   lookback: 20,        // 20-period statistical window
- *   threshold: 2.5       // Trigger at 2.5 combined Z-score
- * })
+ * const regimeBars = new StatisticalRegimeBarGenerator({
+ *   tx: {
+ *     lookback: 20,      // 20-period statistical window
+ *     threshold: 2.5     // Trigger at 2.5 combined Z-score
+ *   }
+ * }, inputBuffer)
  * ```
+ *
+ * @note Requires 2x lookback periods before generating bars
+ * @note Statistical moments calculated on rolling basis
+ * @note State maintained across batch boundaries
  */
-export class StatisticalRegimeBarGenerator extends BarGeneratorTransform<StatisticalRegimeBarParams> {
-  constructor(params: StatisticalRegimeBarParams) {
-    super(params, 'statisticalRegime', 'Statistical Regime Bar Generator')
-    this.validate()
+export class StatisticalRegimeBarGenerator extends BaseBarGenerator<
+  StatisticalRegimeBarParams,
+  StatisticalRegimeBarState
+> {
+  // Configuration
+  private readonly _lookback: number
+  private readonly _threshold: number
+
+  constructor(config: StatisticalRegimeBarParams, inputSlice: DataSlice) {
+    // Validate config
+    const parsed = schema.parse(config)
+
+    // Base class constructor
+    super(
+      'regimeBars',
+      'RegimeBars',
+      config.description || 'Statistical Regime Bar Generator',
+      parsed,
+      inputSlice
+    )
+
+    // Use first config
+    const tx = Array.isArray(parsed.tx) ? parsed.tx : [parsed.tx]
+    const txConfig = tx[0]
+    if (!txConfig) {
+      throw new Error('At least one configuration is required')
+    }
+
+    this._lookback = txConfig.lookback
+    this._threshold = txConfig.threshold
   }
 
-  public validate(): void {
-    super.validate()
-    
-    if (this.params.lookback < 10) {
-      throw new Error('Statistical Regime Bar Generator: lookback must be at least 10')
-    }
-    
-    if (this.params.threshold < 1.0) {
-      throw new Error('Statistical Regime Bar Generator: threshold must be at least 1.0')
-    }
-  }
+  /**
+   * Create a new bar from the first tick
+   */
+  protected createNewBar(tick: any, _rid: number): StatisticalRegimeBarState {
+    // Preserve some history from previous bar if available
+    const prevHistory = this._currentBar?.priceHistory || []
+    const keepHistory = Math.floor(this._lookback / 2)
+    const carryOverPrices =
+      prevHistory.length > keepHistory
+        ? prevHistory.slice(-keepHistory)
+        : prevHistory
 
-  isBarComplete(_symbol: string, _tick: OhlcvDto, state: StatisticalRegimeState): boolean {
-    // Need enough data to calculate statistics
-    if (state.priceHistory.length < this.params.lookback * 2) {
-      return false
-    }
-
-    // Calculate combined Z-score
-    const combinedZ = this.calculateCombinedZScore(state)
-    return combinedZ > this.params.threshold
-  }
-
-  createNewBar(symbol: string, tick: OhlcvDto): StatisticalRegimeState {
     return {
-      currentBar: {
-        timestamp: tick.timestamp,
-        symbol,
-        exchange: tick.exchange,
-        open: tick.close,
-        high: tick.high,
-        low: tick.low,
-        close: tick.close,
-        volume: tick.volume
-      },
-      complete: false,
-      priceHistory: [tick.close],
+      open: tick.open,
+      high: tick.high,
+      low: tick.low,
+      close: tick.close,
+      volume: tick.volume,
+      firstTimestamp: tick.timestamp,
+      lastTimestamp: tick.timestamp,
+      tickCount: 1,
+      priceHistory: [...carryOverPrices, tick.close],
       returnHistory: [],
       kurtosisHistory: [],
       skewnessHistory: [],
@@ -124,76 +149,102 @@ export class StatisticalRegimeBarGenerator extends BarGeneratorTransform<Statist
     }
   }
 
-  updateBar(_symbol: string, currentBar: OhlcvDto, tick: OhlcvDto, state: StatisticalRegimeState): OhlcvDto {
+  /**
+   * Update the current bar with new tick data
+   */
+  protected updateBar(
+    bar: StatisticalRegimeBarState,
+    tick: any,
+    _rid: number
+  ): void {
+    // Update OHLCV values
+    bar.high = Math.max(bar.high, tick.high)
+    bar.low = Math.min(bar.low, tick.low)
+    bar.close = tick.close
+    bar.volume += tick.volume
+    bar.lastTimestamp = tick.timestamp
+    bar.tickCount++
+
     // Update price history
-    state.priceHistory.push(tick.close)
-    
+    bar.priceHistory.push(tick.close)
+
     // Calculate return if we have previous price
-    if (state.priceHistory.length > 1) {
-      const prevPrice = state.priceHistory[state.priceHistory.length - 2]!
+    if (bar.priceHistory.length > 1) {
+      const prevPrice = bar.priceHistory[bar.priceHistory.length - 2]!
       const currentReturn = (tick.close - prevPrice) / prevPrice
-      state.returnHistory.push(currentReturn)
+      bar.returnHistory.push(currentReturn)
     }
-    
+
     // Keep only lookback * 3 history for efficiency
-    const maxHistory = this.params.lookback * 3
-    if (state.priceHistory.length > maxHistory) {
-      state.priceHistory = state.priceHistory.slice(-maxHistory)
+    const maxHistory = this._lookback * 3
+    if (bar.priceHistory.length > maxHistory) {
+      bar.priceHistory = bar.priceHistory.slice(-maxHistory)
     }
-    if (state.returnHistory.length > maxHistory) {
-      state.returnHistory = state.returnHistory.slice(-maxHistory)
+    if (bar.returnHistory.length > maxHistory) {
+      bar.returnHistory = bar.returnHistory.slice(-maxHistory)
     }
-    
+
     // Update statistical metrics if we have enough data
-    if (state.priceHistory.length >= this.params.lookback) {
-      this.updateStatisticalMetrics(state)
-    }
-    
-    // Update bar OHLCV
-    return {
-      timestamp: currentBar.timestamp,
-      symbol: currentBar.symbol,
-      exchange: currentBar.exchange,
-      open: currentBar.open,
-      high: Math.max(currentBar.high, tick.high),
-      low: Math.min(currentBar.low, tick.low),
-      close: tick.close,
-      volume: currentBar.volume + tick.volume
+    if (bar.priceHistory.length >= this._lookback) {
+      this.updateStatisticalMetrics(bar)
     }
   }
 
-  resetState(state: StatisticalRegimeState): void {
-    // Keep some recent history for continuity
-    const keepHistory = Math.floor(this.params.lookback / 2)
-    state.priceHistory = state.priceHistory.slice(-keepHistory)
-    state.returnHistory = state.returnHistory.slice(-keepHistory)
-    state.kurtosisHistory = state.kurtosisHistory.slice(-keepHistory)
-    state.skewnessHistory = state.skewnessHistory.slice(-keepHistory)
-    state.hurstHistory = state.hurstHistory.slice(-keepHistory)
-    state.entropyHistory = state.entropyHistory.slice(-keepHistory)
-    state.complete = false
+  /**
+   * Check if the current bar is complete
+   */
+  protected isBarComplete(
+    bar: StatisticalRegimeBarState,
+    _tick: any,
+    _rid: number
+  ): boolean {
+    // Need enough data to calculate statistics
+    if (bar.priceHistory.length < this._lookback * 2) {
+      return false
+    }
+
+    // Calculate combined Z-score
+    const combinedZ = this.calculateCombinedZScore(bar)
+    return combinedZ > this._threshold
   }
 
-  private updateStatisticalMetrics(state: StatisticalRegimeState): void {
-    const prices = state.priceHistory.slice(-this.params.lookback)
-    const returns = state.returnHistory.slice(-this.params.lookback)
-    
-    if (returns.length < this.params.lookback - 1) return
-    
+  /**
+   * Override to add statistical metrics to emitted bars
+   */
+  protected addAdditionalBarFields(
+    row: Record<string, number>,
+    bar: StatisticalRegimeBarState
+  ): void {
+    // Add latest statistical metrics if available
+    if (bar.kurtosisHistory.length > 0) {
+      row.kurtosis = bar.kurtosisHistory[bar.kurtosisHistory.length - 1]!
+      row.skewness = bar.skewnessHistory[bar.skewnessHistory.length - 1]!
+      row.hurst = bar.hurstHistory[bar.hurstHistory.length - 1]!
+      row.entropy = bar.entropyHistory[bar.entropyHistory.length - 1]!
+      row.combined_zscore = this.calculateCombinedZScore(bar)
+    }
+  }
+
+  private updateStatisticalMetrics(state: StatisticalRegimeBarState): void {
+    const prices = state.priceHistory.slice(-this._lookback)
+    const returns = state.returnHistory.slice(-this._lookback)
+
+    if (returns.length < this._lookback - 1) return
+
     // Calculate statistical moments
     const kurtosis = this.calculateKurtosis(returns)
     const skewness = this.calculateSkewness(returns)
     const hurst = this.calculateHurstExponent(prices)
     const entropy = this.calculateEntropy(returns)
-    
+
     // Store in history
     state.kurtosisHistory.push(kurtosis)
     state.skewnessHistory.push(skewness)
     state.hurstHistory.push(hurst)
     state.entropyHistory.push(entropy)
-    
+
     // Keep limited history
-    const maxStatHistory = this.params.lookback * 2
+    const maxStatHistory = this._lookback * 2
     if (state.kurtosisHistory.length > maxStatHistory) {
       state.kurtosisHistory = state.kurtosisHistory.slice(-maxStatHistory)
     }
@@ -208,66 +259,94 @@ export class StatisticalRegimeBarGenerator extends BarGeneratorTransform<Statist
     }
   }
 
-  private calculateCombinedZScore(state: StatisticalRegimeState): number {
-    if (state.kurtosisHistory.length < this.params.lookback) {
+  private calculateCombinedZScore(state: StatisticalRegimeBarState): number {
+    if (state.kurtosisHistory.length < this._lookback) {
       return 0
     }
-    
+
     // Get current values
-    const currentKurtosis = state.kurtosisHistory[state.kurtosisHistory.length - 1]!
-    const currentSkewness = state.skewnessHistory[state.skewnessHistory.length - 1]!
+    const currentKurtosis =
+      state.kurtosisHistory[state.kurtosisHistory.length - 1]!
+    const currentSkewness =
+      state.skewnessHistory[state.skewnessHistory.length - 1]!
     const currentHurst = state.hurstHistory[state.hurstHistory.length - 1]!
-    const currentEntropy = state.entropyHistory[state.entropyHistory.length - 1]!
-    
+    const currentEntropy =
+      state.entropyHistory[state.entropyHistory.length - 1]!
+
     // Calculate Z-scores
-    const zKurtosis = this.calculateZScore(currentKurtosis, state.kurtosisHistory)
-    const zSkewness = this.calculateZScore(currentSkewness, state.skewnessHistory)
+    const zKurtosis = this.calculateZScore(
+      currentKurtosis,
+      state.kurtosisHistory
+    )
+    const zSkewness = this.calculateZScore(
+      currentSkewness,
+      state.skewnessHistory
+    )
     const zHurst = this.calculateZScore(currentHurst, state.hurstHistory)
     const zEntropy = this.calculateZScore(currentEntropy, state.entropyHistory)
-    
+
     // Combined Z-score (Euclidean distance in Z-space, normalized)
-    return Math.sqrt(zKurtosis * zKurtosis + zSkewness * zSkewness + zHurst * zHurst + zEntropy * zEntropy) / 2
+    return (
+      Math.sqrt(
+        zKurtosis * zKurtosis +
+        zSkewness * zSkewness +
+        zHurst * zHurst +
+        zEntropy * zEntropy
+      ) / 2
+    )
   }
 
   private calculateZScore(value: number, history: number[]): number {
     if (history.length < 2) return 0
-    
+
     const mean = history.reduce((sum, val) => sum + val, 0) / history.length
-    const variance = history.reduce((sum, val) => sum + (val - mean) * (val - mean), 0) / (history.length - 1)
+    const variance =
+      history.reduce((sum, val) => sum + (val - mean) * (val - mean), 0) /
+      (history.length - 1)
     const stdev = Math.sqrt(variance)
-    
+
     return stdev > 0 ? (value - mean) / stdev : 0
   }
 
   private calculateKurtosis(returns: number[]): number {
     if (returns.length < 4) return 0
-    
+
     const mean = returns.reduce((sum, val) => sum + val, 0) / returns.length
-    const variance = returns.reduce((sum, val) => sum + (val - mean) * (val - mean), 0) / returns.length
+    const variance =
+      returns.reduce((sum, val) => sum + (val - mean) * (val - mean), 0) /
+      returns.length
     const stdev = Math.sqrt(variance)
-    
+
     if (stdev === 0) return 0
-    
-    const sum4 = returns.reduce((sum, val) => sum + Math.pow((val - mean) / stdev, 4), 0)
-    return sum4 / returns.length - 3.0  // Excess kurtosis
+
+    const sum4 = returns.reduce(
+      (sum, val) => sum + Math.pow((val - mean) / stdev, 4),
+      0
+    )
+    return sum4 / returns.length - 3.0 // Excess kurtosis
   }
 
   private calculateSkewness(returns: number[]): number {
     if (returns.length < 3) return 0
-    
+
     const mean = returns.reduce((sum, val) => sum + val, 0) / returns.length
-    const variance = returns.reduce((sum, val) => sum + (val - mean) * (val - mean), 0) / returns.length
+    const variance =
+      returns.reduce((sum, val) => sum + (val - mean) * (val - mean), 0) /
+      returns.length
     const stdev = Math.sqrt(variance)
-    
+
     if (stdev === 0) return 0
-    
-    const sum3 = returns.reduce((sum, val) => sum + Math.pow((val - mean) / stdev, 3), 0)
+
+    const sum3 = returns.reduce(
+      (sum, val) => sum + Math.pow((val - mean) / stdev, 3),
+      0
+    )
     return sum3 / returns.length
   }
 
   private calculateHurstExponent(prices: number[]): number {
     if (prices.length < 10) return 0.5
-    
+
     // Calculate returns
     const returns: number[] = []
     for (let i = 1; i < prices.length; i++) {
@@ -275,11 +354,12 @@ export class StatisticalRegimeBarGenerator extends BarGeneratorTransform<Statist
         returns.push(Math.log(prices[i]! / prices[i - 1]!))
       }
     }
-    
+
     if (returns.length < 5) return 0.5
-    
-    const meanReturn = returns.reduce((sum, val) => sum + val, 0) / returns.length
-    
+
+    const meanReturn =
+      returns.reduce((sum, val) => sum + val, 0) / returns.length
+
     // Calculate cumulative deviations
     const cumDevs: number[] = []
     let cumSum = 0
@@ -287,27 +367,32 @@ export class StatisticalRegimeBarGenerator extends BarGeneratorTransform<Statist
       cumSum += ret - meanReturn
       cumDevs.push(cumSum)
     }
-    
+
     // Calculate R (range) and S (standard deviation)
     const R = Math.max(...cumDevs) - Math.min(...cumDevs)
-    const variance = returns.reduce((sum, val) => sum + (val - meanReturn) * (val - meanReturn), 0) / (returns.length - 1)
+    const variance =
+      returns.reduce(
+        (sum, val) => sum + (val - meanReturn) * (val - meanReturn),
+        0
+      ) /
+      (returns.length - 1)
     const S = Math.sqrt(variance)
-    
+
     if (S === 0 || R === 0) return 0.5
-    
+
     const RS = R / S
     return RS > 0 ? Math.log(RS) / Math.log(returns.length * 0.5) : 0.5
   }
 
-  private calculateEntropy(returns: number[], bins: number = 10): number {
+  private calculateEntropy(returns: number[], bins = 10): number {
     if (returns.length < bins) return 0
-    
+
     const minReturn = Math.min(...returns)
     const maxReturn = Math.max(...returns)
     const range = maxReturn - minReturn
-    
+
     if (range === 0) return 0
-    
+
     // Create histogram
     const counts = new Array(bins).fill(0)
     for (const ret of returns) {
@@ -315,7 +400,7 @@ export class StatisticalRegimeBarGenerator extends BarGeneratorTransform<Statist
       const clampedIndex = Math.max(0, Math.min(bins - 1, binIndex))
       counts[clampedIndex]++
     }
-    
+
     // Calculate entropy
     let entropy = 0
     for (const count of counts) {
@@ -324,11 +409,7 @@ export class StatisticalRegimeBarGenerator extends BarGeneratorTransform<Statist
         entropy -= probability * Math.log2(probability)
       }
     }
-    
-    return entropy
-  }
 
-  public withParams(params: Partial<StatisticalRegimeBarParams>): Transform<StatisticalRegimeBarParams> {
-    return new StatisticalRegimeBarGenerator({ ...this.params, ...params })
+    return entropy
   }
 }

@@ -1,201 +1,106 @@
-import { test } from 'node:test'
 import { strict as assert } from 'node:assert'
-import { BaseTransform } from '../../../src/transforms/base-transform'
-import type { OhlcvDto } from '../../../src/models'
-import type { Transform, BaseTransformParams } from '../../../src/interfaces/transform.interface'
+import { test } from 'node:test'
+import type { BaseTransformParams } from '../../../src/interfaces'
+import { DataSlice } from '../../../src/utils'
+import { BaseTransform } from '../../../src/transforms'
+import { DataBuffer } from '../../../src/utils'
 
 // Test implementation of BaseTransform
 interface TestParams extends BaseTransformParams {
-  multiplier: number
+  multiplier: number;
 }
 
 class TestTransform extends BaseTransform<TestParams> {
-  constructor(params: TestParams) {
-    super('priceCalc', 'Test Transform', 'A test transform', params)
+  constructor(params: TestParams, inputSlice: DataSlice) {
+    super('priceCalc', 'Test Transform', 'A test transform', params, inputSlice)
   }
-  
-  protected async *transform(data: AsyncIterator<OhlcvDto>): AsyncGenerator<OhlcvDto> {
-    let item = await data.next()
-    while (!item.done) {
-      const value = item.value
-      
-      yield {
-        ...value,
-        close: value.close * this.params.multiplier
-      }
-      item = await data.next()
+
+  protected processBatch(from: number, to: number): { from: number; to: number } {
+    // Get the close column index
+    const closeCol = this.inputSlice.getColumn('close')
+    if (!closeCol) {
+      throw new Error('Close column not found')
     }
-  }
-  
-  public getOutputFields(): string[] {
-    return ['close'] // Modified existing field
-  }
-  
-  public getRequiredFields(): string[] {
-    return ['close']
-  }
-  
-  public withParams(params: Partial<TestParams>): Transform<TestParams> {
-    return new TestTransform({ ...this.params, ...params })
-  }
 
-  // Expose protected methods for testing
-  public testArrayToAsyncIterator<T>(data: T[]): AsyncIterator<T> {
-    return this.arrayToAsyncIterator(data)
-  }
+    // Process each row in the batch
+    for (let i = from; i <= to; i++) {
+      const closeValue = this.inputSlice.underlyingBuffer.getValue(i, closeCol.index)
+      if (typeof closeValue === 'number') {
+        // Multiply the close value
+        this.inputSlice.underlyingBuffer.updateValue(i, closeCol.index, closeValue * this.params.multiplier)
+      }
+    }
 
-  public testCollectAsyncIterator<T>(iterator: AsyncIterator<T>): Promise<T[]> {
-    return this.collectAsyncIterator(iterator)
+    return { from, to }
   }
 }
 
 test('BaseTransform - Constructor and Properties', () => {
-  const params: TestParams = { multiplier: 2 }
-  const transform = new TestTransform(params)
+  const buffer = new DataBuffer({
+    columns: {
+      timestamp: { index: 0 },
+      close: { index: 1 }
+    }
+  })
   
+  const slice = new DataSlice(buffer, 0, 0)
+  const params: TestParams = { multiplier: 2 }
+  const transform = new TestTransform(params, slice)
+
   assert.equal(transform.type, 'priceCalc')
   assert.equal(transform.name, 'Test Transform')
   assert.equal(transform.description, 'A test transform')
   assert.deepEqual(transform.params, params)
 })
 
-test('BaseTransform - Apply Transform', async () => {
+test('BaseTransform - Process Transform', () => {
+  const buffer = new DataBuffer({
+    columns: {
+      timestamp: { index: 0 },
+      close: { index: 1 }
+    }
+  })
+
+  // Add test data
+  buffer.push({
+    timestamp: 1640995200000,
+    close: 105
+  })
+
+  const slice = new DataSlice(buffer, 0, 0)
   const params: TestParams = { multiplier: 2 }
-  const transform = new TestTransform(params)
-  
-  const testData: OhlcvDto[] = [
-    {
-      timestamp: 1640995200000,
-      symbol: 'BTCUSD',
-      exchange: 'test',
-      open: 100,
-      high: 110,
-      low: 95,
-      close: 105,
-      volume: 1000
+  const transform = new TestTransform(params, slice)
+
+  // Process the data
+  transform.next(0, 0)
+
+  // Check the result
+  const transformedValue = buffer.getValue(0, 1) // close column
+  assert.equal(transformedValue, 210) // 105 * 2
+})
+
+test('BaseTransform - Batch Processing', () => {
+  const buffer = new DataBuffer({
+    columns: {
+      timestamp: { index: 0 },
+      close: { index: 1 }
     }
-  ]
-  
-  // Apply the transform
-  const input = transform.testArrayToAsyncIterator(testData)
-  const result = await transform.apply(input)
-  
-  // Collect results
-  const transformed: OhlcvDto[] = []
-  let item = await result.data.next()
-  while (!item.done) {
-    transformed.push(item.value)
-    item = await result.data.next()
-  }
-  
-  assert.equal(transformed.length, 1)
-  assert.equal(transformed[0]!.close, 210) // 105 * 2
-})
-
-test('BaseTransform - Validation', () => {
-  // Create a transform that overrides validation
-  class ValidatingTransform extends TestTransform {
-    public validate(): void {
-      super.validate()
-      if (this.params.multiplier <= 0) {
-        throw new Error('Multiplier must be positive')
-      }
-    }
-  }
-  
-  assert.throws(
-    () => {
-      const transform = new ValidatingTransform({ multiplier: -1 })
-      transform.validate()
-    },
-    /Multiplier must be positive/
-  )
-})
-
-test('BaseTransform - Column Validation', () => {
-  // Test duplicate output columns
-  assert.throws(
-    () => {
-      const transform = new TestTransform({ 
-        multiplier: 2,
-        in: ['close', 'open'],
-        out: ['result', 'result'] // Duplicate output
-      })
-      transform.validate()
-    },
-    /Output columns must be unique/
-  )
-  
-  // Test that input duplicates are allowed
-  assert.doesNotThrow(() => {
-    const transform = new TestTransform({ 
-      multiplier: 2,
-      in: ['close', 'close'], // Duplicate input - should be allowed
-      out: ['result1', 'result2'] // Unique outputs
-    })
-    transform.validate()
   })
-  
-  // Test null outputs are handled correctly
-  assert.doesNotThrow(() => {
-    const transform = new TestTransform({ 
-      multiplier: 2,
-      in: ['close', 'open', 'high'],
-      out: ['result', null, 'result2'] // null is allowed
-    })
-    transform.validate()
-  })
-  
-  // Test invalid column names
-  assert.throws(
-    () => {
-      const transform = new TestTransform({ 
-        multiplier: 2,
-        in: ['close-invalid'], // Invalid character
-        out: ['result']
-      })
-      transform.validate()
-    },
-    /Invalid input column name/
-  )
-})
 
+  // Add multiple rows
+  buffer.push({ timestamp: 1640995200000, close: 100 })
+  buffer.push({ timestamp: 1640995260000, close: 110 })
+  buffer.push({ timestamp: 1640995320000, close: 120 })
 
-test('BaseTransform - WithParams Creates New Instance', () => {
-  const transform = new TestTransform({ multiplier: 2 })
-  const newTransform = transform.withParams({ multiplier: 3 }) as TestTransform
-  
-  assert.notEqual(transform, newTransform)
-  assert.equal(transform.params.multiplier, 2)
-  assert.equal(newTransform.params.multiplier, 3)
-})
+  const slice = new DataSlice(buffer, 0, 2)
+  const params: TestParams = { multiplier: 3 }
+  const transform = new TestTransform(params, slice)
 
-test('BaseTransform - Readiness', () => {
-  const transform = new TestTransform({ multiplier: 2 })
-  
-  // Most transforms are ready immediately by default
-  assert.equal(transform.isReady(), true)
-})
+  // Process all data
+  transform.next(0, 2)
 
-test('BaseTransform - Helper Methods', async () => {
-  const transform = new TestTransform({ multiplier: 1 })
-
-  // Test arrayToAsyncIterator
-  const data = [1, 2, 3]
-  const iterator = transform.testArrayToAsyncIterator(data)
-  const collected: number[] = []
-
-  let item = await iterator.next()
-  while (!item.done) {
-    collected.push(item.value)
-    item = await iterator.next()
-  }
-  
-  assert.deepEqual(collected, data)
-  
-  // Test collectAsyncIterator
-  const iterator2 = transform.testArrayToAsyncIterator([4, 5, 6])
-  const result = await transform.testCollectAsyncIterator(iterator2)
-  
-  assert.deepEqual(result, [4, 5, 6])
+  // Check all values were transformed
+  assert.equal(buffer.getValue(0, 1), 300) // 100 * 3
+  assert.equal(buffer.getValue(1, 1), 330) // 110 * 3
+  assert.equal(buffer.getValue(2, 1), 360) // 120 * 3
 })

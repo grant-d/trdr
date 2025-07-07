@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
-import { test, afterEach } from 'node:test'
-import type { OhlcvDto } from '../../../src/models/ohlcv.dto'
-import type { OhlcvRepository } from '../../../src/repositories/ohlcv-repository.interface'
+import { afterEach, test } from 'node:test'
+import type { OhlcvDto } from '../../../src/models'
+import type { OhlcvRepository } from '../../../src/repositories'
 import { forceCleanupAsyncHandles } from '../../helpers/test-cleanup'
 
 /**
@@ -9,8 +9,9 @@ import { forceCleanupAsyncHandles } from '../../helpers/test-cleanup'
  * Ensures consistent behavior across CSV, and Jsonl repositories
  */
 export abstract class RepositoryTestBase {
-  public abstract createRepository(): Promise<OhlcvRepository>
-  public abstract cleanup(): Promise<void>
+  public abstract createRepository(): Promise<OhlcvRepository>;
+
+  public abstract cleanup(): Promise<void>;
 
   /**
    * Sample OHLCV data for testing - single symbol/exchange for repository compatibility
@@ -20,21 +21,21 @@ export abstract class RepositoryTestBase {
       timestamp: 1640995200000, // 2022-01-01 00:00:00
       symbol: 'BTCUSD',
       exchange: 'coinbase',
-      open: 47000.50,
+      open: 47000.5,
       high: 47500.25,
       low: 46800.75,
-      close: 47200.00,
+      close: 47200.0,
       volume: 150.25
     },
     {
       timestamp: 1640998800000, // 2022-01-01 01:00:00
       symbol: 'BTCUSD',
       exchange: 'coinbase',
-      open: 47200.00,
-      high: 47800.50,
+      open: 47200.0,
+      high: 47800.5,
       low: 47100.25,
       close: 47650.75,
-      volume: 200.50
+      volume: 200.5
     },
     {
       timestamp: 1641002400000, // 2022-01-01 02:00:00
@@ -42,18 +43,18 @@ export abstract class RepositoryTestBase {
       exchange: 'coinbase',
       open: 47500.25,
       high: 47850.75,
-      low: 47280.50,
-      close: 47625.00,
+      low: 47280.5,
+      close: 47625.0,
       volume: 300.75
     },
     {
       timestamp: 1641006000000, // 2022-01-01 03:00:00
       symbol: 'BTCUSD',
       exchange: 'coinbase',
-      open: 47625.00,
-      high: 48000.00,
+      open: 47625.0,
+      high: 48000.0,
       low: 47500.25,
-      close: 47900.50,
+      close: 47900.5,
       volume: 180.25
     }
   ]
@@ -68,8 +69,8 @@ export abstract class RepositoryTestBase {
       exchange: 'coinbase',
       open: 3800.25,
       high: 3850.75,
-      low: 3780.50,
-      close: 3825.00,
+      low: 3780.5,
+      close: 3825.0,
       volume: 500.75
     }
   ]
@@ -83,13 +84,12 @@ export abstract class RepositoryTestBase {
       symbol: 'BTCUSD',
       exchange: 'binance',
       open: 47650.75,
-      high: 48000.00,
+      high: 48000.0,
       low: 47500.25,
-      close: 47900.50,
+      close: 47900.5,
       volume: 180.25
     }
   ]
-
 
   /**
    * Run all repository tests
@@ -99,16 +99,20 @@ export abstract class RepositoryTestBase {
       afterEach(() => {
         forceCleanupAsyncHandles()
       })
-      
+
       await t.test('Basic CRUD Operations', () => this.testBasicCrud())
       await t.test('Batch Operations', () => this.testBatchOperations())
       await t.test('Date Range Queries', () => this.testDateRangeQueries())
       await t.test('Symbol Filtering', () => this.testSymbolFiltering())
       await t.test('Exchange Filtering', () => this.testExchangeFiltering())
       await t.test('Flexible Query Interface', () => this.testFlexibleQuery())
-      await t.test('Timestamp Operations', () => this.testTimestampOperations())
+      await t.test('Timestamp Operations', () =>
+        this.testTimestampOperations()
+      )
       await t.test('Count Operations', () => this.testCountOperations())
-      await t.test('Symbol and Exchange Lists', () => this.testSymbolExchangeLists())
+      await t.test('Symbol and Exchange Lists', () =>
+        this.testSymbolExchangeLists()
+      )
       await t.test('Repository Statistics', () => this.testRepositoryStats())
       await t.test('Error Handling', () => this.testErrorHandling())
       await t.test('Edge Cases', () => this.testEdgeCases())
@@ -123,21 +127,20 @@ export abstract class RepositoryTestBase {
    */
   protected async testBasicCrud(): Promise<void> {
     const repo = await this.createRepository()
-    
+
     try {
       // Test save single record
       await repo.save(this.sampleData[0]!)
-      
+
       // Flush any buffers before retrieval
       await repo.flush()
-      
+
       // Test retrieval
       const retrieved = await repo.getBySymbol('BTCUSD', 'coinbase', 1)
       assert.equal(retrieved.length, 1)
       assert.equal(retrieved[0]!.timestamp, this.sampleData[0]!.timestamp)
       assert.equal(retrieved[0]!.symbol, this.sampleData[0]!.symbol)
       assert.equal(retrieved[0]!.close, this.sampleData[0]!.close)
-      
     } finally {
       try {
         await repo.close()
@@ -157,29 +160,33 @@ export abstract class RepositoryTestBase {
    */
   protected async testBatchOperations(): Promise<void> {
     const repo = await this.createRepository()
-    
+
     try {
       // Test saveMany
       await repo.saveMany(this.sampleData)
-      
+
       // Test appendBatch with additional data for same symbol/exchange
-      const additionalData: OhlcvDto[] = [{
-        timestamp: 1641009600000,
-        symbol: 'BTCUSD',
-        exchange: 'coinbase',
-        open: 47900.50,
-        high: 48100.25,
-        low: 47750.50,
-        close: 48000.75,
-        volume: 250.25
-      }]
-      
+      const additionalData: OhlcvDto[] = [
+        {
+          timestamp: 1641009600000,
+          symbol: 'BTCUSD',
+          exchange: 'coinbase',
+          open: 47900.5,
+          high: 48100.25,
+          low: 47750.5,
+          close: 48000.75,
+          volume: 250.25
+        }
+      ]
+
       await repo.appendBatch(additionalData)
-      
+
       // Verify all data was saved
       const allData = await repo.query({})
-      assert.equal(allData.length, this.sampleData.length + additionalData.length)
-      
+      assert.equal(
+        allData.length,
+        this.sampleData.length + additionalData.length
+      )
     } finally {
       try {
         await repo.close()
@@ -199,23 +206,22 @@ export abstract class RepositoryTestBase {
    */
   protected async testDateRangeQueries(): Promise<void> {
     const repo = await this.createRepository()
-    
+
     try {
       await repo.saveMany(this.sampleData)
-      
+
       // Test date range filtering
       const startTime = 1640995200000
       const endTime = 1641002400000
-      
+
       const filtered = await repo.getBetweenDates(startTime, endTime)
       assert.ok(filtered.length >= 2)
-      
+
       // Verify all results are within range
       for (const item of filtered) {
         assert.ok(item.timestamp >= startTime)
         assert.ok(item.timestamp <= endTime)
       }
-      
     } finally {
       try {
         await repo.close()
@@ -235,22 +241,21 @@ export abstract class RepositoryTestBase {
    */
   protected async testSymbolFiltering(): Promise<void> {
     const repo = await this.createRepository()
-    
+
     try {
       await repo.saveMany(this.sampleData)
-      
+
       // Test symbol filtering - all our data is BTCUSD
       const btcData = await repo.getBySymbol('BTCUSD')
       const nonExistentData = await repo.getBySymbol('ETHUSD')
-      
+
       assert.ok(btcData.length >= 4)
       assert.equal(nonExistentData.length, 0)
-      
+
       // Verify all results match the symbol
       for (const item of btcData) {
         assert.equal(item.symbol, 'BTCUSD')
       }
-      
     } finally {
       try {
         await repo.close()
@@ -270,22 +275,21 @@ export abstract class RepositoryTestBase {
    */
   protected async testExchangeFiltering(): Promise<void> {
     const repo = await this.createRepository()
-    
+
     try {
       await repo.saveMany(this.sampleData)
-      
+
       // Test exchange filtering - all our data is coinbase
       const coinbaseData = await repo.getBySymbol('BTCUSD', 'coinbase')
       const nonExistentData = await repo.getBySymbol('BTCUSD', 'binance')
-      
+
       assert.ok(coinbaseData.length >= 4)
       assert.equal(nonExistentData.length, 0)
-      
+
       // Verify all results match the exchange
       for (const item of coinbaseData) {
         assert.equal(item.exchange, 'coinbase')
       }
-      
     } finally {
       try {
         await repo.close()
@@ -305,10 +309,10 @@ export abstract class RepositoryTestBase {
    */
   protected async testFlexibleQuery(): Promise<void> {
     const repo = await this.createRepository()
-    
+
     try {
       await repo.saveMany(this.sampleData)
-      
+
       // Test complex query with multiple filters
       const results = await repo.query({
         symbol: 'BTCUSD',
@@ -318,16 +322,15 @@ export abstract class RepositoryTestBase {
         limit: 10,
         offset: 0
       })
-      
+
       assert.ok(results.length >= 1)
-      
+
       for (const item of results) {
         assert.equal(item.symbol, 'BTCUSD')
         assert.equal(item.exchange, 'coinbase')
         assert.ok(item.timestamp >= 1640995200000)
         assert.ok(item.timestamp <= 1641002400000)
       }
-      
     } finally {
       try {
         await repo.close()
@@ -347,24 +350,23 @@ export abstract class RepositoryTestBase {
    */
   protected async testTimestampOperations(): Promise<void> {
     const repo = await this.createRepository()
-    
+
     try {
       await repo.saveMany(this.sampleData)
-      
+
       // Test getLastTimestamp
       const lastTimestamp = await repo.getLastTimestamp('BTCUSD', 'coinbase')
       assert.ok(lastTimestamp !== null)
       assert.equal(lastTimestamp, 1641006000000)
-      
+
       // Test getFirstTimestamp
       const firstTimestamp = await repo.getFirstTimestamp('BTCUSD', 'coinbase')
       assert.ok(firstTimestamp !== null)
       assert.equal(firstTimestamp, 1640995200000)
-      
+
       // Test with non-existent symbol
       const noTimestamp = await repo.getLastTimestamp('NONEXISTENT')
       assert.equal(noTimestamp, null)
-      
     } finally {
       try {
         await repo.close()
@@ -384,22 +386,21 @@ export abstract class RepositoryTestBase {
    */
   protected async testCountOperations(): Promise<void> {
     const repo = await this.createRepository()
-    
+
     try {
       await repo.saveMany(this.sampleData)
-      
+
       // Test count by symbol
       const btcCount = await repo.getCount('BTCUSD')
       assert.ok(btcCount >= 2)
-      
+
       // Test count by symbol and exchange
       const coinbaseCount = await repo.getCount('BTCUSD', 'coinbase')
       assert.ok(coinbaseCount >= 1)
-      
+
       // Test count for non-existent symbol
       const noCount = await repo.getCount('NONEXISTENT')
       assert.equal(noCount, 0)
-      
     } finally {
       try {
         await repo.close()
@@ -414,33 +415,29 @@ export abstract class RepositoryTestBase {
     }
   }
 
-
-
-
   /**
    * Test symbol and exchange list operations
    */
   protected async testSymbolExchangeLists(): Promise<void> {
     const repo = await this.createRepository()
-    
+
     try {
       await repo.saveMany(this.sampleData)
-      
+
       // Test getSymbols - should only have BTCUSD
       const allSymbols = await repo.getSymbols()
       assert.ok(allSymbols.includes('BTCUSD'))
       assert.equal(allSymbols.length, 1)
-      
+
       // Test getSymbols with exchange filter
       const coinbaseSymbols = await repo.getSymbols('coinbase')
       assert.ok(coinbaseSymbols.includes('BTCUSD'))
       assert.equal(coinbaseSymbols.length, 1)
-      
+
       // Test getExchanges - should only have coinbase
       const exchanges = await repo.getExchanges()
       assert.ok(exchanges.includes('coinbase'))
       assert.equal(exchanges.length, 1)
-      
     } finally {
       try {
         await repo.close()
@@ -460,19 +457,18 @@ export abstract class RepositoryTestBase {
    */
   protected async testRepositoryStats(): Promise<void> {
     const repo = await this.createRepository()
-    
+
     try {
       await repo.saveMany(this.sampleData)
-      
+
       const stats = await repo.getStats()
-      
+
       assert.ok(stats.totalRecords >= this.sampleData.length)
       assert.equal(stats.uniqueSymbols, 1) // Only BTCUSD
       assert.equal(stats.uniqueExchanges, 1) // Only coinbase
       assert.ok(stats.dataDateRange.earliest !== null)
       assert.ok(stats.dataDateRange.latest !== null)
       assert.ok(stats.dataDateRange.earliest <= stats.dataDateRange.latest)
-      
     } finally {
       try {
         await repo.close()
@@ -492,7 +488,7 @@ export abstract class RepositoryTestBase {
    */
   protected async testErrorHandling(): Promise<void> {
     const repo = await this.createRepository()
-    
+
     try {
       // First save some valid data to test that error handling doesn't break the repository
       await repo.save({
@@ -505,7 +501,7 @@ export abstract class RepositoryTestBase {
         close: 105,
         volume: 1000
       })
-      
+
       // Test missing exchange field
       const invalidData = {
         timestamp: Date.now(),
@@ -517,7 +513,7 @@ export abstract class RepositoryTestBase {
         volume: 1000
         // Missing exchange field
       } as OhlcvDto
-      
+
       let errorThrown = false
       try {
         await repo.save(invalidData)
@@ -526,9 +522,12 @@ export abstract class RepositoryTestBase {
         assert.ok(error instanceof Error)
         assert.ok(error.message.includes('Missing required fields'))
       }
-      
-      assert.ok(errorThrown, 'Expected validation error was not thrown for missing exchange')
-      
+
+      assert.ok(
+        errorThrown,
+        'Expected validation error was not thrown for missing exchange'
+      )
+
       // Test that repository still works after error
       await repo.save({
         timestamp: Date.now() + 1000,
@@ -540,11 +539,13 @@ export abstract class RepositoryTestBase {
         close: 106,
         volume: 1001
       })
-      
+
       // Verify we can still query data
       const results = await repo.getBySymbol('VALID', 'test')
-      assert.ok(results.length >= 2, 'Repository should still work after validation error')
-      
+      assert.ok(
+        results.length >= 2,
+        'Repository should still work after validation error'
+      )
     } finally {
       try {
         await repo.close()
@@ -564,16 +565,16 @@ export abstract class RepositoryTestBase {
    */
   protected async testEdgeCases(): Promise<void> {
     const repo = await this.createRepository()
-    
+
     try {
       // Test empty dataset queries
       const emptyResults = await repo.getBySymbol('NONEXISTENT')
       assert.equal(emptyResults.length, 0)
-      
+
       // Test empty batch operations
       await repo.saveMany([])
       await repo.appendBatch([])
-      
+
       // Test large timestamp values (year 2099)
       const futureData: OhlcvDto = {
         timestamp: 4070908800000, // Jan 1, 2099
@@ -585,12 +586,11 @@ export abstract class RepositoryTestBase {
         close: 105,
         volume: 1000
       }
-      
+
       await repo.save(futureData)
       await repo.flush() // Flush buffer for single saves
       const retrieved = await repo.getBySymbol('FUTURE')
       assert.equal(retrieved.length, 1)
-      
     } finally {
       try {
         await repo.close()
@@ -610,16 +610,16 @@ export abstract class RepositoryTestBase {
    */
   protected async testDataIntegrity(): Promise<void> {
     const repo = await this.createRepository()
-    
+
     try {
       await repo.saveMany(this.sampleData)
-      
+
       // Flush to ensure data is persisted
       await repo.flush()
-      
+
       // Retrieve all data and verify integrity
       const allData = await repo.query({})
-      
+
       // Verify no data corruption
       for (const item of allData) {
         assert.ok(typeof item.timestamp === 'number')
@@ -630,7 +630,7 @@ export abstract class RepositoryTestBase {
         assert.ok(typeof item.low === 'number')
         assert.ok(typeof item.close === 'number')
         assert.ok(typeof item.volume === 'number')
-        
+
         // Verify OHLC relationships
         assert.ok(item.high >= item.open)
         assert.ok(item.high >= item.close)
@@ -638,7 +638,6 @@ export abstract class RepositoryTestBase {
         assert.ok(item.low <= item.close)
         assert.ok(item.volume >= 0)
       }
-      
     } finally {
       try {
         await repo.close()

@@ -2,8 +2,8 @@ import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { CsvRepository } from '../../../src/repositories/csv-repository'
-import type { OhlcvRepository } from '../../../src/repositories/ohlcv-repository.interface'
+import { CsvRepository } from '../../../src/repositories'
+import type { OhlcvRepository } from '../../../src/repositories'
 import { RepositoryTestBase } from './repository-test-base'
 
 /**
@@ -14,14 +14,17 @@ class CsvRepositoryTest extends RepositoryTestBase {
 
   public async createRepository(): Promise<OhlcvRepository> {
     // Create a unique test directory
-    this.testDir = join(tmpdir(), `trdr-csv-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
-    
+    this.testDir = join(
+      tmpdir(),
+      `trdr-csv-test-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    )
+
     const repo = new CsvRepository()
     await repo.initialize({
-      connectionString: join(this.testDir, 'test-data.csv'),  // Provide a file path, not just directory
+      connectionString: join(this.testDir, 'test-data.csv'), // Provide a file path, not just directory
       options: {}
     })
-    
+
     return repo
   }
 
@@ -42,7 +45,7 @@ class CsvRepositoryTest extends RepositoryTestBase {
 test('CSV Repository - File Organization', async () => {
   const testInstance = new CsvRepositoryTest()
   const repo = await testInstance.createRepository()
-  
+
   try {
     const testData = [
       {
@@ -66,16 +69,15 @@ test('CSV Repository - File Organization', async () => {
         volume: 200
       }
     ]
-    
+
     await repo.saveMany(testData)
-    
+
     // Verify data can be retrieved correctly
     const btcData = await repo.getBySymbol('BTCUSD', 'coinbase')
-    
+
     console.assert(btcData.length === 2)
     console.assert(btcData[0]!.symbol === 'BTCUSD')
     console.assert(btcData[1]!.symbol === 'BTCUSD')
-    
   } finally {
     await repo.close()
     await testInstance.cleanup()
@@ -85,7 +87,7 @@ test('CSV Repository - File Organization', async () => {
 test('CSV Repository - Streaming Writes', async () => {
   const testInstance = new CsvRepositoryTest()
   const repo = await testInstance.createRepository()
-  
+
   try {
     // Test individual saves (should use streaming)
     for (let i = 0; i < 10; i++) {
@@ -100,15 +102,14 @@ test('CSV Repository - Streaming Writes', async () => {
         volume: 1000 + i
       })
     }
-    
+
     const results = await repo.getBySymbol('STREAM_TEST')
     console.assert(results.length === 10)
-    
+
     // Verify data ordering
     for (let i = 0; i < results.length - 1; i++) {
       console.assert(results[i]!.timestamp >= results[i + 1]!.timestamp) // Descending order
     }
-    
   } finally {
     await repo.close()
     await testInstance.cleanup()
@@ -118,14 +119,14 @@ test('CSV Repository - Streaming Writes', async () => {
 test('CSV Repository - CSV Escaping', async () => {
   const testInstance = new CsvRepositoryTest()
   const repo = await testInstance.createRepository()
-  
+
   try {
     // Test symbols and exchanges with special characters
     const testData = [
       {
         timestamp: Date.now(),
         symbol: 'BTC,USD', // Contains comma
-        exchange: 'test"exchange', // Contains quote
+        exchange: "test'exchange", // Contains quote
         open: 47000,
         high: 47500,
         low: 46800,
@@ -135,7 +136,7 @@ test('CSV Repository - CSV Escaping', async () => {
       {
         timestamp: Date.now() + 1000,
         symbol: 'BTC,USD', // Same symbol/exchange pair
-        exchange: 'test"exchange', // Same exchange
+        exchange: "test'exchange", // Same exchange
         open: 3800,
         high: 3850,
         low: 3780,
@@ -143,17 +144,16 @@ test('CSV Repository - CSV Escaping', async () => {
         volume: 500
       }
     ]
-    
+
     await repo.saveMany(testData)
-    
+
     // Verify data can be retrieved correctly despite special characters
     const results = await repo.query({})
     console.assert(results.length === 2)
-    
-    const specialSymbols = results.map(r => r.symbol)
+
+    const specialSymbols = results.map((r) => r.symbol)
     console.assert(specialSymbols.includes('BTC,USD'))
-    console.assert(specialSymbols.every(s => s === 'BTC,USD'))
-    
+    console.assert(specialSymbols.every((s) => s === 'BTC,USD'))
   } finally {
     await repo.close()
     await testInstance.cleanup()

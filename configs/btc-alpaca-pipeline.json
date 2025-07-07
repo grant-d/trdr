@@ -2,7 +2,9 @@
   "input": {
     "type": "provider",
     "provider": "alpaca",
-    "symbols": ["BTC/USD"],
+    "symbols": [
+      "BTC/USD"
+    ],
     "timeframe": "4h",
     "duration": "6M"
   },
@@ -16,13 +18,43 @@
       "type": "missingValues",
       "disabled": false,
       "params": {
-        "strategy": "forward"
+        "tx": [
+          {
+            "in": "open",
+            "out": "open",
+            "strategy": "forward"
+          },
+          {
+            "in": "high",
+            "out": "high",
+            "strategy": "forward"
+          },
+          {
+            "in": "low",
+            "out": "low",
+            "strategy": "forward"
+          },
+          {
+            "in": "close",
+            "out": "close",
+            "strategy": "forward"
+          },
+          {
+            "in": "volume",
+            "out": "volume",
+            "strategy": "forward"
+          }
+        ]
       }
     },
     {
       "type": "fractionalDiff",
       "disabled": false,
       "params": {
+        "tx": {
+          "in": "close",
+          "out": "close_fd"
+        },
         "d": 0.3
       }
     },
@@ -30,6 +62,12 @@
       "type": "zScore",
       "disabled": false,
       "params": {
+        "tx": [
+          {
+            "in": "close",
+            "out": "close_zscore"
+          }
+        ],
         "windowSize": 29
       }
     },
@@ -37,17 +75,38 @@
       "type": "rsi",
       "disabled": false,
       "params": {
-        "in": ["close"],
-        "out": ["rsi"],
-        "period": 14
+        "tx": {
+          "in": "close",
+          "out": "rsi",
+          "window": 14
+        }
       }
     },
     {
       "type": "map",
       "disabled": false,
       "params": {
-        "in": ["close"],
-        "out": ["adj_close"]
+        "tx": {
+          "in": "close",
+          "out": "adj_close"
+        }
+      }
+    },
+    {
+      "type": "lorentzianDistance",
+      "disabled": false,
+      "params": {
+        "tx": {
+          "in": [
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume"
+          ],
+          "cFactor": 1,
+          "threshold": 50
+        }
       }
     }
   ],

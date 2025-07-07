@@ -5,21 +5,21 @@ import { stdout } from 'node:process'
  */
 export interface ProgressConfig {
   /** Total width of the progress bar */
-  width?: number
+  width?: number;
   /** Character to use for completed portion */
-  completeChar?: string
+  completeChar?: string;
   /** Character to use for incomplete portion */
-  incompleteChar?: string
+  incompleteChar?: string;
   /** Whether to show percentage */
-  showPercentage?: boolean
+  showPercentage?: boolean;
   /** Whether to show current/total counts */
-  showCounts?: boolean
+  showCounts?: boolean;
   /** Whether to show time elapsed */
-  showTime?: boolean
+  showTime?: boolean;
   /** Whether to show ETA */
-  showEta?: boolean
+  showEta?: boolean;
   /** Update interval in milliseconds */
-  updateInterval?: number
+  updateInterval?: number;
 }
 
 /**
@@ -44,7 +44,7 @@ export class ProgressIndicator {
       showCounts: config.showCounts ?? true,
       showTime: config.showTime ?? true,
       showEta: config.showEta ?? true,
-      updateInterval: config.updateInterval ?? 100,
+      updateInterval: config.updateInterval ?? 100
     }
 
     this.startTime = Date.now()
@@ -130,12 +130,16 @@ export class ProgressIndicator {
 
     // Calculate percentage and bar
     if (this.totalValue && this.totalValue > 0) {
-      const percentage = Math.min(100, Math.floor((this.currentValue / this.totalValue) * 100))
+      const percentage = Math.min(
+        100,
+        Math.floor((this.currentValue / this.totalValue) * 100)
+      )
       const filled = Math.floor((percentage / 100) * this.config.width)
       const empty = this.config.width - filled
 
       // Progress bar
-      const bar = this.config.completeChar.repeat(filled) +
+      const bar =
+        this.config.completeChar.repeat(filled) +
         this.config.incompleteChar.repeat(empty)
       parts.push(`[${bar}]`)
 

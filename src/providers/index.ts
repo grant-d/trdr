@@ -1,5 +1,6 @@
 export {
-  createFileProvider, CsvFileProvider,
+  createFileProvider,
+  CsvFileProvider,
   FileProvider,
   JsonlFileProvider
 } from './base'

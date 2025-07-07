@@ -1,51 +1,65 @@
 import { deepStrictEqual, ok, strictEqual, throws } from 'node:assert'
 import { describe, it } from 'node:test'
-import type {
-  LogReturnsParams,
-  TransformPipeline
-} from '../../../src/transforms'
-import {
-  LogReturnsNormalizer,
-  MinMaxNormalizer,
-  PriceCalculations,
-  ZScoreNormalizer,
-  createPipeline
-} from '../../../src/transforms'
-import {
-  TransformSerializer,
-  type SerializedPipeline,
-  type SerializedTransform
-} from '../../../src/transforms/transform-serializer'
+import type { LogReturnsParams, TransformPipeline } from '../../../src/transforms'
+import { createPipeline, LogReturnsNormalizer, MinMaxNormalizer, PriceCalculations, ZScoreNormalizer } from '../../../src/transforms'
+import { type SerializedPipeline, type SerializedTransform, TransformSerializer } from '../../../src/transforms'
+import { DataBuffer, DataSlice } from '../../../src/utils'
 
 describe('Transform Serializer', () => {
   describe('serializeTransform', () => {
     it('should serialize a basic transform', () => {
-      const transform = new LogReturnsNormalizer({
-        in: ['close'],
-        out: ['returns']
+      const buffer = new DataBuffer({
+        columns: {
+          timestamp: { index: 0 },
+          open: { index: 1 },
+          high: { index: 2 },
+          low: { index: 3 },
+          close: { index: 4 },
+          volume: { index: 5 }
+        }
       })
+      const slice = new DataSlice(buffer, 0, 0)
+      
+      const transform = new LogReturnsNormalizer({
+        tx: { in: 'close', out: 'returns', base: 'ln' }
+      }, slice)
 
       const serialized = TransformSerializer.serializeTransform(transform)
 
       strictEqual(serialized.type, 'logReturns')
-      deepStrictEqual(serialized.params, {
-        in: ['close'],
-        out: ['returns']
+      deepStrictEqual(serialized.params.tx, {
+        in: 'close',
+        out: 'returns',
+        base: 'ln'
       })
     })
 
     it('should serialize transforms with complex parameters', () => {
-      const transform = new ZScoreNormalizer({
-        in: ['open', 'close', 'volume'],
-        out: ['open_z', 'close_z', 'volume_z'],
-        windowSize: 20
+      const buffer = new DataBuffer({
+        columns: {
+          timestamp: { index: 0 },
+          open: { index: 1 },
+          high: { index: 2 },
+          low: { index: 3 },
+          close: { index: 4 },
+          volume: { index: 5 }
+        }
       })
+      const slice = new DataSlice(buffer, 0, 0)
+      
+      const transform = new ZScoreNormalizer({
+        tx: [
+          { in: 'open', out: 'open_z', window: 20 },
+          { in: 'close', out: 'close_z', window: 20 },
+          { in: 'volume', out: 'volume_z', window: 20 }
+        ]
+      }, slice)
 
       const serialized = TransformSerializer.serializeTransform(transform)
 
-      deepStrictEqual(serialized.params.in, ['open', 'close', 'volume'])
-      deepStrictEqual(serialized.params.out, ['open_z', 'close_z', 'volume_z'])
-      strictEqual(serialized.params.windowSize, 20)
+      ok(Array.isArray(serialized.params.tx))
+      strictEqual(serialized.params.tx.length, 3)
+      strictEqual(serialized.params.tx[0].window, 20)
     })
   })
 
@@ -54,8 +68,11 @@ describe('Transform Serializer', () => {
       const serialized: SerializedTransform = {
         type: 'logReturns',
         params: {
-          in: ['close'],
-          out: ['log_returns']
+          tx: {
+            in: 'close',
+            out: 'log_returns',
+            base: 'ln'
+          }
         }
       }
 
@@ -63,28 +80,36 @@ describe('Transform Serializer', () => {
 
       strictEqual(transform.type, 'logReturns')
       const params = transform.params as Partial<LogReturnsParams>
-      deepStrictEqual(params.in, ['close'])
-      deepStrictEqual(params.out, ['log_returns'])
+      deepStrictEqual((params as any).tx, {
+        in: 'close',
+        out: 'log_returns',
+        base: 'ln'
+      })
     })
 
     it('should deserialize transform with complex parameters', () => {
       const serialized: SerializedTransform = {
         type: 'minMax',
         params: {
-          in: ['close', 'volume'],
-          out: ['close_norm', 'volume_norm'],
-          min: -1,
-          max: 1
+          tx: {
+            in: 'close',
+            out: 'close_norm',
+            min: -1,
+            max: 1,
+            window: 20
+          }
         }
       }
 
       const transform = TransformSerializer.deserializeTransform(serialized)
 
       strictEqual(transform.type, 'minMax')
-      strictEqual((transform.params as any).min, -1)
-      strictEqual((transform.params as any).max, 1)
-      deepStrictEqual(transform.params.in, ['close', 'volume'])
-      deepStrictEqual(transform.params.out, ['close_norm', 'volume_norm'])
+      const tx = (transform.params as any).tx
+      strictEqual(tx.min, -1)
+      strictEqual(tx.max, 1)
+      strictEqual(tx.in, 'close')
+      strictEqual(tx.out, 'close_norm')
+      strictEqual(tx.window, 20)
     })
 
     it('should throw error for unknown transform type', () => {
@@ -101,11 +126,28 @@ describe('Transform Serializer', () => {
 
   describe('serializePipeline', () => {
     it('should serialize a transform pipeline', () => {
-      const pipeline = createPipeline([
-        new LogReturnsNormalizer({ in: ['close'], out: ['returns'] }),
-        new ZScoreNormalizer({ in: ['returns'], out: ['returns_z'] }),
-        new MinMaxNormalizer({ in: ['returns_z'], out: ['returns_norm'] })
-      ], 'Test Pipeline')
+      const buffer = new DataBuffer({
+        columns: {
+          timestamp: { index: 0 },
+          open: { index: 1 },
+          high: { index: 2 },
+          low: { index: 3 },
+          close: { index: 4 },
+          volume: { index: 5 },
+          returns: { index: 6 },
+          returns_z: { index: 7 }
+        }
+      })
+      const slice = new DataSlice(buffer, 0, 0)
+      
+      const pipeline = createPipeline(
+        [
+          new LogReturnsNormalizer({ tx: { in: 'close', out: 'returns', base: 'ln' } }, slice),
+          new ZScoreNormalizer({ tx: { in: 'returns', out: 'returns_z', window: 20 } }, slice),
+          new MinMaxNormalizer({ tx: { in: 'returns_z', out: 'returns_norm', min: -1, max: 1, window: 20 } }, slice)
+        ],
+        'Test Pipeline'
+      )
 
       const serialized = TransformSerializer.serializePipeline(pipeline)
 
@@ -125,11 +167,11 @@ describe('Transform Serializer', () => {
         transforms: [
           {
             type: 'priceCalc',
-            params: { calculation: 'hlc3' }
+            params: { tx: { calc: 'hlc3', out: 'hlc3' } }
           },
           {
             type: 'zScore',
-            params: { in: ['hlc3'], out: ['hlc3_z'] }
+            params: { tx: { in: 'hlc3', out: 'hlc3_z', window: 20 } }
           }
         ],
         metadata: {
@@ -150,11 +192,24 @@ describe('Transform Serializer', () => {
 
   describe('toJSON and fromJSON', () => {
     it('should round-trip serialize a transform', () => {
-      const original = new ZScoreNormalizer({
-        in: ['open', 'close'],
-        out: ['open_z', 'close_z'],
-        windowSize: 50
+      const buffer = new DataBuffer({
+        columns: {
+          timestamp: { index: 0 },
+          open: { index: 1 },
+          high: { index: 2 },
+          low: { index: 3 },
+          close: { index: 4 },
+          volume: { index: 5 }
+        }
       })
+      const slice = new DataSlice(buffer, 0, 0)
+      
+      const original = new ZScoreNormalizer({
+        tx: [
+          { in: 'open', out: 'open_z', window: 50 },
+          { in: 'close', out: 'close_z', window: 50 }
+        ]
+      }, slice)
 
       const json = TransformSerializer.toJSON(original)
       const deserialized = TransformSerializer.fromJSON(json)
@@ -164,13 +219,39 @@ describe('Transform Serializer', () => {
     })
 
     it('should round-trip serialize a pipeline', () => {
-      const original = createPipeline([
-        new LogReturnsNormalizer({ in: ['close'], out: ['returns'] }),
-        new MinMaxNormalizer({ in: ['returns'], out: ['returns_norm'], min: -1, max: 1 })
-      ], 'Round-trip Pipeline')
+      const buffer = new DataBuffer({
+        columns: {
+          timestamp: { index: 0 },
+          open: { index: 1 },
+          high: { index: 2 },
+          low: { index: 3 },
+          close: { index: 4 },
+          volume: { index: 5 },
+          returns: { index: 6 }
+        }
+      })
+      const slice = new DataSlice(buffer, 0, 0)
+      
+      const original = createPipeline(
+        [
+          new LogReturnsNormalizer({ tx: { in: 'close', out: 'returns', base: 'ln' } }, slice),
+          new MinMaxNormalizer({
+            tx: {
+              in: 'returns',
+              out: 'returns_norm',
+              min: -1,
+              max: 1,
+              window: 20
+            }
+          }, slice)
+        ],
+        'Round-trip Pipeline'
+      )
 
       const json = TransformSerializer.toJSON(original)
-      const deserialized = TransformSerializer.fromJSON(json) as TransformPipeline
+      const deserialized = TransformSerializer.fromJSON(
+        json
+      ) as TransformPipeline
 
       strictEqual(deserialized.name, original.name)
       const transforms = deserialized.getTransforms()
@@ -180,7 +261,22 @@ describe('Transform Serializer', () => {
     })
 
     it('should produce formatted JSON', () => {
-      const transform = new PriceCalculations({ calculation: 'ohlc4' })
+      const buffer = new DataBuffer({
+        columns: {
+          timestamp: { index: 0 },
+          open: { index: 1 },
+          high: { index: 2 },
+          low: { index: 3 },
+          close: { index: 4 },
+          volume: { index: 5 }
+        }
+      })
+      const slice = new DataSlice(buffer, 0, 0)
+      
+      const transform = new PriceCalculations({ 
+        in: { open: 'open', high: 'high', low: 'low', close: 'close' },
+        tx: { calc: 'ohlc4', out: 'ohlc4' } 
+      }, slice)
       const json = TransformSerializer.toJSON(transform)
 
       // Check that it's properly formatted
@@ -188,8 +284,6 @@ describe('Transform Serializer', () => {
       ok(json.includes('  ')) // Indentation
     })
   })
-
-
 
   describe('validateSerialized', () => {
     it('should validate correct serialized transform', () => {
@@ -205,12 +299,21 @@ describe('Transform Serializer', () => {
       strictEqual(TransformSerializer.validateSerialized(null), false)
       strictEqual(TransformSerializer.validateSerialized('string'), false)
       strictEqual(TransformSerializer.validateSerialized({}), false)
-      strictEqual(TransformSerializer.validateSerialized({ type: 'logReturns' }), false)
-      strictEqual(TransformSerializer.validateSerialized({ params: {} }), false)
-      strictEqual(TransformSerializer.validateSerialized({ 
-        type: 'unknownType',
-        params: {}
-      }), false)
+      strictEqual(
+        TransformSerializer.validateSerialized({ type: 'logReturns' }),
+        false
+      )
+      strictEqual(
+        TransformSerializer.validateSerialized({ params: {} }),
+        false
+      )
+      strictEqual(
+        TransformSerializer.validateSerialized({
+          type: 'unknownType',
+          params: {}
+        }),
+        false
+      )
     })
   })
 
@@ -246,28 +349,51 @@ describe('Transform Serializer', () => {
   describe('integration tests', () => {
     it('should handle complex pipeline serialization and deserialization', () => {
       // Create a complex pipeline
-      const logReturns = new LogReturnsNormalizer({ in: ['close'], out: ['returns'] })
-      
-      const minMax = new MinMaxNormalizer({
-        in: ['returns'],
-        out: ['returns_norm'],
-        min: -1,
-        max: 1
+      const buffer = new DataBuffer({
+        columns: {
+          timestamp: { index: 0 },
+          open: { index: 1 },
+          high: { index: 2 },
+          low: { index: 3 },
+          close: { index: 4 },
+          volume: { index: 5 }
+        }
       })
+      const slice = new DataSlice(buffer, 0, 0)
+
+      const logReturns = new LogReturnsNormalizer({
+        tx: { in: 'close', out: 'returns', base: 'ln' }
+      }, slice)
+
+      const minMax = new MinMaxNormalizer({
+        tx: {
+          in: 'returns',
+          out: 'returns_norm',
+          min: -1,
+          max: 1,
+          window: 20
+        }
+      }, slice)
 
       const zScore = new ZScoreNormalizer({
-        in: ['close', 'volume'],
-        out: ['close_z', 'volume_z'],
-        windowSize: 30
-      })
+        tx: [
+          { in: 'close', out: 'close_z', window: 30 },
+          { in: 'volume', out: 'volume_z', window: 30 }
+        ]
+      }, slice)
 
-      const original = createPipeline([logReturns, minMax, zScore], 'Complex Pipeline')
+      const original = createPipeline(
+        [logReturns, minMax, zScore],
+        'Complex Pipeline'
+      )
 
       // Serialize to JSON
       const json = TransformSerializer.toJSON(original)
-      
+
       // Deserialize back
-      const deserialized = TransformSerializer.fromJSON(json) as TransformPipeline
+      const deserialized = TransformSerializer.fromJSON(
+        json
+      ) as TransformPipeline
 
       // Verify structure
       strictEqual(deserialized.name, 'Transform Pipeline')
@@ -278,14 +404,15 @@ describe('Transform Serializer', () => {
       strictEqual(transforms[0]!.type, 'logReturns')
       strictEqual(transforms[1]!.type, 'minMax')
       strictEqual(transforms[2]!.type, 'zScore')
-      
+
       // Check that parameters are preserved
       const deserializedMinMax = transforms[1] as MinMaxNormalizer
-      strictEqual(deserializedMinMax.params.min, -1)
-      strictEqual(deserializedMinMax.params.max, 1)
-      
+      strictEqual((deserializedMinMax.params.tx as any).min, -1)
+      strictEqual((deserializedMinMax.params.tx as any).max, 1)
+
       const deserializedZScore = transforms[2] as ZScoreNormalizer
-      strictEqual(deserializedZScore.params.windowSize, 30)
+      strictEqual(Array.isArray(deserializedZScore.params.tx), true)
+      strictEqual((deserializedZScore.params.tx as any[])[0].window, 30)
     })
   })
 })

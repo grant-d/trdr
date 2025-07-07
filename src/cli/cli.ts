@@ -2,6 +2,7 @@
 
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
+import type { PipelineConfig } from '../interfaces'
 import type { CliArgs } from './args-parser'
 import { ArgsParser } from './args-parser'
 import { ConfigLoader } from './config-loader'
@@ -11,7 +12,6 @@ import { InteractiveMode } from './interactive-mode'
 import { PipelineFactory } from './pipeline-factory'
 import { ProgressIndicator } from './progress-indicator'
 import { ServerMode } from './server-mode'
-import type { PipelineConfig } from '../interfaces'
 
 /**
  * Get package version
@@ -51,14 +51,22 @@ async function main(): Promise<void> {
       await fs.access(args.config)
     } catch {
       console.error(`Configuration file not found: ${args.config}`)
-      console.error('\nCreate a pipeline.json file or specify a different config with -c option')
+      console.error(
+        '\nCreate a pipeline.json file or specify a different config with -c option'
+      )
       console.error('\nExample pipeline.json:')
-      console.error(JSON.stringify({
-        input: { type: 'csv', path: './data/input.csv' },
-        output: { path: './data/output.jsonl', format: 'jsonl' },
-        transformations: [],
-        options: {},
-      }, null, 2))
+      console.error(
+        JSON.stringify(
+          {
+            input: { type: 'csv', path: './data/input.csv' },
+            output: { path: './data/output.jsonl', format: 'jsonl' },
+            transformations: [],
+            options: {}
+          },
+          null,
+          2
+        )
+      )
       process.exit(1)
     }
 
@@ -72,35 +80,36 @@ async function main(): Promise<void> {
     // Validate configuration
     const validation = ConfigValidator.validateWithDetails(overriddenConfig)
 
-    if (!validation.isValid) {
-      console.error('Configuration validation failed:')
-      validation.errors.forEach((error) => {
-        console.error(`  ${error.field}: ${error.message}`)
+    if (validation.warnings.length > 0) {
+      console.warn('Configuration warnings:')
+      validation.warnings.forEach((warning) => {
+        console.warn(`  ${warning}`)
       })
-      process.exit(1)
     }
 
     // Handle different modes
     switch (args.mode) {
       case 'pipeline':
-        await runPipeline(overriddenConfig, args)
+        await runPipeline(validation.config, args)
         break
-        
+
       case 'interactive':
-        await runInteractiveMode(overriddenConfig, args)
+        await runInteractiveMode(validation.config, args)
         break
 
       case 'server':
-        await runServerMode(overriddenConfig, args)
+        await runServerMode(validation.config, args)
         break
 
       default:
         console.error(`Unknown mode: ${args.mode}`)
         process.exit(1)
     }
-
   } catch (error) {
-    console.error('Fatal error:', error instanceof Error ? error.message : error)
+    console.error(
+      'Fatal error:',
+      error instanceof Error ? error.message : error
+    )
     process.exit(1)
   }
 }
@@ -108,7 +117,10 @@ async function main(): Promise<void> {
 /**
  * Run the pipeline once
  */
-async function runPipeline(config: PipelineConfig, args: CliArgs): Promise<void> {
+async function runPipeline(
+  config: PipelineConfig,
+  args: CliArgs
+): Promise<void> {
   console.log('Creating pipeline...')
   const pipeline = await PipelineFactory.createPipeline(config)
 
@@ -132,9 +144,11 @@ async function runPipeline(config: PipelineConfig, args: CliArgs): Promise<void>
     console.log(`  Records written: ${result.recordsWritten}`)
     console.log(`  Errors: ${result.errors}`)
     console.log(`  Duration: ${duration.toFixed(2)}s`)
-
   } catch (error) {
-    console.error('\nPipeline execution failed:', error instanceof Error ? error.message : error)
+    console.error(
+      '\nPipeline execution failed:',
+      error instanceof Error ? error.message : error
+    )
     process.exit(1)
   }
 }
@@ -142,7 +156,10 @@ async function runPipeline(config: PipelineConfig, args: CliArgs): Promise<void>
 /**
  * Run in interactive mode
  */
-async function runInteractiveMode(config: PipelineConfig, _args: CliArgs): Promise<void> {
+async function runInteractiveMode(
+  config: PipelineConfig,
+  _args: CliArgs
+): Promise<void> {
   const interactive = new InteractiveMode(config)
   await interactive.start()
 }
@@ -150,7 +167,10 @@ async function runInteractiveMode(config: PipelineConfig, _args: CliArgs): Promi
 /**
  * Run in server mode
  */
-async function runServerMode(config: PipelineConfig, _args: CliArgs): Promise<void> {
+async function runServerMode(
+  config: PipelineConfig,
+  _args: CliArgs
+): Promise<void> {
   const server = new ServerMode(config)
   await server.start()
 }
@@ -160,7 +180,7 @@ export { main }
 
 // Run the CLI if this is the main module
 // Note: For ES modules, we always run main() when the file is executed
-main().catch(error => {
+main().catch((error) => {
   console.error('Unhandled error:', error)
   process.exit(1)
 })

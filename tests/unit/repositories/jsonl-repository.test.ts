@@ -1,10 +1,10 @@
-import { test } from 'node:test'
+import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { rm } from 'node:fs/promises'
-import { RepositoryTestBase } from './repository-test-base'
+import { test } from 'node:test'
 import { JsonlRepository } from '../../../src/repositories/jsonl-repository'
-import type { OhlcvRepository } from '../../../src/repositories/ohlcv-repository.interface'
+import type { OhlcvRepository } from '../../../src/repositories'
+import { RepositoryTestBase } from './repository-test-base'
 
 /**
  * Jsonl Repository Tests
@@ -14,16 +14,19 @@ class JsonlRepositoryTest extends RepositoryTestBase {
 
   public async createRepository(): Promise<OhlcvRepository> {
     // Create a unique test directory
-    this.testDir = join(tmpdir(), `trdr-jsonl-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
-    
+    this.testDir = join(
+      tmpdir(),
+      `trdr-jsonl-test-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    )
+
     const repo = new JsonlRepository()
     await repo.initialize({
-      connectionString: join(this.testDir, 'test-data.jsonl'),  // Provide a file path, not just directory
+      connectionString: join(this.testDir, 'test-data.jsonl'), // Provide a file path, not just directory
       options: {
         batchSize: 100 // Smaller batch size for testing
       }
     })
-    
+
     return repo
   }
 
@@ -44,7 +47,7 @@ class JsonlRepositoryTest extends RepositoryTestBase {
 test('Jsonl Repository - Columnar Storage', async () => {
   const testInstance = new JsonlRepositoryTest()
   const repo = await testInstance.createRepository()
-  
+
   try {
     // Use single symbol/exchange for the entire dataset
     const testData = Array.from({ length: 50 }, (_, i) => ({
@@ -57,20 +60,19 @@ test('Jsonl Repository - Columnar Storage', async () => {
       close: 105 + i,
       volume: 1000 + i
     }))
-    
+
     await repo.saveMany(testData)
-    
+
     // Test data retrieval and integrity
     const symbolData = await repo.getBySymbol('SYMBOL_TEST')
-    
+
     console.assert(symbolData.length === 50)
-    
+
     // Verify data integrity
     for (const item of symbolData) {
       console.assert(item.symbol === 'SYMBOL_TEST')
       console.assert(item.exchange === 'test')
     }
-    
   } finally {
     await repo.close()
     await testInstance.cleanup()
@@ -80,10 +82,11 @@ test('Jsonl Repository - Columnar Storage', async () => {
 test('Jsonl Repository - Batch Buffer Management', async () => {
   const testInstance = new JsonlRepositoryTest()
   const repo = await testInstance.createRepository()
-  
+
   try {
     // Test individual saves that should trigger buffer flushes
-    for (let i = 0; i < 150; i++) { // More than batch size
+    for (let i = 0; i < 150; i++) {
+      // More than batch size
       await repo.save({
         timestamp: Date.now() + i * 1000,
         symbol: 'BUFFER_TEST',
@@ -95,13 +98,12 @@ test('Jsonl Repository - Batch Buffer Management', async () => {
         volume: 1000 + i
       })
     }
-    
+
     // Flush remaining buffer
     await repo.flush()
-    
+
     const results = await repo.getBySymbol('BUFFER_TEST')
     console.assert(results.length === 150)
-    
   } finally {
     await repo.close()
     await testInstance.cleanup()
@@ -111,7 +113,7 @@ test('Jsonl Repository - Batch Buffer Management', async () => {
 test('Jsonl Repository - File Deduplication', async () => {
   const testInstance = new JsonlRepositoryTest()
   const repo = await testInstance.createRepository()
-  
+
   try {
     const duplicateData = [
       {
@@ -135,16 +137,15 @@ test('Jsonl Repository - File Deduplication', async () => {
         volume: 1001
       }
     ]
-    
+
     await repo.saveMany(duplicateData)
-    
+
     // Should only have one record after deduplication
     const results = await repo.getBySymbol('DEDUP_TEST')
     console.assert(results.length === 1)
-    
+
     // Should keep the last record
     console.assert(results[0]!.close === 106)
-    
   } finally {
     await repo.close()
     await testInstance.cleanup()
@@ -190,7 +191,7 @@ test('Jsonl Repository - Compression Efficiency', async () => {
 test('Jsonl Repository - BigInt Timestamp Handling', async () => {
   const testInstance = new JsonlRepositoryTest()
   const repo = await testInstance.createRepository()
-  
+
   try {
     // Test with large timestamp values (but within valid range)
     // Using a timestamp for year 2099 (within the 2000-2100 valid range)
@@ -207,13 +208,12 @@ test('Jsonl Repository - BigInt Timestamp Handling', async () => {
         volume: 1000
       }
     ]
-    
+
     await repo.saveMany(largeTimestampData)
-    
+
     const results = await repo.getBySymbol('BIGINT_TEST')
     console.assert(results.length === 1)
     console.assert(results[0]!.timestamp === year2099Timestamp)
-    
   } finally {
     await repo.close()
     await testInstance.cleanup()

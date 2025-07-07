@@ -1,109 +1,248 @@
-import { BarGeneratorTransform, type BarGeneratorParams, type BarState } from './bar-generator-base'
-import type { OhlcvDto } from '../../models'
+import { z } from 'zod/v4'
+import type { BaseTransformParams } from '../../interfaces'
+import type { DataSlice } from '../../utils'
+import type { BaseBarState } from './base-bar-generator'
+import { BaseBarGenerator, baseBarSchema } from './base-bar-generator'
 
-export interface TickRunBarParams extends BarGeneratorParams {
-  /** 
-   * Number of consecutive ticks in same direction to trigger a new bar
-   * @example 5 // Complete bars after 5 consecutive up or down ticks
-   * @minimum 0 (exclusive)
-   */
-  runLength: number
-  
-  /** 
-   * Use volume runs instead of tick count runs
-   * @default false
-   * - false: Count consecutive ticks in same direction
-   * - true: Accumulate volume units in same direction runs
-   */
-  useVolume?: boolean
+/**
+ * Schema for tick run bar configuration
+ * @property {number} runLength - Number of consecutive ticks in same direction to trigger a new bar
+ * @property {boolean} [useVolume] - Use volume runs instead of tick count runs
+ */
+const txSchema = z.object({
+  runLength: z.number().positive(),
+  useVolume: z.boolean().default(false)
+})
+
+/**
+ * Main schema for TickRunBarGenerator transform
+ */
+const schema = baseBarSchema.extend({
+  tx: z.union([txSchema, z.array(txSchema)])
+})
+
+interface TickRunBarParams
+  extends z.infer<typeof schema>,
+          BaseTransformParams {
 }
 
-interface TickRunState extends BarState {
-  currentRunLength: number
-  currentRunDirection: 'up' | 'down' | 'neutral'
-  previousClose?: number
-  volumeInRun: number
+interface TickRunBarState extends BaseBarState {
+  currentRunLength: number;
+  currentRunDirection: 'up' | 'down' | 'neutral';
+  previousClose: number;
+  volumeInRun: number;
 }
 
 /**
  * Tick Run Bar Generator
- * 
+ *
  * Generates bars based on tick runs - consecutive ticks moving in the same direction.
  * This advanced bar type is particularly effective for capturing momentum periods
  * and directional market moves.
- * 
- * ## Algorithm
- * 
- * 1. **Direction Classification**: For each tick, determine movement direction:
- *    - Up: current price > previous price
- *    - Down: current price < previous price  
- *    - Neutral: current price = previous price
- * 
- * 2. **Run Tracking**: Track consecutive ticks in the same direction:
- *    - Same direction: increment run length
- *    - Direction change: reset run length to 1
- *    - Neutral: maintain current direction (doesn't break run)
- * 
- * 3. **Bar Completion**: When run length >= runLength threshold, complete the bar
- * 4. **Bar Reset**: Start new bar with fresh run tracking
- * 
- * ## Use Cases
- * 
- * - **Momentum Analysis**: Capture periods of sustained directional movement
- * - **Trend Detection**: Identify the start and end of trending moves
- * - **Breakout Analysis**: Detect when price starts running in one direction
- * - **Market Microstructure**: Analyze tick-level momentum patterns
- * - **Reversal Studies**: Identify when momentum exhausts and reverses
- * 
- * ## Advantages over Time-Based Bars
- * 
- * - **Momentum Sensitive**: Bars form during periods of sustained movement
- * - **Natural Breakpoints**: Bars end when directional momentum changes
- * - **Trend Alignment**: Each bar represents a cohesive directional move
- * - **Volatility Adaptive**: More bars during volatile (trending) periods
- * 
- * ## Considerations
- * 
- * - **Momentum Dependent**: Requires sustained directional movement to form bars
- * - **Neutral Ticks**: Price-unchanged ticks don't break runs but don't extend them
- * - **Market Regime Sensitivity**: Run length may need adjustment for different assets
- * - **Choppy Markets**: May produce few bars in sideways/choppy conditions
- * 
+ *
+ * **Algorithm**:
+ * 1. Classify each tick direction: up, down, or neutral
+ * 2. Track consecutive ticks in the same direction
+ * 3. When run length >= threshold, complete the bar
+ * 4. Start new bar with fresh run tracking
+ *
+ * **Direction Classification**:
+ * - Up: current price > previous price
+ * - Down: current price < previous price
+ * - Neutral: current price = previous price (doesn't break runs)
+ *
+ * **Key Properties**:
+ * - Bars form during sustained directional movement
+ * - Natural breakpoints at momentum changes
+ * - More bars during trending periods
+ * - Each bar represents cohesive directional move
+ *
+ * **Use Cases**:
+ * - Momentum and trend analysis
+ * - Breakout detection
+ * - Market microstructure studies
+ * - Reversal identification
+ * - High-frequency trading strategies
+ *
  * @example
  * ```typescript
  * // Capture runs of 10 consecutive directional ticks
  * const tickRunBars = new TickRunBarGenerator({
- *   runLength: 10,
- *   useVolume: false // Count ticks, not volume
- * })
- * 
- * // Use volume-weighted runs for institutional momentum
+ *   tx: {
+ *     runLength: 10,
+ *     useVolume: false
+ *   }
+ * }, inputBuffer)
+ *
+ * // Volume-weighted runs for institutional momentum
  * const volumeRunBars = new TickRunBarGenerator({
- *   runLength: 50000, // 50K volume in same direction
- *   useVolume: true
- * })
- * 
- * // High-sensitivity momentum detection
- * const microRunBars = new TickRunBarGenerator({
- *   runLength: 3, // Very short runs
- *   useVolume: false
- * })
+ *   tx: {
+ *     runLength: 50000,
+ *     useVolume: true
+ *   }
+ * }, inputBuffer)
  * ```
+ *
+ * @note Neutral ticks maintain but don't extend runs
+ * @note First tick has no previous close for comparison
+ * @note State maintained across batch boundaries
  */
-export class TickRunBarGenerator extends BarGeneratorTransform<TickRunBarParams> {
-  constructor(params: TickRunBarParams) {
-    super(params, 'tickRunBars' as any, 'Tick Run Bar Generator')
-    
-    if (!params.runLength || params.runLength <= 0) {
-      throw new Error('runLength must be greater than 0')
+export class TickRunBarGenerator extends BaseBarGenerator<
+  TickRunBarParams,
+  TickRunBarState
+> {
+  // Configuration
+  private readonly _runLength: number
+  private readonly _useVolume: boolean
+  // Track previous close across all bars
+  private _lastClose: number | undefined
+
+  constructor(config: TickRunBarParams, inputSlice: DataSlice) {
+    // Validate config
+    const parsed = schema.parse(config)
+
+    // Base class constructor
+    super(
+      'tickRunBars',
+      'TickRunBars',
+      config.description || 'Tick Run Bar Generator',
+      parsed,
+      inputSlice
+    )
+
+    // Use first config
+    const tx = Array.isArray(parsed.tx) ? parsed.tx : [parsed.tx]
+    const txConfig = tx[0]
+    if (!txConfig) {
+      throw new Error('At least one configuration is required')
+    }
+
+    this._runLength = txConfig.runLength
+    this._useVolume = txConfig.useVolume
+  }
+
+  /**
+   * Create a new bar from the first tick
+   */
+  protected createNewBar(tick: any, _rid: number): TickRunBarState {
+    const tickDirection = this.getTickDirection(tick.close, this._lastClose)
+
+    return {
+      open: tick.open,
+      high: tick.high,
+      low: tick.low,
+      close: tick.close,
+      volume: tick.volume,
+      firstTimestamp: tick.timestamp,
+      lastTimestamp: tick.timestamp,
+      tickCount: 1,
+      currentRunLength: tickDirection === 'neutral' ? 0 : 1,
+      currentRunDirection: tickDirection,
+      previousClose: tick.close,
+      volumeInRun: tick.volume
     }
   }
 
-  private getTickDirection(currentPrice: number, previousPrice: number | undefined): 'up' | 'down' | 'neutral' {
+  /**
+   * Update the current bar with new tick data
+   */
+  protected updateBar(bar: TickRunBarState, tick: any, _rid: number): void {
+    const tickDirection = this.getTickDirection(tick.close, bar.previousClose)
+
+    // Update OHLCV values
+    bar.high = Math.max(bar.high, tick.high)
+    bar.low = Math.min(bar.low, tick.low)
+    bar.close = tick.close
+    bar.volume += tick.volume
+    bar.lastTimestamp = tick.timestamp
+    bar.tickCount++
+
+    // Update run tracking
+    if (tickDirection !== 'neutral') {
+      if (
+        tickDirection === bar.currentRunDirection ||
+        bar.currentRunDirection === 'neutral'
+      ) {
+        // Same direction or first direction, increment run
+        if (bar.currentRunDirection === 'neutral') {
+          bar.currentRunDirection = tickDirection
+        }
+        bar.currentRunLength++
+        bar.volumeInRun += tick.volume
+      } else {
+        // Direction changed, reset run
+        bar.currentRunDirection = tickDirection
+        bar.currentRunLength = 1
+        bar.volumeInRun = tick.volume
+      }
+    } else {
+      // Neutral tick, just add volume
+      bar.volumeInRun += tick.volume
+    }
+
+    // Update previous close for next tick
+    bar.previousClose = tick.close
+  }
+
+  /**
+   * Check if the current bar is complete
+   */
+  protected isBarComplete(
+    bar: TickRunBarState,
+    _tick: any,
+    _rid: number
+  ): boolean {
+    if (this._useVolume) {
+      // For volume runs, check volume units
+      const avgVolumePerTick = bar.volume / bar.tickCount
+      const volumeRunUnits = bar.volumeInRun / avgVolumePerTick
+      return volumeRunUnits >= this._runLength
+    } else {
+      // For tick count runs, check if we've reached the threshold
+      return bar.currentRunLength >= this._runLength
+    }
+  }
+
+  /**
+   * Override to track last close across bars
+   */
+  protected emitBar(sourceRid: number, bar: TickRunBarState): void {
+    // Store last close for next bar's first tick classification
+    this._lastClose = bar.close
+
+    // Call parent implementation
+    super.emitBar(sourceRid, bar)
+  }
+
+  /**
+   * Override to add run metrics to emitted bars
+   */
+  protected addAdditionalBarFields(
+    row: Record<string, number>,
+    bar: TickRunBarState
+  ): void {
+    // Add run metrics
+    row.run_length = bar.currentRunLength
+    row.run_direction =
+      bar.currentRunDirection === 'up'
+        ? 1
+        : bar.currentRunDirection === 'down'
+          ? -1
+          : 0
+    row.volume_in_run = bar.volumeInRun
+  }
+
+  /**
+   * Classify tick direction based on price movement
+   */
+  private getTickDirection(
+    currentPrice: number,
+    previousPrice: number | undefined
+  ): 'up' | 'down' | 'neutral' {
     if (previousPrice === undefined) {
       return 'neutral'
     }
-    
+
     if (currentPrice > previousPrice) {
       return 'up'
     } else if (currentPrice < previousPrice) {
@@ -111,130 +250,5 @@ export class TickRunBarGenerator extends BarGeneratorTransform<TickRunBarParams>
     } else {
       return 'neutral'
     }
-  }
-
-  isBarComplete(_symbol: string, _tick: OhlcvDto, state: TickRunState): boolean {
-    // Check if we have enough ticks in the current run
-    // This is called AFTER updateBar, so currentRunLength has been updated
-    if (this.params.useVolume) {
-      // For volume runs, check volume units
-      const avgVolumePerTick = state.currentBar.volume / (state.tickCount || 1)
-      const volumeRunUnits = state.volumeInRun / avgVolumePerTick
-      return volumeRunUnits >= this.params.runLength
-    } else {
-      // For tick count runs, check if we've reached the threshold
-      return state.currentRunLength >= this.params.runLength
-    }
-  }
-
-  createNewBar(symbol: string, tick: OhlcvDto): TickRunState {
-    const currentState = this.symbolState.get(symbol) as TickRunState
-    const previousClose = currentState?.currentBar?.close
-    const tickDirection = this.getTickDirection(tick.close, previousClose)
-    
-    // Mark the previous bar as complete if it exists
-    if (currentState) {
-      currentState.complete = true
-    }
-    
-    const newState: TickRunState = {
-      currentBar: {
-        ...tick,
-        timestamp: tick.timestamp
-      },
-      // Always start fresh run count for new bar
-      currentRunLength: tickDirection === 'neutral' ? 0 : 1,
-      currentRunDirection: tickDirection === 'neutral' ? 
-        (currentState?.currentRunDirection || 'neutral') : tickDirection,
-      previousClose: tick.close,
-      volumeInRun: tick.volume,
-      tickCount: 1,
-      complete: false
-    }
-    
-    return newState
-  }
-
-  updateBar(_symbol: string, currentBar: OhlcvDto, tick: OhlcvDto, state: TickRunState): OhlcvDto {
-    // Update OHLCV values first
-    const updatedBar = {
-      ...currentBar,
-      high: Math.max(currentBar.high, tick.high),
-      low: Math.min(currentBar.low, tick.low),
-      close: tick.close,
-      volume: currentBar.volume + tick.volume,
-      // Keep the timestamp of the last tick
-      timestamp: tick.timestamp
-    }
-    
-    // Then update state for next isBarComplete check
-    const tickDirection = this.getTickDirection(tick.close, state.previousClose)
-    
-    // Update tick count
-    state.tickCount = (state.tickCount || 0) + 1
-    
-    // Update run tracking
-    if (tickDirection !== 'neutral') {
-      if (tickDirection === state.currentRunDirection || state.currentRunDirection === 'neutral') {
-        // Same direction or first direction, increment run
-        if (state.currentRunDirection === 'neutral') {
-          state.currentRunDirection = tickDirection
-        }
-        state.currentRunLength++
-        state.volumeInRun += tick.volume
-      } else {
-        // Direction changed, reset run
-        state.currentRunDirection = tickDirection
-        state.currentRunLength = 1
-        state.volumeInRun = tick.volume
-      }
-    } else {
-      // Neutral tick, just add volume
-      state.volumeInRun += tick.volume
-    }
-    
-    // Update previous close
-    state.previousClose = tick.close
-
-    return updatedBar
-  }
-
-  resetState(state: TickRunState): void {
-    state.currentRunLength = 0
-    state.volumeInRun = 0
-    state.tickCount = 0
-    state.complete = false
-    // Keep previousClose and currentRunDirection for continuity
-  }
-
-  withParams(params: Partial<TickRunBarParams>): TickRunBarGenerator {
-    return new TickRunBarGenerator({ ...this.params, ...params })
-  }
-
-  validate(): void {
-    // Skip base validation that checks for input columns
-    // Bar generators use standard OHLCV fields instead
-    
-    if (this.params.runLength <= 0) {
-      throw new Error('runLength must be greater than 0')
-    }
-  }
-
-  /**
-   * Override getState to include run-specific state
-   */
-  getState(): Record<string, BarState> {
-    const state: Record<string, BarState> = {}
-    this.symbolState.forEach((barState, symbol) => {
-      const runState = barState as TickRunState
-      state[symbol] = {
-        ...barState,
-        currentRunLength: runState.currentRunLength,
-        currentRunDirection: runState.currentRunDirection,
-        previousClose: runState.previousClose,
-        volumeInRun: runState.volumeInRun
-      } as any
-    })
-    return state
   }
 }

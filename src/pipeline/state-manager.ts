@@ -132,7 +132,7 @@ export class StateManager {
    */
   async saveState(stateId: string, state: PipelineState): Promise<void> {
     const filePath = this.getStateFilePath(stateId)
-    
+
     // Ensure directory exists
     await fs.mkdir(dirname(filePath), { recursive: true })
 
@@ -194,7 +194,7 @@ export class StateManager {
    */
   async deleteState(stateId: string): Promise<void> {
     const filePath = this.getStateFilePath(stateId)
-    
+
     try {
       await fs.unlink(filePath)
     } catch (error: any) {
@@ -211,10 +211,10 @@ export class StateManager {
     try {
       const files = await fs.readdir(this.config.stateDir)
       const extension = this.config.compress ? '.json.gz' : '.json'
-      
+
       return files
-        .filter(file => file.endsWith(extension))
-        .map(file => file.replace(extension, ''))
+        .filter((file) => file.endsWith(extension))
+        .map((file) => file.replace(extension, ''))
     } catch (error: any) {
       if (error.code === 'ENOENT') {
         return []
@@ -261,13 +261,18 @@ export class StateManager {
   /**
    * Restore state to transform
    */
-  static restoreTransformState(transform: Transform, state: TransformState): boolean {
+  static restoreTransformState(
+    transform: Transform,
+    state: TransformState
+  ): boolean {
     if (!this.isStateful(transform)) {
       return false
     }
 
     if (transform.type !== state.type) {
-      console.warn(`Transform type mismatch: ${transform.type} vs ${state.type}`)
+      console.warn(
+        `Transform type mismatch: ${transform.type} vs ${state.type}`
+      )
       return false
     }
 
@@ -275,7 +280,10 @@ export class StateManager {
       transform.restoreState(state.state)
       return true
     } catch (error) {
-      console.error(`Failed to restore state for transform ${transform.name}:`, error)
+      console.error(
+        `Failed to restore state for transform ${transform.name}:`,
+        error
+      )
       return false
     }
   }
@@ -312,13 +320,13 @@ export class StateCheckpoint {
    */
   create(id: string, state: PipelineState): void {
     this.checkpoints.set(id, structuredClone(state))
-    
+
     // Remove oldest checkpoints if limit exceeded
     if (this.checkpoints.size > this.maxCheckpoints) {
       const oldest = Array.from(this.checkpoints.entries())
         .sort(([, a], [, b]) => a.timestamp - b.timestamp)
         .slice(0, this.checkpoints.size - this.maxCheckpoints)
-      
+
       for (const [oldId] of oldest) {
         this.checkpoints.delete(oldId)
       }

@@ -14,7 +14,6 @@ import { RepositoryStorageError } from './ohlcv-repository.interface'
  * Optimized for streaming and append operations
  */
 export class JsonlRepository extends FileBasedRepository {
-
   /**
    * Get the repository type name for logging
    */
@@ -25,7 +24,9 @@ export class JsonlRepository extends FileBasedRepository {
   /**
    * Perform additional initialization specific to JSONL format
    */
-  protected async performAdditionalInitialization(_config: RepositoryConfig): Promise<void> {
+  protected async performAdditionalInitialization(
+    _config: RepositoryConfig
+  ): Promise<void> {
     // No additional initialization needed for JSONL
   }
 
@@ -36,20 +37,17 @@ export class JsonlRepository extends FileBasedRepository {
     // No additional cleanup needed - streams are handled by base class
   }
 
-
   /**
    * Write a batch of OHLCV records to JSONL storage
    */
   protected async writeOhlcvBatch(data: OhlcvDto[]): Promise<void> {
     // Write to a single file
     const filePath = this.basePath
-    
+
     // Prepare content with abbreviated property names
     let content = ''
     for (const record of data) {
       const abbreviated: any = {
-        x: record.exchange,
-        s: record.symbol,
         t: new Date(record.timestamp).toISOString(),
         o: record.open,
         h: record.high,
@@ -57,18 +55,27 @@ export class JsonlRepository extends FileBasedRepository {
         c: record.close,
         v: record.volume
       }
-      
+
       // Add any additional fields from transforms
-      const standardKeys = new Set(['timestamp', 'symbol', 'exchange', 'open', 'high', 'low', 'close', 'volume'])
+      const standardKeys = new Set([
+        'timestamp',
+        'symbol',
+        'exchange',
+        'open',
+        'high',
+        'low',
+        'close',
+        'volume'
+      ])
       for (const [key, value] of Object.entries(record)) {
         if (!standardKeys.has(key)) {
           abbreviated[key] = value
         }
       }
-      
+
       content += JSON.stringify(abbreviated) + '\n'
     }
-    
+
     // Append to file
     await this.appendToFile(filePath, content)
   }
@@ -78,25 +85,25 @@ export class JsonlRepository extends FileBasedRepository {
    */
   async query(query: OhlcvQuery): Promise<OhlcvDto[]> {
     this.ensureReady()
-    
+
     // Flush buffer before reading to ensure we have all data
     await this.flush()
-    
+
     try {
       const results: OhlcvDto[] = []
       const files = await this.getRelevantFiles(query)
-      
+
       for (const file of files) {
         const stream = createReadStream(file, { encoding: 'utf8' })
         const rl = createInterface({ input: stream })
-        
+
         for await (const line of rl) {
           if (!line.trim()) continue
-          
+
           try {
             const rawRecord = JSON.parse(line)
             const record = this.normalizeRecord(rawRecord)
-            
+
             if (this.matchesQuery(record, query)) {
               results.push(record)
             }
@@ -105,10 +112,10 @@ export class JsonlRepository extends FileBasedRepository {
           }
         }
       }
-      
+
       // Sort by timestamp
       results.sort((a, b) => a.timestamp - b.timestamp)
-      
+
       return this.applyPagination(results, query)
     } catch (error) {
       logger.error('Failed to execute query', { error, query })
@@ -122,16 +129,19 @@ export class JsonlRepository extends FileBasedRepository {
   /**
    * Get the most recent timestamp for a specific symbol
    */
-  async getLastTimestamp(symbol: string, exchange?: string): Promise<number | null> {
+  async getLastTimestamp(
+    symbol: string,
+    exchange?: string
+  ): Promise<number | null> {
     this.ensureReady()
-    
+
     // Flush buffer before reading to ensure we have all data
     await this.flush()
 
     try {
       const results = await this.getBySymbol(symbol, exchange)
       if (results.length === 0) return null
-      
+
       // Find latest
       let latest = results[0]!.timestamp
       for (const item of results) {
@@ -152,16 +162,19 @@ export class JsonlRepository extends FileBasedRepository {
   /**
    * Get the earliest timestamp for a specific symbol
    */
-  async getFirstTimestamp(symbol: string, exchange?: string): Promise<number | null> {
+  async getFirstTimestamp(
+    symbol: string,
+    exchange?: string
+  ): Promise<number | null> {
     this.ensureReady()
-    
+
     // Flush buffer before reading to ensure we have all data
     await this.flush()
 
     try {
       const results = await this.getBySymbol(symbol, exchange)
       if (results.length === 0) return null
-      
+
       // Find earliest
       let earliest = results[0]!.timestamp
       for (const item of results) {
@@ -184,7 +197,7 @@ export class JsonlRepository extends FileBasedRepository {
    */
   async getCount(symbol: string, exchange?: string): Promise<number> {
     this.ensureReady()
-    
+
     // Flush buffer before reading to ensure we have all data
     await this.flush()
 
@@ -206,53 +219,62 @@ export class JsonlRepository extends FileBasedRepository {
   async deleteBetweenDates(
     startTime: number,
     endTime: number,
-    symbol?: string,
-    exchange?: string
+    _symbol?: string,
+    _exchange?: string
   ): Promise<number> {
     this.ensureReady()
-    
+
     // Flush buffer before deleting
     await this.flush()
-    
+
     try {
       let deletedCount = 0
-      const files = await this.getRelevantFiles({ symbol, exchange })
-      
+      const files = await this.getRelevantFiles({})
+
       for (const file of files) {
         // Read all records
         const keepRecords: OhlcvDto[] = []
         const stream = createReadStream(file, { encoding: 'utf8' })
         const rl = createInterface({ input: stream })
-        
+
         for await (const line of rl) {
           if (!line.trim()) continue
-          
+
           try {
             const rawRecord = JSON.parse(line)
             const record = this.normalizeRecord(rawRecord)
-            
-            if (record.timestamp >= startTime && record.timestamp <= endTime &&
-                (!symbol || record.symbol === symbol) &&
-                (!exchange || record.exchange === exchange)) {
+
+            if (
+              record.timestamp >= startTime &&
+              record.timestamp <= endTime
+              // Symbol/exchange filtering removed since they're no longer in OhlcvDto
+            ) {
               deletedCount++
             } else {
               keepRecords.push(record)
             }
           } catch (error) {
             // Keep unparseable records
-            logger.warn('Failed to parse record during delete', { file, error: error instanceof Error ? error.message : String(error) })
+            logger.warn('Failed to parse record during delete', {
+              file,
+              error: error instanceof Error ? error.message : String(error)
+            })
           }
         }
-        
+
         // Rewrite file with remaining records
         if (deletedCount > 0) {
           await this.rewriteFile(file, keepRecords)
         }
       }
-      
+
       return deletedCount
     } catch (error) {
-      logger.error('Failed to delete between dates', { error, startTime, endTime })
+      logger.error('Failed to delete between dates', {
+        error,
+        startTime,
+        endTime
+      })
       throw new RepositoryStorageError(
         `Failed to delete between dates: ${String(error)}`,
         error instanceof Error ? error : undefined
@@ -260,39 +282,37 @@ export class JsonlRepository extends FileBasedRepository {
     }
   }
 
-
   /**
    * Get all unique symbols in the repository
    */
-  async getSymbols(exchange?: string): Promise<string[]> {
+  async getSymbols(_exchange?: string): Promise<string[]> {
     this.ensureReady()
-    
+
     // Flush buffer before reading
     await this.flush()
-    
+
     try {
       const symbols = new Set<string>()
       const files = await this.getRelevantFiles({})
-      
+
       for (const file of files) {
         const stream = createReadStream(file, { encoding: 'utf8' })
         const rl = createInterface({ input: stream })
-        
+
         for await (const line of rl) {
           if (!line.trim()) continue
-          
+
           try {
-            const rawRecord = JSON.parse(line)
-            const record = this.normalizeRecord(rawRecord)
-            if (!exchange || record.exchange === exchange) {
-              symbols.add(record.symbol)
-            }
+            // const rawRecord = JSON.parse(line)
+            // const record = this.normalizeRecord(rawRecord)
+            // Skip symbol/exchange filtering since they're no longer in the data
+            // symbols.add(record.symbol)
           } catch (error) {
             // Skip invalid records
           }
         }
       }
-      
+
       return Array.from(symbols).sort()
     } catch (error) {
       logger.error('Failed to get symbols', { error })
@@ -308,31 +328,31 @@ export class JsonlRepository extends FileBasedRepository {
    */
   async getExchanges(): Promise<string[]> {
     this.ensureReady()
-    
+
     // Flush buffer before reading
     await this.flush()
-    
+
     try {
       const exchanges = new Set<string>()
       const files = await this.getRelevantFiles({})
-      
+
       for (const file of files) {
         const stream = createReadStream(file, { encoding: 'utf8' })
         const rl = createInterface({ input: stream })
-        
+
         for await (const line of rl) {
           if (!line.trim()) continue
-          
+
           try {
-            const rawRecord = JSON.parse(line)
-            const record = this.normalizeRecord(rawRecord)
-            exchanges.add(record.exchange)
+            // const rawRecord = JSON.parse(line)
+            // const record = this.normalizeRecord(rawRecord)
+            // exchanges.add(record.exchange)
           } catch (error) {
             // Skip invalid records
           }
         }
       }
-      
+
       return Array.from(exchanges).sort()
     } catch (error) {
       logger.error('Failed to get exchanges', { error })
@@ -347,20 +367,20 @@ export class JsonlRepository extends FileBasedRepository {
    * Get repository statistics and health information
    */
   async getStats(): Promise<{
-    totalRecords: number
-    uniqueSymbols: number
-    uniqueExchanges: number
+    totalRecords: number;
+    uniqueSymbols: number;
+    uniqueExchanges: number;
     dataDateRange: {
-      earliest: number | null
-      latest: number | null
-    }
-    storageSize?: number
+      earliest: number | null;
+      latest: number | null;
+    };
+    storageSize?: number;
   }> {
     this.ensureReady()
-    
+
     // Flush buffer before reading
     await this.flush()
-    
+
     try {
       let totalRecords = 0
       let earliest: number | null = null
@@ -368,26 +388,26 @@ export class JsonlRepository extends FileBasedRepository {
       const symbols = new Set<string>()
       const exchanges = new Set<string>()
       let storageSize = 0
-      
+
       const files = await this.getRelevantFiles({})
-      
+
       for (const file of files) {
         const stats = await stat(file)
         storageSize += stats.size
-        
+
         const stream = createReadStream(file, { encoding: 'utf8' })
         const rl = createInterface({ input: stream })
-        
+
         for await (const line of rl) {
           if (!line.trim()) continue
-          
+
           try {
             const rawRecord = JSON.parse(line)
             const record = this.normalizeRecord(rawRecord)
             totalRecords++
-            symbols.add(record.symbol)
-            exchanges.add(record.exchange)
-            
+            // symbols.add(record.symbol)
+            // exchanges.add(record.exchange)
+
             if (earliest === null || record.timestamp < earliest) {
               earliest = record.timestamp
             }
@@ -399,7 +419,7 @@ export class JsonlRepository extends FileBasedRepository {
           }
         }
       }
-      
+
       return {
         totalRecords,
         uniqueSymbols: symbols.size,
@@ -416,7 +436,6 @@ export class JsonlRepository extends FileBasedRepository {
     }
   }
 
-
   /**
    * Private helper methods
    */
@@ -429,7 +448,6 @@ export class JsonlRepository extends FileBasedRepository {
     return []
   }
 
-  
   /**
    * Normalizes a record from abbreviated or full property names to standard OhlcvDto
    */
@@ -437,8 +455,6 @@ export class JsonlRepository extends FileBasedRepository {
     // Handle abbreviated format
     if ('t' in record && 'o' in record) {
       const normalized: any = {
-        exchange: record.x || record.e || record.exchange,
-        symbol: record.s || record.symbol,
         timestamp: this.parseTimestamp(record.t || record.timestamp),
         open: record.o || record.open,
         high: record.h || record.high,
@@ -446,18 +462,36 @@ export class JsonlRepository extends FileBasedRepository {
         close: record.c || record.close,
         volume: record.v || record.volume
       }
-      
+
       // Add any additional fields (transform outputs)
-      const abbreviatedKeys = new Set(['x', 'e', 's', 't', 'o', 'h', 'l', 'c', 'v', 'exchange', 'symbol', 'timestamp', 'open', 'high', 'low', 'close', 'volume'])
+      const abbreviatedKeys = new Set([
+        'x',
+        'e',
+        's',
+        't',
+        'o',
+        'h',
+        'l',
+        'c',
+        'v',
+        'exchange',
+        'symbol',
+        'timestamp',
+        'open',
+        'high',
+        'low',
+        'close',
+        'volume'
+      ])
       for (const [key, value] of Object.entries(record)) {
         if (!abbreviatedKeys.has(key)) {
           normalized[key] = value
         }
       }
-      
+
       return normalized as OhlcvDto
     }
-    
+
     // Already in full format - just parse timestamp
     return {
       ...record,
@@ -480,7 +514,9 @@ export class JsonlRepository extends FileBasedRepository {
       const numericValue = Number(value)
       if (!isNaN(numericValue)) {
         const SECONDS_THRESHOLD = 978307200000 // Year 2001 in milliseconds
-        return numericValue > 0 && numericValue < SECONDS_THRESHOLD ? numericValue * 1000 : numericValue
+        return numericValue > 0 && numericValue < SECONDS_THRESHOLD
+          ? numericValue * 1000
+          : numericValue
       }
 
       // Try to parse as ISO date string
@@ -495,17 +531,18 @@ export class JsonlRepository extends FileBasedRepository {
     throw new Error(`Invalid timestamp type: ${typeof value}`)
   }
 
-  private async rewriteFile(filePath: string, records: OhlcvDto[]): Promise<void> {
+  private async rewriteFile(
+    filePath: string,
+    records: OhlcvDto[]
+  ): Promise<void> {
     // Write to temp file first
     const tempPath = filePath + '.tmp'
-    
+
     // Prepare content
     let content = ''
     for (const record of records) {
       // Write in abbreviated format to save space
       const abbreviated: any = {
-        x: record.exchange,
-        s: record.symbol,
         t: new Date(record.timestamp).toISOString(),
         o: record.open,
         h: record.high,
@@ -513,24 +550,32 @@ export class JsonlRepository extends FileBasedRepository {
         c: record.close,
         v: record.volume
       }
-      
+
       // Add any additional fields from transforms
-      const standardKeys = new Set(['timestamp', 'symbol', 'exchange', 'open', 'high', 'low', 'close', 'volume'])
+      const standardKeys = new Set([
+        'timestamp',
+        'symbol',
+        'exchange',
+        'open',
+        'high',
+        'low',
+        'close',
+        'volume'
+      ])
       for (const [key, value] of Object.entries(record)) {
         if (!standardKeys.has(key)) {
           abbreviated[key] = value
         }
       }
-      
+
       content += JSON.stringify(abbreviated) + '\n'
     }
-    
+
     // Write to temp file
     await this.writeToFile(tempPath, content)
-    
+
     // Atomic rename
     await rm(filePath)
     await rename(tempPath, filePath)
   }
-
 }

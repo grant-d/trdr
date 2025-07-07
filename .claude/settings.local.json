@@ -71,7 +71,13 @@
       "Bash(/tmp/test-with-timeout.sh:*)",
       "Bash(./run-btc-pipeline.sh:*)",
       "Bash(yarn run:config:*)",
-      "Bash(tsx:*)"
+      "Bash(tsx:*)",
+      "Bash(eslint:*)",
+      "Bash(yarn tc:*)",
+      "Bash(tsc:*)",
+      "Bash(DEBUG=*)",
+      "Bash(LOG_LEVEL=error yarn test tests/integration/csv-sma-logreturns-jsonl.test.ts)",
+      "Bash(LOG_LEVEL=debug yarn test tests/integration/csv-sma-logreturns-jsonl.test.ts)"
     ],
     "deny": []
   }

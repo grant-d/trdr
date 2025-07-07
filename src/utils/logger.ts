@@ -37,22 +37,22 @@ const logger = winston.createLogger({
   transports: [
     // Console transport
     new winston.transports.Console({
-      format: consoleFormat,
+      format: consoleFormat
     }),
     // File transport for all logs
     new winston.transports.File({
       filename: path.join(logDir, 'combined.log'),
       maxsize: 5242880, // 5MB
-      maxFiles: 5,
+      maxFiles: 5
     }),
     // File transport for errors
     new winston.transports.File({
       filename: path.join(logDir, 'error.log'),
       level: 'error',
       maxsize: 5242880, // 5MB
-      maxFiles: 5,
-    }),
-  ],
+      maxFiles: 5
+    })
+  ]
 })
 
 // If we're not in production, log to the console with the format:
@@ -60,7 +60,7 @@ const logger = winston.createLogger({
 if (process.env.NODE_ENV !== 'production') {
   logger.add(
     new winston.transports.Console({
-      format: winston.format.combine(winston.format.colorize(), consoleFormat),
+      format: winston.format.combine(winston.format.colorize(), consoleFormat)
     })
   )
 }

@@ -1,68 +1,100 @@
 import type { DataProvider, InputConfig, PipelineConfig, Transform, TransformConfig } from '../interfaces'
-import { Pipeline } from '../pipeline'
+import type { Pipeline } from '../pipeline'
+import { BufferPipeline } from '../pipeline'
 import type { FileProvider } from '../providers'
 import { AlpacaProvider, CoinbaseProvider, CsvFileProvider, JsonlFileProvider } from '../providers'
 import type { OhlcvRepository } from '../repositories'
-import { CsvRepository, JsonlRepository } from '../repositories'
+import { CsvRepository } from '../repositories'
 import {
-  LogReturnsNormalizer,
-  MappingTransform,
-  MinMaxNormalizer,
-  MissingValueHandler,
-  PriceCalculations,
-  TimeframeAggregator,
-  TransformPipeline,
-  ZScoreNormalizer,
-  FractionalDiffNormalizer,
-  SimpleMovingAverage,
-  ExponentialMovingAverage,
-  RelativeStrengthIndex,
-  BollingerBands,
-  Macd,
   AverageTrueRange,
-  VolumeWeightedAveragePrice,
-  TickBarGenerator,
-  VolumeBarGenerator,
+  BollingerBands,
   DollarBarGenerator,
+  ExponentialMovingAverage,
+  FractionalDiffNormalizer,
+  HeikinAshi,
+  ImputeTransform,
+  LogReturnsNormalizer,
+  LorentzianDistanceBarGenerator,
+  Macd,
+  MapTransform,
+  MinMaxNormalizer,
+  PriceCalculations,
+  RelativeStrengthIndex,
+  ShannonInformationBarGenerator,
+  SimpleMovingAverage,
+  StatisticalRegimeBarGenerator,
+  TickBarGenerator,
   TickImbalanceBarGenerator,
   TickRunBarGenerator,
-  HeikinAshiGenerator,
-  StatisticalRegimeBarGenerator,
-  LorentzianDistanceBarGenerator,
-  ShannonInformationBarGenerator,
+  TimeBarGenerator,
+  VolumeBarGenerator,
+  VolumeWeightedAveragePrice,
+  ZScoreNormalizer
 } from '../transforms'
+import { DataBuffer, DataSlice } from '../utils'
 import { ConfigLoader } from './config-loader'
-import type { ValidatedConfig } from './config-validator'
 import { ConfigValidator } from './config-validator'
 
 /**
  * Transform factory map for creating transform instances
+ * Some transforms require a buffer, others don't
  */
-const TRANSFORM_FACTORIES: Record<string, (params: any) => Transform> = {
-  logReturns: (params) => new LogReturnsNormalizer(params),
-  map: (params) => new MappingTransform(params),
-  minMax: (params) => new MinMaxNormalizer(params),
-  zScore: (params) => new ZScoreNormalizer(params),
-  fractionalDiff: (params) => new FractionalDiffNormalizer(params),
-  priceCalc: (params) => new PriceCalculations(params),
-  missingValues: (params) => new MissingValueHandler(params),
-  timeframeAggregation: (params) => new TimeframeAggregator(params),
-  sma: (params) => new SimpleMovingAverage(params),
-  ema: (params) => new ExponentialMovingAverage(params),
-  rsi: (params) => new RelativeStrengthIndex(params),
-  bollinger: (params) => new BollingerBands(params),
-  macd: (params) => new Macd(params),
-  atr: (params) => new AverageTrueRange(params),
-  vwap: (params) => new VolumeWeightedAveragePrice(params),
-  tickBars: (params) => new TickBarGenerator(params),
-  volumeBars: (params) => new VolumeBarGenerator(params),
-  dollarBars: (params) => new DollarBarGenerator(params),
-  tickImbalanceBars: (params) => new TickImbalanceBarGenerator(params),
-  tickRunBars: (params) => new TickRunBarGenerator(params),
-  heikinAshi: (params) => new HeikinAshiGenerator(params),
-  statisticalRegime: (params) => new StatisticalRegimeBarGenerator(params),
-  lorentzianDistance: (params) => new LorentzianDistanceBarGenerator(params),
-  shannonInformation: (params) => new ShannonInformationBarGenerator(params),
+const TRANSFORM_FACTORIES: Record<
+  string,
+  (params: any, buffer?: DataBuffer) => Transform
+> = {
+  logReturns: (params, buffer) => new LogReturnsNormalizer(params, new DataSlice(buffer!, 0, buffer!.length())),
+  map: (params, buffer) =>
+    new MapTransform(params, new DataSlice(buffer!, 0, buffer!.length())),
+  minMax: (params, buffer) => new MinMaxNormalizer(params, new DataSlice(buffer!, 0, buffer!.length())),
+  zScore: (params, buffer) => new ZScoreNormalizer(params, new DataSlice(buffer!, 0, buffer!.length())),
+  fractionalDiff: (params, buffer) =>
+    new FractionalDiffNormalizer(params, new DataSlice(buffer!, 0, buffer!.length())),
+  priceCalc: (params, buffer) =>
+    new PriceCalculations(params, new DataSlice(buffer!, 0, buffer!.length())),
+  missingValues: (params, buffer) =>
+    new ImputeTransform(params, new DataSlice(buffer!, 0, buffer!.length())),
+  timeBars: (params, buffer) => new TimeBarGenerator(params, new DataSlice(buffer!, 0, buffer!.length())),
+  sma: (params, buffer) =>
+    new SimpleMovingAverage(
+      params,
+      new DataSlice(buffer!, 0, buffer!.length())
+    ),
+  ema: (params, buffer) =>
+    new ExponentialMovingAverage(
+      params,
+      new DataSlice(buffer!, 0, buffer!.length())
+    ),
+  rsi: (params, buffer) =>
+    new RelativeStrengthIndex(
+      params,
+      new DataSlice(buffer!, 0, buffer!.length())
+    ),
+  bollinger: (params, buffer) =>
+    new BollingerBands(params, new DataSlice(buffer!, 0, buffer!.length())),
+  macd: (params, buffer) =>
+    new Macd(params, new DataSlice(buffer!, 0, buffer!.length())),
+  atr: (params, buffer) =>
+    new AverageTrueRange(params, new DataSlice(buffer!, 0, buffer!.length())),
+  vwap: (params, buffer) =>
+    new VolumeWeightedAveragePrice(
+      params,
+      new DataSlice(buffer!, 0, buffer!.length())
+    ),
+  tickBars: (params, buffer) => new TickBarGenerator(params, new DataSlice(buffer!, 0, buffer!.length())),
+  volumeBars: (params, buffer) => new VolumeBarGenerator(params, new DataSlice(buffer!, 0, buffer!.length())),
+  dollarBars: (params, buffer) => new DollarBarGenerator(params, new DataSlice(buffer!, 0, buffer!.length())),
+  tickImbalanceBars: (params, buffer) =>
+    new TickImbalanceBarGenerator(params, new DataSlice(buffer!, 0, buffer!.length())),
+  tickRunBars: (params, buffer) => new TickRunBarGenerator(params, new DataSlice(buffer!, 0, buffer!.length())),
+  regimeBars: (params, buffer) =>
+    new StatisticalRegimeBarGenerator(params, new DataSlice(buffer!, 0, buffer!.length())),
+  lorentzianBars: (params, buffer) =>
+    new LorentzianDistanceBarGenerator(params, new DataSlice(buffer!, 0, buffer!.length())),
+  shannonInfoBars: (params, buffer) =>
+    new ShannonInformationBarGenerator(params, new DataSlice(buffer!, 0, buffer!.length())),
+  heikinAshi: (params, buffer) =>
+    new HeikinAshi(params, new DataSlice(buffer!, 0, buffer!.length()))
 }
 
 /**
@@ -72,117 +104,60 @@ export class PipelineFactory {
   /**
    * Create a Pipeline instance from a validated configuration
    */
-  public static async createPipeline(config: ValidatedConfig): Promise<Pipeline> {
+  public static async createPipeline(
+    config: PipelineConfig
+  ): Promise<Pipeline> {
     // Create input provider
     const provider = await this.createProvider(config.input)
 
-    // Create transforms
-    const transforms = this.createTransforms(config.transformations)
+    // Create initial buffer based on provider's schema
+    const initialBuffer = new DataBuffer({
+      columns: {
+        timestamp: { index: 0 },
+        symbol: { index: 1 },
+        exchange: { index: 2 },
+        open: { index: 3 },
+        high: { index: 4 },
+        low: { index: 5 },
+        close: { index: 6 },
+        volume: { index: 7 }
+      }
+    })
 
-    // Create transform pipeline
-    const transformPipeline = transforms.length > 0
-      ? new TransformPipeline({
-        transforms,
-        description: config.metadata?.name || 'Data Pipeline',
-      })
-      : undefined
+    // Create transforms with buffer chaining
+    const { transforms, finalBuffer } = this.createTransformsWithBuffer(
+      config.transformations,
+      initialBuffer
+    )
 
     // Create output repository
     const repository = await this.createRepository(config.output)
 
-    // Prepare historical params if using a data provider
-    let historicalParams
-    if (config.input.type === 'provider') {
-      // Parse duration to determine start/end times
-      const duration = config.input.duration || '1h'
-      const end = Date.now()
-      let start = end
-      
-      if (duration === 'continuous') {
-        // For continuous mode, we'll handle this differently in the pipeline
-        start = end - 3600000 // Default to last hour for initial data
-      } else if (duration.endsWith('m')) {
-        const minutes = parseInt(duration.slice(0, -1))
-        if (isNaN(minutes) || minutes <= 0) {
-          throw new Error(`Invalid duration value: ${duration}. Must be a positive number.`)
-        }
-        start = end - (minutes * 60000)
-      } else if (duration.endsWith('h')) {
-        const hours = parseInt(duration.slice(0, -1))
-        if (isNaN(hours) || hours <= 0) {
-          throw new Error(`Invalid duration value: ${duration}. Must be a positive number.`)
-        }
-        start = end - (hours * 3600000)
-      } else if (duration.endsWith('d')) {
-        const days = parseInt(duration.slice(0, -1))
-        if (isNaN(days) || days <= 0) {
-          throw new Error(`Invalid duration value: ${duration}. Must be a positive number.`)
-        }
-        start = end - (days * 86400000)
-      } else if (duration.endsWith('w')) {
-        const weeks = parseInt(duration.slice(0, -1))
-        if (isNaN(weeks) || weeks <= 0) {
-          throw new Error(`Invalid duration value: ${duration}. Must be a positive number.`)
-        }
-        start = end - (weeks * 7 * 86400000)
-      } else if (duration.endsWith('M')) {
-        const months = parseInt(duration.slice(0, -1))
-        if (isNaN(months) || months <= 0) {
-          throw new Error(`Invalid duration value: ${duration}. Must be a positive number.`)
-        }
-        // Use 30 days as approximate month length
-        start = end - (months * 30 * 86400000)
-      } else if (duration.endsWith('y')) {
-        const years = parseInt(duration.slice(0, -1))
-        if (isNaN(years) || years <= 0) {
-          throw new Error(`Invalid duration value: ${duration}. Must be a positive number.`)
-        }
-        // Use 365 days as approximate year length
-        start = end - (years * 365 * 86400000)
-      } else if (duration.endsWith('bars')) {
-        const bars = parseInt(duration.slice(0, -4))
-        if (isNaN(bars) || bars <= 0) {
-          throw new Error(`Invalid bar count: ${duration}. Must be a positive number.`)
-        }
-        // For bar count, we'll use a reasonable time window and let the provider handle limiting
-        start = end - (7 * 86400000) // Default to 7 days
-      } else {
-        throw new Error(`Invalid duration format: ${duration}. Supported formats: m (minutes), h (hours), d (days), w (weeks), M (months), y (years), bars, or 'continuous'`)
-      }
-      
-      historicalParams = {
-        symbols: config.input.symbols,
-        start,
-        end,
-        timeframe: config.input.timeframe,
-      }
-    }
-
-    // Create and return pipeline
-    return new Pipeline({
-      provider,
-      transform: transformPipeline,
+    // Use BufferPipeline for buffer-based transforms only
+    const bufferPipeline = new BufferPipeline({
+      provider: provider as FileProvider,
+      transforms,
       repository,
-      options: {
-        chunkSize: config.options?.chunkSize,
-        continueOnError: config.options?.continueOnError,
-        maxErrors: config.options?.maxErrors,
-        showProgress: config.options?.showProgress,
-      },
-      metadata: config.metadata,
-      historicalParams,
+      batchSize: config.options?.chunkSize,
+      initialBuffer,
+      finalBuffer
     })
+
+    // TODO: Wrap BufferPipeline in Pipeline interface for compatibility
+    return bufferPipeline as any
   }
 
   /**
    * Create a provider from configuration
    */
-  private static async createProvider(config: InputConfig): Promise<DataProvider | FileProvider> {
+  private static async createProvider(
+    config: InputConfig
+  ): Promise<DataProvider | FileProvider> {
     if (config.type === 'file') {
       // Handle file-based providers
       const fileExt = config.path.toLowerCase().split('.').pop()
       const format = config.format || fileExt
-      
+
       switch (format) {
         case 'csv':
           return new CsvFileProvider({
@@ -190,14 +165,14 @@ export class PipelineFactory {
             columnMapping: config.columnMapping,
             delimiter: config.delimiter,
             hasHeader: config.hasHeader,
-            encoding: config.encoding,
+            encoding: config.encoding
           })
 
         case 'jsonl':
           return new JsonlFileProvider({
             path: config.path,
             columnMapping: config.columnMapping,
-            encoding: config.encoding,
+            encoding: config.encoding
           })
 
         default:
@@ -206,26 +181,26 @@ export class PipelineFactory {
     } else if (config.type === 'provider') {
       // Handle API-based providers
       let provider: DataProvider
-      
+
       switch (config.provider) {
         case 'coinbase':
           provider = new CoinbaseProvider()
           break
-          
+
         case 'alpaca':
           provider = new AlpacaProvider()
           break
-          
+
         default:
           throw new Error(`Unsupported provider: ${config.provider}`)
       }
-      
+
       // Validate environment variables
       provider.validateEnvVars()
-      
+
       // Connect to the provider
       await provider.connect()
-      
+
       return provider
     } else {
       throw new Error(`Unsupported input type: ${(config as any).type}`)
@@ -233,34 +208,66 @@ export class PipelineFactory {
   }
 
   /**
-   * Create transforms from configuration
+   * Create transforms from configuration with buffer flow
+   * @param configs Transform configurations
+   * @param initialBuffer The initial buffer from the provider
+   * @returns Array of transforms and the final buffer
    */
-  private static createTransforms(configs: TransformConfig[]): Transform[] {
-    return configs
-      .filter(config => !config.disabled)
-      .map((config, index) => {
+  private static createTransformsWithBuffer(
+    configs: TransformConfig[],
+    initialBuffer: DataBuffer
+  ): { transforms: Transform[]; finalBuffer: DataBuffer } {
+    const transforms: Transform[] = []
+    let currentBuffer = initialBuffer
+
+    for (const config of configs.filter((c) => !c.disabled)) {
       const factory = TRANSFORM_FACTORIES[config.type]
 
       if (!factory) {
-        throw new Error(`Unknown transform type at index ${index}: ${config.type}`)
+        throw new Error(`Unknown transform type: ${config.type}`)
       }
 
       try {
-        return factory(config.params)
+        // Check if this transform type requires a buffer
+        const bufferlessTransforms = [
+          'timeframeAggregation',
+          'tickBars',
+          'volumeBars',
+          'dollarBars',
+          'tickImbalanceBars',
+          'tickRunBars',
+          'heikinAshi',
+          'statisticalRegime',
+          'lorentzianDistance',
+          'shannonInformation'
+        ]
+
+        const transform = bufferlessTransforms.includes(config.type)
+          ? factory(config.params)
+          : factory(config.params, currentBuffer)
+
+        transforms.push(transform)
+
+        // Get the output buffer from the transform
+        // This will be either the same buffer (for in-place transforms)
+        // or a new buffer (for reshaping transforms)
+        currentBuffer = transform.outputBuffer
       } catch (error) {
         throw new Error(
-          `Failed to create transform '${config.type}' at index ${index}: ${
-            error instanceof Error ? error.message : 'Unknown error'
-          }`,
+          `Failed to create transform ${config.type}: ${error instanceof Error ? error.message : String(error)}`
         )
       }
-    })
+    }
+
+    return { transforms, finalBuffer: currentBuffer }
   }
 
   /**
    * Create a repository from output configuration
    */
-  private static async createRepository(config: PipelineConfig['output']): Promise<OhlcvRepository> {
+  private static async createRepository(
+    config: PipelineConfig['output']
+  ): Promise<OhlcvRepository> {
     let repository: OhlcvRepository
 
     switch (config.format) {
@@ -269,8 +276,8 @@ export class PipelineFactory {
         break
 
       case 'jsonl':
-        repository = new JsonlRepository()
-        break
+        // TODO: Implement JSONL repository with buffer support
+        throw new Error('JSONL output format not yet supported')
 
       default:
         throw new Error(`Unsupported output format: ${config.format}`)
@@ -281,8 +288,8 @@ export class PipelineFactory {
       connectionString: config.path,
       options: {
         overwrite: config.overwrite,
-        columnMapping: config.columnMapping,
-      },
+        columnMapping: config.columnMapping
+      }
     })
 
     return repository

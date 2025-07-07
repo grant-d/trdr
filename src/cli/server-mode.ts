@@ -43,7 +43,7 @@ export class ServerMode {
       port: serverConfig.port ?? 3000,
       host: serverConfig.host ?? 'localhost',
       cors: serverConfig.cors ?? true,
-      maxBodySize: serverConfig.maxBodySize ?? 10 * 1024 * 1024, // 10MB
+      maxBodySize: serverConfig.maxBodySize ?? 10 * 1024 * 1024 // 10MB
     }
     this.activePipelines = new Map()
   }
@@ -55,17 +55,23 @@ export class ServerMode {
     this.server = createServer(this.handleRequest.bind(this))
 
     return new Promise((resolve, reject) => {
-      this.server!.listen(this.serverConfig.port, this.serverConfig.host, () => {
-        console.log(`TRDR Server listening on http://${this.serverConfig.host}:${this.serverConfig.port}`)
-        console.log('Available endpoints:')
-        console.log('  GET  /health        - Health check')
-        console.log('  GET  /config        - Get current configuration')
-        console.log('  POST /validate      - Validate configuration')
-        console.log('  POST /execute       - Execute pipeline')
-        console.log('  GET  /status/:id    - Get pipeline status')
-        console.log('  POST /stop/:id      - Stop pipeline')
-        resolve()
-      })
+      this.server!.listen(
+        this.serverConfig.port,
+        this.serverConfig.host,
+        () => {
+          console.log(
+            `TRDR Server listening on http://${this.serverConfig.host}:${this.serverConfig.port}`
+          )
+          console.log('Available endpoints:')
+          console.log('  GET  /health        - Health check')
+          console.log('  GET  /config        - Get current configuration')
+          console.log('  POST /validate      - Validate configuration')
+          console.log('  POST /execute       - Execute pipeline')
+          console.log('  GET  /status/:id    - Get pipeline status')
+          console.log('  POST /stop/:id      - Stop pipeline')
+          resolve()
+        }
+      )
 
       this.server!.on('error', reject)
     })
@@ -88,7 +94,10 @@ export class ServerMode {
   /**
    * Handle HTTP requests
    */
-  private async handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  private async handleRequest(
+    req: IncomingMessage,
+    res: ServerResponse
+  ): Promise<void> {
     // Set CORS headers if enabled
     if (this.serverConfig.cors) {
       res.setHeader('Access-Control-Allow-Origin', '*')
@@ -134,25 +143,34 @@ export class ServerMode {
   /**
    * Handle health check
    */
-  private async handleHealth(_req: IncomingMessage, res: ServerResponse): Promise<void> {
+  private async handleHealth(
+    _req: IncomingMessage,
+    res: ServerResponse
+  ): Promise<void> {
     this.sendJson(res, 200, {
       status: 'ok',
       uptime: process.uptime(),
-      activePipelines: this.activePipelines.size,
+      activePipelines: this.activePipelines.size
     })
   }
 
   /**
    * Handle get configuration
    */
-  private async handleGetConfig(_req: IncomingMessage, res: ServerResponse): Promise<void> {
+  private async handleGetConfig(
+    _req: IncomingMessage,
+    res: ServerResponse
+  ): Promise<void> {
     this.sendJson(res, 200, this.baseConfig)
   }
 
   /**
    * Handle validate configuration
    */
-  private async handleValidate(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  private async handleValidate(
+    req: IncomingMessage,
+    res: ServerResponse
+  ): Promise<void> {
     const body = await this.parseBody(req)
     const config = body.config || this.baseConfig
 
@@ -160,17 +178,20 @@ export class ServerMode {
 
     this.sendJson(res, 200, {
       valid: validation.isValid,
-      errors: validation.errors,
-      errorMessages: validation.errorMessages,
-      warningMessages: validation.warningMessages,
+      errors: validation.warnings.length,
+      errorMessages: [],
+      warningMessages: validation.warnings
     })
   }
 
   /**
    * Handle execute pipeline
    */
-  private async handleExecute(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    const body = await this.parseBody(req) as ExecuteRequest
+  private async handleExecute(
+    req: IncomingMessage,
+    res: ServerResponse
+  ): Promise<void> {
+    const body = (await this.parseBody(req)) as ExecuteRequest
     const pipelineId = this.generateId()
 
     // Merge configurations
@@ -183,7 +204,7 @@ export class ServerMode {
     if (!validation.isValid) {
       this.sendJson(res, 400, {
         error: 'Invalid configuration',
-        details: validation.errors,
+        details: validation.warnings
       })
       return
     }
@@ -196,7 +217,7 @@ export class ServerMode {
       this.activePipelines.set(pipelineId, {
         pipeline,
         startTime: Date.now(),
-        status: 'running',
+        status: 'running'
       })
 
       // If streaming is requested, set up SSE
@@ -204,54 +225,63 @@ export class ServerMode {
         res.writeHead(200, {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
+          Connection: 'keep-alive'
         })
 
         pipeline.onProgress((update) => {
-          res.write(`data: ${JSON.stringify({
-            type: 'progress',
-            ...update,
-          })}\n\n`)
+          res.write(
+            `data: ${JSON.stringify({
+              type: 'progress',
+              ...update
+            })}\n\n`
+          )
         })
       }
 
       // Execute pipeline asynchronously
-      pipeline.execute().then(result => {
-        const pipelineInfo = this.activePipelines.get(pipelineId)
-        if (pipelineInfo) {
-          pipelineInfo.status = 'completed'
-          pipelineInfo.result = result
-        }
+      pipeline
+        .execute()
+        .then((result) => {
+          const pipelineInfo = this.activePipelines.get(pipelineId)
+          if (pipelineInfo) {
+            pipelineInfo.status = 'completed'
+            pipelineInfo.result = result
+          }
 
-        if (body.stream) {
-          res.write(`data: ${JSON.stringify({
-            type: 'complete',
-            result,
-          })}\n\n`)
-          res.end()
-        }
-      }).catch(error => {
-        const pipelineInfo = this.activePipelines.get(pipelineId)
-        if (pipelineInfo) {
-          pipelineInfo.status = 'failed'
-          pipelineInfo.error = error.message
-        }
+          if (body.stream) {
+            res.write(
+              `data: ${JSON.stringify({
+                type: 'complete',
+                result
+              })}\n\n`
+            )
+            res.end()
+          }
+        })
+        .catch((error) => {
+          const pipelineInfo = this.activePipelines.get(pipelineId)
+          if (pipelineInfo) {
+            pipelineInfo.status = 'failed'
+            pipelineInfo.error = error.message
+          }
 
-        if (body.stream) {
-          res.write(`data: ${JSON.stringify({
-            type: 'error',
-            error: error.message,
-          })}\n\n`)
-          res.end()
-        }
-      })
+          if (body.stream) {
+            res.write(
+              `data: ${JSON.stringify({
+                type: 'error',
+                error: error.message
+              })}\n\n`
+            )
+            res.end()
+          }
+        })
 
       // Return pipeline ID immediately
       if (!body.stream) {
         this.sendJson(res, 202, {
           id: pipelineId,
           status: 'running',
-          message: 'Pipeline execution started',
+          message: 'Pipeline execution started'
         })
       }
     } catch (error) {
@@ -262,7 +292,11 @@ export class ServerMode {
   /**
    * Handle get pipeline status
    */
-  private async handleStatus(_req: IncomingMessage, res: ServerResponse, id: string): Promise<void> {
+  private async handleStatus(
+    _req: IncomingMessage,
+    res: ServerResponse,
+    id: string
+  ): Promise<void> {
     const pipelineInfo = this.activePipelines.get(id)
 
     if (!pipelineInfo) {
@@ -274,7 +308,7 @@ export class ServerMode {
       id,
       status: pipelineInfo.status,
       startTime: pipelineInfo.startTime,
-      duration: Date.now() - pipelineInfo.startTime,
+      duration: Date.now() - pipelineInfo.startTime
     }
 
     if (pipelineInfo.result) {
@@ -291,7 +325,11 @@ export class ServerMode {
   /**
    * Handle stop pipeline
    */
-  private async handleStop(_req: IncomingMessage, res: ServerResponse, id: string): Promise<void> {
+  private async handleStop(
+    _req: IncomingMessage,
+    res: ServerResponse,
+    id: string
+  ): Promise<void> {
     const pipelineInfo = this.activePipelines.get(id)
 
     if (!pipelineInfo) {
@@ -301,7 +339,7 @@ export class ServerMode {
 
     // TODO: Implement pipeline cancellation
     this.sendJson(res, 501, {
-      error: 'Pipeline cancellation not yet implemented',
+      error: 'Pipeline cancellation not yet implemented'
     })
   }
 
@@ -345,7 +383,11 @@ export class ServerMode {
   /**
    * Send error response
    */
-  private sendError(res: ServerResponse, status: number, message: string): void {
+  private sendError(
+    res: ServerResponse,
+    status: number,
+    message: string
+  ): void {
     this.sendJson(res, status, { error: message })
   }
 

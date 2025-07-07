@@ -4,10 +4,10 @@
  */
 export interface OhlcvDto {
   /** Exchange where the data originates from (e.g., 'coinbase', 'binance') */
-  exchange: string
+  // exchange: string
 
   /** Trading pair symbol (e.g., 'BTC-USD', 'ETH-USD') */
-  symbol: string
+  // symbol: string
 
   /** Unix timestamp in milliseconds (UTC) */
   timestamp: number
@@ -38,7 +38,7 @@ export interface OhlcvDto {
  */
 export function isValidOhlcv(data: Partial<OhlcvDto>): boolean {
   // Check required fields exist
-  if (!data.exchange || !data.symbol || !data.timestamp) {
+  if (!data.timestamp) {
     return false
   }
 
@@ -72,7 +72,13 @@ export function isValidOhlcv(data: Partial<OhlcvDto>): boolean {
   }
 
   // Check non-negative values
-  if (data.open < 0 || data.high < 0 || data.low < 0 || data.close < 0 || data.volume < 0) {
+  if (
+    data.open < 0 ||
+    data.high < 0 ||
+    data.low < 0 ||
+    data.close < 0 ||
+    data.volume < 0
+  ) {
     return false
   }
 
@@ -80,7 +86,6 @@ export function isValidOhlcv(data: Partial<OhlcvDto>): boolean {
   const year2000 = 946684800000
   const year2100 = 4102444800000
   return !(data.timestamp < year2000 || data.timestamp > year2100)
-
 }
 
 /**
@@ -90,7 +95,7 @@ export function isValidOhlcv(data: Partial<OhlcvDto>): boolean {
  */
 export function formatOhlcv(data: OhlcvDto): string {
   const date = new Date(data.timestamp).toISOString()
-  return `${data.exchange}:${data.symbol} ${date} O:${data.open} H:${data.high} L:${data.low} C:${data.close} V:${data.volume}`
+  return `${date} O:${data.open} H:${data.high} L:${data.low} C:${data.close} V:${data.volume}`
 }
 
 /**
@@ -101,13 +106,11 @@ export function formatOhlcv(data: OhlcvDto): string {
  */
 export function cleanOhlcv(data: OhlcvDto): OhlcvDto {
   return {
-    exchange: data.exchange,
-    symbol: data.symbol,
     timestamp: data.timestamp,
     open: data.open,
     high: data.high,
     low: data.low,
     close: data.close,
-    volume: data.volume,
+    volume: data.volume
   }
 }

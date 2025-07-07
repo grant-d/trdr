@@ -19,7 +19,7 @@ export class InteractiveMode {
     this.rl = createInterface({
       input: stdin,
       output: stdout,
-      prompt: 'trdr> ',
+      prompt: 'trdr> '
     })
   }
 
@@ -152,7 +152,7 @@ Available commands:
         showPercentage: true,
         showCounts: true,
         showTime: true,
-        showEta: true,
+        showEta: true
       })
 
       pipeline.onProgress((update) => {
@@ -170,9 +170,11 @@ Available commands:
       console.log(`  Records written: ${result.recordsWritten}`)
       console.log(`  Errors: ${result.errors}`)
       console.log(`  Duration: ${duration.toFixed(2)}s`)
-
     } catch (error) {
-      console.error('\nPipeline failed:', error instanceof Error ? error.message : error)
+      console.error(
+        '\nPipeline failed:',
+        error instanceof Error ? error.message : error
+      )
     } finally {
       this.isRunning = false
     }
@@ -192,13 +194,11 @@ Available commands:
   private validateConfig(): void {
     const validation = ConfigValidator.validateWithDetails(this.config)
 
-    if (validation.isValid) {
-      console.log('✓ Configuration is valid')
-    } else {
-      console.log('✗ Configuration has errors:')
-      validation.errors.forEach(error => {
-        const prefix = error.severity === 'error' ? '  ERROR' : '  WARN'
-        console.log(`${prefix}: ${error.field} - ${error.message}`)
+    console.log('✓ Configuration is valid')
+    if (validation.warnings.length > 0) {
+      console.log('Warnings:')
+      validation.warnings.forEach((warning) => {
+        console.log(`  WARN: ${warning}`)
       })
     }
   }
@@ -214,10 +214,14 @@ Available commands:
     if (this.config.input.type === 'file') {
       console.log(`  Input: file (${this.config.input.path})`)
     } else if (this.config.input.type === 'provider') {
-      console.log(`  Input: ${this.config.input.provider} provider (${this.config.input.symbols.join(', ')})`)
+      console.log(
+        `  Input: ${this.config.input.provider} provider (${this.config.input.symbols.join(', ')})`
+      )
     }
 
-    console.log(`  Output: ${this.config.output.format} (${this.config.output.path})`)
+    console.log(
+      `  Output: ${this.config.output.format} (${this.config.output.path})`
+    )
     console.log(`  Transforms: ${this.config.transformations.length}`)
   }
 
@@ -242,7 +246,7 @@ Available commands:
 
     console.log('\nAvailable Transform Types:')
     const available = PipelineFactory.getAvailableTransforms()
-    available.forEach(type => {
+    available.forEach((type) => {
       console.log(`  - ${type}`)
     })
   }

@@ -4,7 +4,10 @@ import type { PipelineConfig } from '../interfaces'
  * Error thrown when configuration override fails
  */
 export class ConfigOverrideError extends Error {
-  constructor(message: string, public readonly override: string) {
+  constructor(
+    message: string,
+    public readonly override: string
+  ) {
     super(message)
     this.name = 'ConfigOverrideError'
   }
@@ -15,11 +18,11 @@ export class ConfigOverrideError extends Error {
  */
 interface ParsedOverride {
   /** Dot-notation path to the property */
-  path: string[]
+  path: string[];
   /** Raw string value from command line */
-  value: string
+  value: string;
   /** Original override string for error reporting */
-  original: string
+  original: string;
 }
 
 /**
@@ -45,7 +48,10 @@ function parseOverride(override: string): ParsedOverride {
     )
   }
 
-  const path = pathString.split('.').map(segment => segment.trim()).filter(segment => segment.length > 0)
+  const path = pathString
+    .split('.')
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0)
 
   if (path.length === 0) {
     throw new ConfigOverrideError(
@@ -65,7 +71,11 @@ function parseOverride(override: string): ParsedOverride {
  * Converts a string value to the appropriate type based on context
  * Handles common data types: boolean, number, string, arrays
  */
-function convertValue(value: string, _path: string[], original: string): unknown {
+function convertValue(
+  value: string,
+  _path: string[],
+  original: string
+): unknown {
   // Handle null/undefined
   if (value.toLowerCase() === 'null') return null
   if (value.toLowerCase() === 'undefined') return undefined
@@ -119,9 +129,17 @@ function convertValue(value: string, _path: string[], original: string): unknown
  * Sets a nested property value using dot notation path
  * Creates intermediate objects as needed
  */
-function setNestedProperty(obj: PipelineConfig, path: string[], value: unknown, original: string): void {
+function setNestedProperty(
+  obj: PipelineConfig,
+  path: string[],
+  value: unknown,
+  original: string
+): void {
   if (path.length === 0) {
-    throw new ConfigOverrideError(`Empty property path in override "${original}"`, original)
+    throw new ConfigOverrideError(
+      `Empty property path in override "${original}"`,
+      original
+    )
   }
 
   let current = obj as any
@@ -136,7 +154,7 @@ function setNestedProperty(obj: PipelineConfig, path: string[], value: unknown, 
     } else if (typeof current[segment] !== 'object') {
       throw new ConfigOverrideError(
         `Cannot override property "${path.slice(0, i + 1).join('.')}" in "${original}": intermediate value is not an object`,
-        original,
+        original
       )
     }
 
@@ -153,10 +171,19 @@ function setNestedProperty(obj: PipelineConfig, path: string[], value: unknown, 
  * This helps catch typos and invalid property names early
  */
 function validateOverridePath(path: string[], original: string): void {
-  const validRootProperties = ['input', 'output', 'transformations', 'options', 'metadata']
+  const validRootProperties = [
+    'input',
+    'output',
+    'transformations',
+    'options',
+    'metadata'
+  ]
 
   if (path.length === 0) {
-    throw new ConfigOverrideError(`Empty property path in override "${original}"`, original)
+    throw new ConfigOverrideError(
+      `Empty property path in override "${original}"`,
+      original
+    )
   }
 
   const rootProperty = path[0]!
@@ -194,7 +221,13 @@ function validateInputOverridePath(path: string[], original: string): void {
   if (path.length === 0) return // Allow overriding entire input object
 
   const validInputProperties = [
-    'path', 'format', 'columnMapping', 'chunkSize', 'exchange', 'symbol', 'delimiter',
+    'path',
+    'format',
+    'columnMapping',
+    'chunkSize',
+    'exchange',
+    'symbol',
+    'delimiter'
   ]
 
   const property = path[0]!
@@ -207,7 +240,16 @@ function validateInputOverridePath(path: string[], original: string): void {
 
   // Validate column mapping paths
   if (property === 'columnMapping' && path.length > 1) {
-    const validColumnFields = ['timestamp', 'open', 'high', 'low', 'close', 'volume', 'symbol', 'exchange']
+    const validColumnFields = [
+      'timestamp',
+      'open',
+      'high',
+      'low',
+      'close',
+      'volume',
+      'symbol',
+      'exchange'
+    ]
     const field = path[1]!
     if (!validColumnFields.includes(field)) {
       throw new ConfigOverrideError(
@@ -224,7 +266,12 @@ function validateInputOverridePath(path: string[], original: string): void {
 function validateOutputOverridePath(path: string[], original: string): void {
   if (path.length === 0) return // Allow overriding entire output object
 
-  const validOutputProperties = ['path', 'format', 'overwrite', 'columnMapping']
+  const validOutputProperties = [
+    'path',
+    'format',
+    'overwrite',
+    'columnMapping'
+  ]
 
   const property = path[0]!
   if (!validOutputProperties.includes(property)) {
@@ -238,7 +285,10 @@ function validateOutputOverridePath(path: string[], original: string): void {
 /**
  * Validates transformation-specific override paths
  */
-function validateTransformationOverridePath(path: string[], original: string): void {
+function validateTransformationOverridePath(
+  path: string[],
+  original: string
+): void {
   if (path.length === 0) return // Allow overriding entire transformations array
 
   // First segment should be array index
@@ -269,7 +319,10 @@ function validateOptionsOverridePath(path: string[], original: string): void {
   if (path.length === 0) return // Allow overriding entire options object
 
   const validOptionsProperties = [
-    'chunkSize', 'continueOnError', 'maxErrors', 'showProgress'
+    'chunkSize',
+    'continueOnError',
+    'maxErrors',
+    'showProgress'
   ]
 
   const property = path[0]!
@@ -288,14 +341,19 @@ function validateMetadataOverridePath(path: string[], original: string): void {
   if (path.length === 0) return // Allow overriding entire metadata object
 
   const validMetadataProperties = [
-    'name', 'version', 'description', 'author', 'created', 'modified'
+    'name',
+    'version',
+    'description',
+    'author',
+    'created',
+    'modified'
   ]
 
   const property = path[0]!
   if (!validMetadataProperties.includes(property)) {
     throw new ConfigOverrideError(
       `Invalid metadata property "${property}" in override "${original}". Valid metadata properties: ${validMetadataProperties.join(', ')}`,
-      original,
+      original
     )
   }
 }
@@ -318,7 +376,10 @@ function validateMetadataOverridePath(path: string[], original: string): void {
  * ])
  * ```
  */
-export function applyOverrides(config: PipelineConfig, overrides: string[]): void {
+export function applyOverrides(
+  config: PipelineConfig,
+  overrides: string[]
+): void {
   if (!overrides || overrides.length === 0) {
     return // Nothing to override
   }
@@ -351,7 +412,11 @@ export function applyOverrides(config: PipelineConfig, overrides: string[]): voi
   // Apply overrides
   for (const parsed of parsedOverrides) {
     try {
-      const convertedValue = convertValue(parsed.value, parsed.path, parsed.original)
+      const convertedValue = convertValue(
+        parsed.value,
+        parsed.path,
+        parsed.original
+      )
       setNestedProperty(config, parsed.path, convertedValue, parsed.original)
     } catch (error) {
       if (error instanceof ConfigOverrideError) {
@@ -378,11 +443,15 @@ export function cloneConfig(config: PipelineConfig): PipelineConfig {
  * Useful for debugging and testing
  */
 export function getConfigValue(config: PipelineConfig, path: string): unknown {
-  const pathArray = path.split('.').filter(segment => segment.length > 0)
+  const pathArray = path.split('.').filter((segment) => segment.length > 0)
   let current = config as any
 
   for (const segment of pathArray) {
-    if (current === null || current === undefined || typeof current !== 'object') {
+    if (
+      current === null ||
+      current === undefined ||
+      typeof current !== 'object'
+    ) {
       return undefined
     }
     current = current[segment]
@@ -398,7 +467,10 @@ export class ConfigOverrides {
   /**
    * Apply overrides to configuration
    */
-  public static apply(config: PipelineConfig, overrides: string[]): PipelineConfig {
+  public static apply(
+    config: PipelineConfig,
+    overrides: string[]
+  ): PipelineConfig {
     const cloned = cloneConfig(config)
     applyOverrides(cloned, overrides)
     return cloned

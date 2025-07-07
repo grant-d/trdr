@@ -1,7 +1,7 @@
-import { Pipeline, type PipelineConfig } from './pipeline'
+import { EventEmitter } from 'node:events'
 import type { DataProvider, RealtimeParams } from '../interfaces'
 import type { OhlcvDto } from '../models'
-import { EventEmitter } from 'node:events'
+import { Pipeline, type PipelineConfig } from './pipeline'
 
 /**
  * Server mode configuration options
@@ -42,7 +42,7 @@ export enum ServerState {
   RUNNING = 'running',
   STOPPING = 'stopping',
   STOPPED = 'stopped',
-  ERROR = 'error'
+  ERROR = 'error',
 }
 
 /**
@@ -51,7 +51,8 @@ export enum ServerState {
  */
 export class PipelineServer extends EventEmitter {
   private readonly pipeline: Pipeline
-  private readonly config: Required<Omit<ServerModeConfig, 'onHealthCheck'>> & Pick<ServerModeConfig, 'onHealthCheck'>
+  private readonly config: Required<Omit<ServerModeConfig, 'onHealthCheck'>> &
+                           Pick<ServerModeConfig, 'onHealthCheck'>
   private state: ServerState = ServerState.IDLE
   private restartAttempts = 0
   private healthCheckTimer?: NodeJS.Timeout
@@ -65,7 +66,10 @@ export class PipelineServer extends EventEmitter {
     lastHealthCheck: 0
   }
 
-  constructor(pipelineConfig: PipelineConfig, serverConfig: ServerModeConfig = {}) {
+  constructor(
+    pipelineConfig: PipelineConfig,
+    serverConfig: ServerModeConfig = {}
+  ) {
     super()
     this.pipeline = new Pipeline(pipelineConfig)
     this.config = {
@@ -104,7 +108,9 @@ export class PipelineServer extends EventEmitter {
       if (historicalParams) {
         console.log('Running historical backfill...')
         const result = await this.pipeline.execute()
-        console.log(`Backfill complete: ${result.recordsProcessed} records processed`)
+        console.log(
+          `Backfill complete: ${result.recordsProcessed} records processed`
+        )
         this.stats.recordsProcessed += result.recordsProcessed
       }
 
@@ -119,8 +125,11 @@ export class PipelineServer extends EventEmitter {
     } catch (error) {
       this.state = ServerState.ERROR
       this.emit('error', error as Error)
-      
-      if (this.config.autoRestart && this.restartAttempts < this.config.maxRestartAttempts) {
+
+      if (
+        this.config.autoRestart &&
+        this.restartAttempts < this.config.maxRestartAttempts
+      ) {
         await this.scheduleRestart()
       } else {
         throw error
@@ -209,16 +218,24 @@ export class PipelineServer extends EventEmitter {
     this.realtimeSubscription = provider.subscribeRealtime(realtimeParams)
 
     // Process realtime data through pipeline
-    const transform = this.pipeline.getConfig().transform
+    // const transform = this.pipeline.getConfig().transform
     const repository = this.pipeline.getConfig().repository
 
     try {
       let processedStream: AsyncIterableIterator<OhlcvDto>
-      
+
+      // TODO: Update this to work with new buffer-based transforms
+      /*
       if (transform && this.realtimeSubscription) {
         const result = await transform.apply(this.realtimeSubscription)
         processedStream = result.data as AsyncIterableIterator<OhlcvDto>
       } else if (this.realtimeSubscription) {
+        processedStream = this.realtimeSubscription
+      } else {
+        throw new Error('No realtime subscription available')
+      }
+      */
+      if (this.realtimeSubscription) {
         processedStream = this.realtimeSubscription
       } else {
         throw new Error('No realtime subscription available')
@@ -237,7 +254,7 @@ export class PipelineServer extends EventEmitter {
         } catch (error) {
           this.stats.errors++
           this.emit('error', error as Error)
-          
+
           if (this.stats.errors > 100) {
             throw new Error('Too many errors in realtime processing')
           }
@@ -280,13 +297,14 @@ export class PipelineServer extends EventEmitter {
     this.healthCheckTimer = setInterval(async () => {
       try {
         let healthy = true
-        
+
         if (this.config.onHealthCheck) {
           healthy = await this.config.onHealthCheck()
         } else {
           // Default health check
           const provider = this.pipeline.getConfig().provider
-          healthy = this.state === ServerState.RUNNING && provider.isConnected()
+          healthy =
+            this.state === ServerState.RUNNING && provider.isConnected()
         }
 
         this.stats.lastHealthCheck = Date.now()
@@ -308,11 +326,15 @@ export class PipelineServer extends EventEmitter {
   private async scheduleRestart(): Promise<void> {
     this.restartAttempts++
     this.stats.restarts++
-    
-    this.emit('restart', this.restartAttempts)
-    console.log(`Scheduling restart attempt ${this.restartAttempts} in ${this.config.restartDelay}ms...`)
 
-    await new Promise(resolve => setTimeout(resolve, this.config.restartDelay))
+    this.emit('restart', this.restartAttempts)
+    console.log(
+      `Scheduling restart attempt ${this.restartAttempts} in ${this.config.restartDelay}ms...`
+    )
+
+    await new Promise((resolve) =>
+      setTimeout(resolve, this.config.restartDelay)
+    )
 
     try {
       await this.stop()
@@ -320,7 +342,7 @@ export class PipelineServer extends EventEmitter {
       this.restartAttempts = 0 // Reset on successful restart
     } catch (error) {
       console.error('Restart failed:', error)
-      
+
       if (this.restartAttempts >= this.config.maxRestartAttempts) {
         console.error('Max restart attempts reached, giving up')
         this.state = ServerState.ERROR

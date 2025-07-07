@@ -1,8 +1,8 @@
 import { EventEmitter } from 'node:events'
-import type { OhlcvDto } from '../models'
 import type { Transform } from '../interfaces'
-import type { Gap } from './gap-detector'
+import type { OhlcvDto } from '../models'
 import type { BackfillRequest } from './backfill-manager'
+import type { Gap } from './gap-detector'
 
 /**
  * Metric types
@@ -11,7 +11,7 @@ export enum MetricType {
   COUNTER = 'counter',
   GAUGE = 'gauge',
   HISTOGRAM = 'histogram',
-  SUMMARY = 'summary'
+  SUMMARY = 'summary',
 }
 
 /**
@@ -140,7 +140,7 @@ export class PipelineMonitor extends EventEmitter {
 
     this.stop()
     this.performanceData.startTime = Date.now()
-    
+
     this.metricsTimer = setInterval(() => {
       this.collectMetrics()
     }, this.config.metricsInterval)
@@ -159,7 +159,12 @@ export class PipelineMonitor extends EventEmitter {
   /**
    * Record a metric
    */
-  recordMetric(name: string, value: number, type: MetricType = MetricType.GAUGE, labels?: Record<string, string>): void {
+  recordMetric(
+    name: string,
+    value: number,
+    type: MetricType = MetricType.GAUGE,
+    labels?: Record<string, string>
+  ): void {
     const metric: Metric = {
       name,
       type,
@@ -175,7 +180,11 @@ export class PipelineMonitor extends EventEmitter {
   /**
    * Increment a counter
    */
-  incrementCounter(name: string, value = 1, labels?: Record<string, string>): void {
+  incrementCounter(
+    name: string,
+    value = 1,
+    labels?: Record<string, string>
+  ): void {
     const existing = this.metrics.get(name)
     const newValue = existing ? existing.value + value : value
     this.recordMetric(name, newValue, MetricType.COUNTER, labels)
@@ -184,9 +193,14 @@ export class PipelineMonitor extends EventEmitter {
   /**
    * Record transform execution
    */
-  recordTransformExecution(transform: Transform, inputCount: number, outputCount: number, duration: number): void {
+  recordTransformExecution(
+    transform: Transform,
+    inputCount: number,
+    outputCount: number,
+    duration: number
+  ): void {
     let metrics = this.transformMetrics.get(transform.name)
-    
+
     if (!metrics) {
       metrics = {
         name: transform.name,
@@ -200,8 +214,9 @@ export class PipelineMonitor extends EventEmitter {
 
     // Update metrics
     const totalProcessed = metrics.recordsProcessed + inputCount
-    const totalTime = metrics.avgProcessingTime * metrics.recordsProcessed + duration
-    
+    const totalTime =
+      metrics.avgProcessingTime * metrics.recordsProcessed + duration
+
     metrics.recordsProcessed = totalProcessed
     metrics.recordsOutput += outputCount
     metrics.avgProcessingTime = totalTime / totalProcessed
@@ -214,10 +229,13 @@ export class PipelineMonitor extends EventEmitter {
   recordError(source: string, _error: Error): void {
     this.performanceData.errors++
     this.incrementCounter(`errors.${source}`)
-    
+
     // Check error rate alert
     const errorRate = this.calculateErrorRate()
-    if (this.config.alerts.maxErrorRate && errorRate > this.config.alerts.maxErrorRate) {
+    if (
+      this.config.alerts.maxErrorRate &&
+      errorRate > this.config.alerts.maxErrorRate
+    ) {
       this.emitAlert({
         level: 'error',
         type: 'error_rate',
@@ -250,7 +268,7 @@ export class PipelineMonitor extends EventEmitter {
    */
   recordBackfillRequest(request: BackfillRequest): void {
     this.incrementCounter(`backfill.${request.status}`)
-    
+
     if (request.status === 'completed' && request.recordsReceived) {
       this.incrementCounter('backfill.records', request.recordsReceived)
     }
@@ -292,7 +310,7 @@ export class PipelineMonitor extends EventEmitter {
    */
   private collectMetrics(): void {
     const performanceMetrics = this.getPerformanceMetrics()
-    
+
     // Record performance metrics
     this.recordMetric('throughput', performanceMetrics.throughput)
     this.recordMetric('latency', performanceMetrics.latency)
@@ -314,10 +332,13 @@ export class PipelineMonitor extends EventEmitter {
   private calculateThroughput(): number {
     const now = Date.now()
     const timeDiff = (now - this.performanceData.lastThroughputCheck) / 1000
-    const recordsDiff = this.performanceData.recordsProcessed - this.performanceData.lastRecordCount
+    const recordsDiff =
+      this.performanceData.recordsProcessed -
+      this.performanceData.lastRecordCount
 
     this.performanceData.lastThroughputCheck = now
-    this.performanceData.lastRecordCount = this.performanceData.recordsProcessed
+    this.performanceData.lastRecordCount =
+      this.performanceData.recordsProcessed
 
     return timeDiff > 0 ? recordsDiff / timeDiff : 0
   }
@@ -328,11 +349,12 @@ export class PipelineMonitor extends EventEmitter {
   private calculateAverageLatency(): number {
     // This would need to be implemented based on actual timing data
     const avgProcessingTimes = Array.from(this.transformMetrics.values())
-      .map(m => m.avgProcessingTime)
-      .filter(t => t > 0)
+      .map((m) => m.avgProcessingTime)
+      .filter((t) => t > 0)
 
     return avgProcessingTimes.length > 0
-      ? avgProcessingTimes.reduce((a, b) => a + b, 0) / avgProcessingTimes.length
+      ? avgProcessingTimes.reduce((a, b) => a + b, 0) /
+      avgProcessingTimes.length
       : 0
   }
 
@@ -372,7 +394,11 @@ export class PipelineMonitor extends EventEmitter {
       })
     }
 
-    if (alerts.minThroughput && metrics.throughput < alerts.minThroughput && this.performanceData.recordsProcessed > 0) {
+    if (
+      alerts.minThroughput &&
+      metrics.throughput < alerts.minThroughput &&
+      this.performanceData.recordsProcessed > 0
+    ) {
       this.emitAlert({
         level: 'warning',
         type: 'throughput',
@@ -439,7 +465,7 @@ export class MonitoringDashboard {
    */
   start(updateInterval = 1000): void {
     this.stop()
-    
+
     this.updateInterval = setInterval(() => {
       this.render()
     }, updateInterval)
@@ -469,10 +495,12 @@ export class MonitoringDashboard {
     console.clear()
     console.log('=== Pipeline Monitoring Dashboard ===')
     console.log()
-    
+
     // Performance metrics
     console.log('Performance Metrics:')
-    console.log(`  Throughput: ${performance.throughput.toFixed(2)} records/sec`)
+    console.log(
+      `  Throughput: ${performance.throughput.toFixed(2)} records/sec`
+    )
     console.log(`  Latency: ${performance.latency.toFixed(2)} ms`)
     console.log(`  Memory: ${performance.memoryUsage.toFixed(2)} MB`)
     console.log(`  Error Rate: ${performance.errorRate.toFixed(2)} errors/min`)
@@ -485,7 +513,9 @@ export class MonitoringDashboard {
         console.log(`  ${transform.name}:`)
         console.log(`    Processed: ${transform.recordsProcessed}`)
         console.log(`    Output: ${transform.recordsOutput}`)
-        console.log(`    Avg Time: ${transform.avgProcessingTime.toFixed(2)} ms`)
+        console.log(
+          `    Avg Time: ${transform.avgProcessingTime.toFixed(2)} ms`
+        )
         console.log(`    Errors: ${transform.errors}`)
       }
     }

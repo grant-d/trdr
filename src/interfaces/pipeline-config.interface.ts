@@ -22,7 +22,7 @@ export interface ProviderInputConfig {
   /** Timeframe for the data (e.g., '1m', '5m', '1h') */
   timeframe: string
   /** Duration for data fetching */
-  duration?: string // e.g., "1h", "1000bars", "continuous"
+  duration?: string // e.g., '1h', '1000bars', 'continuous'
 }
 
 /**

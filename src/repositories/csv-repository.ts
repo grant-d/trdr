@@ -7,17 +7,14 @@ import type { OhlcvQuery, RepositoryConfig } from './ohlcv-repository.interface'
 import { RepositoryStorageError } from './ohlcv-repository.interface'
 
 /**
- * CSV-based implementation of the OhlcvRepository interface
- * Extends FileBasedRepository to gain deduplication and shared functionality
- * Organizes data in CSV files with streaming writes
+ * CSV repository implementation that uses DataBuffer for memory-efficient writing
+ * This repository pops items from the buffer as they're written, reducing memory usage
  */
 export class CsvRepository extends FileBasedRepository {
   // CSV configuration
   private readonly csvDelimiter = ','
   private readonly csvHeaders = [
     'timestamp',
-    'symbol',
-    'exchange',
     'open',
     'high',
     'low',
@@ -32,63 +29,77 @@ export class CsvRepository extends FileBasedRepository {
     return 'CSV'
   }
 
-
   /**
    * Perform additional initialization specific to CSV format
    */
-  protected async performAdditionalInitialization(_config: RepositoryConfig): Promise<void> {
-    // No additional initialization needed for CSV
+  protected async performAdditionalInitialization(
+    _config: RepositoryConfig
+  ): Promise<void> {
+    // Initialize the data buffer on startup
+    this.initializeDataBuffer()
   }
 
   /**
    * Perform additional cleanup specific to CSV format
    */
   protected async performAdditionalCleanup(): Promise<void> {
-    // No additional cleanup needed - streams are handled by base class
+    // Ensure buffer is flushed before closing
+    await this.flush()
   }
 
   /**
    * Write a batch of OHLCV records to CSV storage
+   * This is called by flush() after popping items from the buffer
    */
   protected async writeOhlcvBatch(data: OhlcvDto[]): Promise<void> {
+    if (data.length === 0) {
+      logger.debug('writeOhlcvBatch called with empty data')
+      return
+    }
+
     // Sort data by timestamp for consistent ordering
     const sortedData = [...data].sort((a, b) => a.timestamp - b.timestamp)
-    
+
     // Check if file exists and needs headers
     const needsHeaders = !(await this.fileExists(this.basePath))
-    
+
     // Prepare the content to write
     let content = ''
-    
+
     // Add headers if this is a new file
     if (needsHeaders && sortedData.length > 0) {
-      // Generate headers using expected fields if available, otherwise from first record
-      const headers = this.expectedOutputFields.length > 0 
-        ? this.generateHeadersFromExpected()
-        : this.generateHeaders(sortedData[0]!)
+      // Generate headers using expected fields if available
+      const headers =
+        this.expectedOutputFields.length > 0
+          ? this.generateHeadersFromExpected()
+          : this.generateHeaders(sortedData[0]!)
       content += headers.join(this.csvDelimiter) + '\n'
     }
-    
+
     // Add all rows
     for (const item of sortedData) {
       content += this.formatOhlcvAsCsvRow(item) + '\n'
     }
-    
+
     // Write or append based on whether file exists
     if (needsHeaders) {
       await this.writeToFile(this.basePath, content)
     } else {
       await this.appendToFile(this.basePath, content)
     }
-  }
 
+    logger.debug(`Wrote ${sortedData.length} records to CSV (buffer popped)`, {
+      firstTimestamp: sortedData[0]?.timestamp,
+      lastTimestamp: sortedData[sortedData.length - 1]?.timestamp
+    })
+  }
 
   /**
    * Get OHLCV data using flexible query parameters
    */
   async query(query: OhlcvQuery): Promise<OhlcvDto[]> {
     this.ensureReady()
-    
+
     // Flush buffer before reading to ensure we have all data
     await this.flush()
 
@@ -98,13 +109,13 @@ export class CsvRepository extends FileBasedRepository {
 
       for (const file of files) {
         const data = await this.readCsvFile(file)
-        const filtered = data.filter(item => this.matchesQuery(item, query))
+        const filtered = data.filter((item) => this.matchesQuery(item, query))
         allData.push(...filtered)
       }
 
       // Sort by timestamp
       const sorted = allData.sort((a, b) => a.timestamp - b.timestamp)
-      
+
       return this.applyPagination(sorted, query)
     } catch (error) {
       logger.error('Failed to execute query', { error, query })
@@ -118,7 +129,10 @@ export class CsvRepository extends FileBasedRepository {
   /**
    * Get relevant CSV files based on symbol and exchange filters
    */
-  private async getRelevantFiles(symbol?: string, exchange?: string): Promise<string[]> {
+  private async getRelevantFiles(
+    symbol?: string,
+    exchange?: string
+  ): Promise<string[]> {
     // Since we're using a single file approach, just return the base path if it exists
     if (await this.fileExists(this.basePath)) {
       // If filtering by symbol/exchange, check if it matches our single symbol/exchange
@@ -141,14 +155,14 @@ export class CsvRepository extends FileBasedRepository {
 
     try {
       const content = await fs.readFile(filePath, 'utf8')
-      const lines = content.split('\n').filter(line => line.trim())
+      const lines = content.split('\n').filter((line) => line.trim())
 
       if (lines.length === 0) return []
 
       // Parse header row to know field names
       const headerLine = lines[0]
       const headers = headerLine ? this.parseCsvLine(headerLine) : undefined
-      
+
       // Skip header row
       const dataLines = lines.slice(1)
 
@@ -193,7 +207,11 @@ export class CsvRepository extends FileBasedRepository {
 
       // Add any additional fields from transforms
       if (headers && values.length > this.csvHeaders.length) {
-        for (let i = this.csvHeaders.length; i < headers.length && i < values.length; i++) {
+        for (
+          let i = this.csvHeaders.length;
+          i < headers.length && i < values.length;
+          i++
+        ) {
           const fieldName = headers[i]
           if (fieldName) {
             const value = values[i]
@@ -206,7 +224,7 @@ export class CsvRepository extends FileBasedRepository {
         }
       }
 
-      return isValidOhlcv(ohlcv) ? ohlcv as OhlcvDto : null
+      return isValidOhlcv(ohlcv) ? (ohlcv as OhlcvDto) : null
     } catch {
       return null
     }
@@ -257,9 +275,12 @@ export class CsvRepository extends FileBasedRepository {
   /**
    * Get the most recent timestamp for a specific symbol
    */
-  async getLastTimestamp(symbol: string, exchange?: string): Promise<number | null> {
+  async getLastTimestamp(
+    symbol: string,
+    exchange?: string
+  ): Promise<number | null> {
     this.ensureReady()
-    
+
     // Flush buffer before reading to ensure we have all data
     await this.flush()
 
@@ -289,9 +310,12 @@ export class CsvRepository extends FileBasedRepository {
   /**
    * Get the earliest timestamp for a specific symbol
    */
-  async getFirstTimestamp(symbol: string, exchange?: string): Promise<number | null> {
+  async getFirstTimestamp(
+    symbol: string,
+    exchange?: string
+  ): Promise<number | null> {
     this.ensureReady()
-    
+
     // Flush buffer before reading to ensure we have all data
     await this.flush()
 
@@ -323,7 +347,7 @@ export class CsvRepository extends FileBasedRepository {
    */
   async getCount(symbol: string, exchange?: string): Promise<number> {
     this.ensureReady()
-    
+
     // Flush buffer before reading to ensure we have all data
     await this.flush()
 
@@ -349,23 +373,14 @@ export class CsvRepository extends FileBasedRepository {
   /**
    * Get all unique symbols in the repository
    */
-  async getSymbols(exchange?: string): Promise<string[]> {
+  async getSymbols(_exchange?: string): Promise<string[]> {
     this.ensureReady()
 
     try {
-      const files = await this.getRelevantFiles(undefined, exchange)
-      const symbols = new Set<string>()
-
-      for (const file of files) {
-        const data = await this.readCsvFile(file)
-        for (const item of data) {
-          if (!exchange || item.exchange === exchange) {
-            symbols.add(item.symbol)
-          }
-        }
-      }
-
-      return Array.from(symbols).sort()
+      // Since symbol/exchange are no longer part of OhlcvDto, 
+      // we can't extract them from the data
+      logger.warn('getSymbols() is not supported with current OhlcvDto structure')
+      return []
     } catch (error) {
       logger.error('Failed to get symbols', { error })
       throw new RepositoryStorageError(
@@ -382,17 +397,10 @@ export class CsvRepository extends FileBasedRepository {
     this.ensureReady()
 
     try {
-      const files = await this.getRelevantFiles()
-      const exchanges = new Set<string>()
-
-      for (const file of files) {
-        const data = await this.readCsvFile(file)
-        for (const item of data) {
-          exchanges.add(item.exchange)
-        }
-      }
-
-      return Array.from(exchanges).sort()
+      // Since symbol/exchange are no longer part of OhlcvDto, 
+      // we can't extract them from the data
+      logger.warn('getExchanges() is not supported with current OhlcvDto structure')
+      return []
     } catch (error) {
       logger.error('Failed to get exchanges', { error })
       throw new RepositoryStorageError(
@@ -412,11 +420,13 @@ export class CsvRepository extends FileBasedRepository {
     exchange?: string
   ): Promise<number> {
     this.ensureReady()
-    
+
     // Flush buffer before reading to ensure we have all data
     await this.flush()
 
-    logger.warn('deleteBetweenDates is inefficient with CSV storage - consider using SQLite for deletions')
+    logger.warn(
+      'deleteBetweenDates is inefficient with CSV storage - consider using SQLite for deletions'
+    )
 
     try {
       const files = await this.getRelevantFiles(symbol, exchange)
@@ -425,7 +435,7 @@ export class CsvRepository extends FileBasedRepository {
       for (const file of files) {
         const data = await this.readCsvFile(file)
         const filtered = data.filter(
-          item => item.timestamp < startTime || item.timestamp > endTime,
+          (item) => item.timestamp < startTime || item.timestamp > endTime
         )
 
         const deletedCount = data.length - filtered.length
@@ -439,7 +449,11 @@ export class CsvRepository extends FileBasedRepository {
 
       return totalDeleted
     } catch (error) {
-      logger.error('Failed to delete between dates', { error, startTime, endTime })
+      logger.error('Failed to delete between dates', {
+        error,
+        startTime,
+        endTime
+      })
       throw new RepositoryStorageError(
         `Failed to delete between dates: ${String(error)}`,
         error instanceof Error ? error : undefined
@@ -450,7 +464,10 @@ export class CsvRepository extends FileBasedRepository {
   /**
    * Rewrite a CSV file with new data
    */
-  private async rewriteCsvFile(filePath: string, data: OhlcvDto[]): Promise<void> {
+  private async rewriteCsvFile(
+    filePath: string,
+    data: OhlcvDto[]
+  ): Promise<void> {
     if (data.length === 0) {
       // Delete the file if no data remains
       await fs.unlink(filePath)
@@ -467,19 +484,23 @@ export class CsvRepository extends FileBasedRepository {
     await fs.writeFile(filePath, content, 'utf8')
   }
 
-
   /**
    * Get repository statistics and health information
    */
   async getStats(): Promise<{
-    totalRecords: number
-    uniqueSymbols: number
-    uniqueExchanges: number
+    totalRecords: number;
+    uniqueSymbols: number;
+    uniqueExchanges: number;
     dataDateRange: {
-      earliest: number | null
-      latest: number | null
-    }
-    storageSize?: number
+      earliest: number | null;
+      latest: number | null;
+    };
+    storageSize?: number;
+    bufferStats?: {
+      currentSize: number;
+      columns: string[];
+      isEmpty: boolean;
+    };
   }> {
     this.ensureReady()
 
@@ -497,8 +518,8 @@ export class CsvRepository extends FileBasedRepository {
         totalRecords += data.length
 
         for (const item of data) {
-          symbols.add(item.symbol)
-          exchanges.add(item.exchange)
+          // symbols.add(item.symbol)
+          // exchanges.add(item.exchange)
 
           if (earliest === null || item.timestamp < earliest) {
             earliest = item.timestamp
@@ -517,13 +538,13 @@ export class CsvRepository extends FileBasedRepository {
         }
       }
 
-
       return {
         totalRecords,
         uniqueSymbols: symbols.size,
         uniqueExchanges: exchanges.size,
         dataDateRange: { earliest, latest },
-        storageSize
+        storageSize,
+        bufferStats: this.getBufferStats()
       }
     } catch (error) {
       logger.error('Failed to get stats', { error })
@@ -542,16 +563,27 @@ export class CsvRepository extends FileBasedRepository {
   private generateHeadersFromExpected(): string[] {
     // Standard headers in order
     const headers = [...this.csvHeaders]
-    
+
     // Add expected additional fields
-    const standardKeys = new Set(['timestamp', 'symbol', 'exchange', 'open', 'high', 'low', 'close', 'volume'])
-    
+    const standardKeys = new Set([
+      'timestamp',
+      'symbol',
+      'exchange',
+      'open',
+      'high',
+      'low',
+      'close',
+      'volume'
+    ])
+
     // Get additional fields that aren't standard OHLCV
-    const additionalFields = this.expectedOutputFields.filter(field => !standardKeys.has(field))
-    
+    const additionalFields = this.expectedOutputFields.filter(
+      (field) => !standardKeys.has(field)
+    )
+
     // Add additional fields to headers
     headers.push(...additionalFields)
-    
+
     return headers
   }
 
@@ -561,31 +593,41 @@ export class CsvRepository extends FileBasedRepository {
   private generateHeaders(data: OhlcvDto): string[] {
     // Standard headers in order
     const headers = [...this.csvHeaders]
-    
+
     // Add any additional fields from transforms
-    const standardKeys = new Set(['timestamp', 'symbol', 'exchange', 'open', 'high', 'low', 'close', 'volume'])
-    
+    const standardKeys = new Set([
+      'timestamp',
+      'symbol',
+      'exchange',
+      'open',
+      'high',
+      'low',
+      'close',
+      'volume'
+    ])
+
     // Get all additional keys
-    const additionalKeys = Object.keys(data)
-      .filter(key => !standardKeys.has(key))
-    
+    const additionalKeys = Object.keys(data).filter(
+      (key) => !standardKeys.has(key)
+    )
+
     // Group by transform name (suffix after underscore)
     const transformGroups = new Map<string, string[]>()
-    
+
     for (const key of additionalKeys) {
       // Extract transform name from keys like "o_t1", "h_t1" -> "t1"
       const match = /_(.+)$/.exec(key)
       const transformName = match?.[1] ? match[1] : 'other'
-      
+
       if (!transformGroups.has(transformName)) {
         transformGroups.set(transformName, [])
       }
       transformGroups.get(transformName)!.push(key)
     }
-    
+
     // Sort transform names and add columns in grouped order
     const sortedTransformNames = Array.from(transformGroups.keys()).sort()
-    
+
     for (const transformName of sortedTransformNames) {
       const columns = transformGroups.get(transformName)!
       // Sort columns within each transform group (o_, h_, l_, c_, v_ order)
@@ -595,7 +637,7 @@ export class CsvRepository extends FileBasedRepository {
         const bPrefix = b.substring(0, 2)
         const aIndex = prefixOrder.indexOf(aPrefix)
         const bIndex = prefixOrder.indexOf(bPrefix)
-        
+
         if (aIndex !== -1 && bIndex !== -1) {
           return aIndex - bIndex
         }
@@ -603,7 +645,7 @@ export class CsvRepository extends FileBasedRepository {
       })
       headers.push(...sortedColumns)
     }
-    
+
     return headers
   }
 
@@ -614,8 +656,6 @@ export class CsvRepository extends FileBasedRepository {
     // Always include standard fields first
     const standardValues = [
       new Date(data.timestamp).toISOString(),
-      this.escapeCsvValue(data.symbol),
-      this.escapeCsvValue(data.exchange),
       data.open,
       data.high,
       data.low,
@@ -624,50 +664,72 @@ export class CsvRepository extends FileBasedRepository {
     ]
 
     // Check for additional fields added by transforms
-    const standardKeys = new Set(['timestamp', 'symbol', 'exchange', 'open', 'high', 'low', 'close', 'volume'])
-    
-    // Get all additional keys
-    const additionalKeys = Object.keys(data)
-      .filter(key => !standardKeys.has(key))
-    
-    // Group by transform name (suffix after underscore)
-    const transformGroups = new Map<string, string[]>()
-    
-    for (const key of additionalKeys) {
-      // Extract transform name from keys like "o_t1", "h_t1" -> "t1"
-      const match = /_(.+)$/.exec(key)
-      const transformName = match?.[1] ? match[1] : 'other'
-      
-      if (!transformGroups.has(transformName)) {
-        transformGroups.set(transformName, [])
-      }
-      transformGroups.get(transformName)!.push(key)
-    }
-    
-    // Sort transform names and add values in grouped order
+    const standardKeys = new Set([
+      'timestamp',
+      'open',
+      'high',
+      'low',
+      'close',
+      'volume'
+    ])
+
+    // Get all additional keys - use expected fields if available, otherwise from data
+    const additionalKeys =
+      this.expectedOutputFields.length > 0
+        ? this.expectedOutputFields.filter((field) => !standardKeys.has(field))
+        : Object.keys(data).filter((key) => !standardKeys.has(key))
+
     const additionalFields: string[] = []
-    const sortedTransformNames = Array.from(transformGroups.keys()).sort()
-    
-    for (const transformName of sortedTransformNames) {
-      const columns = transformGroups.get(transformName)!
-      // Sort columns within each transform group (o_, h_, l_, c_, v_ order)
-      const sortedColumns = columns.sort((a, b) => {
-        const prefixOrder = ['o_', 'h_', 'l_', 'c_', 'v_']
-        const aPrefix = a.substring(0, 2)
-        const bPrefix = b.substring(0, 2)
-        const aIndex = prefixOrder.indexOf(aPrefix)
-        const bIndex = prefixOrder.indexOf(bPrefix)
-        
-        if (aIndex !== -1 && bIndex !== -1) {
-          return aIndex - bIndex
-        }
-        return a.localeCompare(b)
-      })
-      
-      // Add values for each column
-      for (const key of sortedColumns) {
+
+    if (this.expectedOutputFields.length > 0) {
+      // When using expected fields, maintain their order
+      for (const key of additionalKeys) {
         const value = (data as any)[key]
-        additionalFields.push(value !== null && value !== undefined ? String(value) : '')
+        additionalFields.push(
+          value !== null && value !== undefined ? String(value) : ''
+        )
+      }
+    } else {
+      // Legacy behavior: group by transform name
+      const transformGroups = new Map<string, string[]>()
+
+      for (const key of additionalKeys) {
+        // Extract transform name from keys like "o_t1", "h_t1" -> "t1"
+        const match = /_(.+)$/.exec(key)
+        const transformName = match?.[1] ? match[1] : 'other'
+
+        if (!transformGroups.has(transformName)) {
+          transformGroups.set(transformName, [])
+        }
+        transformGroups.get(transformName)!.push(key)
+      }
+
+      // Sort transform names and add values in grouped order
+      const sortedTransformNames = Array.from(transformGroups.keys()).sort()
+
+      for (const transformName of sortedTransformNames) {
+        const columns = transformGroups.get(transformName)!
+        // Sort columns within each transform group (o_, h_, l_, c_, v_ order)
+        const sortedColumns = columns.sort((a, b) => {
+          const prefixOrder = ['o_', 'h_', 'l_', 'c_', 'v_']
+          const aPrefix = a.substring(0, 2)
+          const bPrefix = b.substring(0, 2)
+          const aIndex = prefixOrder.indexOf(aPrefix)
+          const bIndex = prefixOrder.indexOf(bPrefix)
+
+          if (aIndex !== -1 && bIndex !== -1) {
+            return aIndex - bIndex
+          }
+          return a.localeCompare(b)
+        })
+
+        // Add values for each column
+        for (const key of sortedColumns) {
+          const value = (data as any)[key]
+          additionalFields.push(
+            value !== null && value !== undefined ? String(value) : ''
+          )
+        }
       }
     }
 
@@ -686,7 +748,9 @@ export class CsvRepository extends FileBasedRepository {
       // Handle both seconds and milliseconds
       // If the number is less than year 2001 in milliseconds, it's likely seconds
       const SECONDS_THRESHOLD = 978307200000 // Year 2001 in milliseconds
-      return numericValue > 0 && numericValue < SECONDS_THRESHOLD ? numericValue * 1000 : numericValue
+      return numericValue > 0 && numericValue < SECONDS_THRESHOLD
+        ? numericValue * 1000
+        : numericValue
     }
 
     // Try to parse as ISO date string
@@ -698,13 +762,4 @@ export class CsvRepository extends FileBasedRepository {
     return date.getTime()
   }
 
-  /**
-   * Escape CSV values that contain special characters
-   */
-  private escapeCsvValue(value: string): string {
-    if (value.includes(this.csvDelimiter) || value.includes('"') || value.includes('\n')) {
-      return `"${value.replace(/"/g, '""')}"`
-    }
-    return value
-  }
 }

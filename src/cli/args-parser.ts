@@ -68,13 +68,12 @@ export function parseArgs(argv: string[]): CliArgs {
       (_, previous) => previous + 1,
       DEFAULT_ARGS.verbose
     )
-    .option(
-      '--no-progress',
-      'disable progress indicators',
-    )
+    .option('--no-progress', 'disable progress indicators')
 
   // Add examples to help
-  program.addHelpText('after', `
+  program.addHelpText(
+    'after',
+    `
 
 Examples:
   $ trdr                                    # Run pipeline once with default pipeline.json
@@ -97,7 +96,7 @@ Provider Configuration:
   When using type: 'provider' in input configuration:
   - duration: Supports multiple formats
     * Minutes: "5m", "30m", "60m"
-    * Hours: "1h", "6h", "24h" 
+    * Hours: "1h", "6h", "24h"
     * Days: "1d", "7d", "30d"
     * Weeks: "1w", "4w", "52w"
     * Months: "1M", "3M", "12M" (30-day approximation)
@@ -125,18 +124,26 @@ Output Options:
   const options = program.opts()
 
   // Validate mode option
-  if (options.mode && !['pipeline', 'interactive', 'server'].includes(options.mode)) {
-    console.error(`Invalid mode '${options.mode}'. Must be 'pipeline', 'interactive', or 'server'.`)
+  if (
+    options.mode &&
+    !['pipeline', 'interactive', 'server'].includes(options.mode)
+  ) {
+    console.error(
+      `Invalid mode '${options.mode}'. Must be 'pipeline', 'interactive', or 'server'.`
+    )
     process.exit(1)
   }
 
   return {
-    config: options.config !== undefined ? options.config : DEFAULT_ARGS.config!,
-    mode: (options.mode as 'pipeline' | 'interactive' | 'server') || DEFAULT_ARGS.mode!,
+    config:
+      options.config !== undefined ? options.config : DEFAULT_ARGS.config!,
+    mode:
+      (options.mode as 'pipeline' | 'interactive' | 'server') ||
+      DEFAULT_ARGS.mode!,
     override: options.override || DEFAULT_ARGS.override!,
     verbose: options.verbose || DEFAULT_ARGS.verbose!,
     noProgress: options.progress === false, // Commander converts --no-progress to progress: false
-    version: options.version || false,
+    version: options.version || false
   }
 }
 

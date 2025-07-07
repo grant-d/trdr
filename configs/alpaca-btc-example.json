@@ -4,7 +4,9 @@
   "input": {
     "type": "provider",
     "provider": "alpaca",
-    "symbols": ["BTC/USD"],
+    "symbols": [
+      "BTC/USD"
+    ],
     "timeframe": "5m",
     "duration": "24h"
   },

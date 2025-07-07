@@ -1,8 +1,5 @@
-import { 
-  CoinbaseAdvTradeClient,
-  CoinbaseAdvTradeCredentials,
-  ProductsService
-} from '@coinbase-sample/advanced-trade-sdk-ts/dist/index.js'
+import { CoinbaseAdvTradeClient, CoinbaseAdvTradeCredentials, ProductsService } from '@coinbase-sample/advanced-trade-sdk-ts/dist/index.js'
+import type { Candle } from '@coinbase-sample/advanced-trade-sdk-ts/dist/model/Candle'
 import type { DataProvider, DataProviderConfig, HistoricalParams, RealtimeParams } from '../../interfaces'
 import type { OhlcvDto } from '../../models'
 import { isValidOhlcv } from '../../models'
@@ -22,11 +19,11 @@ export class CoinbaseProvider implements DataProvider {
   private readonly apiKey?: string
   private readonly apiSecret?: string
   private readonly rateLimiter: RateLimiter
-  
+
   // Environment variable names
   private static readonly API_KEY_ENV = 'COINBASE_API_KEY'
   private static readonly API_SECRET_ENV = 'COINBASE_API_SECRET'
-  
+
   // Map from standard timeframe to Coinbase granularity (in seconds)
   private static readonly TIMEFRAME_MAP: Record<string, string> = {
     '1m': 'ONE_MINUTE',
@@ -40,9 +37,12 @@ export class CoinbaseProvider implements DataProvider {
   }
 
   constructor(config: DataProviderConfig = {}) {
-    this.apiKey = (config.apiKey as string) || process.env[CoinbaseProvider.API_KEY_ENV]
-    this.apiSecret = (config.apiSecret as string) || process.env[CoinbaseProvider.API_SECRET_ENV]
-    
+    this.apiKey =
+      (config.apiKey as string) || process.env[CoinbaseProvider.API_KEY_ENV]
+    this.apiSecret =
+      (config.apiSecret as string) ||
+      process.env[CoinbaseProvider.API_SECRET_ENV]
+
     // Initialize rate limiter with config
     this.rateLimiter = new RateLimiter({
       maxRequestsPerSecond: (config.rateLimitPerSecond as number) || 10,
@@ -51,7 +51,7 @@ export class CoinbaseProvider implements DataProvider {
       maxRetryDelayMs: (config.maxRetryDelayMs as number) || 60000,
       backoffMultiplier: (config.backoffMultiplier as number) || 2
     })
-    
+
     logger.info('CoinbaseProvider initialized')
   }
 
@@ -62,7 +62,7 @@ export class CoinbaseProvider implements DataProvider {
     }
 
     this.validateEnvVars()
-    
+
     try {
       // Initialize the SDK client
       const credentials = new CoinbaseAdvTradeCredentials(
@@ -71,18 +71,20 @@ export class CoinbaseProvider implements DataProvider {
       )
       this.client = new CoinbaseAdvTradeClient(credentials)
       this.productsService = new ProductsService(this.client)
-      
+
       // Test connection by fetching a product with rate limiting
       await this.rateLimiter.execute(
         () => this.productsService!.getProduct({ productId: 'BTC-USD' }),
         'connect'
       )
-      
+
       this.connected = true
       logger.info('CoinbaseProvider connected successfully')
     } catch (error) {
       logger.error('Failed to connect to Coinbase', { error })
-      throw new Error(`Failed to connect to Coinbase: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      throw new Error(
+        `Failed to connect to Coinbase: ${error instanceof Error ? error.message : 'Unknown error'}`
+      )
     }
   }
 
@@ -102,13 +104,15 @@ export class CoinbaseProvider implements DataProvider {
     }
   }
 
-  async *getHistoricalData(params: HistoricalParams): AsyncIterableIterator<OhlcvDto> {
+  async* getHistoricalData(
+    params: HistoricalParams
+  ): AsyncIterableIterator<OhlcvDto> {
     if (!this.connected || !this.productsService) {
       throw new Error('Provider not connected')
     }
 
     const granularity = this.mapTimeframe(params.timeframe)
-    
+
     for (const symbol of params.symbols) {
       logger.info('Fetching historical data', {
         symbol,
@@ -121,19 +125,20 @@ export class CoinbaseProvider implements DataProvider {
         // Convert timestamps to ISO strings for the API
         const startStr = new Date(params.start).toISOString()
         const endStr = new Date(params.end).toISOString()
-        
+
         // Fetch candles from Coinbase with rate limiting
         const response = await this.rateLimiter.execute(
-          () => this.productsService!.getProductCandles({
-            productId: symbol,
-            start: startStr,
-            end: endStr,
-            granularity,
-            limit: 300 // Max allowed by Coinbase
-          }),
+          () =>
+            this.productsService!.getProductCandles({
+              productId: symbol,
+              start: startStr,
+              end: endStr,
+              granularity,
+              limit: 300 // Max allowed by Coinbase
+            }),
           `getHistoricalData:${symbol}`
         )
-        
+
         if ('candles' in response && response.candles) {
           // Sort candles by timestamp (oldest first)
           const sortedCandles = [...response.candles].sort((a, b) => {
@@ -141,14 +146,14 @@ export class CoinbaseProvider implements DataProvider {
             const timeB = parseInt(b.start || '0')
             return timeA - timeB
           })
-          
+
           for (const candle of sortedCandles) {
-            const ohlcv = this.convertCandleToOhlcv(candle, symbol)
+            const ohlcv = this.convertCandleToOhlcv(candle)
             if (ohlcv && isValidOhlcv(ohlcv)) {
               yield ohlcv
             }
           }
-          
+
           logger.info('Historical data fetch completed', {
             symbol,
             count: response.candles.length
@@ -161,12 +166,16 @@ export class CoinbaseProvider implements DataProvider {
     }
   }
 
-  async *subscribeRealtime(_params: RealtimeParams): AsyncIterableIterator<OhlcvDto> {
+  async* subscribeRealtime(
+    _params: RealtimeParams
+  ): AsyncIterableIterator<OhlcvDto> {
     // Note: Coinbase Advanced Trade currently doesn't provide candle/OHLCV data via WebSocket
     // Their WebSocket API only provides ticker and trade (match) data
     // This would need to be aggregated into candles on the client side
     // For now, we throw an error as proper candle WebSocket support is not available
-    throw new Error('Coinbase WebSocket API does not provide candle/OHLCV data. Use ticker aggregation or polling REST API instead.')
+    throw new Error(
+      'Coinbase WebSocket API does not provide candle/OHLCV data. Use ticker aggregation or polling REST API instead.'
+    )
   }
 
   getRequiredEnvVars(): string[] {
@@ -175,17 +184,19 @@ export class CoinbaseProvider implements DataProvider {
 
   validateEnvVars(): void {
     const missing: string[] = []
-    
+
     if (!this.apiKey) {
       missing.push(CoinbaseProvider.API_KEY_ENV)
     }
-    
+
     if (!this.apiSecret) {
       missing.push(CoinbaseProvider.API_SECRET_ENV)
     }
 
     if (missing.length > 0) {
-      throw new Error(`Missing required environment variables: ${missing.join(', ')}`)
+      throw new Error(
+        `Missing required environment variables: ${missing.join(', ')}`
+      )
     }
   }
 
@@ -203,7 +214,9 @@ export class CoinbaseProvider implements DataProvider {
   private mapTimeframe(timeframe: string): string {
     const granularity = CoinbaseProvider.TIMEFRAME_MAP[timeframe]
     if (!granularity) {
-      throw new Error(`Unsupported timeframe: ${timeframe}. Supported: ${this.getSupportedTimeframes().join(', ')}`)
+      throw new Error(
+        `Unsupported timeframe: ${timeframe}. Supported: ${this.getSupportedTimeframes().join(', ')}`
+      )
     }
     return granularity
   }
@@ -211,7 +224,7 @@ export class CoinbaseProvider implements DataProvider {
   /**
    * Converts Coinbase candle data to OhlcvDto
    */
-  private convertCandleToOhlcv(candle: any, symbol: string): OhlcvDto | null {
+  private convertCandleToOhlcv(candle: Candle): OhlcvDto | null {
     try {
       // Parse string values to numbers
       const timestamp = parseInt(candle.start || '0') * 1000 // Convert from seconds to milliseconds
@@ -220,10 +233,8 @@ export class CoinbaseProvider implements DataProvider {
       const low = parseFloat(candle.low || '0')
       const close = parseFloat(candle.close || '0')
       const volume = parseFloat(candle.volume || '0')
-      
+
       return {
-        exchange: 'coinbase',
-        symbol,
         timestamp,
         open,
         high,

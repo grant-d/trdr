@@ -10,8 +10,8 @@ export interface ColumnMapping {
   low: string
   close: string
   volume: string
-  symbol?: string
-  exchange?: string
+  // symbol?: string
+  // exchange?: string
 }
 
 /**
@@ -27,9 +27,9 @@ export interface FileProviderConfig extends DataProviderConfig {
   /** Chunk size for streaming (number of rows) */
   chunkSize?: number
   /** Default exchange name for data */
-  exchange?: string
+  // exchange?: string
   /** Default symbol for data (if not in file) */
-  symbol?: string
+  // symbol?: string
   /** CSV-specific: delimiter character */
   delimiter?: string
 }

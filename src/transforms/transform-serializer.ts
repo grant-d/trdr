@@ -1,37 +1,28 @@
 import type { Transform, TransformConfig, TransformType } from '../interfaces'
-import { LogReturnsNormalizer } from './log-returns-normalizer'
-import { MinMaxNormalizer } from './min-max-normalizer'
-import { MissingValueHandler } from './missing-value-handler'
+import { DataBuffer, DataSlice } from '../utils'
+import { DollarBarGenerator, TickBarGenerator, TickImbalanceBarGenerator, TickRunBarGenerator, TimeBarGenerator, VolumeBarGenerator } from './bar-generators'
+import { LogReturnsNormalizer, MinMaxNormalizer, ZScoreNormalizer } from './normalizers'
 import { PriceCalculations } from './price-calculations'
-import { TimeframeAggregator } from './timeframe-aggregator'
-import { TransformPipeline } from './transform-pipeline'
-import { ZScoreNormalizer } from './z-score-normalizer'
 import {
-  SimpleMovingAverage,
-  ExponentialMovingAverage,
-  RelativeStrengthIndex,
-  BollingerBands,
-  Macd,
   AverageTrueRange,
-  VolumeWeightedAveragePrice,
+  BollingerBands,
+  ExponentialMovingAverage,
+  ImputeTransform,
+  Macd,
+  RelativeStrengthIndex,
+  SimpleMovingAverage,
+  VolumeWeightedAveragePrice
 } from './technical-indicators'
-import {
-  TickBarGenerator,
-  VolumeBarGenerator,
-  DollarBarGenerator,
-  TickImbalanceBarGenerator,
-  TickRunBarGenerator,
-  HeikinAshiGenerator,
-} from './bar-generators'
+import { TransformPipeline } from './transform-pipeline'
 
 /**
  * Serialized representation of a transform
  */
 export interface SerializedTransform {
   /** Type of the transform */
-  type: TransformType
+  type: TransformType;
   /** Transform parameters */
-  params: Record<string, any>
+  params: Record<string, any>;
 }
 
 /**
@@ -39,41 +30,67 @@ export interface SerializedTransform {
  */
 export interface SerializedPipeline {
   /** Array of serialized transforms in the pipeline */
-  transforms: SerializedTransform[]
+  transforms: SerializedTransform[];
   /** Pipeline description */
-  description?: string
+  description?: string;
   /** Pipeline metadata */
   metadata?: {
-    createdAt?: string
-    updatedAt?: string
-    version?: string
-  }
+    createdAt?: string;
+    updatedAt?: string;
+    version?: string;
+  };
 }
 
 /**
  * Registry of transform constructors for deserialization
  */
-const TRANSFORM_REGISTRY: Record<string, (params: any) => Transform> = {
-  logReturns: (params) => new LogReturnsNormalizer(params),
-  minMax: (params) => new MinMaxNormalizer(params),
-  zScore: (params) => new ZScoreNormalizer(params),
-  priceCalc: (params) => new PriceCalculations(params),
-  missingValues: (params) => new MissingValueHandler(params),
-  timeframeAggregation: (params) => new TimeframeAggregator(params),
-  sma: (params) => new SimpleMovingAverage(params),
-  ema: (params) => new ExponentialMovingAverage(params),
-  rsi: (params) => new RelativeStrengthIndex(params),
-  bollinger: (params) => new BollingerBands(params),
-  macd: (params) => new Macd(params),
-  atr: (params) => new AverageTrueRange(params),
-  vwap: (params) => new VolumeWeightedAveragePrice(params),
-  tickBars: (params) => new TickBarGenerator(params),
-  volumeBars: (params) => new VolumeBarGenerator(params),
-  dollarBars: (params) => new DollarBarGenerator(params),
-  tickImbalanceBars: (params) => new TickImbalanceBarGenerator(params),
-  tickRunBars: (params) => new TickRunBarGenerator(params),
-  heikinAshi: (params) => new HeikinAshiGenerator(params),
+// Note: Transform serialization needs to be updated for the new buffer-based architecture
+// For now, create a dummy buffer and slice for deserialization
+const createDummyBuffer = () => {
+  return new DataBuffer({
+    columns: {
+      timestamp: { index: 0 },
+      symbol: { index: 1 },
+      exchange: { index: 2 },
+      open: { index: 3 },
+      high: { index: 4 },
+      low: { index: 5 },
+      close: { index: 6 },
+      volume: { index: 7 }
+    }
+  })
 }
+
+const createDummySlice = () => {
+  const buffer = createDummyBuffer()
+  return new DataSlice(buffer, 0, buffer.length())
+}
+
+const TRANSFORM_REGISTRY: Readonly<Record<string, (params: any) => Transform>> =
+  {
+    logReturns: (params) =>
+      new LogReturnsNormalizer(params, createDummySlice()),
+    minMax: (params) => new MinMaxNormalizer(params, createDummySlice()),
+    zScore: (params) => new ZScoreNormalizer(params, createDummySlice()),
+    priceCalc: (params) => new PriceCalculations(params, createDummySlice()),
+    impute: (params) => new ImputeTransform(params, createDummySlice()),
+    timeBars: (params) => new TimeBarGenerator(params, createDummySlice()),
+    sma: (params) => new SimpleMovingAverage(params, createDummySlice()),
+    ema: (params) => new ExponentialMovingAverage(params, createDummySlice()),
+    rsi: (params) => new RelativeStrengthIndex(params, createDummySlice()),
+    bollinger: (params) => new BollingerBands(params, createDummySlice()),
+    macd: (params) => new Macd(params, createDummySlice()),
+    atr: (params) => new AverageTrueRange(params, createDummySlice()),
+    vwap: (params) =>
+      new VolumeWeightedAveragePrice(params, createDummySlice()),
+    tickBars: (params) => new TickBarGenerator(params, createDummySlice()),
+    volumeBars: (params) => new VolumeBarGenerator(params, createDummySlice()),
+    dollarBars: (params) => new DollarBarGenerator(params, createDummySlice()),
+    tickImbalanceBars: (params) =>
+      new TickImbalanceBarGenerator(params, createDummySlice()),
+    tickRunBars: (params) =>
+      new TickRunBarGenerator(params, createDummySlice())
+  }
 
 /**
  * Utility class for serializing and deserializing transforms
@@ -94,11 +111,13 @@ export class TransformSerializer {
   /**
    * Serialize a transform pipeline
    */
-  public static serializePipeline(pipeline: TransformPipeline): SerializedPipeline {
+  public static serializePipeline(
+    pipeline: TransformPipeline
+  ): SerializedPipeline {
     const transforms = pipeline.getTransforms()
-    
+
     return {
-      transforms: transforms.map(t => this.serializeTransform(t)),
+      transforms: transforms.map((t) => this.serializeTransform(t)),
       description: pipeline.description,
       metadata: {
         createdAt: new Date().toISOString(),
@@ -110,9 +129,11 @@ export class TransformSerializer {
   /**
    * Deserialize a transform from a serialized representation
    */
-  public static deserializeTransform(serialized: SerializedTransform): Transform {
+  public static deserializeTransform(
+    serialized: SerializedTransform
+  ): Transform {
     const constructor = TRANSFORM_REGISTRY[serialized.type]
-    
+
     if (!constructor) {
       throw new Error(`Unknown transform type: ${serialized.type}`)
     }
@@ -125,9 +146,13 @@ export class TransformSerializer {
   /**
    * Deserialize a transform pipeline
    */
-  public static deserializePipeline(serialized: SerializedPipeline): TransformPipeline {
-    const transforms = serialized.transforms.map(t => this.deserializeTransform(t))
-    
+  public static deserializePipeline(
+    serialized: SerializedPipeline
+  ): TransformPipeline {
+    const transforms = serialized.transforms.map((t) =>
+      this.deserializeTransform(t)
+    )
+
     return new TransformPipeline({
       transforms,
       description: serialized.description
@@ -138,7 +163,9 @@ export class TransformSerializer {
    * Convert transform configuration to serialized form
    * This is useful for saving configurations
    */
-  public static configToSerialized(config: TransformConfig): SerializedTransform {
+  public static configToSerialized(
+    config: TransformConfig
+  ): SerializedTransform {
     return {
       type: config.type,
       params: config.params
@@ -161,7 +188,7 @@ export class TransformSerializer {
    */
   public static fromJSON(json: string): Transform | TransformPipeline {
     const parsed = JSON.parse(json)
-    
+
     // Check if it's a pipeline
     if ('transforms' in parsed && Array.isArray(parsed.transforms)) {
       return this.deserializePipeline(parsed)
@@ -173,7 +200,9 @@ export class TransformSerializer {
   /**
    * Validate a serialized transform structure
    */
-  public static validateSerialized(serialized: any): serialized is SerializedTransform {
+  public static validateSerialized(
+    serialized: any
+  ): serialized is SerializedTransform {
     if (!serialized || typeof serialized !== 'object') {
       return false
     }
@@ -187,7 +216,10 @@ export class TransformSerializer {
     }
 
     // Validate known transform types
-    if (!(serialized.type in TRANSFORM_REGISTRY) && serialized.type !== 'pipeline') {
+    if (
+      !(serialized.type in TRANSFORM_REGISTRY) &&
+      serialized.type !== 'pipeline'
+    ) {
       return false
     }
 

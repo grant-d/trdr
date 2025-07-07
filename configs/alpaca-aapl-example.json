@@ -4,7 +4,9 @@
   "input": {
     "type": "provider",
     "provider": "alpaca",
-    "symbols": ["AAPL"],
+    "symbols": [
+      "AAPL"
+    ],
     "timeframe": "1m",
     "duration": "1000bars"
   },

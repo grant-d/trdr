@@ -1,115 +1,103 @@
-import { createReadStream } from 'node:fs'
-import { createInterface } from 'node:readline'
 import type { HistoricalParams } from '../../interfaces'
-import type { OhlcvDto } from '../../models'
 import logger from '../../utils/logger'
 import { FileProvider } from './file-provider.base'
 import type { FileProviderConfig } from './types'
 
 /**
- * JSONL (JSON Lines) file provider implementation
- * Handles reading and writing JSONL files with streaming support
- * Each line contains a complete JSON object representing one OHLCV record
+ * JSONL file provider implementation
+ * Reads JSONL data and pushes directly to buffer
  */
 export class JsonlFileProvider extends FileProvider {
+  private pipeline?: { next(from: number, to: number): void }
+
   constructor(config: FileProviderConfig) {
     super(config)
   }
 
   /**
-   * Streams historical data from JSONL file
+   * Set the pipeline to notify when rows are added
    */
-  async* getHistoricalData(params: HistoricalParams): AsyncIterableIterator<OhlcvDto> {
+  setPipeline(pipeline: { next(): void }): void {
+    this.pipeline = pipeline
+  }
+
+  /**
+   * Process historical data from JSONL file
+   */
+  async processHistoricalData(params: HistoricalParams): Promise<void> {
     if (!this.connected) {
       throw new Error('Provider not connected. Call connect() first.')
     }
 
-    logger.info('Starting JSONL data stream', {
+    logger.info('Processing JSONL data', {
       path: this.filePath,
       symbols: params.symbols,
       start: new Date(params.start).toISOString(),
       end: new Date(params.end).toISOString()
     })
 
-    const fileStream = createReadStream(this.filePath, { encoding: 'utf8' })
-    const rl = createInterface({
-      input: fileStream,
-      crlfDelay: Infinity
-    })
+    await this.processFile(this.pipeline as any)
+  }
 
+  /**
+   * Process a single JSONL line
+   */
+  protected processLine(line: string): boolean {
     try {
-      let rowNumber = 0
-      let yieldedCount = 0
-      const chunk: OhlcvDto[] = []
+      const rawData = JSON.parse(line)
 
-      for await (const line of rl) {
-        rowNumber++
-        
-        // Skip empty lines
-        if (!line.trim()) continue
+      // Extract values using column mapping
+      const timestamp = this.parseTimestamp(rawData[this.columnMapping.timestamp])
+      const open = this.parseNumber(rawData[this.columnMapping.open], 'open')
+      const high = this.parseNumber(rawData[this.columnMapping.high], 'high')
+      const low = this.parseNumber(rawData[this.columnMapping.low], 'low')
+      const close = this.parseNumber(rawData[this.columnMapping.close], 'close')
+      const volume = this.parseNumber(rawData[this.columnMapping.volume], 'volume')
 
-        try {
-          // Parse JSON line
-          const row = JSON.parse(line)
-          
-          // Transform row to OHLCV
-          const ohlcv = this.validateAndTransform(row, rowNumber)
-          if (!ohlcv) continue
-
-          // Filter by params
-          if (!this.matchesParams(ohlcv, params)) continue
-
-          // Add to chunk
-          chunk.push(ohlcv)
-
-          // Yield chunk when it reaches configured size
-          if (chunk.length >= this.chunkSize) {
-            for (const item of chunk) {
-              yield item
-              yieldedCount++
-            }
-            chunk.length = 0
-          }
-        } catch (parseError) {
-          logger.warn('Failed to parse JSONL line', { 
-            line: rowNumber, 
-            error: parseError 
-          })
-        }
-      }
-
-      // Yield remaining items
-      for (const item of chunk) {
-        yield item
-        yieldedCount++
-      }
-
-      logger.info('JSONL streaming completed', {
-        path: this.filePath,
-        rowsProcessed: rowNumber,
-        rowsYielded: yieldedCount
+      // Push to buffer
+      this._buffer!.push({
+        timestamp,
+        open,
+        high,
+        low,
+        close,
+        volume
       })
+
+      return true
     } catch (error) {
-      logger.error('Error reading JSONL file', { error, path: this.filePath })
-      throw error
-    } finally {
-      // Ensure readline interface is closed
-      rl.close()
-      // Destroy the underlying stream
-      fileStream.destroy()
+      logger.warn('Failed to parse JSON line', {
+        error: error instanceof Error ? error.message : String(error),
+        line: line.substring(0, 100)
+      })
+      return false
     }
   }
 
   /**
-   * Checks if OHLCV data matches the query parameters
+   * Parse timestamp helper
    */
-  private matchesParams(ohlcv: OhlcvDto, params: HistoricalParams): boolean {
-    // Check timestamp range
-    if (ohlcv.timestamp < params.start || ohlcv.timestamp > params.end) {
-      return false
-    }
+  protected parseTimestamp(value: unknown): number {
+    return super.parseTimestamp(value, 0)
+  }
 
-    // Check symbol filter
-    return !(params.symbols.length > 0 && !params.symbols.includes(ohlcv.symbol))
+  /**
+   * Parse number helper
+   */
+  protected parseNumber(value: unknown, field: string): number {
+    return super.parseNumber(value, field, 0)
+  }
+
+  /**
+   * Required by FileProvider interface - just processes the data
+   */
+  async* getHistoricalData(
+    params: HistoricalParams
+  ): AsyncIterableIterator<any> {
+    // Process all data into buffer
+    await this.processHistoricalData(params)
+
+    // Don't yield anything - data is in buffer
+    return
   }
 }

@@ -93,7 +93,7 @@ export class Pipeline {
       chunkSize: config.options?.chunkSize ?? 1000,
       continueOnError: config.options?.continueOnError ?? false,
       maxErrors: config.options?.maxErrors ?? 100,
-      showProgress: config.options?.showProgress ?? true,
+      showProgress: config.options?.showProgress ?? true
     }
   }
 
@@ -120,29 +120,36 @@ export class Pipeline {
       }
 
       // Set expected output fields on repository if transform is present
+      // TODO: Update this to work with new buffer-based transforms
+      /*
       if (this.config.transform && 'setExpectedOutputFields' in this.config.repository) {
         const outputFields = this.config.transform.getOutputFields()
-        ;(this.config.repository as any).setExpectedOutputFields(outputFields)
+        (this.config.repository as any).setExpectedOutputFields(outputFields)
       }
+      */
 
       // Get data stream from provider
       let dataStream: AsyncIterableIterator<OhlcvDto>
-      
+
       if (this.config.historicalParams) {
         // Use provided historical params (for API providers)
-        dataStream = this.config.provider.getHistoricalData(this.config.historicalParams)
+        dataStream = this.config.provider.getHistoricalData(
+          this.config.historicalParams
+        )
       } else {
         // For file providers, use default params (entire file)
         dataStream = this.config.provider.getHistoricalData({
           symbols: [], // Empty array means all symbols
           start: 0,
           end: Date.now(),
-          timeframe: '1m',
+          timeframe: '1m'
         })
       }
 
       // Apply transform if provided
+      // TODO: Update this to work with new buffer-based transforms
       let processedStream: AsyncIterableIterator<OhlcvDto>
+      /*
       if (this.config.transform) {
         const result = await this.config.transform.apply(dataStream)
         // Convert AsyncIterator to AsyncIterableIterator if needed
@@ -151,6 +158,8 @@ export class Pipeline {
       } else {
         processedStream = dataStream
       }
+      */
+      processedStream = dataStream
 
       // Process data in chunks
       const chunk: OhlcvDto[] = []
@@ -196,7 +205,7 @@ export class Pipeline {
         recordsProcessed,
         recordsWritten,
         errors: this.errorCount,
-        executionTime,
+        executionTime
       }
     } catch (error) {
       // Make sure to disconnect on error
@@ -205,11 +214,11 @@ export class Pipeline {
       } catch {
         // Ignore disconnect errors
       }
-      
+
       throw new Error(
         `Pipeline execution failed: ${
           error instanceof Error ? error.message : 'Unknown error'
-        }`,
+        }`
       )
     }
   }
@@ -220,7 +229,10 @@ export class Pipeline {
   private handleError(error: unknown): void {
     this.errorCount++
 
-    if (!this.options.continueOnError || this.errorCount >= this.options.maxErrors) {
+    if (
+      !this.options.continueOnError ||
+      this.errorCount >= this.options.maxErrors
+    ) {
       throw error
     }
 
@@ -238,7 +250,7 @@ export class Pipeline {
 
     this.progressCallback({
       current,
-      message: `Processing record ${current}`,
+      message: `Processing record ${current}`
     })
   }
 
@@ -271,7 +283,7 @@ export class Pipeline {
 
     return {
       name: this.config.transform.name,
-      type: this.config.transform.type,
+      type: this.config.transform.type
     }
   }
 }

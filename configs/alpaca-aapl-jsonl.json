@@ -2,34 +2,47 @@
   "input": {
     "type": "provider",
     "provider": "alpaca",
-    "symbols": ["AAPL"],
+    "symbols": [
+      "AAPL"
+    ],
     "timeframe": "1d",
     "duration": "1y"
   },
   "transformations": [
     {
       "type": "logReturns",
-      "enabled": true,
+      "disabled": false,
       "params": {
-        "description": "Calculate log returns for all OHLCV columns"
+        "tx": {
+          "in": "close",
+          "out": "returns"
+        }
       }
     },
     {
       "type": "zScore",
-      "enabled": true,
+      "disabled": false,
       "params": {
-        "description": "Z-score normalization of all columns",
+        "tx": [
+          {
+            "in": "close",
+            "out": "close_zscore"
+          }
+        ],
         "windowSize": 20
       }
     },
     {
       "type": "minMax",
-      "enabled": true,
+      "disabled": false,
       "params": {
-        "description": "Min-max normalization with 10-bar window",
-        "windowSize": 10,
-        "targetMin": 0,
-        "targetMax": 1
+        "tx": [
+          {
+            "in": "close",
+            "out": "close_normalized"
+          }
+        ],
+        "windowSize": 10
       }
     }
   ],

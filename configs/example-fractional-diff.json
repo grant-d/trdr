@@ -2,7 +2,9 @@
   "input": {
     "type": "provider",
     "provider": "alpaca",
-    "symbols": ["SPY"],
+    "symbols": [
+      "SPY"
+    ],
     "timeframe": "1h",
     "duration": "30d"
   },
@@ -16,20 +18,46 @@
       "type": "missingValues",
       "disabled": false,
       "params": {
-        "strategy": "forward",
-        "in": ["open", "high", "low", "close", "volume"],
-        "out": ["open", "high", "low", "close", "volume"]
+        "tx": [
+          {
+            "in": "open",
+            "out": "open",
+            "strategy": "forward"
+          },
+          {
+            "in": "high",
+            "out": "high",
+            "strategy": "forward"
+          },
+          {
+            "in": "low",
+            "out": "low",
+            "strategy": "forward"
+          },
+          {
+            "in": "close",
+            "out": "close",
+            "strategy": "forward"
+          },
+          {
+            "in": "volume",
+            "out": "volume",
+            "strategy": "forward"
+          }
+        ]
       }
     },
     {
       "type": "fractionalDiff",
       "disabled": false,
       "params": {
+        "tx": {
+          "in": "close",
+          "out": "close_fd"
+        },
         "d": 0.3,
         "maxWeights": 50,
-        "minWeight": 0.001,
-        "in": ["close"],
-        "out": ["close_fd"]
+        "minWeight": 0.001
       }
     }
   ],

@@ -11,7 +11,7 @@ export type TransformedOhlcvDto = OhlcvDto & {
   high_log_return?: number
   low_log_return?: number
   high_return?: number
-  
+
   // Z-score fields
   open_zscore?: number
   high_zscore?: number
@@ -19,7 +19,7 @@ export type TransformedOhlcvDto = OhlcvDto & {
   close_zscore?: number
   volume_zscore?: number
   close_z?: number
-  
+
   // Min-max normalized fields
   open_norm?: number
   high_norm?: number
@@ -28,4 +28,4 @@ export type TransformedOhlcvDto = OhlcvDto & {
   volume_norm?: number
   close_scaled?: number
   close_01?: number
-}
+};

@@ -2,7 +2,9 @@
   "input": {
     "type": "provider",
     "provider": "alpaca",
-    "symbols": ["AAPL"],
+    "symbols": [
+      "AAPL"
+    ],
     "timeframe": "1d",
     "duration": "30d"
   },

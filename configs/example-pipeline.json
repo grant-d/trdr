@@ -6,7 +6,7 @@
     "columnMapping": {
       "timestamp": "Date",
       "open": "Open",
-      "high": "High", 
+      "high": "High",
       "low": "Low",
       "close": "Close",
       "volume": "Volume"
@@ -20,17 +20,24 @@
   "transformations": [
     {
       "type": "logReturns",
-      "enabled": true,
+      "disabled": false,
       "params": {
-        "outputField": "returns",
-        "priceField": "close"
+        "tx": {
+          "in": "close",
+          "out": "returns"
+        }
       }
     },
     {
       "type": "zScore",
-      "enabled": true,
+      "disabled": false,
       "params": {
-        "fields": ["returns"],
+        "tx": [
+          {
+            "in": "close",
+            "out": "close_zscore"
+          }
+        ],
         "windowSize": 20
       }
     }
