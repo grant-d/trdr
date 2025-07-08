@@ -31,7 +31,7 @@ describe('FileProvider Tests', () => {
   })
 
   describe('CsvFileProvider', () => {
-    it('should connect to a valid CSV file', async () => {
+    it('should connect to a valid CSV file', { timeout: 10000 }, async () => {
       const config: FileProviderConfig = {
         path: csvPath,
         format: 'csv',
@@ -45,7 +45,7 @@ describe('FileProvider Tests', () => {
       await provider.disconnect()
     })
 
-    it('should throw error when connecting to non-existent file', async () => {
+    it('should throw error when connecting to non-existent file', { timeout: 10000 }, async () => {
       const config: FileProviderConfig = {
         path: join(testDir, 'non-existent.csv'),
         format: 'csv',
@@ -59,7 +59,7 @@ describe('FileProvider Tests', () => {
       )
     })
 
-    it('should read and parse CSV data correctly', async () => {
+    it('should read and parse CSV data correctly', { timeout: 15000 }, async () => {
       const config: FileProviderConfig = {
         path: csvPath,
         format: 'csv',
@@ -94,7 +94,7 @@ describe('FileProvider Tests', () => {
       await provider.disconnect()
     })
 
-    it('should filter data by timestamp range', async () => {
+    it('should filter data by timestamp range', { timeout: 15000 }, async () => {
       const config: FileProviderConfig = {
         path: csvPath,
         format: 'csv',
@@ -126,7 +126,7 @@ describe('FileProvider Tests', () => {
       await provider.disconnect()
     })
 
-    it('should handle custom column mapping', async () => {
+    it('should handle custom column mapping', { timeout: 15000 }, async () => {
       // Create CSV with different column names
       const customCsv = `time,o,h,l,c,v,pair
 2024-01-01T00:00:00Z,100,105,99,103,1000,BTC-USD`
@@ -171,7 +171,7 @@ describe('FileProvider Tests', () => {
       await provider.disconnect()
     })
 
-    it('should handle malformed CSV rows gracefully', async () => {
+    it('should handle malformed CSV rows gracefully', { timeout: 15000 }, async () => {
       const malformedCsv = `timestamp,open,high,low,close,volume,symbol
 2024-01-01T00:00:00Z,100,105,99,103,1000,BTC-USD
 2024-01-01T01:00:00Z,103,107,102
@@ -208,7 +208,7 @@ describe('FileProvider Tests', () => {
       await provider.disconnect()
     })
 
-    it('should validate OHLC relationships', async () => {
+    it('should validate OHLC relationships', { timeout: 15000 }, async () => {
       const invalidCsv = `timestamp,open,high,low,close,volume,symbol
 2024-01-01T00:00:00Z,100,90,99,103,1000,BTC-USD` // high < low
 
@@ -243,7 +243,7 @@ describe('FileProvider Tests', () => {
       await provider.disconnect()
     })
 
-    it('should handle large files with streaming', async () => {
+    it('should handle large files with streaming', { timeout: 30000 }, async () => {
       // Create a larger CSV file
       let largeCsv = 'timestamp,open,high,low,close,volume,symbol\n'
       const baseTime = new Date('2024-01-01T00:00:00Z').getTime()

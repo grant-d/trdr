@@ -77,7 +77,10 @@
       "Bash(tsc:*)",
       "Bash(DEBUG=*)",
       "Bash(LOG_LEVEL=error yarn test tests/integration/csv-sma-logreturns-jsonl.test.ts)",
-      "Bash(LOG_LEVEL=debug yarn test tests/integration/csv-sma-logreturns-jsonl.test.ts)"
+      "Bash(LOG_LEVEL=debug yarn test tests/integration/csv-sma-logreturns-jsonl.test.ts)",
+      "Bash(git commit:*)",
+      "Bash(NODE_OPTIONS='--unhandled-rejections=strict --experimental-detect-module' tsx --test tests/unit/cli/config-overrides.test.ts)",
+      "Bash(yarn exec tsx:*)"
     ],
     "deny": []
   }

@@ -7,6 +7,8 @@ import { forceCleanupAsyncHandles } from '../../helpers/test-cleanup'
 let stdoutOutput = ''
 const originalWrite = process.stdout.write
 const activeTimeouts = new Set<NodeJS.Timeout>()
+const activeIntervals = new Set<NodeJS.Timeout>()
+const activeSpinners = new Set<any>()
 
 // Helper function to create tracked timeouts
 function createTimeout(callback: () => void, delay: number): Promise<void> {
@@ -36,6 +38,23 @@ afterEach(() => {
     clearTimeout(timeout)
   }
   activeTimeouts.clear()
+  
+  // Clear any remaining intervals to prevent hangs
+  for (const interval of Array.from(activeIntervals)) {
+    clearInterval(interval)
+  }
+  activeIntervals.clear()
+  
+  // Stop any active spinners
+  for (const spinner of Array.from(activeSpinners)) {
+    try {
+      spinner.stop()
+    } catch {
+      // Ignore errors
+    }
+  }
+  activeSpinners.clear()
+  
   forceCleanupAsyncHandles()
 })
 
@@ -175,6 +194,7 @@ describe('Progress Indicator', () => {
   describe('Spinner', () => {
     it('should cycle through frames', async () => {
       const spinner = new Spinner(['1', '2', '3'])
+      activeSpinners.add(spinner)
 
       spinner.start('Testing')
 
@@ -199,6 +219,7 @@ describe('Progress Indicator', () => {
 
     it('should update message', async () => {
       const spinner = new Spinner()
+      activeSpinners.add(spinner)
 
       spinner.start('Initial')
       ok(stdoutOutput.includes('Initial'))
@@ -223,6 +244,7 @@ describe('Progress Indicator', () => {
 
     it('should show final message on stop', () => {
       const spinner = new Spinner()
+      activeSpinners.add(spinner)
 
       spinner.start()
       stdoutOutput = ''
