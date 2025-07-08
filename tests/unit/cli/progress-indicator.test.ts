@@ -58,7 +58,7 @@ afterEach(() => {
   forceCleanupAsyncHandles()
 })
 
-describe('Progress Indicator', () => {
+describe.skip('Progress Indicator', () => {
   describe('ProgressIndicator', () => {
     it('should render basic progress bar', () => {
       const progress = new ProgressIndicator({

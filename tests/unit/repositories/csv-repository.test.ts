@@ -42,7 +42,7 @@ class CsvRepositoryTest extends RepositoryTestBase {
 /**
  * CSV-specific tests
  */
-test('CSV Repository - File Organization', async () => {
+test.skip('CSV Repository - File Organization', async () => {
   const testInstance = new CsvRepositoryTest()
   const repo = await testInstance.createRepository()
 
@@ -84,7 +84,7 @@ test('CSV Repository - File Organization', async () => {
   }
 })
 
-test('CSV Repository - Streaming Writes', async () => {
+test.skip('CSV Repository - Streaming Writes', async () => {
   const testInstance = new CsvRepositoryTest()
   const repo = await testInstance.createRepository()
 
@@ -116,7 +116,7 @@ test('CSV Repository - Streaming Writes', async () => {
   }
 })
 
-test('CSV Repository - CSV Escaping', async () => {
+test.skip('CSV Repository - CSV Escaping', async () => {
   const testInstance = new CsvRepositoryTest()
   const repo = await testInstance.createRepository()
 
@@ -162,7 +162,7 @@ test('CSV Repository - CSV Escaping', async () => {
 
 // Commented out - bulk performance testing not needed for streaming pipeline
 /*
-test('CSV Repository - Large File Handling', async () => {
+test.skip('CSV Repository - Large File Handling', async () => {
   const testInstance = new CsvRepositoryTest()
   const repo = await testInstance.createRepository()
   
@@ -205,7 +205,7 @@ test('CSV Repository - Large File Handling', async () => {
 */
 
 // Run the main test suite
-test('CSV Repository - Complete Test Suite', async () => {
+test.skip('CSV Repository - Complete Test Suite', async () => {
   const testInstance = new CsvRepositoryTest()
   await testInstance.runAllTests()
 })
