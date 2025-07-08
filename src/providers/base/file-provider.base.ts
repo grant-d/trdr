@@ -190,63 +190,74 @@ export abstract class FileProvider implements DataProvider {
    * Returns number of rows loaded into buffer
    */
   async loadBatch(batchSize: number): Promise<number> {
-    if (!this.fileHandle) {
-      this.fileHandle = await fsPromises.open(this.filePath, 'r')
-    }
+    let fileHandle: fsPromises.FileHandle | undefined
+    
+    try {
+      if (!this.fileHandle) {
+        this.fileHandle = await fsPromises.open(this.filePath, 'r')
+      }
+      fileHandle = this.fileHandle
 
-    let loadedCount = 0
-    const chunkSize = 8192 // 8KB chunks
-    const readBuffer = Buffer.alloc(chunkSize)
+      let loadedCount = 0
+      const chunkSize = 8192 // 8KB chunks
+      const readBuffer = Buffer.alloc(chunkSize)
 
-    // Main processing loop
-    while (loadedCount < batchSize) {
-      // Process pending lines first
-      while (this.pendingLines.length > 0 && loadedCount < batchSize) {
-        const line = this.pendingLines.shift()!
-        if (this.processLine(line)) {
-          loadedCount++
+      // Main processing loop
+      while (loadedCount < batchSize) {
+        // Process pending lines first
+        while (this.pendingLines.length > 0 && loadedCount < batchSize) {
+          const line = this.pendingLines.shift()!
+          if (this.processLine(line)) {
+            loadedCount++
+          }
         }
-      }
 
-      if (loadedCount >= batchSize) {
-        return loadedCount
-      }
-      // Check if we have complete lines in buffer
-      const newlineIndex = this.lineBuffer.indexOf('\n')
-      if (newlineIndex !== -1) {
-        // Split all complete lines
-        const allLines = this.lineBuffer.split('\n')
-        this.lineBuffer = allLines.pop() || '' // Keep last incomplete line
-
-        // Add all complete lines to pending
-        this.pendingLines.push(...allLines)
-        continue // Process pending lines
-      }
-
-      // Read more from file
-      const { bytesRead } = await this.fileHandle.read(
-        readBuffer,
-        0,
-        chunkSize,
-        this.currentPosition
-      )
-
-      if (bytesRead === 0) {
-        // End of file - process remaining buffer
-        if (this.lineBuffer.trim() && this.processLine(this.lineBuffer)) {
-          loadedCount++
+        if (loadedCount >= batchSize) {
+          return loadedCount
         }
-        this.lineBuffer = ''
-        break
+        // Check if we have complete lines in buffer
+        const newlineIndex = this.lineBuffer.indexOf('\n')
+        if (newlineIndex !== -1) {
+          // Split all complete lines
+          const allLines = this.lineBuffer.split('\n')
+          this.lineBuffer = allLines.pop() || '' // Keep last incomplete line
+
+          // Add all complete lines to pending
+          this.pendingLines.push(...allLines)
+          continue // Process pending lines
+        }
+
+        // Read more from file
+        const { bytesRead } = await fileHandle.read(
+          readBuffer,
+          0,
+          chunkSize,
+          this.currentPosition
+        )
+
+        if (bytesRead === 0) {
+          // End of file - process remaining buffer
+          if (this.lineBuffer.trim() && this.processLine(this.lineBuffer)) {
+            loadedCount++
+          }
+          this.lineBuffer = ''
+          break
+        }
+
+        this.currentPosition += bytesRead
+        const chunk = readBuffer.subarray(0, bytesRead).toString('utf8')
+        this.lineBuffer += chunk
+
       }
 
-      this.currentPosition += bytesRead
-      const chunk = readBuffer.subarray(0, bytesRead).toString('utf8')
-      this.lineBuffer += chunk
-
+      return loadedCount
+    } catch (error) {
+      // Only close if we opened it in this method
+      if (fileHandle && !this.fileHandle) {
+        await fileHandle.close()
+      }
+      throw error
     }
-
-    return loadedCount
   }
 
   /**

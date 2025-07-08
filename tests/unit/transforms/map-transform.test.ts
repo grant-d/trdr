@@ -1,10 +1,10 @@
 import { strict as assert } from 'node:assert'
-import { test } from 'node:test'
+import { describe, it } from 'node:test'
 import { MapTransform } from '../../../src/transforms'
 import { DataBuffer, DataSlice } from '../../../src/utils'
 
-test('MapTransform', async (t) => {
-  await t.test('should copy single field to new name', () => {
+describe('MapTransform', () => {
+  it('should copy single field to new name', () => {
     const buffer = new DataBuffer({
       columns: {
         timestamp: { index: 0 },
@@ -33,7 +33,7 @@ test('MapTransform', async (t) => {
       }
     }, slice)
 
-    transform.next(0, 0)
+    transform.next(0, 1)
     const outputBuffer = transform.outputBuffer
 
     assert.equal(outputBuffer.length(), 1)
@@ -43,7 +43,7 @@ test('MapTransform', async (t) => {
     assert.equal((row as any).adj_close, 105)
   })
 
-  await t.test('should handle multiple mappings', () => {
+  it('should handle multiple mappings', () => {
     const buffer = new DataBuffer({
       columns: {
         timestamp: { index: 0 },
@@ -72,7 +72,7 @@ test('MapTransform', async (t) => {
       ]
     }, slice)
 
-    transform.next(0, 0)
+    transform.next(0, 1)
     const outputBuffer = transform.outputBuffer
 
     assert.equal(outputBuffer.length(), 1)
@@ -81,7 +81,7 @@ test('MapTransform', async (t) => {
     assert.equal((row as any).vol, 1000)
   })
 
-  await t.test('should handle basic functionality without errors', () => {
+  it('should handle basic functionality without errors', () => {
     const buffer = new DataBuffer({
       columns: {
         timestamp: { index: 0 },
@@ -102,7 +102,7 @@ test('MapTransform', async (t) => {
       }
     }, slice)
 
-    transform.next(0, 0)
+    transform.next(0, 1)
     const outputBuffer = transform.outputBuffer
 
     assert.equal(outputBuffer.length(), 1)

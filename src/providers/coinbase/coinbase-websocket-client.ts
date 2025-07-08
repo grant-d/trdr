@@ -172,8 +172,18 @@ export class CoinbaseWebSocketClient {
         yield { symbol, data }
       }
 
-      // Wait for new messages with timeout to allow breaking from loop
-      await new Promise((resolve) => setTimeout(resolve, 100))
+      // Wait for new messages with proper timeout resolution
+      await new Promise<void>((resolve) => {
+        const timeoutId = setTimeout(() => {
+          resolve()
+        }, 100)
+        
+        // Clear timeout if disconnecting
+        if (this.isDisconnecting) {
+          clearTimeout(timeoutId)
+          resolve()
+        }
+      })
 
       // Additional check to break loop when disconnecting
       if (this.isDisconnecting) {

@@ -48,7 +48,7 @@ function createTestDataBuffer(): DataBuffer {
   return buffer
 }
 
-test('ImputeTransform - Forward Fill Strategy', async () => {
+test('ImputeTransform - Forward Fill Strategy', () => {
   const params: ImputeParams = {
     tx: {
       in: 'open',
@@ -82,7 +82,7 @@ test('ImputeTransform - Forward Fill Strategy', async () => {
   assert.equal(outputBuffer.getValue(2, 5), 1200) // volume
 })
 
-test('ImputeTransform - Backward Fill Strategy', async () => {
+test('ImputeTransform - Backward Fill Strategy', () => {
   const params: ImputeParams = {
     tx: {
       in: 'open',
@@ -105,7 +105,7 @@ test('ImputeTransform - Backward Fill Strategy', async () => {
   assert.equal(outputBuffer.getValue(1, 1), 108) // open filled from next
 })
 
-test('ImputeTransform - Custom Value Strategy', async () => {
+test('ImputeTransform - Custom Value Strategy', () => {
   const params: ImputeParams = {
     tx: {
       in: 'open',
@@ -126,7 +126,7 @@ test('ImputeTransform - Custom Value Strategy', async () => {
   assert.equal(outputBuffer.getValue(1, 1), 0) // open
 })
 
-test('ImputeTransform - Multiple Fields', async () => {
+test('ImputeTransform - Multiple Fields', () => {
   const params: ImputeParams = {
     tx: [
       { in: 'open', out: 'open', strategy: 'forward', fillValue: 0 },
@@ -149,7 +149,7 @@ test('ImputeTransform - Multiple Fields', async () => {
   assert.equal(outputBuffer.getValue(1, 4), 105) // close filled
 })
 
-test('ImputeTransform - Basic Implementation', async () => {
+test('ImputeTransform - Basic Implementation', () => {
   const params: ImputeParams = {
     tx: {
       in: 'open',

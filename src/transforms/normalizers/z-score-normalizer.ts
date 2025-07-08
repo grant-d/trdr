@@ -54,7 +54,9 @@ const schema = z
     }
   )
 
-export interface ZScoreParams extends z.infer<typeof schema>, BaseTransformParams {
+export interface ZScoreParams extends BaseTransformParams {
+  description?: string
+  tx: z.infer<typeof txSchema> | z.infer<typeof txSchema>[]
 }
 
 interface State {
