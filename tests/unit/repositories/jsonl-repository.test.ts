@@ -154,7 +154,7 @@ test('Jsonl Repository - File Deduplication', async () => {
 
 // Commented out - bulk performance testing not needed for streaming pipeline
 /*
-test('Jsonl Repository - Compression Efficiency', async () => {
+test.skip('Jsonl Repository - Compression Efficiency', async () => {
   const testInstance = new JsonlRepositoryTest()
   const repo = await testInstance.createRepository()
   

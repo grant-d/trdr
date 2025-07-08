@@ -232,7 +232,7 @@ export class LorentzianDistanceBarGenerator extends BaseBarGenerator<
   ): void {
     // Calculate final distance for the bar
     const finalDistance = this.calculateLorentzianDistance(
-      { close: bar.close, volume: bar.volume } as any,
+      { close: bar.close, volume: bar.volume },
       bar
     )
 

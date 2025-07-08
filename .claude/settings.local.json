@@ -80,7 +80,26 @@
       "Bash(LOG_LEVEL=debug yarn test tests/integration/csv-sma-logreturns-jsonl.test.ts)",
       "Bash(git commit:*)",
       "Bash(NODE_OPTIONS='--unhandled-rejections=strict --experimental-detect-module' tsx --test tests/unit/cli/config-overrides.test.ts)",
-      "Bash(yarn exec tsx:*)"
+      "Bash(yarn exec tsx:*)",
+      "Bash(NODE_OPTIONS='--unhandled-rejections=strict --experimental-detect-module' tsx --test tests/unit/utils/data-buffer.test.ts)",
+      "Bash(NODE_ENV=test yarn test)",
+      "Bash(NODE_ENV=test NODE_OPTIONS='--unhandled-rejections=strict --experimental-detect-module' npx tsx --test tests/unit/utils/data-buffer.test.ts)",
+      "Bash(NODE_ENV=test NODE_OPTIONS='--unhandled-rejections=strict --experimental-detect-module' npx tsx --test tests/unit/cli/config-overrides.test.ts)",
+      "Bash(NODE_ENV=test node -e \"\nconst { createDefaultPipelineConfig } = require(''./src/cli/config-loader.ts'');\nconsole.log(''Creating config...'');\nconst config = createDefaultPipelineConfig();\nconsole.log(''Config created successfully'');\nconsole.log(''Keys:'', Object.keys(config));\nsetTimeout(() => {\n  console.log(''Process should exit cleanly'');\n  process.exit(0);\n}, 1000);\n\")",
+      "Bash(NODE_ENV=test npx tsx debug-hanging.ts)",
+      "Bash(NODE_ENV=test npx tsx --test debug-test-minimal.ts)",
+      "Bash(NODE_ENV=test npx tsx --test debug-test-config.ts)",
+      "Bash(NODE_ENV=test npx tsx --test debug-config-overrides-simple.ts)",
+      "Bash(NODE_ENV=test npx tsx --test tests/unit/cli/config-overrides.test.ts)",
+      "Bash(NODE_ENV=test npx tsx debug-import-test.ts)",
+      "Bash(NODE_ENV=test node -e \"\nimport(''./tests/unit/cli/config-overrides.test.ts'').then(() => {\n  console.log(''Module loaded successfully'');\n  setTimeout(() => process.exit(0), 1000);\n}).catch(err => {\n  console.error(''Error loading module:'', err);\n  process.exit(1);\n});\n\")",
+      "Bash(NODE_ENV=test npx tsx --test tests/unit/cli/pipeline-factory.test.ts)",
+      "Bash(NODE_ENV=test npx tsx --test debug-minimal-config-override.ts)",
+      "Bash(NODE_ENV=test npx tsx --test debug-config-override-imports.ts)",
+      "Bash(NODE_ENV=test npx tsx --test debug-config-override-subset.ts)",
+      "Bash(NODE_ENV=test npx tsx --test debug-config-override-imports2.ts)",
+      "Bash(NODE_ENV=test node:*)",
+      "Bash(NODE_ENV=test yarn tc:all)"
     ],
     "deny": []
   }

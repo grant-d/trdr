@@ -28,13 +28,12 @@ describe('AlpacaProvider Integration Tests', () => {
     forceCleanupAsyncHandles()
   })
   
-  it('should connect and disconnect successfully', async (t) => {
+  it('should connect and disconnect successfully', async () => {
     const isPaper = process.env.ALPACA_PAPER?.toLowerCase() !== 'false'
     const apiKey = isPaper ? process.env.ALPACA_PAPER_API_KEY : process.env.ALPACA_LIVE_API_KEY
     
     if (!apiKey) {
-      t.skip('API credentials not available')
-      return
+      throw new Error('API credentials not available')
     }
     
     assert.strictEqual(provider.isConnected(), false)
@@ -46,13 +45,12 @@ describe('AlpacaProvider Integration Tests', () => {
     assert.strictEqual(provider.isConnected(), false)
   })
   
-  it('should fetch historical data', async (t) => {
+  it('should fetch historical data', async () => {
     const isPaper = process.env.ALPACA_PAPER?.toLowerCase() !== 'false'
     const apiKey = isPaper ? process.env.ALPACA_PAPER_API_KEY : process.env.ALPACA_LIVE_API_KEY
     
     if (!apiKey) {
-      t.skip('API credentials not available')
-      return
+      throw new Error('API credentials not available')
     }
     
     await provider.connect()
@@ -140,13 +138,12 @@ describe('AlpacaProvider Integration Tests', () => {
     }
   })
   
-  it('should support standard and arbitrary timeframes', (t) => {
+  it('should support standard and arbitrary timeframes', () => {
     const isPaper = process.env.ALPACA_PAPER?.toLowerCase() !== 'false'
     const apiKey = isPaper ? process.env.ALPACA_PAPER_API_KEY : process.env.ALPACA_LIVE_API_KEY
     
     if (!apiKey) {
-      t.skip('API credentials not available')
-      return
+      throw new Error('API credentials not available')
     }
     
     const timeframes = provider.getSupportedTimeframes()
@@ -183,13 +180,12 @@ describe('AlpacaProvider Integration Tests', () => {
     )
   })
   
-  it('should fetch crypto historical data', async (t) => {
+  it('should fetch crypto historical data', async () => {
     const isPaper = process.env.ALPACA_PAPER?.toLowerCase() !== 'false'
     const apiKey = isPaper ? process.env.ALPACA_PAPER_API_KEY : process.env.ALPACA_LIVE_API_KEY
     
     if (!apiKey) {
-      t.skip('API credentials not available')
-      return
+      throw new Error('API credentials not available')
     }
     
     await provider.connect()
