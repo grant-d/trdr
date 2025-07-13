@@ -102,7 +102,9 @@
       "Bash(NODE_ENV=test yarn tc:all)",
       "Bash(NODE_ENV=test npx tsx --test tests/unit/repositories/csv-repository.test.ts)",
       "Bash(NODE_ENV=test npx tsx --test tests/unit/repositories/jsonl-repository.test.ts)",
-      "Bash(NODE_ENV=test yarn test:unit)"
+      "Bash(NODE_ENV=test yarn test:unit)",
+      "Bash(uv init:*)",
+      "Bash(uv add:*)"
     ],
     "deny": []
   }
