@@ -156,33 +156,93 @@ class GeneticAlgorithm:
             if len(results) < 2:
                 return -1000  # Invalid strategy
             
-            returns = results['portfolio_value'].pct_change().dropna()
+            # Get portfolio values
+            portfolio_values = results['portfolio_value']
             
-            # Calculate base fitness metric
+            # Calculate returns  
+            returns = portfolio_values.pct_change().dropna()
+            
+            # Calculate base fitness metric using OLD CODE APPROACH
             if self.fitness_metric == 'sortino':
-                sortino = calculate_sortino_ratio(returns)
+                # OLD CODE: MAR = 0, no risk-free rate
+                mar = 0
+                downside_returns = returns[returns < mar]
+                
+                if len(downside_returns) == 0:
+                    # No downside returns
+                    sortino = float('inf')
+                else:
+                    downside_deviation = downside_returns.std()
+                    if downside_deviation == 0 or np.isnan(downside_deviation):
+                        sortino = float('inf')
+                    else:
+                        # Annualized return and Sortino
+                        periods_per_year = 365  # Dollar bars, not 252
+                        n_periods = len(returns)
+                        total_return = (portfolio_values.iloc[-1] / initial_capital) - 1
+                        annualized_return = (1 + total_return) ** (periods_per_year / n_periods) - 1
+                        sortino = (annualized_return - mar) / (downside_deviation * np.sqrt(periods_per_year))
+                
                 # Handle special cases
                 if np.isnan(sortino):
                     return -1000  # Invalid strategy
                 elif np.isinf(sortino):
-                    sortino = 10.0  # Cap infinite Sortino
+                    sortino = 10.0  # Cap infinite Sortino at 10
                 base_fitness = sortino
+                
             elif self.fitness_metric == 'calmar':
-                base_fitness = calculate_calmar_ratio(returns)
+                # Calculate using old approach
+                periods_per_year = 365
+                n_periods = len(returns)
+                total_return = (portfolio_values.iloc[-1] / initial_capital) - 1
+                annualized_return = (1 + total_return) ** (periods_per_year / n_periods) - 1
+                
+                # Max drawdown calculation
+                equity_curve = portfolio_values
+                peak = equity_curve.expanding().max()
+                drawdown_dollars = equity_curve - peak
+                max_drawdown_dollars = drawdown_dollars.min()
+                
+                if max_drawdown_dollars >= 0:
+                    base_fitness = 10.0  # No drawdown
+                else:
+                    base_fitness = annualized_return / abs(max_drawdown_dollars / initial_capital)
             else:
                 # Default to total return
-                base_fitness = (results['portfolio_value'].iloc[-1] / initial_capital - 1)
+                base_fitness = (portfolio_values.iloc[-1] / initial_capital - 1)
             
-            # Calculate maximum drawdown for penalty
-            cumulative_returns = (1 + returns).cumprod()
-            running_max = cumulative_returns.expanding().max()
-            drawdown = (cumulative_returns - running_max) / running_max
-            max_drawdown_pct = abs(drawdown.min()) * 100
+            # Calculate maximum drawdown PERCENTAGE (OLD CODE APPROACH)
+            equity_curve = portfolio_values
+            peak = equity_curve.expanding().max()
+            drawdown_dollars = equity_curve - peak
+            max_drawdown_dollars = drawdown_dollars.min()
             
-            # Combined fitness with drawdown penalty (from new implementation)
+            if max_drawdown_dollars < 0:
+                # Find the index where max drawdown occurred
+                idx_max_drawdown = drawdown_dollars.idxmin()
+                # Find the peak before this drawdown
+                peak_before_drawdown = equity_curve.loc[:idx_max_drawdown].max()
+                if peak_before_drawdown > 0:
+                    max_drawdown_pct = abs(max_drawdown_dollars) / peak_before_drawdown * 100
+                else:
+                    max_drawdown_pct = 100.0
+            else:
+                max_drawdown_pct = 0.0
+            
+            # Ensure valid percentage
+            if np.isnan(max_drawdown_pct) or np.isinf(max_drawdown_pct):
+                max_drawdown_pct = 100.0
+            
+            # Combined fitness with drawdown penalty (from old implementation)
             weight_primary = 0.7
             weight_drawdown = 0.3
             fitness = (base_fitness * weight_primary) - (max_drawdown_pct * weight_drawdown)
+            
+            # Debug output (remove later)
+            if False:  # Set to True for debugging
+                print(f"  Base fitness (Sortino): {base_fitness:.4f}")
+                print(f"  Max drawdown %: {max_drawdown_pct:.2f}%")
+                print(f"  Combined fitness: {fitness:.4f}")
             
             # Additional penalties for extreme parameters
             if weights['trend'] < 0.1 or weights['trend'] > 0.7:

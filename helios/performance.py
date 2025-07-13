@@ -122,6 +122,52 @@ def calculate_sortino_ratio(returns: pd.Series, risk_free_rate: float = 0.02,
     return sortino
 
 
+def calculate_sortino_ratio_classic(returns: pd.Series, mar: float = 0.0,
+                                  periods_per_year: int = 365) -> float:
+    """
+    Calculate Sortino Ratio using classic approach (MAR-based, no risk-free rate)
+    This matches the old notebook implementation
+    
+    Parameters:
+    -----------
+    returns : pd.Series
+        Series of returns
+    mar : float
+        Minimum Acceptable Return (default 0)
+    periods_per_year : int
+        Number of periods per year (365 for dollar bars)
+    
+    Returns:
+    --------
+    float
+        Sortino ratio
+    """
+    returns = returns.dropna()
+    if len(returns) == 0:
+        return 0
+    
+    # Downside returns (below MAR)
+    downside_returns = returns[returns < mar]
+    
+    if len(downside_returns) == 0:
+        # No downside returns
+        return float('inf')
+    
+    # Downside deviation
+    downside_deviation = downside_returns.std()
+    
+    if downside_deviation == 0 or np.isnan(downside_deviation):
+        return float('inf')
+    
+    # Mean return
+    mean_return = returns.mean()
+    
+    # Annualized Sortino Ratio
+    sortino = (mean_return - mar) * np.sqrt(periods_per_year) / downside_deviation
+    
+    return sortino
+
+
 def calculate_max_drawdown(cumulative_returns: pd.Series) -> float:
     """
     Calculate maximum drawdown

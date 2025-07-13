@@ -107,7 +107,8 @@
       "Bash(uv add:*)",
       "Bash(uv sync:*)",
       "Bash(python:*)",
-      "Bash(source:*)"
+      "Bash(source:*)",
+      "Bash(uv run:*)"
     ],
     "deny": []
   }
