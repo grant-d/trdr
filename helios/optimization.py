@@ -158,22 +158,37 @@ class GeneticAlgorithm:
             
             returns = results['portfolio_value'].pct_change().dropna()
             
+            # Calculate base fitness metric
             if self.fitness_metric == 'sortino':
-                fitness = calculate_sortino_ratio(returns)
+                sortino = calculate_sortino_ratio(returns)
+                # Handle special cases
+                if np.isnan(sortino):
+                    return -1000  # Invalid strategy
+                elif np.isinf(sortino):
+                    sortino = 10.0  # Cap infinite Sortino
+                base_fitness = sortino
             elif self.fitness_metric == 'calmar':
-                fitness = calculate_calmar_ratio(returns)
+                base_fitness = calculate_calmar_ratio(returns)
             else:
                 # Default to total return
-                fitness = (results['portfolio_value'].iloc[-1] / initial_capital - 1)
+                base_fitness = (results['portfolio_value'].iloc[-1] / initial_capital - 1)
             
-            # Penalize extreme parameters
-            penalty = 0
+            # Calculate maximum drawdown for penalty
+            cumulative_returns = (1 + returns).cumprod()
+            running_max = cumulative_returns.expanding().max()
+            drawdown = (cumulative_returns - running_max) / running_max
+            max_drawdown_pct = abs(drawdown.min()) * 100
+            
+            # Combined fitness with drawdown penalty (from new implementation)
+            weight_primary = 0.7
+            weight_drawdown = 0.3
+            fitness = (base_fitness * weight_primary) - (max_drawdown_pct * weight_drawdown)
+            
+            # Additional penalties for extreme parameters
             if weights['trend'] < 0.1 or weights['trend'] > 0.7:
-                penalty += 0.1
+                fitness -= 0.5
             if lookback < 5 or lookback > 100:
-                penalty += 0.1
-            
-            fitness -= penalty
+                fitness -= 0.5
             
             return fitness
             

@@ -69,6 +69,7 @@ def run_helios_analysis(df, config):
     df["macd"] = macd_data["macd"]
     df["macd_signal"] = macd_data["signal"]
     df["macd_hist"] = macd_data["histogram"]
+    df["macd_hist_norm"] = macd_data["histogram_normalized"]
 
     # RSI
     df["rsi"] = calculate_rsi(df)

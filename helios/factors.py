@@ -26,7 +26,7 @@ def calculate_macd(df: pd.DataFrame, fast: int = 12, slow: int = 26, signal: int
     Returns:
     --------
     Dict[str, pd.Series]
-        Dictionary with 'macd', 'signal', and 'histogram' series
+        Dictionary with 'macd', 'signal', 'histogram', and 'histogram_normalized' series
     """
     close = df['close']
     
@@ -43,14 +43,27 @@ def calculate_macd(df: pd.DataFrame, fast: int = 12, slow: int = 26, signal: int
     # MACD histogram
     histogram = macd - signal_line
     
+    # Normalize histogram to -100 to 100 range
+    # Use percentile-based normalization for robustness
+    hist_abs = histogram.abs()
+    hist_95th = hist_abs.rolling(window=252, min_periods=50).quantile(0.95)
+    hist_95th = hist_95th.fillna(hist_abs.expanding(min_periods=50).quantile(0.95))
+    
+    # Avoid division by zero
+    valid_mask = hist_95th > 1e-10
+    histogram_normalized = histogram.copy()
+    histogram_normalized[valid_mask] = (histogram[valid_mask] / hist_95th[valid_mask]) * 100
+    histogram_normalized = np.clip(histogram_normalized, -100, 100)
+    
     return {
         'macd': macd,
         'signal': signal_line,
-        'histogram': histogram
+        'histogram': histogram,
+        'histogram_normalized': histogram_normalized
     }
 
 
-def calculate_rsi(df: pd.DataFrame, period: int = 14) -> pd.Series:
+def calculate_rsi(df: pd.DataFrame, period: int = 14, normalized: bool = False) -> pd.Series:
     """
     Calculate RSI (Relative Strength Index)
     
@@ -60,11 +73,13 @@ def calculate_rsi(df: pd.DataFrame, period: int = 14) -> pd.Series:
         DataFrame with 'close' prices
     period : int
         RSI period
+    normalized : bool
+        If True, return normalized RSI (-100 to 100)
     
     Returns:
     --------
     pd.Series
-        RSI values
+        RSI values (0-100 or -100 to 100 if normalized)
     """
     close = df['close']
     delta = close.diff()
@@ -74,6 +89,10 @@ def calculate_rsi(df: pd.DataFrame, period: int = 14) -> pd.Series:
     
     rs = gain / loss
     rsi = 100 - (100 / (1 + rs))
+    
+    if normalized:
+        # Normalize to -100 to 100 range (50 becomes 0)
+        rsi = (rsi - 50) * 2
     
     return rsi
 
@@ -172,14 +191,26 @@ def calculate_exhaustion_factor(df: pd.DataFrame, lookback: int = 20) -> pd.Seri
     Returns:
     --------
     pd.Series
-        Normalized exhaustion factor values
+        Normalized exhaustion factor values (-100 to 100)
     """
     close = df['close']
     sma = close.rolling(window=lookback).mean()
-    atr = calculate_volatility_factor(df, lookback) * close / 100  # Convert back to price units
+    
+    # Calculate ATR for normalization
+    high_low = df['high'] - df['low']
+    high_close = np.abs(df['high'] - df['close'].shift())
+    low_close = np.abs(df['low'] - df['close'].shift())
+    true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    atr = true_range.rolling(window=lookback).mean()
     
     # Distance from SMA normalized by ATR
-    exhaustion_factor = (close - sma) / atr
+    valid_mask = (atr.notna()) & (atr.abs() > 1e-9)
+    exhaustion_factor = pd.Series(index=df.index, dtype=float)
+    exhaustion_factor[valid_mask] = (close[valid_mask] - sma[valid_mask]) / atr[valid_mask]
+    
+    # Scale to -100 to 100 range (assuming -10 to 10 ATR units covers most cases)
+    scaling_factor = 100 / 10
+    exhaustion_factor = np.clip(exhaustion_factor * scaling_factor, -100, 100)
     
     return exhaustion_factor
 
@@ -216,34 +247,43 @@ def calculate_mss(df: pd.DataFrame, lookback: int = 20,
     volatility = calculate_volatility_factor(df, lookback)
     exhaustion = calculate_exhaustion_factor(df, lookback)
     
-    # Normalize factors to [-1, 1] range
-    trend_norm = np.tanh(trend / 2)  # Divide by 2 to reduce sensitivity
-    volatility_norm = np.tanh(volatility / 5)  # Higher divisor for volatility
-    exhaustion_norm = np.tanh(exhaustion / 2)
+    # Add ATR for reference (used in trading)
+    from data_processing import calculate_atr
+    atr = calculate_atr(df, lookback)
     
-    # Calculate MSS
-    mss = (weights['trend'] * trend_norm + 
+    # Factors are already normalized to appropriate ranges
+    # Trend: roughly -100 to 100 based on percentage slope
+    # Volatility: 0 to 100 (percentage of price)
+    # Exhaustion: -100 to 100 (clipped)
+    
+    # For MSS calculation, normalize volatility to -100 to 100
+    # High volatility is generally negative for trend following
+    volatility_norm = 100 - (volatility * 2)  # Convert 0-100 to 100 to -100
+    volatility_norm = np.clip(volatility_norm, -100, 100)
+    
+    # Calculate MSS as weighted sum
+    mss = (weights['trend'] * trend + 
            weights['volatility'] * volatility_norm + 
-           weights['exhaustion'] * exhaustion_norm)
+           weights['exhaustion'] * exhaustion)
     
     # Classify regimes based on MSS
+    # Using thresholds from the new implementation
     regimes = pd.Series(index=df.index, dtype='object')
-    regimes[mss > 0.5] = 'Strong Bull'
-    regimes[(mss > 0.1) & (mss <= 0.5)] = 'Weak Bull'
-    regimes[(mss >= -0.1) & (mss <= 0.1)] = 'Neutral'
-    regimes[(mss >= -0.5) & (mss < -0.1)] = 'Weak Bear'
-    regimes[mss < -0.5] = 'Strong Bear'
+    regimes[mss > 50] = 'Strong Bull'
+    regimes[(mss > 20) & (mss <= 50)] = 'Weak Bull'
+    regimes[(mss >= -20) & (mss <= 20)] = 'Neutral'
+    regimes[(mss > -50) & (mss < -20)] = 'Weak Bear'
+    regimes[mss <= -50] = 'Strong Bear'
     
     # Create results DataFrame
     results = pd.DataFrame({
         'trend': trend,
         'volatility': volatility,
         'exhaustion': exhaustion,
-        'trend_norm': trend_norm,
         'volatility_norm': volatility_norm,
-        'exhaustion_norm': exhaustion_norm,
         'mss': mss,
-        'regime': regimes
+        'regime': regimes,
+        'atr': atr
     }, index=df.index)
     
     return results, regimes
