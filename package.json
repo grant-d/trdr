@@ -13,7 +13,7 @@
     "build": "rimraf dist && tsc",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
-    "test": "NODE_OPTIONS='--unhandled-rejections=strict --experimental-detect-module' tsx --test 'tests/**/*.test.ts'",
+    "test": "NODE_OPTIONS='--unhandled-rejections=strict --experimental-detect-module' tsx --test --test-force-exit 'tests/**/*.test.ts'",
     "test:watch": "tsx --test --watch --test-timeout=10000 'src/**/*.test.ts' 'tests/**/*.test.ts'",
     "test:unit": "NODE_OPTIONS='--unhandled-rejections=strict --experimental-detect-module' tsx --test --test-force-exit 'tests/unit/**/*.test.ts'",
     "test:integration": "tsx --test --test-timeout=15000 'tests/integration/**/*.test.ts'",

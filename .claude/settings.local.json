@@ -99,7 +99,10 @@
       "Bash(NODE_ENV=test npx tsx --test debug-config-override-subset.ts)",
       "Bash(NODE_ENV=test npx tsx --test debug-config-override-imports2.ts)",
       "Bash(NODE_ENV=test node:*)",
-      "Bash(NODE_ENV=test yarn tc:all)"
+      "Bash(NODE_ENV=test yarn tc:all)",
+      "Bash(NODE_ENV=test npx tsx --test tests/unit/repositories/csv-repository.test.ts)",
+      "Bash(NODE_ENV=test npx tsx --test tests/unit/repositories/jsonl-repository.test.ts)",
+      "Bash(NODE_ENV=test yarn test:unit)"
     ],
     "deny": []
   }
