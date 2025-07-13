@@ -104,7 +104,10 @@
       "Bash(NODE_ENV=test npx tsx --test tests/unit/repositories/jsonl-repository.test.ts)",
       "Bash(NODE_ENV=test yarn test:unit)",
       "Bash(uv init:*)",
-      "Bash(uv add:*)"
+      "Bash(uv add:*)",
+      "Bash(uv sync:*)",
+      "Bash(python:*)",
+      "Bash(source:*)"
     ],
     "deny": []
   }
