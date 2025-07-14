@@ -3,6 +3,16 @@
 # Live Paper Trading Script
 # Uses GA optimization for real-time trading decisions
 
+# Activate virtual environment
+if [ -f ../.venv/bin/activate ]; then
+    source ../.venv/bin/activate
+elif [ -f .venv/bin/activate ]; then
+    source .venv/bin/activate
+else
+    echo "Error: Virtual environment not found"
+    exit 1
+fi
+
 # Load environment variables
 if [ -f .env ]; then
     export $(cat .env | grep -v '^#' | xargs)
@@ -18,6 +28,14 @@ fi
 SYMBOL=${1:-"MSFT"}
 INTERVAL=${2:-60}
 TIMEFRAME=${3:-1}  # Default to 1-minute bars
+
+# Convert crypto symbols to correct format (BTCUSD -> BTC/USD)
+if [[ $SYMBOL == *"USD" ]] && [[ $SYMBOL != *"/"* ]]; then
+    # Extract base currency and add slash
+    BASE="${SYMBOL%USD}"
+    SYMBOL="${BASE}/USD"
+    echo "Converted symbol to: $SYMBOL"
+fi
 
 # Determine if crypto
 if [[ $SYMBOL == *"USD"* ]] || [[ $SYMBOL == *"/"* ]]; then

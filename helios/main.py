@@ -254,6 +254,11 @@ def main():
         help="Save results (use alone for params.json, or with prefix like --output msft for msft-params.json)",
     )
     optimize_parser.add_argument(
+        "--output-dir",
+        default="./optimization_results",
+        help="Output directory for optimization results (default: ./optimization_results)",
+    )
+    optimize_parser.add_argument(
         "--test", action="store_true", help="Run test immediately after optimization"
     )
     optimize_parser.add_argument(
@@ -630,7 +635,7 @@ def handle_optimize_command(args):
             window_size=args.window_days, step_size=args.step_days
         )
 
-        results = wfo.optimize(df, ga)
+        results = wfo.optimize(df, ga, save_results=True, output_dir=args.output_dir)
 
         print(f"\nAverage Train Fitness: {results['avg_train_fitness']:.4f}")
         print(f"Average Test Fitness: {results['avg_test_fitness']:.4f}")
@@ -661,7 +666,7 @@ def handle_optimize_command(args):
         # Save results if output specified
         if args.output is not None:
             print("\nSaving optimization results...")
-            results_dir = Path("./optimization_results")
+            results_dir = Path(args.output_dir)
             results_dir.mkdir(exist_ok=True)
 
             # Save optimized parameters
@@ -889,6 +894,16 @@ def handle_test_command(args):
     # Run backtest
     results = strategy.run_backtest(combined_df, combined_df)
     trades_summary = strategy.get_trade_summary()
+
+    # Debug: Check if results DataFrame has required columns
+    if results.empty:
+        print("Warning: Backtest returned empty results")
+        return 1
+        
+    if 'portfolio_value' not in results.columns:
+        print(f"Warning: Backtest results missing 'portfolio_value' column")
+        print(f"Available columns: {list(results.columns)}")
+        return 1
 
     # Generate performance report
     performance_report = generate_performance_report(

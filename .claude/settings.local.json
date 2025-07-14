@@ -116,7 +116,9 @@
       "Bash(pip install:*)",
       "Bash(./.venv/bin/python:*)",
       "Bash(../.venv/bin/python:*)",
-      "Bash(./run_adaptive.sh:*)"
+      "Bash(./run_adaptive.sh:*)",
+      "Bash(./run_live_custom.sh:*)",
+      "Bash(./run_live.sh:*)"
     ],
     "deny": []
   }

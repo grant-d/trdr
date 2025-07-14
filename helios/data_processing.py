@@ -102,7 +102,65 @@ def create_dollar_bars(
     return dollar_bars_df
 
 
-def prepare_data(df: pd.DataFrame, lookback: int = 20) -> pd.DataFrame:
+def impute_missing_bars(df: pd.DataFrame, timeframe_minutes: int = 1) -> pd.DataFrame:
+    """
+    Forward fill missing bars in OHLCV time series data
+    
+    Parameters:
+    -----------
+    df : pd.DataFrame
+        DataFrame with timestamp column and OHLCV data
+    timeframe_minutes : int
+        Timeframe in minutes for expected bar intervals
+    
+    Returns:
+    --------
+    pd.DataFrame
+        DataFrame with gaps filled via forward fill
+    """
+    if df.empty:
+        return df
+        
+    df = df.copy()
+    
+    # Ensure timestamp is datetime
+    if 'timestamp' in df.columns:
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        
+        # Create expected time index
+        start_time = df['timestamp'].min()
+        end_time = df['timestamp'].max()
+        freq = f'{timeframe_minutes}min'
+        expected_times = pd.date_range(start=start_time, end=end_time, freq=freq)
+        
+        # Set timestamp as index for reindexing
+        df.set_index('timestamp', inplace=True)
+        original_len = len(df)
+        
+        # Reindex to include all expected times and forward fill
+        df_filled = df.reindex(expected_times).ffill()
+        
+        # Reset index back to column
+        df_filled.reset_index(inplace=True)
+        df_filled.rename(columns={'index': 'timestamp'}, inplace=True)
+        
+        # Fill missing values appropriately for new rows
+        if 'volume' in df_filled.columns:
+            df_filled['volume'] = df_filled['volume'].fillna(0)
+        if 'trade_count' in df_filled.columns:
+            df_filled['trade_count'] = df_filled['trade_count'].fillna(0)
+        
+        filled_count = len(df_filled) - original_len
+        if filled_count > 0:
+            print(f"Imputed {filled_count} missing bars via forward fill")
+            
+        return df_filled
+    else:
+        # If no timestamp column, just return as-is
+        return df
+
+
+def prepare_data(df: pd.DataFrame, lookback: int = 20, impute_gaps: bool = True, timeframe_minutes: int = 1) -> pd.DataFrame:
     """
     Prepare data for analysis with rolling normalizations suitable for live trading
 
@@ -114,13 +172,21 @@ def prepare_data(df: pd.DataFrame, lookback: int = 20) -> pd.DataFrame:
         Raw OHLCV data
     lookback : int
         Number of periods for rolling calculations
+    impute_gaps : bool
+        Whether to impute missing bars via forward fill (default: True)
+    timeframe_minutes : int
+        Timeframe in minutes for gap imputation (default: 1)
 
     Returns:
     --------
     pd.DataFrame
-        Prepared data with normalized columns
+        Prepared data with normalized columns and optionally filled gaps
     """
     df = df.copy()
+    
+    # Impute missing bars if requested
+    if impute_gaps:
+        df = impute_missing_bars(df, timeframe_minutes)
 
     # Ensure numeric types
     numeric_columns = ["open", "high", "low", "close", "volume"]

@@ -180,6 +180,7 @@ class GeneticAlgorithm:
         self.elitism_rate = elitism_rate
         self.fitness_metric = fitness_metric
         self.allow_shorts = allow_shorts
+        self.seed_parameters: Optional[Dict] = None  # For seeding with previous best parameters
         
         # Calculate elite size
         self.elite_size = max(1, int(population_size * elitism_rate))
@@ -245,8 +246,20 @@ class GeneticAlgorithm:
         return Individual(genes=genes)
     
     def create_population(self) -> List[Individual]:
-        """Create initial population"""
-        return [self.create_individual() for _ in range(self.population_size)]
+        """Create initial population, seeded with previous best if available"""
+        population = []
+        
+        # Add seeded individual first if parameters are provided
+        if self.seed_parameters is not None:
+            seeded_individual = Individual(self.seed_parameters.copy())
+            population.append(seeded_individual)
+            print(f"Added seeded individual with {len(self.seed_parameters)} parameters")
+        
+        # Fill remaining population with random individuals
+        remaining_size = self.population_size - len(population)
+        population.extend([self.create_individual() for _ in range(remaining_size)])
+        
+        return population
     
     def evaluate_fitness(self, individual: Individual, 
                         train_data: pd.DataFrame, 
@@ -795,7 +808,7 @@ class WalkForwardOptimizer:
         return windows
     
     def optimize(self, data: pd.DataFrame, ga: GeneticAlgorithm, 
-                save_results: bool = True) -> Dict:
+                save_results: bool = True, output_dir: str = "./optimization_results") -> Dict:
         """
         Run walk-forward optimization
         
@@ -807,6 +820,8 @@ class WalkForwardOptimizer:
             Genetic algorithm instance
         save_results : bool
             Save optimization results
+        output_dir : str
+            Directory to save optimization results
         
         Returns:
         --------
@@ -869,7 +884,7 @@ class WalkForwardOptimizer:
         
         if save_results:
             # Save results
-            results_dir = Path('./optimization_results')
+            results_dir = Path(output_dir)
             results_dir.mkdir(exist_ok=True)
             
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -1009,7 +1024,10 @@ def auto_detect_dollar_thresholds(data: pd.DataFrame, sample_size: int = 1000) -
     max_threshold = float(target_threshold * 2.0)
     
     # Apply absolute limits to prevent extreme values
-    min_threshold = max(100_000.0, min(min_threshold, 100_000_000.0))
+    # Use a more reasonable minimum based on the actual data
+    data_max_dollar_vol = float(dollar_volume.max())
+    reasonable_min = max(1000.0, data_max_dollar_vol * 0.01)  # At least $1k or 1% of max volume
+    min_threshold = max(reasonable_min, min(min_threshold, 100_000_000.0))
     max_threshold = max(min_threshold * 2, min(max_threshold, 500_000_000.0))
     
     print(f"  Target: ~{target_bars_per_day} bars per day")

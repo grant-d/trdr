@@ -10,4 +10,9 @@ echo "=== FAST TESTING MODE ==="
 echo "Using 1-minute bars for quicker signal generation"
 echo ""
 
+# For live trader with caching, use run_live.sh instead
+echo "Note: For live trader with CSV caching, use:"
+echo "  ./run_live.sh $SYMBOL 1"
+echo ""
+
 ./run_live_trader.sh "$SYMBOL" "$INTERVAL" 1

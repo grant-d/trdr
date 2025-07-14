@@ -1,7 +1,13 @@
 #!/bin/bash
 
-# Adaptive Live Paper Trading Script with CSV caching
+# Live Paper Trading Script with CSV caching
 # Uses GA optimization on every bar with data caching
+#
+# Usage: ./run_live.sh SYMBOL [TIMEFRAME] [POPULATION] [GENERATIONS] [LOOKBACK] [INITIAL_BARS] [CAPITAL] [CHECK_INTERVAL] [MAX_OPT_BARS]
+#
+# Example: ./run_live.sh BTCUSD 5 50 20 300 2000 50000 10 2000
+#
+# For named parameters, use run_live_custom.sh instead
 
 # Activate virtual environment
 if [ -f ../.venv/bin/activate ]; then
@@ -57,8 +63,37 @@ echo ""
 echo "Press Ctrl+C to stop"
 echo ""
 
-python live_trader_adaptive.py "$SYMBOL" \
+# Additional optional parameters
+POPULATION=${3:-50}
+GENERATIONS=${4:-20}
+LOOKBACK=${5:-200}
+INITIAL_BARS=${6:-1000}
+CAPITAL=${7:-100000}
+CHECK_INTERVAL=${8:-5}
+MAX_OPT_BARS=${9:-2000}
+
+# Display parameters if customized
+if [ "$#" -gt 2 ]; then
+    echo "Custom parameters:"
+    echo "  Population: $POPULATION"
+    echo "  Generations: $GENERATIONS"
+    echo "  Lookback: $LOOKBACK bars"
+    echo "  Initial bars: $INITIAL_BARS"
+    echo "  Capital: \$$CAPITAL"
+    echo "  Check interval: ${CHECK_INTERVAL}s"
+    echo "  Max optimization bars: $MAX_OPT_BARS"
+    echo ""
+fi
+
+python live_trader.py "$SYMBOL" \
     --api-key "$ALPACA_API_KEY" \
     --secret-key "$ALPACA_SECRET_KEY" \
     --timeframe "$TIMEFRAME" \
+    --population "$POPULATION" \
+    --generations "$GENERATIONS" \
+    --lookback "$LOOKBACK" \
+    --initial-bars "$INITIAL_BARS" \
+    --capital "$CAPITAL" \
+    --check-interval "$CHECK_INTERVAL" \
+    --max-opt-bars "$MAX_OPT_BARS" \
     $CRYPTO_FLAG
