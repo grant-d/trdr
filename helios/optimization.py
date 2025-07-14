@@ -5,7 +5,7 @@ Implements walk-forward optimization of strategy parameters
 
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Tuple, Optional, Callable, Union
+from typing import Dict, List, Tuple, Optional, Callable, Union, Mapping
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 import random
@@ -133,7 +133,7 @@ class GeneticAlgorithm:
     """
     
     def __init__(self, 
-                 parameter_config: Dict[str, Union[ParameterRange, Tuple[float, float]]],
+                 parameter_config: Mapping[str, Union[ParameterRange, Tuple[float, float]]],
                  population_size: int = 50,
                  generations: int = 20,
                  mutation_rate: float = 0.1,
@@ -146,7 +146,7 @@ class GeneticAlgorithm:
         
         Parameters:
         -----------
-        parameter_config : Dict[str, Union[ParameterRange, Tuple[float, float]]]
+        parameter_config : Mapping[str, Union[ParameterRange, Tuple[float, float]]]
             Parameter configuration using polymorphic range types or legacy tuples
         population_size : int
             Number of individuals in population

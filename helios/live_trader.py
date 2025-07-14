@@ -29,6 +29,7 @@ from factors import calculate_mss, calculate_macd, calculate_rsi
 from strategy_enhanced import EnhancedTradingStrategy, Position
 from chalk import Chalk, green, red, yellow, blue, cyan, magenta, white, bold
 from args_types import OptimizeArgs, TestArgs
+from portfolio_tracker import PortfolioTracker
 
 
 class LiveTrader:
@@ -97,12 +98,31 @@ class LiveTrader:
         self.csv_filename = self.cache_dir / f"{safe_symbol}_{timeframe_minutes}min.csv"
         self.cached_df = self.load_cached_data()
         
+        # Trading portfolio tracker setup
+        self.tracker = PortfolioTracker(symbol, timeframe_minutes, capital)
+        
         # Temporary files for main.py integration
         self.temp_dir = Path("./temp_live_trader")
         self.temp_dir.mkdir(parents=True, exist_ok=True)
         
         # Load previous optimization results if available
         self.load_previous_params()
+        
+    # Portfolio tracking methods delegated to PortfolioTracker class
+    @property
+    def current_position_size(self) -> float:
+        """Get current position size from tracker"""
+        return self.tracker.current_position_size
+    
+    @property
+    def available_cash(self) -> float:
+        """Get available cash from tracker"""
+        return self.tracker.available_cash
+    
+    def get_portfolio_value(self, current_price: float) -> float:
+        """Get total portfolio value from tracker"""
+        portfolio = self.tracker.get_portfolio_value(current_price)
+        return portfolio.get('total', self.capital) if isinstance(portfolio, dict) else self.capital
         
     def load_previous_params(self):
         """Load previous optimization parameters if available"""
@@ -642,6 +662,9 @@ class LiveTrader:
             
             if use_dollar_bars and dollar_threshold:
                 df_prepared = create_dollar_bars(df_prepared, dollar_threshold)
+                print(f"Dollar bars created: {len(df_prepared)} from {len(df)} time bars")
+                if len(df_prepared) < 50:
+                    return False, False, "Insufficient dollar bars", {}
             
             # Calculate factors with optimized parameters
             weights = {
@@ -666,6 +689,15 @@ class LiveTrader:
             # Get current market state
             latest = combined_df.iloc[-1]
             mss_score = latest.get('mss', 0)
+            
+            # Debug: Check if data processing worked
+            if len(combined_df) == 0:
+                return False, False, "Empty combined dataframe", {}
+            
+            # Check if mss calculation succeeded
+            if 'mss' not in combined_df.columns:
+                print(f"Warning: MSS not calculated. Available columns: {list(combined_df.columns)}")
+                return False, False, "MSS calculation failed", {}
             
             # Determine regime
             if mss_score >= params.get('strong_bull_threshold', 50):
@@ -702,7 +734,7 @@ class LiveTrader:
             
             # Calculate current position value
             current_price = latest['close']
-            current_position_value = self.current_position_value(current_price) if hasattr(self, 'position') else 0
+            current_position_value = self.current_position_value(current_price)
             portfolio_value = self.get_portfolio_value(current_price)
             current_position_fraction = current_position_value / portfolio_value if portfolio_value > 0 else 0
             
@@ -755,73 +787,97 @@ class LiveTrader:
         return False
     
     def current_position_value(self, current_price: float) -> float:
-        """Calculate current position value"""
-        if not hasattr(self, 'position') or not self.position or not self.position.is_open:
-            return 0.0
-        return self.position.units * current_price
-    
-    def get_portfolio_value(self, current_price: float) -> float:
-        """Calculate total portfolio value"""
-        if not hasattr(self, 'cash'):
-            self.cash = self.capital
-        if not hasattr(self, 'position'):
-            self.position = Position()
-        
-        position_value = self.current_position_value(current_price)
-        return self.cash + position_value
+        """Get current position value from tracker"""
+        return self.current_position_size * current_price
     
     
     def execute_trade(self, side: OrderSide, quantity: float, price: float, reason: str):
-        """Execute a paper trade with detailed logging"""
-        if side == OrderSide.BUY:
-            # Play buy sound
-            self.play_sound("buy")
+        """Execute a paper trade using the comprehensive ledger system"""
+        try:
+            # Convert OrderSide to string
+            side_str = side.value.lower() if hasattr(side, 'value') else str(side).lower()
             
-            # Calculate cost
-            cost = quantity * price
-            if cost > self.cash:
-                quantity = self.cash / price
-                cost = quantity * price
+            # Record trade in tracker with slippage and fees
+            trade_entry = self.tracker.record_trade(
+                side=side_str,
+                quantity=quantity,
+                market_price=price,
+                notes=reason
+            )
             
-            # Update position and cash
-            self.cash -= cost
-            self.position.units = quantity
-            self.position.cost_basis = cost
-            self.position.entry_price = price
-            self.position.entry_time = pd.Timestamp.now(tz='UTC')
+            # Play appropriate sound
+            self.play_sound("buy" if side_str == "buy" else "sell")
             
-            print(f"\n{green('═' * 60)}")
-            print(f"{green('🔔 BUY SIGNAL')} - {white(str(datetime.now()))}")
-            print(f"{green('═' * 60)}")
-            print(f"{white('Symbol:')} {bold(self.symbol)}")
-            print(f"{white('Reason:')} {green(reason)}")
-            print(f"{white('Quantity:')} {green(f'{quantity:.4f}')}")
-            print(f"{white('Price:')} ${green(f'{price:.2f}')}")
-            print(f"{white('Total Cost:')} ${green(f'{cost:.2f}')}")
-            print(f"{white('Cash Remaining:')} ${cyan(f'{self.cash:.2f}')}")
-            print(f"\n{yellow('📊 OPTIMIZED PARAMETERS:')}")
+            # Get portfolio metrics
+            portfolio = self.tracker.get_portfolio_value(price)
+            
+            if side_str == "buy":
+                print(f"\n{green('═' * 60)}")
+                print(f"{green('🔔 BUY SIGNAL')} - {white(str(datetime.now()))}")
+                print(f"{green('═' * 60)}")
+                print(f"{white('Symbol:')} {bold(self.symbol)}")
+                print(f"{white('Reason:')} {green(reason)}")
+                print(f"{white('Quantity:')} {green(f'{quantity:.6f}')}")
+                print(f"{white('Market Price:')} ${green(f'{price:.4f}')}")
+                print(f"{white('Execution Price:')} ${green(f'{trade_entry["price"]:.4f}')} (slippage: {trade_entry['slippage_bps']:.1f}bps)")
+                print(f"{white('Trade Value:')} ${green(f'{trade_entry["trade_value"]:.2f}')}")
+                print(f"{white('Fees:')} ${cyan(f'{trade_entry["fee_total"]:.2f}')}")
+                print(f"{white('Net Amount:')} ${red(f'{abs(trade_entry["net_amount"]):.2f}')} (out)")
+                print(f"{white('Cash Remaining:')} ${cyan(f'{portfolio["cash"]:.2f}')}")
+                print(f"{white('Position:')} {cyan(f'{portfolio["position_size"]:.6f}')} {self.symbol}")
+            else:
+                profit_color = green if trade_entry['realized_pnl'] >= 0 else red
+                print(f"\n{red('═' * 60)}")
+                print(f"{red('🔔 SELL SIGNAL')} - {white(str(datetime.now()))}")
+                print(f"{red('═' * 60)}")
+                print(f"{white('Symbol:')} {bold(self.symbol)}")
+                print(f"{white('Reason:')} {red(reason)}")
+                print(f"{white('Quantity:')} {red(f'{quantity:.6f}')}")
+                print(f"{white('Market Price:')} ${red(f'{price:.4f}')}")
+                print(f"{white('Execution Price:')} ${red(f'{trade_entry["price"]:.4f}')} (slippage: {trade_entry['slippage_bps']:.1f}bps)")
+                print(f"{white('Trade Value:')} ${red(f'{trade_entry["trade_value"]:.2f}')}")
+                print(f"{white('Fees:')} ${cyan(f'{trade_entry["fee_total"]:.2f}')}")
+                print(f"{white('Net Amount:')} ${green(f'{trade_entry["net_amount"]:.2f}')} (in)")
+                print(f"{white('Realized P&L:')} ${profit_color(f'{trade_entry["realized_pnl"]:.2f}')}")
+                print(f"{white('Cash:')} ${cyan(f'{portfolio["cash"]:.2f}')}")
+                print(f"{white('Position:')} {cyan(f'{portfolio["position_size"]:.6f}')} {self.symbol}")
+            
+            # Show portfolio summary
+            print(f"\n{yellow('📊 PORTFOLIO SUMMARY:')}")
+            print(f"   {white('Total Value:')} ${cyan(f'{portfolio["total_value"]:.2f}')}")
+            print(f"   {white('Total P&L:')} ${(green if portfolio['total_pnl'] >= 0 else red)(f'{portfolio["total_pnl"]:.2f}')}")
+            print(f"   {white('Total Return:')} {(green if portfolio['total_return_pct'] >= 0 else red)(f'{portfolio["total_return_pct"]:.2f}%')}")
+            
             if self.current_params:
+                print(f"\n{yellow('🎯 STRATEGY PARAMETERS:')}")
                 for key, value in self.current_params.items():
-                    print(f"   {white(key)}: {cyan(str(value))}")
-            print(f"\n{yellow('📋 MANUAL ORDER DETAILS:')}")
-            print(f"   {white('Order Type:')} {green('MARKET BUY')}")
-            print(f"   {white('Symbol:')} {bold(self.symbol)}")
-            print(f"   {white('Quantity:')} {green(f'{quantity:.4f}')}")
-            print(f"   {white('Estimated Price:')} ${green(f'{price:.2f}')}")
-            print(f"{green('═' * 60)}\n")
+                    if isinstance(value, float):
+                        print(f"   {white(key)}: {cyan(f'{value:.4f}')}")
+                    else:
+                        print(f"   {white(key)}: {cyan(str(value))}")
             
-        else:  # SELL
-            # Play sell sound
-            self.play_sound("sell")
+            print(f"{green('═' * 60) if side_str == 'buy' else red('═' * 60)}\n")
             
-            # Calculate proceeds and profit
-            proceeds = self.position.units * price
-            self.cash += proceeds
+            # Record trade for tracking
+            trade_record = {
+                'timestamp': datetime.now(timezone.utc),
+                'side': side_str.upper(),
+                'quantity': quantity,
+                'price': trade_entry['price'],
+                'market_price': price,
+                'slippage_bps': trade_entry['slippage_bps'],
+                'fees': trade_entry['fee_total'],
+                'reason': reason,
+                'portfolio_value': portfolio['total_value']
+            }
+            self.trades.append(trade_record)
             
-            profit = proceeds - self.position.cost_basis
-            profit_pct = (profit / self.position.cost_basis) * 100
+        except Exception as e:
+            print(f"{red('TRADE EXECUTION FAILED:')} {e}")
+            print(f"Side: {side}, Quantity: {quantity}, Price: {price}")
+            raise
             
-            profit_color = green if profit >= 0 else red
+        # Sell logic now handled in the main execute_trade method above
             
             print(f"\n{red('═' * 60)}")
             print(f"{red('🔔 SELL SIGNAL')} - {white(str(datetime.now()))}")
@@ -862,7 +918,7 @@ class LiveTrader:
         total_equity = self.cash + position_value
         self.equity_curve.append(total_equity)
     
-    def print_status(self, current_price: float, df: pd.DataFrame, market_info: Dict = None):
+    def print_status(self, current_price: float, df: pd.DataFrame, market_info: Dict | None = None):
         """Print current trading status with colors"""
         position_value = self.position.units * current_price if self.position.is_open else 0
         total_equity = self.cash + position_value
@@ -937,14 +993,15 @@ class LiveTrader:
         else:
             print(f"\n{yellow('📈 POSITION:')} {white('None')}")
             
-        # Trading Stats
-        if self.trades:
-            total_profit = sum(t['profit'] for t in self.trades)
-            win_rate = sum(1 for t in self.trades if t['profit'] > 0) / len(self.trades) * 100
+        # Trading Stats - only count completed trades (those with 'profit' key)
+        completed_trades = [t for t in self.trades if 'profit' in t]
+        if completed_trades:
+            total_profit = sum(t['profit'] for t in completed_trades)
+            win_rate = sum(1 for t in completed_trades if t['profit'] > 0) / len(completed_trades) * 100
             profit_color = green if total_profit >= 0 else red
             
             print(f"\n{yellow('📊 TRADING STATS')}")
-            print(f"  {white('Trades:')} {len(self.trades)} | "
+            print(f"  {white('Trades:')} {len(completed_trades)} completed | "
                   f"{white('Win Rate:')} {green(f'{win_rate:.1f}%') if win_rate >= 50 else red(f'{win_rate:.1f}%')} | "
                   f"{white('Total P&L:')} {profit_color(f'${total_profit:+.2f}')}")
             
