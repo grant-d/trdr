@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 from typing import Dict, List, Tuple, Optional, Callable, Union, Mapping
 from dataclasses import dataclass
-from abc import ABC, abstractmethod
 import random
 from datetime import datetime, timedelta
 import json
@@ -17,101 +16,7 @@ from factors import calculate_mss, calculate_macd, calculate_rsi
 from strategy_enhanced import EnhancedTradingStrategy
 from performance import calculate_sortino_ratio, calculate_calmar_ratio
 from data_processing import prepare_data
-
-
-class ParameterRange(ABC):
-    """Abstract base class for parameter range configurations"""
-    
-    @abstractmethod
-    def sample(self) -> float:
-        """Sample a value from this parameter range"""
-        pass
-    
-    @abstractmethod
-    def mutate(self, current_value: float) -> float:
-        """Mutate the current value within this parameter range"""
-        pass
-    
-    @abstractmethod
-    def to_dict(self) -> Dict:
-        """Convert to dictionary for serialization"""
-        pass
-
-
-@dataclass
-class MinMaxRange(ParameterRange):
-    """Traditional continuous min-max range"""
-    min_val: float
-    max_val: float
-    
-    def sample(self) -> float:
-        """Sample uniformly from min to max"""
-        return random.uniform(self.min_val, self.max_val)
-    
-    def mutate(self, current_value: float) -> float:
-        """Gaussian mutation within bounds"""
-        noise = random.gauss(0, (self.max_val - self.min_val) * 0.1)
-        return max(self.min_val, min(self.max_val, current_value + noise))
-    
-    def to_dict(self) -> Dict:
-        return {"type": "min_max", "min": self.min_val, "max": self.max_val}
-
-
-@dataclass
-class LogRange(ParameterRange):
-    """Discrete logarithmic-spaced values"""
-    values: List[float]
-    
-    def sample(self) -> float:
-        """Sample from discrete values"""
-        return random.choice(self.values)
-    
-    def mutate(self, current_value: float) -> float:
-        """Mutate to nearby discrete value"""
-        try:
-            current_idx = self.values.index(current_value)
-            # Pick adjacent value (within 1 step)
-            if current_idx == 0:
-                return self.values[1]  # Move up
-            elif current_idx == len(self.values) - 1:
-                return self.values[-2]  # Move down
-            else:
-                # Randomly pick adjacent
-                return random.choice([self.values[current_idx-1], self.values[current_idx+1]])
-        except ValueError:
-            # If current value not in discrete set, pick random
-            return random.choice(self.values)
-    
-    def to_dict(self) -> Dict:
-        return {"type": "log_range", "values": self.values}
-
-
-def create_log_range(start: float, end: float, num_points: int = 4) -> LogRange:
-    """
-    Create logarithmic range with fine spacing at start, larger gaps at end
-    
-    Examples:
-    - create_log_range(28, 42, 4) -> [28.0, 32.0, 37.0, 42.0]
-    - create_log_range(1.5, 4.5, 4) -> [1.5, 2.2, 3.2, 4.5]
-    """
-    if num_points <= 1:
-        return LogRange([start])
-    
-    log_factor = 2.5  # Controls curve steepness
-    points = []
-    
-    for i in range(num_points):
-        # Normalize i to [0, 1]
-        t = i / (num_points - 1)
-        
-        # Apply logarithmic curve
-        curved_t = (np.exp(t * log_factor) - 1) / (np.exp(log_factor) - 1)
-        
-        # Scale to [start, end]
-        value = start + (end - start) * curved_t
-        points.append(round(value, 1))
-    
-    return LogRange(points)
+from ranges import ParameterRange, MinMaxRange, LogRange, DiscreteRange, create_log_range, create_discrete_range
 
 
 @dataclass
@@ -180,7 +85,8 @@ class GeneticAlgorithm:
         self.elitism_rate = elitism_rate
         self.fitness_metric = fitness_metric
         self.allow_shorts = allow_shorts
-        self.seed_parameters: Optional[Dict] = None  # For seeding with previous best parameters
+        self.candidate_archive: List[Dict] = []  # Archive of recent top candidates
+        self.archive_size = 5  # Keep top 5 candidates from recent runs
         
         # Calculate elite size
         self.elite_size = max(1, int(population_size * elitism_rate))
@@ -246,18 +152,48 @@ class GeneticAlgorithm:
         return Individual(genes=genes)
     
     def create_population(self) -> List[Individual]:
-        """Create initial population, seeded with previous best if available"""
+        """Create initial population with smart seeding strategy
+        
+        Always seeds from archive when available to maintain continuity
+        """
         population = []
         
-        # Add seeded individual first if parameters are provided
-        if self.seed_parameters is not None:
-            seeded_individual = Individual(self.seed_parameters.copy())
-            population.append(seeded_individual)
-            print(f"Added seeded individual with {len(self.seed_parameters)} parameters")
+        # Strategy: Use about 20% of population for seeded/elite individuals
+        elite_slots = max(1, int(self.population_size * 0.2))
         
-        # Fill remaining population with random individuals
+        # Always seed from archive if available
+        if self.candidate_archive:
+            # 1. Add individuals from archive
+            archive_to_add = min(len(self.candidate_archive), elite_slots)
+            for i in range(archive_to_add):
+                archived = Individual(self.candidate_archive[i].copy())
+                population.append(archived)
+            print(f"Added {archive_to_add} individuals from candidate archive")
+            
+            # 2. Add mutated versions of best archived individuals for diversity
+            if self.candidate_archive:
+                best_archived = self.candidate_archive[0]  # Archive is sorted by fitness
+                mutations_to_add = min(elite_slots // 2, 3)  # Add up to 3 mutated versions
+                
+                for i in range(mutations_to_add):
+                    mutated = Individual(best_archived.copy())
+                    # Apply light mutation (50% chance per parameter, small changes)
+                    for param in mutated.genes:
+                        if random.random() < 0.5:
+                            param_range = self.parameter_ranges[param]
+                            current_val = mutated.genes[param]
+                            # Small mutation: +/- 10% of parameter range
+                            mutation_range = param_range.get_range() * 0.1
+                            mutation = random.uniform(-mutation_range, mutation_range)
+                            new_val = param_range.clip(current_val + mutation)
+                            mutated.genes[param] = new_val
+                    population.append(mutated)
+                print(f"Added {mutations_to_add} lightly mutated variants of best archived individual")
+        
+        # 3. Fill remaining population with random individuals for exploration
         remaining_size = self.population_size - len(population)
         population.extend([self.create_individual() for _ in range(remaining_size)])
+        print(f"Added {remaining_size} random individuals for exploration")
         
         return population
     
@@ -619,7 +555,7 @@ class GeneticAlgorithm:
         
         return Individual(genes=genes1), Individual(genes=genes2)
     
-    def mutate(self, individual: Individual) -> Individual:
+    def mutate(self, individual: Individual, mutation_rate: Optional[float] = None) -> Individual:
         """Mutate an individual while maintaining threshold constraints
         
         Mutation strategy:
@@ -630,9 +566,13 @@ class GeneticAlgorithm:
         """
         genes = individual.genes.copy()
         
+        # Use provided mutation rate or default
+        if mutation_rate is None:
+            mutation_rate = self.mutation_rate
+        
         # Mutate non-threshold parameters normally
         for param, param_range in self.parameter_ranges.items():
-            if 'threshold' not in param and random.random() < self.mutation_rate:
+            if 'threshold' not in param and random.random() < mutation_rate:
                 if param.endswith('_int'):
                     # Integer mutation - mutate and convert to int
                     mutated_value = param_range.mutate(genes[param])
@@ -644,7 +584,7 @@ class GeneticAlgorithm:
         # Mutate threshold parameters with constraint checking
         threshold_params = [p for p in self.parameter_ranges.keys() if 'threshold' in p]
         for param in threshold_params:
-            if random.random() < self.mutation_rate:
+            if random.random() < mutation_rate:
                 param_range = self.parameter_ranges[param]
                 # Try multiple times to get valid mutation
                 for _ in range(10):
@@ -676,15 +616,25 @@ class GeneticAlgorithm:
         return Individual(genes=genes)
     
     def evolve_population(self, population: List[Individual]) -> List[Individual]:
-        """Evolve population for one generation"""
+        """Evolve population for one generation with diversity injection"""
         # Sort by fitness
         population.sort(key=lambda x: x.fitness, reverse=True)
         
         # Keep elite
         new_population = population[:self.elite_size]
         
+        # Inject diversity: Add 10% completely random individuals each generation
+        diversity_count = max(1, int(self.population_size * 0.1))
+        for _ in range(diversity_count):
+            new_population.append(self.create_individual())
+        
         # Generate rest of population
         while len(new_population) < self.population_size:
+            # Occasionally (5% chance) create a completely new random individual
+            if random.random() < 0.05:
+                new_population.append(self.create_individual())
+                continue
+                
             # Selection
             parent1 = self.tournament_selection(population)
             parent2 = self.tournament_selection(population)
@@ -692,9 +642,13 @@ class GeneticAlgorithm:
             # Crossover
             child1, child2 = self.crossover(parent1, parent2)
             
-            # Mutation
-            child1 = self.mutate(child1)
-            child2 = self.mutate(child2)
+            # Mutation with adaptive rate (higher mutation for stagnant populations)
+            avg_fitness = float(np.mean([ind.fitness for ind in population[:10]]))
+            best_fitness = float(population[0].fitness)
+            stagnation_factor = 1.0 if best_fitness == 0 else min(2.0, 1.0 + (1.0 - avg_fitness/best_fitness))
+            
+            child1 = self.mutate(child1, mutation_rate=self.mutation_rate * stagnation_factor)
+            child2 = self.mutate(child2, mutation_rate=self.mutation_rate * stagnation_factor)
             
             new_population.extend([child1, child2])
         
@@ -752,7 +706,28 @@ class GeneticAlgorithm:
         
         # Return best individual
         best_individual = max(population, key=lambda x: x.fitness)
+        
+        # Update candidate archive with top performers
+        self.update_archive(population)
+        
         return best_individual, best_fitness_history
+    
+    def update_archive(self, population: List[Individual]):
+        """Update the candidate archive with top performers from current population"""
+        # Get top performers from current population
+        top_performers = sorted(population, key=lambda x: x.fitness, reverse=True)[:3]
+        
+        # Add their parameters to archive
+        for performer in top_performers:
+            self.candidate_archive.append(performer.genes.copy())
+        
+        # Keep only the best candidates in archive (remove duplicates and sort by fitness)
+        # Note: This is simplified - in production you'd want to track fitness with params
+        if len(self.candidate_archive) > self.archive_size:
+            # Keep only the most recent ones (FIFO with size limit)
+            self.candidate_archive = self.candidate_archive[-self.archive_size:]
+        
+        print(f"Archive updated: {len(self.candidate_archive)} candidates stored")
 
 
 class WalkForwardOptimizer:

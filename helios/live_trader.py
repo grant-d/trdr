@@ -50,7 +50,8 @@ class LiveTrader:
                  max_optimization_bars: int = 2000,
                  dollar_threshold: str = "auto",
                  fitness: str = "sortino",
-                 allow_shorts: bool = False):
+                 allow_shorts: bool = False,
+                 quiet_mode: bool = True):
         self.symbol = symbol
         self.is_crypto = is_crypto
         self.timeframe_minutes = timeframe_minutes
@@ -84,11 +85,16 @@ class LiveTrader:
         self.current_strategy = None
         self.current_params = None
         self.historical_data_limit_reached = False  # Track if we've hit the data provider's limit
+        self.ga_archive = []  # Archive of top candidates from recent optimizations
         
         # Performance tracking
         self.trades: List[Dict] = []
         self.equity_curve: List[float] = [self.capital]
         self.optimization_history: List[Dict] = []
+        
+        # Progress tracking for cache messages
+        self.cache_fetch_count = 0
+        self.cache_message_printed = False
         
         # CSV caching setup
         self.cache_dir = Path("./data/cache")
@@ -286,9 +292,8 @@ class LiveTrader:
                                 'trade_count': bar.trade_count,
                                 'vwap': bar.vwap
                             }])], ignore_index=True)
-                            print(f"Filled gap with latest closed bar: {bar.timestamp}")
                 except Exception as e:
-                    print(f"Could not fetch latest bar: {e}")
+                    pass  # Silently handle errors in gap filling
         
         # Forward fill gaps in the data
         if not df.empty:
@@ -336,18 +341,21 @@ class LiveTrader:
             
             if need_newer_data:
                 # Fetch newer data (gap filling)
-                print(f"Fetching missing bars after {latest_cached}")
                 newer_bars = self.fetch_missing_bars(latest_cached, end)
                 if not newer_bars.empty:
-                    print(f"Successfully fetched {len(newer_bars)} newer bars")
                     self.save_bars_to_cache(newer_bars)
-                else:
-                    print("No newer bars returned")
             
             # Return data from cache (always return what we have, even if less than requested)
             result = self.cached_df[self.cached_df['timestamp'] >= desired_start].copy()
             if len(result) > 0:
-                print(f"Using {len(result)} cached bars (requested {lookback_bars})")
+                # Show cache usage with dots for repeated fetches
+                self.cache_fetch_count += 1
+                if self.cache_fetch_count == 1:
+                    print(f"Using {len(result)} cached bars (requested {lookback_bars})", end='', flush=True)
+                    self.cache_message_printed = True
+                else:
+                    # Add a dot for each subsequent fetch
+                    print(".", end='', flush=True)
                 return result.tail(min(lookback_bars * 2, len(result)))  # Return what we have, up to requested * 2
             
             # If we have cache but no results in the time range, return recent data
@@ -422,14 +430,22 @@ class LiveTrader:
         # Seed with previous best parameters if available
         if self.current_params is not None:
             print("\nSeeding GA with previous best parameters...")
-            # Add previous best as first individual in population
-            ga.seed_parameters = self.current_params.copy()
+            # Add previous best to archive so it gets used in population creation
+            ga.candidate_archive.insert(0, self.current_params.copy())
+            
+        # Pass archive of top candidates if available
+        if self.ga_archive:
+            ga.candidate_archive = self.ga_archive.copy()
+            print(f"Loaded archive with {len(self.ga_archive)} top candidates")
         
         print("\nRunning optimization...")
         print()
         
         # Run optimization
         best_individual, fitness_history = ga.optimize(df_prepared, verbose=True)
+        
+        # Save the updated archive for next optimization
+        self.ga_archive = ga.candidate_archive.copy()
         
         print(f"\nBest fitness: {best_individual.fitness:.4f}")
         print("\nBest parameters:")
@@ -610,6 +626,11 @@ class LiveTrader:
                 raise Exception("Test failed")
             
             elapsed = time.time() - start_time
+            # Print newline if we've been showing cache dots
+            if self.cache_message_printed:
+                print()  # New line to clear the dots
+                self.cache_message_printed = False
+                self.cache_fetch_count = 0
             print(f" {green('Done!')} ({cyan(f'{elapsed:.1f}s')})")
             fitness_val = params_data.get("fitness", 0)
             print(f"  {white('Best fitness:')} {cyan(f'{fitness_val:.4f}')} | {white('Window:')} {cyan(f'{bars_used} bars')}")

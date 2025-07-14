@@ -78,7 +78,7 @@ logs/
 .env.*.local
 
 # Data files (except examples)
-data/
+data/cache
 *.parquet
 *.h5
 *.hdf5
