@@ -128,7 +128,7 @@ class TradingContext:
         self.strategy = EnhancedTradingStrategy(
             initial_capital=self.state.initial_capital,
             max_position_fraction=self.state.parameters.get("max_position_pct", 0.95),
-            allow_shorts=self.state.parameters.get("allow_shorts", False)
+            allow_shorts=self.state.parameters.get("allow_shorts", False),
         )
 
         # Restore position state

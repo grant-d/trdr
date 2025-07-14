@@ -5,6 +5,7 @@ Includes dollar bars conversion and data preparation
 
 import pandas as pd
 import numpy as np
+
 # Type hints are handled by pandas
 
 
@@ -104,7 +105,7 @@ def create_dollar_bars(
 def prepare_data(df: pd.DataFrame, lookback: int = 20) -> pd.DataFrame:
     """
     Prepare data for analysis with rolling normalizations suitable for live trading
-    
+
     All normalizations use only historical data (no look-ahead bias)
 
     Parameters:
@@ -132,85 +133,86 @@ def prepare_data(df: pd.DataFrame, lookback: int = 20) -> pd.DataFrame:
 
     # Sort by index to ensure chronological order
     df.sort_index(inplace=True)
-    
+
     # Add HLC3 (more stable than close for some calculations)
-    df['hlc3'] = (df['high'] + df['low'] + df['close']) / 3
-    
+    df["hlc3"] = (df["high"] + df["low"] + df["close"]) / 3
+
     # Calculate returns
-    df['returns'] = df['close'].pct_change()
-    
+    df["returns"] = df["close"].pct_change()
+
     # Log returns - useful for volatility estimation and risk modeling
     # Comment: We use simple returns for trading signals (more intuitive),
     # but log returns are available for statistical analysis if needed
-    df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
-    
-    df['hlc3_returns'] = df['hlc3'].pct_change()
-    
+    df["log_returns"] = np.log(df["close"] / df["close"].shift(1))
+
+    df["hlc3_returns"] = df["hlc3"].pct_change()
+
     # Rolling normalized returns (z-score)
     # Using expanding window for early periods, then fixed rolling window
     # This ensures we always have some normalization, even for early rows
-    
+
     # Calculate both rolling and expanding statistics
-    returns_mean = df['returns'].rolling(lookback, min_periods=1).mean()
-    returns_std = df['returns'].rolling(lookback, min_periods=1).std()
-    
+    returns_mean = df["returns"].rolling(lookback, min_periods=1).mean()
+    returns_std = df["returns"].rolling(lookback, min_periods=1).std()
+
     # For the first lookback periods, use expanding window
     # Using where() is more efficient than fillna() for this use case
     mask = returns_mean.isna()
     if mask.any():
-        expanding_mean = df['returns'].expanding(min_periods=1).mean()
-        expanding_std = df['returns'].expanding(min_periods=1).std()
+        expanding_mean = df["returns"].expanding(min_periods=1).mean()
+        expanding_std = df["returns"].expanding(min_periods=1).std()
         returns_mean = returns_mean.where(~mask, expanding_mean)
         returns_std = returns_std.where(returns_std.notna(), expanding_std)
-    
+
     # Avoid division by zero - if std is too small, use a minimum value
     returns_std_safe = returns_std.clip(lower=1e-8)
-    df['returns_z'] = (df['returns'] - returns_mean) / returns_std_safe
-    
+    df["returns_z"] = (df["returns"] - returns_mean) / returns_std_safe
+
     # Rolling normalized volume (percentage of average)
     # This shows volume relative to recent average (1.0 = average volume)
-    volume_ma = df['volume'].rolling(lookback, min_periods=1).mean()
-    
+    volume_ma = df["volume"].rolling(lookback, min_periods=1).mean()
+
     # Use expanding window for early periods (more efficient with where())
     mask_vol = volume_ma.isna()
     if mask_vol.any():
-        expanding_vol_ma = df['volume'].expanding(min_periods=1).mean()
+        expanding_vol_ma = df["volume"].expanding(min_periods=1).mean()
         volume_ma = volume_ma.where(~mask_vol, expanding_vol_ma)
-    
+
     # Avoid division by zero
     volume_ma_safe = volume_ma.clip(lower=1e-8)
-    df['volume_n'] = df['volume'] / volume_ma_safe
-    
+    df["volume_n"] = df["volume"] / volume_ma_safe
+
     # Rolling z-score normalized volume (for spike detection)
-    volume_mean = df['volume'].rolling(lookback, min_periods=1).mean()
-    volume_std = df['volume'].rolling(lookback, min_periods=1).std()
-    
+    volume_mean = df["volume"].rolling(lookback, min_periods=1).mean()
+    volume_std = df["volume"].rolling(lookback, min_periods=1).std()
+
     # Use expanding window for early periods
     mask_vol_stats = volume_mean.isna() | volume_std.isna()
     if mask_vol_stats.any():
-        expanding_vol_mean = df['volume'].expanding(min_periods=1).mean()
-        expanding_vol_std = df['volume'].expanding(min_periods=1).std()
+        expanding_vol_mean = df["volume"].expanding(min_periods=1).mean()
+        expanding_vol_std = df["volume"].expanding(min_periods=1).std()
         volume_mean = volume_mean.where(~mask_vol_stats, expanding_vol_mean)
         volume_std = volume_std.where(~mask_vol_stats, expanding_vol_std)
-    
+
     # Avoid division by zero
     volume_std_safe = volume_std.clip(lower=1e-8)
-    df['volume_z'] = (df['volume'] - volume_mean) / volume_std_safe
-    
+    df["volume_z"] = (df["volume"] - volume_mean) / volume_std_safe
+
     # Clean up edge cases (inf values from division, NaN from insufficient data)
-    df['returns_z'] = df['returns_z'].replace([np.inf, -np.inf], 0)
-    df['returns_z'] = df['returns_z'].fillna(0)
-    
-    df['volume_n'] = df['volume_n'].replace([np.inf, -np.inf], 1)
-    df['volume_n'] = df['volume_n'].fillna(1)
-    
-    df['volume_z'] = df['volume_z'].replace([np.inf, -np.inf], 0)
-    df['volume_z'] = df['volume_z'].fillna(0)
-    
+    df["returns_z"] = df["returns_z"].replace([np.inf, -np.inf], 0)
+    df["returns_z"] = df["returns_z"].fillna(0)
+
+    df["volume_n"] = df["volume_n"].replace([np.inf, -np.inf], 1)
+    df["volume_n"] = df["volume_n"].fillna(1)
+
+    df["volume_z"] = df["volume_z"].replace([np.inf, -np.inf], 0)
+    df["volume_z"] = df["volume_z"].fillna(0)
+
     # Add cumulative returns for performance tracking
-    df['cumulative_returns'] = (1 + df['returns'].fillna(0)).cumprod() - 1
+    df["cumulative_returns"] = (1 + df["returns"].fillna(0)).cumprod() - 1
 
     return df
+
 
 def calculate_atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
     """

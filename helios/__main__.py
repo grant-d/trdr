@@ -16,6 +16,6 @@ from main import main
 if __name__ == "__main__":
     # Load environment variables from .env file
     load_dotenv()
-    
+
     # Run main function
     sys.exit(main())
