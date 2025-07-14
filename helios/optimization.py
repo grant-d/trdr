@@ -90,6 +90,21 @@ class GeneticAlgorithm:
         
         # Calculate elite size
         self.elite_size = max(1, int(population_size * elitism_rate))
+        
+        # Adaptive parameters
+        self.base_mutation_rate = mutation_rate
+        self.base_crossover_rate = crossover_rate
+        self.generations_without_improvement = 0
+        self.best_fitness_history = []
+        
+        # Age-based elitism
+        self.individual_ages = {}  # Track age of individuals
+        self.max_elite_age = 5  # Maximum generations an elite can survive
+        
+        # Dynamic population
+        self.min_population_size = max(20, population_size // 2)
+        self.max_population_size = min(200, population_size * 2)
+        self.target_diversity = 0.3  # Target diversity level
     
     def create_individual(self) -> Individual:
         """Create a random individual with enforced threshold constraints
@@ -168,7 +183,6 @@ class GeneticAlgorithm:
             for i in range(archive_to_add):
                 archived = Individual(self.candidate_archive[i].copy())
                 population.append(archived)
-            print(f"Added {archive_to_add} individuals from candidate archive")
             
             # 2. Add mutated versions of best archived individuals for diversity
             if self.candidate_archive:
@@ -188,14 +202,217 @@ class GeneticAlgorithm:
                             new_val = param_range.clip(current_val + mutation)
                             mutated.genes[param] = new_val
                     population.append(mutated)
-                print(f"Added {mutations_to_add} lightly mutated variants of best archived individual")
         
         # 3. Fill remaining population with random individuals for exploration
         remaining_size = self.population_size - len(population)
         population.extend([self.create_individual() for _ in range(remaining_size)])
-        print(f"Added {remaining_size} random individuals for exploration")
         
         return population
+    
+    def calculate_population_diversity(self, population: List[Individual]) -> float:
+        """Calculate diversity of population based on parameter variance"""
+        if len(population) < 2:
+            return 0.0
+        
+        # Calculate variance for each parameter
+        variances = []
+        for param in self.parameter_ranges.keys():
+            values = [ind.genes[param] for ind in population]
+            if len(set(values)) > 1:  # More than one unique value
+                param_range = self.parameter_ranges[param]
+                normalized_values = [(v - min(values)) / (max(values) - min(values) + 1e-8) 
+                                   for v in values]
+                variance = np.var(normalized_values)
+                variances.append(variance)
+        
+        return float(np.mean(variances)) if variances else 0.0
+    
+    def adapt_rates(self, population: List[Individual], generation: int):
+        """Adapt mutation and crossover rates based on diversity and convergence"""
+        diversity = self.calculate_population_diversity(population)
+        
+        # Check if fitness is improving
+        if self.best_fitness_history:
+            current_best = max(ind.fitness for ind in population)
+            if len(self.best_fitness_history) >= 3:
+                recent_improvement = current_best - self.best_fitness_history[-3]
+                if recent_improvement < 0.001:  # No significant improvement
+                    self.generations_without_improvement += 1
+                else:
+                    self.generations_without_improvement = 0
+        
+        # Adjust mutation rate based on diversity and stagnation
+        if diversity < 0.1:  # Low diversity
+            self.mutation_rate = min(0.5, self.base_mutation_rate * 2.0)
+        elif self.generations_without_improvement > 5:  # Stagnation
+            self.mutation_rate = min(0.4, self.base_mutation_rate * 1.5)
+        else:
+            self.mutation_rate = self.base_mutation_rate
+        
+        # Adjust crossover rate inversely to mutation
+        if self.mutation_rate > self.base_mutation_rate:
+            self.crossover_rate = max(0.5, self.base_crossover_rate * 0.8)
+        else:
+            self.crossover_rate = self.base_crossover_rate
+        
+        # Only print adaptive info every 5 generations or on significant changes
+        if generation % 5 == 0 or self.generations_without_improvement == 1:
+            from chalk import black
+            print(f"  {black(f'Adaptive: Div={diversity:.2f}, Mut={self.mutation_rate:.2f}, Stag={self.generations_without_improvement}')}")
+    
+    def age_based_replacement(self, population: List[Individual], generation: int) -> List[Individual]:
+        """Replace old elites to prevent premature convergence"""
+        # Update ages
+        for ind in population:
+            ind_id = id(ind)
+            if ind_id in self.individual_ages:
+                self.individual_ages[ind_id] += 1
+            else:
+                self.individual_ages[ind_id] = 0
+        
+        # Sort by fitness
+        sorted_pop = sorted(population, key=lambda x: x.fitness, reverse=True)
+        
+        # Check elite ages and replace if too old
+        new_population = []
+        elites_replaced = 0
+        
+        for i, ind in enumerate(sorted_pop):
+            ind_id = id(ind)
+            age = self.individual_ages.get(ind_id, 0)
+            
+            # Replace old elites (except the very best)
+            if i > 0 and i < self.elite_size and age > self.max_elite_age:
+                # Create a new random individual to replace the old elite
+                new_ind = self.create_individual()
+                new_population.append(new_ind)
+                elites_replaced += 1
+                # Remove age tracking for replaced individual
+                if ind_id in self.individual_ages:
+                    del self.individual_ages[ind_id]
+            else:
+                new_population.append(ind)
+        
+        # Only print if elites were replaced
+        if elites_replaced > 0:
+            from chalk import yellow
+            print(f"  {yellow(f'↻ Replaced {elites_replaced} old elites')}")
+        
+        # Clean up age tracking for individuals not in population
+        current_ids = {id(ind) for ind in new_population}
+        self.individual_ages = {k: v for k, v in self.individual_ages.items() if k in current_ids}
+        
+        return new_population
+    
+    def augment_data(self, df: pd.DataFrame, augmentation_type: str = "noise") -> pd.DataFrame:
+        """Apply data augmentation for robustness
+        
+        Parameters:
+        -----------
+        df : pd.DataFrame
+            Original price data
+        augmentation_type : str
+            Type of augmentation: 'noise', 'resample', 'shift'
+        """
+        if augmentation_type == "noise":
+            # Add small noise to OHLCV data (1% of price)
+            noise_factor = 0.01
+            augmented = df.copy()
+            
+            for col in ['open', 'high', 'low', 'close']:
+                if col in augmented.columns:
+                    noise = np.random.normal(0, augmented[col].std() * noise_factor, len(augmented))
+                    augmented[col] = augmented[col] + noise
+            
+            # Ensure high >= low and OHLC consistency
+            augmented['high'] = augmented[['open', 'high', 'close']].max(axis=1)
+            augmented['low'] = augmented[['open', 'low', 'close']].min(axis=1)
+            
+        elif augmentation_type == "resample":
+            # Randomly resample with replacement (bootstrap)
+            n_samples = int(len(df) * 0.95)  # Use 95% of data
+            indices = np.random.choice(len(df), n_samples, replace=True)
+            augmented = df.iloc[sorted(indices)].copy()
+            
+        elif augmentation_type == "shift":
+            # Time shift returns slightly
+            augmented = df.copy()
+            returns = augmented['close'].pct_change()
+            shift_factor = np.random.uniform(-0.001, 0.001)  # Small shift
+            shifted_returns = returns + shift_factor
+            
+            # Reconstruct prices
+            augmented['close'] = augmented['close'].iloc[0] * (1 + shifted_returns).cumprod()
+            for col in ['open', 'high', 'low']:
+                if col in augmented.columns:
+                    # Adjust other prices proportionally
+                    ratio = augmented[col] / df['close']
+                    augmented[col] = ratio * augmented['close']
+        else:
+            augmented = df.copy()
+        
+        return augmented
+    
+    def adjust_population_size(self, population: List[Individual], diversity: float) -> int:
+        """Dynamically adjust population size based on diversity"""
+        current_size = len(population)
+        
+        if diversity < 0.15:  # Very low diversity
+            # Increase population to encourage exploration
+            new_size = min(current_size + 10, self.max_population_size)
+            if new_size > current_size:
+                from chalk import cyan
+                print(f"  {cyan(f'↑ Low diversity ({diversity:.2f}), population: {current_size} → {new_size}')}")
+        elif diversity > 0.45 and current_size > self.min_population_size:  # High diversity
+            # Can reduce population for efficiency
+            new_size = max(current_size - 5, self.min_population_size)
+            if new_size < current_size:
+                from chalk import cyan
+                print(f"  {cyan(f'↓ High diversity ({diversity:.2f}), population: {current_size} → {new_size}')}")
+        else:
+            new_size = current_size
+        
+        return new_size
+    
+    def create_ensemble_parameters(self, top_individuals: List[Individual], n_ensemble: int = 3) -> Dict[str, float]:
+        """Create ensemble parameters from top N individuals
+        
+        Uses weighted average based on fitness scores
+        """
+        # Get top N individuals
+        sorted_individuals = sorted(top_individuals, key=lambda x: x.fitness, reverse=True)
+        ensemble_members = sorted_individuals[:n_ensemble]
+        
+        if not ensemble_members:
+            return {}
+        
+        # Calculate weights based on fitness (normalized)
+        min_fitness = min(ind.fitness for ind in ensemble_members)
+        fitness_range = max(ind.fitness for ind in ensemble_members) - min_fitness
+        
+        if fitness_range > 0:
+            weights = [(ind.fitness - min_fitness) / fitness_range for ind in ensemble_members]
+        else:
+            weights = [1.0 / len(ensemble_members)] * len(ensemble_members)
+        
+        # Normalize weights
+        weight_sum = sum(weights)
+        weights = [w / weight_sum for w in weights]
+        
+        # Create ensemble parameters
+        ensemble_params = {}
+        for param in self.parameter_ranges.keys():
+            if param.endswith('_int'):
+                # For integer parameters, use weighted average then round
+                weighted_sum = sum(ind.genes[param] * w for ind, w in zip(ensemble_members, weights))
+                ensemble_params[param] = int(round(weighted_sum))
+            else:
+                # For continuous parameters, use weighted average
+                ensemble_params[param] = sum(ind.genes[param] * w for ind, w in zip(ensemble_members, weights))
+        
+        # Silently create ensemble - details logged elsewhere if needed
+        
+        return ensemble_params
     
     def evaluate_fitness(self, individual: Individual, 
                         train_data: pd.DataFrame, 
@@ -299,7 +516,15 @@ class GeneticAlgorithm:
             
             # Calculate actual time span using timestamps
             try:
-                time_span_days = (portfolio_values.index[-1] - portfolio_values.index[0]).days
+                # Get time span safely - portfolio_values should have DatetimeIndex
+                # Type checker can't infer this, but it's safe within try block
+                time_diff = portfolio_values.index[-1] - portfolio_values.index[0]  # type: ignore
+                if hasattr(time_diff, 'days'):
+                    time_span_days = time_diff.days
+                else:
+                    # For pandas Timedelta
+                    time_span_days = time_diff.total_seconds() / 86400
+                
                 years_elapsed = max(time_span_days / 365.25, 1/365.25)  # At least 1 day
                 annualized_return = (1 + total_return) ** (1 / years_elapsed) - 1
                 periods_per_year = n_periods / years_elapsed  # Actual frequency
@@ -437,7 +662,7 @@ class GeneticAlgorithm:
             # Additional penalties for extreme parameters
             if weights['trend'] < 0.05 or weights['trend'] > 0.95:
                 fitness -= 1.0
-            if lookback < 5 or lookback > 100:
+            if lookback < 3 or lookback > 100:
                 fitness -= 1.0
             
             # Penalty for inverted thresholds (critical for proper strategy operation)
@@ -624,12 +849,12 @@ class GeneticAlgorithm:
         new_population = population[:self.elite_size]
         
         # Inject diversity: Add 10% completely random individuals each generation
-        diversity_count = max(1, int(self.population_size * 0.1))
+        diversity_count = max(1, int(len(population) * 0.1))
         for _ in range(diversity_count):
             new_population.append(self.create_individual())
         
         # Generate rest of population
-        while len(new_population) < self.population_size:
+        while len(new_population) < len(population):
             # Occasionally (5% chance) create a completely new random individual
             if random.random() < 0.05:
                 new_population.append(self.create_individual())
@@ -642,23 +867,21 @@ class GeneticAlgorithm:
             # Crossover
             child1, child2 = self.crossover(parent1, parent2)
             
-            # Mutation with adaptive rate (higher mutation for stagnant populations)
-            avg_fitness = float(np.mean([ind.fitness for ind in population[:10]]))
-            best_fitness = float(population[0].fitness)
-            stagnation_factor = 1.0 if best_fitness == 0 else min(2.0, 1.0 + (1.0 - avg_fitness/best_fitness))
-            
-            child1 = self.mutate(child1, mutation_rate=self.mutation_rate * stagnation_factor)
-            child2 = self.mutate(child2, mutation_rate=self.mutation_rate * stagnation_factor)
+            # Mutation with adaptive rate from adapt_rates method
+            child1 = self.mutate(child1, mutation_rate=self.mutation_rate)
+            child2 = self.mutate(child2, mutation_rate=self.mutation_rate)
             
             new_population.extend([child1, child2])
         
         # Trim to population size
-        return new_population[:self.population_size]
+        return new_population[:len(population)]
     
     def optimize(self, train_data: pd.DataFrame, 
-                verbose: bool = True) -> Tuple[Individual, List[float]]:
+                verbose: bool = True,
+                use_data_augmentation: bool = True,
+                use_ensemble: bool = True) -> Tuple[Individual, List[float], Optional[Dict]]:
         """
-        Run genetic algorithm optimization
+        Run genetic algorithm optimization with advanced features
         
         Parameters:
         -----------
@@ -666,26 +889,72 @@ class GeneticAlgorithm:
             Training data
         verbose : bool
             Print progress
+        use_data_augmentation : bool
+            Apply data augmentation for robustness
+        use_ensemble : bool
+            Return ensemble parameters from top individuals
         
         Returns:
         --------
-        Tuple[Individual, List[float]]
-            Best individual and fitness history
+        Tuple[Individual, List[float], Optional[Dict]]
+            Best individual, fitness history, and ensemble parameters (if enabled)
         """
         # Create initial population
         population = self.create_population()
+        current_pop_size = len(population)
         
         # Pre-calculate volatility scale once for efficiency
         volatility_scale = estimate_asset_volatility_scale(train_data, sample_size=min(500, len(train_data)))
         
+        # Prepare augmented datasets if enabled
+        augmented_datasets = []
+        if use_data_augmentation:
+            augmented_datasets = [
+                self.augment_data(train_data, "noise"),
+                self.augment_data(train_data, "shift")
+            ]
+            # Silent - augmentation enabled
+        
         # Evaluate initial population
         for individual in population:
             individual.fitness = self.evaluate_fitness(individual, train_data, volatility_scale)
+            
+            # Additional evaluation on augmented data
+            if use_data_augmentation and augmented_datasets:
+                aug_fitness_scores = []
+                for aug_data in augmented_datasets:
+                    aug_fitness = self.evaluate_fitness(individual, aug_data, volatility_scale)
+                    aug_fitness_scores.append(aug_fitness)
+                # Use weighted average: 70% original, 30% augmented
+                individual.fitness = float(0.7 * individual.fitness + 0.3 * np.mean(aug_fitness_scores))
         
-        best_fitness_history = []
+        self.best_fitness_history = []
+        ensemble_params = None
         
         # Evolution loop
         for generation in range(self.generations):
+            # Adaptive rate adjustment
+            self.adapt_rates(population, generation)
+            
+            # Age-based elite replacement
+            population = self.age_based_replacement(population, generation)
+            
+            # Dynamic population size adjustment
+            diversity = self.calculate_population_diversity(population)
+            new_pop_size = self.adjust_population_size(population, diversity)
+            
+            # Adjust population size if needed
+            if new_pop_size > current_pop_size:
+                # Add new random individuals
+                for _ in range(new_pop_size - current_pop_size):
+                    population.append(self.create_individual())
+                current_pop_size = new_pop_size
+            elif new_pop_size < current_pop_size:
+                # Remove worst individuals
+                population.sort(key=lambda x: x.fitness, reverse=True)
+                population = population[:new_pop_size]
+                current_pop_size = new_pop_size
+            
             # Evolve population
             population = self.evolve_population(population)
             
@@ -693,24 +962,50 @@ class GeneticAlgorithm:
             for individual in population:
                 if individual.fitness == 0:  # Not evaluated yet
                     individual.fitness = self.evaluate_fitness(individual, train_data, volatility_scale)
+                    
+                    # Additional evaluation on augmented data
+                    if use_data_augmentation and augmented_datasets:
+                        aug_fitness_scores = []
+                        for aug_data in augmented_datasets:
+                            aug_fitness = self.evaluate_fitness(individual, aug_data, volatility_scale)
+                            aug_fitness_scores.append(aug_fitness)
+                        # Use weighted average
+                        individual.fitness = float(0.7 * individual.fitness + 0.3 * np.mean(aug_fitness_scores))
             
             # Track best fitness
             best_individual = max(population, key=lambda x: x.fitness)
-            best_fitness_history.append(best_individual.fitness)
+            self.best_fitness_history.append(best_individual.fitness)
             
             if verbose:
+                from chalk import green, cyan, bold, black
                 avg_fitness = np.mean([ind.fitness for ind in population])
-                print(f"Generation {generation+1}/{self.generations}: "
-                      f"Best Fitness = {best_individual.fitness:.4f}, "
-                      f"Avg Fitness = {avg_fitness:.4f}")
+                
+                # Progress bar
+                progress = (generation + 1) / self.generations
+                bar_length = 20
+                filled = int(bar_length * progress)
+                bar = green("█" * filled) + black("░" * (bar_length - filled))
+                
+                # Compact output
+                print(f"\r{bar} Gen {bold(f'{generation+1}/{self.generations}')} | "
+                      f"Best: {cyan(f'{best_individual.fitness:.3f}')} | "
+                      f"Avg: {black(f'{avg_fitness:.3f}')} | "
+                      f"Pop: {current_pop_size}", end='', flush=True)
         
-        # Return best individual
+        # Get final best individual
         best_individual = max(population, key=lambda x: x.fitness)
+        
+        if verbose:
+            print()  # New line after progress bar
+        
+        # Create ensemble parameters if requested
+        if use_ensemble:
+            ensemble_params = self.create_ensemble_parameters(population, n_ensemble=3)
         
         # Update candidate archive with top performers
         self.update_archive(population)
         
-        return best_individual, best_fitness_history
+        return best_individual, self.best_fitness_history, ensemble_params
     
     def update_archive(self, population: List[Individual]):
         """Update the candidate archive with top performers from current population"""
@@ -727,7 +1022,7 @@ class GeneticAlgorithm:
             # Keep only the most recent ones (FIFO with size limit)
             self.candidate_archive = self.candidate_archive[-self.archive_size:]
         
-        print(f"Archive updated: {len(self.candidate_archive)} candidates stored")
+        # Silent archive update - no print needed
 
 
 class WalkForwardOptimizer:
@@ -818,7 +1113,7 @@ class WalkForwardOptimizer:
             test_data = data[test_start:test_end]
             
             # Optimize on training data
-            best_individual, fitness_history = ga.optimize(train_data, verbose=False)
+            best_individual, fitness_history, ensemble_params = ga.optimize(train_data, verbose=False)
             
             # Evaluate on test data (let it auto-detect volatility for test period)
             test_fitness = ga.evaluate_fitness(best_individual, test_data)
@@ -973,10 +1268,9 @@ def auto_detect_dollar_thresholds(data: pd.DataFrame, sample_size: int = 1000) -
     dollar_volume = (sample_data['high'] + sample_data['low'] + sample_data['close']) / 3 * sample_data['volume']
     
     # Calculate statistics - ensure we get numeric values
-    # Convert to numpy array first to avoid pandas type issues
-    dollar_vol_array = dollar_volume.values
-    median_dollar_vol = float(np.median(dollar_vol_array))
-    mean_dollar_vol = float(np.mean(dollar_vol_array))
+    # Use pandas methods for better type handling
+    median_dollar_vol = float(dollar_volume.median())
+    mean_dollar_vol = float(dollar_volume.mean())
     
     # Determine asset class based on price level and volume characteristics
     avg_price = float(sample_data['close'].mean())

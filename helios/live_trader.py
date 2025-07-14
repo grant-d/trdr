@@ -442,7 +442,7 @@ class LiveTrader:
         print()
         
         # Run optimization
-        best_individual, fitness_history = ga.optimize(df_prepared, verbose=True)
+        best_individual, fitness_history, ensemble_params = ga.optimize(df_prepared, verbose=True)
         
         # Save the updated archive for next optimization
         self.ga_archive = ga.candidate_archive.copy()

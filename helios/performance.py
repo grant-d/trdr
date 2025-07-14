@@ -30,8 +30,8 @@ def calculate_geometric_mean(returns: pd.Series) -> float:
     growth_factors = 1 + returns
 
     # Calculate geometric mean: (product of growth factors)^(1/n) - 1
-    # Convert to numpy for consistent types
-    product = np.prod(growth_factors.values)
+    # Use pandas prod() method for better type handling
+    product = float(growth_factors.prod())
     geometric_mean = product ** (1 / len(returns)) - 1
 
     return float(geometric_mean)
@@ -73,12 +73,11 @@ def calculate_returns_metrics(
         }
 
     # Basic metrics
-    # Use numpy for consistent scalar types
-    returns_array = np.asarray(returns.values)
-    total_return = float(np.prod(1.0 + returns_array) - 1.0)
+    # Calculate total return using pandas for consistent types
+    total_return = float((1.0 + returns).prod() - 1.0)
 
     # Calculate both arithmetic and geometric means
-    arithmetic_mean = float(np.mean(returns.values))
+    arithmetic_mean = float(returns.mean())
     geometric_mean = calculate_geometric_mean(returns)
 
     # Annualized metrics (assuming daily returns)
@@ -91,12 +90,12 @@ def calculate_returns_metrics(
     # Geometric annualized return (more accurate for compounding)
     annualized_return_geometric = (1 + geometric_mean) ** periods_per_year - 1
 
-    annualized_vol = float(np.std(returns.values)) * np.sqrt(periods_per_year)
+    annualized_vol = float(returns.std()) * np.sqrt(periods_per_year)
 
     # Sharpe Ratio
     excess_returns = returns - risk_free_rate / periods_per_year
-    returns_std = float(np.std(returns.values))
-    excess_mean = float(np.mean(excess_returns.values))
+    returns_std = float(returns.std())
+    excess_mean = float(excess_returns.mean())
     sharpe_ratio = (
         excess_mean / returns_std * np.sqrt(periods_per_year)
         if returns_std > 0
@@ -175,7 +174,7 @@ def calculate_sortino_ratio(
 
     # Annualized Sortino Ratio
     sortino = (
-        float(np.mean(excess_returns.values)) / downside_std * np.sqrt(periods_per_year)
+        float(excess_returns.mean()) / downside_std * np.sqrt(periods_per_year)
     )
 
     return sortino
@@ -252,7 +251,7 @@ def calculate_max_drawdown(cumulative_returns: pd.Series) -> float:
     drawdown = (cumulative_returns - running_max) / running_max
 
     # Return maximum drawdown (most negative value)
-    return float(np.min(drawdown.values))
+    return float(drawdown.min())
 
 
 def calculate_calmar_ratio(returns: pd.Series, periods_per_year: int = 252) -> float:
@@ -276,8 +275,7 @@ def calculate_calmar_ratio(returns: pd.Series, periods_per_year: int = 252) -> f
         return 0
 
     # Calculate annualized return
-    returns_array = np.asarray(returns.values)
-    total_return = float(np.prod(1.0 + returns_array) - 1.0)
+    total_return = float((1.0 + returns).prod() - 1.0)
     n_periods = len(returns)
     annualized_return = (1 + total_return) ** (periods_per_year / n_periods) - 1
 
@@ -430,58 +428,101 @@ def generate_performance_report(
         Formatted performance report
     """
     # Calculate performance metrics
+    from chalk import green, red, yellow, cyan, bold, black
+    
     metrics = evaluate_strategy_performance(results_df, initial_capital)
 
     report = []
-    report.append("=" * 60)
-    report.append("HELIOS TRADER PERFORMANCE REPORT")
-    report.append("=" * 60)
+    report.append(bold("=" * 60))
+    report.append(bold(cyan("HELIOS TRADER PERFORMANCE REPORT")))
+    report.append(bold("=" * 60))
 
     # Overall Performance
-    report.append("\nOVERALL PERFORMANCE")
-    report.append("-" * 30)
-    report.append(f"Initial Capital:        ${initial_capital:,.2f}")
-    report.append(f"Final Portfolio Value:  ${metrics['final_portfolio_value']:,.2f}")
-    report.append(f"Total P&L:             ${metrics['total_pnl']:,.2f}")
-    report.append(f"Total Return:          {metrics['total_return_pct']:.2f}%")
-    report.append(f"Annualized Return:     {metrics['annualized_return']:.2f}%")
+    report.append(f"\n{bold('OVERALL PERFORMANCE')}")
+    report.append(black("-" * 30))
+    report.append(f"Initial Capital:        {black('$')}{initial_capital:>13,.2f}")
+    
+    # Color code based on profit/loss
+    final_val = metrics['final_portfolio_value']
+    pnl = metrics['total_pnl']
+    total_ret = metrics['total_return_pct']
+    ann_ret = metrics['annualized_return']
+    
+    if pnl > 0:
+        report.append(f"Final Portfolio Value:  {green(f'${final_val:>13,.2f}')}")
+        report.append(f"Total P&L:              {green(f'+${pnl:>12,.2f}')}")
+        report.append(f"Total Return:           {green(f'+{total_ret:>12.2f}%')}")
+        report.append(f"Annualized Return:      {green(f'{ann_ret:>13.2f}%')}")
+    else:
+        report.append(f"Final Portfolio Value:  {red(f'${final_val:>13,.2f}')}")
+        report.append(f"Total P&L:              {red(f'${pnl:>13,.2f}')}")
+        report.append(f"Total Return:           {red(f'{total_ret:>13.2f}%')}")
+        report.append(f"Annualized Return:      {red(f'{ann_ret:>13.2f}%')}")
+    
     report.append(
-        f"Geometric Ann. Return: {metrics.get('annualized_return_geometric', metrics['annualized_return']):.2f}%"
+        f"Geometric Ann. Return:  {green(f'{metrics.get('annualized_return_geometric', ann_ret):>13.2f}%') if ann_ret > 0 else red(f'{metrics.get('annualized_return_geometric', ann_ret):>13.2f}%')}"
     )
 
     # Risk Metrics
-    report.append("\nRISK METRICS")
-    report.append("-" * 30)
-    report.append(f"Volatility (Annual):   {metrics['volatility']:.2f}%")
-    report.append(f"Maximum Drawdown:      {metrics['max_drawdown']:.2f}%")
-    report.append(f"Sharpe Ratio:          {metrics['sharpe_ratio']:.2f}")
-    report.append(f"Sortino Ratio:         {metrics['sortino_ratio']:.2f}")
-    report.append(f"Calmar Ratio:          {metrics['calmar_ratio']:.2f}")
+    report.append(f"\n{bold('RISK METRICS')}")
+    report.append(black("-" * 30))
+    
+    # Volatility - lower is better
+    vol = metrics['volatility']
+    vol_color = green if vol < 20 else yellow if vol < 40 else red
+    report.append(f"Volatility (Annual):    {vol_color(f'{vol:>13.2f}%')}")
+    
+    # Max Drawdown - closer to 0 is better
+    dd = metrics['max_drawdown']
+    dd_color = green if dd > -5 else yellow if dd > -15 else red
+    report.append(f"Maximum Drawdown:       {dd_color(f'{dd:>13.2f}%')}")
+    
+    # Ratios - higher is better
+    sharpe = metrics['sharpe_ratio']
+    sortino = metrics['sortino_ratio']
+    calmar = metrics['calmar_ratio']
+    
+    report.append(f"Sharpe Ratio:           {green(f'{sharpe:>13.2f}') if sharpe > 1 else yellow(f'{sharpe:>13.2f}') if sharpe > 0.5 else red(f'{sharpe:>13.2f}')}")
+    report.append(f"Sortino Ratio:          {green(f'{sortino:>13.2f}') if sortino > 2 else yellow(f'{sortino:>13.2f}') if sortino > 1 else red(f'{sortino:>13.2f}')}")
+    report.append(f"Calmar Ratio:           {green(f'{calmar:>13.2f}') if calmar > 3 else yellow(f'{calmar:>13.2f}') if calmar > 1 else red(f'{calmar:>13.2f}')}")
 
     # Mean Returns (for advanced analysis)
-    report.append("\nRETURN STATISTICS")
-    report.append("-" * 30)
+    report.append(f"\n{bold('RETURN STATISTICS')}")
+    report.append(black("-" * 30))
     report.append(
-        f"Arithmetic Mean:       {metrics.get('arithmetic_mean_return', 0):.4f}%"
+        f"Arithmetic Mean:        {black(f'{metrics.get('arithmetic_mean_return', 0):>13.4f}%')}"
     )
     report.append(
-        f"Geometric Mean:        {metrics.get('geometric_mean_return', 0):.4f}%"
+        f"Geometric Mean:         {black(f'{metrics.get('geometric_mean_return', 0):>13.4f}%')}"
     )
 
     # Trading Statistics
-    report.append("\nTRADING STATISTICS")
-    report.append("-" * 30)
-    report.append(f"Total Trades:          {trades_summary.get('total_trades', 0)}")
-    report.append(f"Position Cycles:       {trades_summary.get('position_cycles', 0)}")
-    report.append(f"Winning Trades:        {trades_summary.get('winning_trades', 0)}")
-    report.append(f"Losing Trades:         {trades_summary.get('losing_trades', 0)}")
-    report.append(f"Win Rate:              {trades_summary.get('win_rate', 0):.2f}%")
-    report.append(f"Average Win:           {trades_summary.get('avg_win', 0):.2f}%")
-    report.append(f"Average Loss:          {trades_summary.get('avg_loss', 0):.2f}%")
-    report.append(
-        f"Profit Factor:         {trades_summary.get('profit_factor', 0):.2f}"
-    )
+    report.append(f"\n{bold('TRADING STATISTICS')}")
+    report.append(black("-" * 30))
+    report.append(f"Total Trades:           {cyan(str(trades_summary.get('total_trades', 0)).rjust(14))}")
+    report.append(f"Position Cycles:        {str(trades_summary.get('position_cycles', 0)).rjust(14)}")
+    
+    wins = trades_summary.get('winning_trades', 0)
+    losses = trades_summary.get('losing_trades', 0)
+    report.append(f"Winning Trades:         {green(str(wins).rjust(14))}")
+    report.append(f"Losing Trades:          {red(str(losses).rjust(14))}")
+    
+    # Win Rate - color based on performance
+    win_rate = trades_summary.get('win_rate', 0)
+    wr_color = green if win_rate > 60 else yellow if win_rate > 40 else red
+    report.append(f"Win Rate:               {wr_color(f'{win_rate:>13.2f}%')}")
+    
+    # Average win/loss
+    avg_win = trades_summary.get('avg_win', 0)
+    avg_loss = trades_summary.get('avg_loss', 0)
+    report.append(f"Average Win:            {green(f'+{avg_win:>12.2f}%')}")
+    report.append(f"Average Loss:           {red(f'{avg_loss:>13.2f}%')}")
+    
+    # Profit Factor - higher is better
+    pf = trades_summary.get('profit_factor', 0)
+    pf_color = green if pf > 2 else yellow if pf > 1.5 else red
+    report.append(f"Profit Factor:          {pf_color(f'{pf:>13.2f}')}")
 
-    report.append("\n" + "=" * 60)
+    report.append("\n" + bold("=" * 60))
 
     return "\n".join(report)

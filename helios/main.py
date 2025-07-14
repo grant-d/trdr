@@ -653,12 +653,17 @@ def handle_optimize_command(args):
     else:
         # Simple optimization
         print("\nRunning optimization...")
-        best_individual, fitness_history = ga.optimize(df)
+        best_individual, fitness_history, ensemble_params = ga.optimize(df)
 
         print(f"\nBest fitness: {best_individual.fitness:.4f}")
         print("\nBest parameters:")
         for param, value in best_individual.genes.items():
             print(f"  {param}: {value:.4f}")
+        
+        if ensemble_params:
+            print("\nEnsemble parameters (weighted average of top 3):")
+            for param, value in ensemble_params.items():
+                print(f"  {param}: {value:.4f}")
 
         # Sound notification when optimization completes
         play_completion_sound()
@@ -697,6 +702,7 @@ def handle_optimize_command(args):
                         set(fitness_history)
                     ),  # Unique fitness values
                 },
+                "ensemble_parameters": ensemble_params if ensemble_params else None,
             }
 
             # Use output prefix if provided
