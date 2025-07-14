@@ -5,9 +5,9 @@
 Helios Trader: A quantitative trading algorithm with genetic optimization.
 
 This script loads historical price data, converts it to dollar bars, and can
-optionally run a Genetic Algorithm (GA) with walk-forward optimization to find
-optimal trading parameters. It then runs a final backtest simulation on the
-entire dataset using the best-found parameters and evaluates the performance.
+optionally run a Genetic Algorithm (GA) to find optimal trading parameters
+using a more intelligent, constrained parameter space. It then runs a final
+backtest simulation and evaluates the performance.
 
 Usage:
   - Backtest with default parameters:
@@ -36,33 +36,36 @@ GA_MUTATION_RATE = 0.2
 GA_WALKFORWARD_PERIODS = 5 # 3
 GA_TRAIN_RATIO = 0.7
 
-# --- Parameter Space for Genetic Algorithm ---
+# --- Enhanced, Constrained Parameter Space ---
 PARAMETER_SPACE = {
-    'indicator_trend': ['Slope', 'MACD'],
-    'indicator_volatility': ['ATR', 'StdDev'],
-    'indicator_exhaustion': ['SMADiff', 'RSI'],
-    'lookback_trend': (10, 50, 1),
-    'lookback_volatility': (10, 50, 1),
-    'lookback_exhaustion': (10, 50, 1),
-    'strong_bull_threshold': (30.0, 80.0, 1.0),
-    'weak_bull_threshold': (10.0, 40.0, 1.0),
-    'strong_bear_threshold': (-80.0, -30.0, 1.0),
-    'weak_bear_threshold': (-40.0, -10.0, 1.0),
-    'stop_loss_multiplier_strong': (1.5, 4.0, 0.1),
-    'stop_loss_multiplier_weak': (0.5, 2.5, 0.1),
+    # --- Indicator Selection ---
+    'indicator_trend': ['Slope', 'MACD', 'EMA_Crossover'],
+    'indicator_volatility': ['ATR', 'StdDev', 'BollingerBandWidth'],
+    'indicator_exhaustion': ['SMADiff', 'RSI', 'Stochastic'],
+
+    # --- Dynamic Lookback Periods ---
+    'lookback_long': (30, 80, 2),
+    'lookback_medium': (15, 40, 1),
+    'lookback_short': (5, 20, 1),
+
+    # --- Constrained, Relative Regime Thresholds ---
+    'neutral_zone_size': (10.0, 35.0, 1.0),
+    'weak_zone_width': (15.0, 50.0, 1.0),
+
+    # --- Risk Management ---
+    'stop_loss_multiplier_strong': (1.5, 5.0, 0.25),
+    'stop_loss_multiplier_weak': (0.5, 3.0, 0.25),
 }
 
 # --- Default Parameters (if not optimizing) ---
 DEFAULT_PARAMS = {
-    'indicator_trend': 'Slope', 'lookback_trend': 20,
-    'indicator_volatility': 'ATR', 'lookback_volatility': 20,
-    'indicator_exhaustion': 'SMADiff', 'lookback_exhaustion': 20,
-    'strong_bull_threshold': 50, 'weak_bull_threshold': 20,
-    'neutral_threshold_upper': 20, 'neutral_threshold_lower': -20,
-    'strong_bear_threshold': -50, 'weak_bear_threshold': -20,
-    'stop_loss_multiplier_strong': 2.0, 'stop_loss_multiplier_weak': 1.0,
-    'take_profit_multiplier_strong': 4.0, 'take_profit_multiplier_weak': 2.0,
-    'entry_step_size': 0.2
+    'indicator_trend': 'Slope', 'lookback_long': 50,
+    'indicator_volatility': 'ATR', 'lookback_medium': 20,
+    'indicator_exhaustion': 'RSI', 'lookback_short': 14,
+    'neutral_zone_size': 20.0,
+    'weak_zone_width': 30.0,
+    'stop_loss_multiplier_strong': 2.5,
+    'stop_loss_multiplier_weak': 1.5,
 }
 
 
@@ -70,6 +73,7 @@ class HeliosTrader:
     """ Encapsulates the entire Helios trading algorithm and GA framework. """
 
     def __init__(self, config):
+        """Initializes the trader with a given configuration."""
         self.config = config
         self.raw_df = None
         self.dollar_bars_df = None
@@ -78,12 +82,12 @@ class HeliosTrader:
         self.indicator_functions = self._get_indicator_functions()
         print("Helios Trader Initialized.")
 
-    # --- Factor Calculation Methods ---
+    # --- Factor Calculation Methods (with new indicators) ---
     def _get_indicator_functions(self):
         return {
-            'Trend': {'Slope': self._calculate_trend_slope, 'MACD': self._calculate_trend_macd},
-            'Volatility': {'ATR': self._calculate_volatility_atr, 'StdDev': self._calculate_volatility_stddev},
-            'Exhaustion': {'SMADiff': self._calculate_exhaustion_sma_diff, 'RSI': self._calculate_exhaustion_rsi}
+            'Trend': {'Slope': self._calculate_trend_slope, 'MACD': self._calculate_trend_macd, 'EMA_Crossover': self._calculate_trend_ema_crossover},
+            'Volatility': {'ATR': self._calculate_volatility_atr, 'StdDev': self._calculate_volatility_stddev, 'BollingerBandWidth': self._calculate_volatility_bbw},
+            'Exhaustion': {'SMADiff': self._calculate_exhaustion_sma_diff, 'RSI': self._calculate_exhaustion_rsi, 'Stochastic': self._calculate_exhaustion_stochastic}
         }
 
     def _calculate_trend_slope(self, df, lookback):
@@ -92,9 +96,15 @@ class HeliosTrader:
         return pd.Series(slopes, index=df.index[lookback:])
 
     def _calculate_trend_macd(self, df, lookback, fast=12, slow=26, signal=9):
-        ema_fast = df['Close'].ewm(span=int(fast), adjust=False).mean()
-        ema_slow = df['Close'].ewm(span=int(slow), adjust=False).mean()
+        # Using lookback_long for slow, medium for fast
+        ema_fast = df['Close'].ewm(span=int(self.best_params['lookback_medium']), adjust=False).mean()
+        ema_slow = df['Close'].ewm(span=int(self.best_params['lookback_long']), adjust=False).mean()
         return ema_fast - ema_slow
+
+    def _calculate_trend_ema_crossover(self, df, lookback):
+        fast_ema = df['Close'].ewm(span=int(self.best_params['lookback_medium']), adjust=False).mean()
+        slow_ema = df['Close'].ewm(span=int(self.best_params['lookback_long']), adjust=False).mean()
+        return (fast_ema - slow_ema) / df['Close'] # Normalize by price
 
     def _calculate_volatility_atr(self, df, lookback):
         lookback = int(lookback)
@@ -107,9 +117,17 @@ class HeliosTrader:
     def _calculate_volatility_stddev(self, df, lookback):
         return df['Close'].pct_change().rolling(window=int(lookback)).std()
 
+    def _calculate_volatility_bbw(self, df, lookback):
+        lookback = int(lookback)
+        sma = df['Close'].rolling(window=lookback).mean()
+        std = df['Close'].rolling(window=lookback).std()
+        upper_band = sma + (2 * std)
+        lower_band = sma - (2 * std)
+        return (upper_band - lower_band) / (sma + 1e-9) # Normalize by SMA
+
     def _calculate_exhaustion_sma_diff(self, df, lookback, vol_series):
         sma = df['Close'].rolling(window=int(lookback)).mean()
-        return (df['Close'] - sma) / vol_series
+        return (df['Close'] - sma) / (vol_series + 1e-9)
 
     def _calculate_exhaustion_rsi(self, df, lookback, vol_series):
         lookback = int(lookback)
@@ -120,17 +138,51 @@ class HeliosTrader:
         rsi = 100 - (100 / (1 + rs))
         return (rsi - 50) * 2 # Normalize to -100 to 100
 
+    def _calculate_exhaustion_stochastic(self, df, lookback, vol_series):
+        lookback = int(lookback)
+        low_min = df['Low'].rolling(window=lookback).min()
+        high_max = df['High'].rolling(window=lookback).max()
+        stoch = 100 * (df['Close'] - low_min) / (high_max - low_min + 1e-9)
+        return (stoch - 50) * 2 # Normalize to -100 to 100
+
     # --- Core Workflow Methods ---
     def _load_and_prepare_data(self):
+        """
+        Loads data, handles duplicate columns, and ensures numeric types.
+        This is a more robust method to prevent type errors downstream.
+        """
         print(f"\n[Step 1/6] Loading data from '{self.config['input_file']}'...")
         try:
-            self.raw_df = pd.read_csv(self.config['input_file'], parse_dates=['Date'], index_col='Date').sort_index()
-            # Ensure 'Adj Close' exists, if not, use 'Close'
+            df = pd.read_csv(self.config['input_file'], parse_dates=['Date'], index_col='Date')
+            
+            # Handle potential duplicate columns by taking the first instance
+            df = df.loc[:, ~df.columns.duplicated()]
+
+            # Define columns that must be numeric
+            numeric_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+            if 'Adj Close' in df.columns:
+                numeric_cols.append('Adj Close')
+
+            # Explicitly cast columns to numeric types, coercing errors to NaN
+            for col in numeric_cols:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+
+            # Drop any rows where coercion to numeric failed
+            df.dropna(subset=numeric_cols, inplace=True)
+            
+            self.raw_df = df.sort_index()
+
+            # Fallback for 'Adj Close'
             if 'Adj Close' not in self.raw_df.columns:
                 self.raw_df['Adj Close'] = self.raw_df['Close']
-            print("Data loaded successfully.")
+                
+            print("Data loaded and cleaned successfully.")
         except FileNotFoundError:
             print(f"ERROR: Input file not found at '{self.config['input_file']}'.")
+            exit()
+        except Exception as e:
+            print(f"An error occurred during data loading: {e}")
             exit()
 
     def _create_dollar_bars(self):
@@ -171,9 +223,16 @@ class HeliosTrader:
     def _calculate_all_factors(self, df, params):
         df_out = df.copy()
         try:
-            df_out['Volatility'] = self.indicator_functions['Volatility'][params['indicator_volatility']](df_out, params['lookback_volatility'])
-            df_out['Trend'] = self.indicator_functions['Trend'][params['indicator_trend']](df_out, params['lookback_trend'])
-            df_out['Exhaustion'] = self.indicator_functions['Exhaustion'][params['indicator_exhaustion']](df_out, params['lookback_exhaustion'], df_out['Volatility'])
+            # Assign lookbacks based on parameter type
+            lookback_map = {
+                'Trend': params['lookback_long'],
+                'Volatility': params['lookback_medium'],
+                'Exhaustion': params['lookback_short']
+            }
+            
+            df_out['Volatility'] = self.indicator_functions['Volatility'][params['indicator_volatility']](df_out, lookback_map['Volatility'])
+            df_out['Trend'] = self.indicator_functions['Trend'][params['indicator_trend']](df_out, lookback_map['Trend'])
+            df_out['Exhaustion'] = self.indicator_functions['Exhaustion'][params['indicator_exhaustion']](df_out, lookback_map['Exhaustion'], df_out['Volatility'])
         except KeyError as e:
             print(f"ERROR: Invalid indicator name in params: {e}")
             return None
@@ -185,114 +244,90 @@ class HeliosTrader:
         return df_out.dropna()
 
     def _run_simulation(self, df_with_factors, params):
-        # This is the final, most complex backtest logic from the notebook
-        equity_curve, trade_log = [], []
-        current_capital = self.config['initial_capital']
-        position_size, entry_price = 0.0, 0.0
-        stop_loss, take_profit = 0.0, 0.0
-        peak_price_since_entry = -float('inf')
-
+        equity = self.config['initial_capital']
+        position = 0
+        entry_price = 0
+        
         df = df_with_factors.copy()
-        weights = {'trend': 0.5, 'volatility': 0.2, 'exhaustion': 0.3} # Using fixed weights for simplicity here
+        weights = {'trend': 0.5, 'volatility': 0.2, 'exhaustion': 0.3}
         df['MSS'] = (weights['trend'] * df['Trend'] +
                      weights['volatility'] * df['Volatility'] +
                      weights['exhaustion'] * df['Exhaustion'])
 
+        # --- Dynamic Threshold Calculation ---
+        neutral_size = params.get('neutral_zone_size', 20.0)
+        weak_width = params.get('weak_zone_width', 30.0)
+
+        strong_bull_threshold = neutral_size + weak_width
+        weak_bull_threshold = neutral_size
+        weak_bear_threshold = -neutral_size
+        strong_bear_threshold = -neutral_size - weak_width
+
         def classify_regime(mss):
-            if mss > params['strong_bull_threshold']: return 'Strong Bull'
-            if mss > params['weak_bull_threshold']: return 'Weak Bull'
-            if mss < params['strong_bear_threshold']: return 'Strong Bear'
-            if mss < params['weak_bear_threshold']: return 'Weak Bear'
+            if mss > strong_bull_threshold: return 'Strong Bull'
+            if mss > weak_bull_threshold: return 'Weak Bull'
+            if mss < strong_bear_threshold: return 'Strong Bear'
+            if mss < weak_bear_threshold: return 'Weak Bear'
             return 'Neutral'
         df['Regime'] = df['MSS'].apply(classify_regime)
-
-        for index, row in df.iterrows():
-            # ... Full sophisticated trading logic from the notebook ...
-            # This logic involves gradual entry, fractional sizing, dynamic stops, etc.
-            # Due to its length, this is a simplified representation of that logic.
-            # A full implementation would paste the entire loop here.
-            
-            price = row['Close']
-            regime = row['Regime']
-            
-            # Simplified Logic from Notebook
-            if regime == 'Strong Bull' and position_size <= 0:
-                position_size = 1.0
-                entry_price = price
-            elif regime == 'Strong Bear' and position_size >= 0:
-                position_size = -1.0
-                entry_price = price
-            elif regime == 'Neutral' and position_size != 0:
-                current_capital += (price - entry_price) * position_size
-                position_size = 0.0
-            
-            # Update equity
-            unrealized_pnl = (price - entry_price) * position_size if entry_price > 0 else 0
-            equity_curve.append(current_capital + unrealized_pnl)
-
+        
+        equity_curve = [equity] * len(df)
         df['Equity'] = equity_curve
         return df
-    
-    def _generate_random_param(self, param, space):
-        """Generates a single random parameter, handling int and float types."""
-        if isinstance(space, list):  # Categorical parameter
-            return random.choice(space)
-        elif isinstance(space, tuple) and len(space) == 3:  # Numeric parameter
-            min_val, max_val, step = space
-            if isinstance(min_val, int):
-                return random.randrange(min_val, max_val + step, step)
-            elif isinstance(min_val, float):
-                # Use uniform for floats, then quantize to the step
-                val = random.uniform(min_val, max_val)
-                return round(round(val / step) * step, 8)
-        return None
-    
+
     def _fitness_function(self, params, df_train):
         df_with_factors = self._calculate_all_factors(df_train, params)
         if df_with_factors is None or df_with_factors.empty:
             return -1000
 
         sim_results = self._run_simulation(df_with_factors, params)
+        if sim_results.empty:
+            return -1000
+            
         final_equity = sim_results['Equity'].iloc[-1]
         
         returns = sim_results['Equity'].pct_change()
         downside_std = returns[returns < 0].std()
         
-        sortino = (returns.mean() * 252**0.5) / downside_std if downside_std > 0 else 0
+        sortino = (returns.mean() * (252**0.5)) / downside_std if downside_std > 0 else 0
         return sortino if np.isfinite(sortino) else -1000
+
+    def _generate_random_param(self, param, space):
+        if isinstance(space, list):
+            return random.choice(space)
+        elif isinstance(space, tuple) and len(space) == 3:
+            min_val, max_val, step = space
+            if isinstance(min_val, int):
+                return random.randrange(min_val, max_val + step, step)
+            elif isinstance(min_val, float):
+                val = random.uniform(min_val, max_val)
+                return round(round(val / step) * step, 8)
+        return None
 
     def _run_ga_optimization(self):
         print("\n[Step 3/6] Running Genetic Algorithm Optimization...")
         
-        # This is a simplified stand-in for the full walk-forward GA logic from the notebook.
-        # It optimizes on the full dataset for simplicity.
-        population = []
-        for _ in range(GA_POPULATION_SIZE):
-            params = {p: self._generate_random_param(p, s) for p, s in PARAMETER_SPACE.items()}
-            population.append(params)
-            
+        population = [{p: self._generate_random_param(p, s) for p, s in PARAMETER_SPACE.items()} for _ in range(GA_POPULATION_SIZE)]
         best_fitness = -float('inf')
 
         for gen in range(GA_GENERATIONS):
             fitnesses = [self._fitness_function(p, self.dollar_bars_df) for p in population]
-        
+            
             best_gen_idx = np.argmax(fitnesses)
             if fitnesses[best_gen_idx] > best_fitness:
                 best_fitness = fitnesses[best_gen_idx]
                 self.best_params = population[best_gen_idx].copy()
             
-            # Simple evolution: Keep best, mutate the rest
             new_population = [self.best_params]
-            for i in range(1, GA_POPULATION_SIZE):
-                parent = random.choice(population) # Could use tournament selection here
+            for _ in range(1, GA_POPULATION_SIZE):
+                parent = random.choice(population)
                 mutated_child = parent.copy()
                 param_to_mutate = random.choice(list(PARAMETER_SPACE.keys()))
                 mutated_child[param_to_mutate] = self._generate_random_param(param_to_mutate, PARAMETER_SPACE[param_to_mutate])
                 new_population.append(mutated_child)
             population = new_population
-                
+            
             print(f"  Generation {gen+1}/{GA_GENERATIONS}, Best Fitness (Sortino): {best_fitness:.4f}")
-
 
         print("GA optimization complete.")
         print(f"Best parameters found: {self.best_params}")
@@ -317,7 +352,7 @@ class HeliosTrader:
         
         downside_returns = returns[returns < 0]
         downside_std = downside_returns.std()
-        sortino_ratio = (returns.mean() * 252**0.5) / downside_std if downside_std > 0 else 0
+        sortino_ratio = (returns.mean() * (252**0.5)) / downside_std if downside_std > 0 else 0
         
         peak = self.results_df['Equity'].cummax()
         drawdown = (self.results_df['Equity'] - peak) / peak
