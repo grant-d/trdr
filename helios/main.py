@@ -189,6 +189,9 @@ def main():
     # Optimize command
     optimize_parser = subparsers.add_parser('optimize', help='Run genetic algorithm optimization')
     optimize_parser.add_argument("--data", "-d", required=True, help="Path to data file")
+    optimize_parser.add_argument('--enhanced', action='store_true', help='Use enhanced strategy with gradual entries and regime thresholds')
+    optimize_parser.add_argument('--dollar-bars', action='store_true', help='Convert to dollar bars before optimization')
+    optimize_parser.add_argument('--dollar-threshold', type=float, default=1000000, help='Dollar volume threshold for bars')
     optimize_parser.add_argument('--context-id', help='Context ID to optimize for')
     optimize_parser.add_argument('--walk-forward', action='store_true', help='Use walk-forward optimization')
     optimize_parser.add_argument('--window-days', type=int, default=365, help='Training window in days')
@@ -197,6 +200,17 @@ def main():
     optimize_parser.add_argument('--generations', type=int, default=20, help='Number of generations')
     optimize_parser.add_argument('--fitness', choices=['sortino', 'calmar'], default='sortino',
                                 help='Fitness metric to optimize')
+    optimize_parser.add_argument('--save-results', action='store_true', help='Save optimization results and parameters')
+    
+    # Run-optimized command
+    run_opt_parser = subparsers.add_parser('run-optimized', help='Run backtest with saved optimization parameters')
+    run_opt_parser.add_argument("--data", "-d", required=True, help="Path to data file")
+    run_opt_parser.add_argument("--params", "-p", required=True, help="Path to optimized parameters JSON file")
+    run_opt_parser.add_argument('--dollar-bars', action='store_true', help='Convert to dollar bars before analysis')
+    run_opt_parser.add_argument('--dollar-threshold', type=float, default=1000000, help='Dollar volume threshold for bars')
+    run_opt_parser.add_argument('--capital', type=float, default=100000, help='Initial capital')
+    run_opt_parser.add_argument('--save-results', action='store_true', help='Save backtest results')
+    run_opt_parser.add_argument('--output-dir', default='./strategy_results', help='Output directory for results')
     
     # Backtest command
     backtest_parser = subparsers.add_parser('backtest', help='Run backtest with trading context')
@@ -295,6 +309,9 @@ def main():
     elif args.command == 'optimize':
         return handle_optimize_command(args)
     
+    elif args.command == 'run-optimized':
+        return handle_run_optimized_command(args)
+    
     elif args.command == 'backtest':
         return handle_backtest_command(args)
     
@@ -302,14 +319,16 @@ def main():
         print("\nHelios Trading Analysis Toolkit v0.2.0")
         print("=" * 40)
         print("\nAvailable commands:")
-        print("  analyze   - Run basic analysis on historical data")
-        print("  context   - Manage trading contexts")
-        print("  optimize  - Run genetic algorithm optimization")
-        print("  backtest  - Run backtest with trading context")
+        print("  analyze      - Run basic analysis on historical data")
+        print("  optimize     - Run genetic algorithm optimization")
+        print("  run-optimized - Run backtest with saved optimization parameters")
+        print("  context      - Manage trading contexts")
+        print("  backtest     - Run backtest with trading context")
         print("\nExamples:")
-        print("  python -m helios analyze --data data.csv")
+        print("  python -m helios analyze --data data.csv --dollar-bars")
+        print("  python -m helios optimize --data data.csv --enhanced --population 50 --generations 20")
+        print("  python -m helios run-optimized --data data.csv --params results/optimized_parameters.json")
         print("  python -m helios context create --instrument BTC --exchange COINBASE --timeframe 1h")
-        print("  python -m helios optimize --data data.csv --walk-forward")
         print("\nFor command help:")
         print("  python -m helios <command> --help")
     
@@ -428,8 +447,21 @@ def handle_optimize_command(args):
         print(f"Error loading data: {e}")
         return 1
     
-    # Create GA
-    param_ranges = create_default_parameter_ranges()
+    # Convert to dollar bars if requested
+    if args.dollar_bars:
+        print(f"Creating dollar bars (threshold: ${args.dollar_threshold:,.0f})...")
+        df = create_dollar_bars(df, args.dollar_threshold)
+        print(f"Dollar bars created: {len(df)}")
+    
+    # Create GA with appropriate parameter ranges
+    if args.enhanced:
+        from optimization import create_enhanced_parameter_ranges
+        param_ranges = create_enhanced_parameter_ranges()
+        print("Using enhanced strategy with gradual entries and regime thresholds")
+    else:
+        param_ranges = create_default_parameter_ranges()
+        print("Using basic strategy")
+        
     ga = GeneticAlgorithm(
         parameter_ranges=param_ranges,
         population_size=args.population,
@@ -466,6 +498,187 @@ def handle_optimize_command(args):
         print("\nBest parameters:")
         for param, value in best_individual.genes.items():
             print(f"  {param}: {value:.4f}")
+        
+        # Save results if requested
+        if args.save_results:
+            print("\nSaving optimization results...")
+            results_dir = Path("./optimization_results")
+            results_dir.mkdir(exist_ok=True)
+            
+            # Save optimized parameters
+            import json
+            params_data = {
+                "parameters": {k: float(v) for k, v in best_individual.genes.items()},
+                "fitness": float(best_individual.fitness),
+                "fitness_metric": args.fitness,
+                "enhanced_strategy": args.enhanced,
+                "data_file": args.data,
+                "dollar_bars": args.dollar_bars,
+                "dollar_threshold": args.dollar_threshold if args.dollar_bars else None,
+                "population_size": args.population,
+                "generations": args.generations,
+                "parameter_ranges": {k: [float(v[0]), float(v[1])] for k, v in param_ranges.items()}
+            }
+            
+            params_file = results_dir / "optimized_parameters.json"
+            with open(params_file, "w") as f:
+                json.dump(params_data, f, indent=2)
+            print(f"   Optimized parameters saved to: {params_file}")
+            
+            # Save fitness history
+            fitness_file = results_dir / "fitness_history.json"
+            with open(fitness_file, "w") as f:
+                json.dump({"fitness_history": [float(f) for f in fitness_history]}, f, indent=2)
+            print(f"   Fitness history saved to: {fitness_file}")
+    
+    return 0
+
+
+def handle_run_optimized_command(args):
+    """Handle run-optimized commands"""
+    print("\nHelios Run with Optimized Parameters")
+    print("=" * 40)
+    
+    # Load optimized parameters
+    try:
+        print(f"Loading parameters from: {args.params}")
+        import json
+        with open(args.params, 'r') as f:
+            params_data = json.load(f)
+        
+        opt_params = params_data['parameters']
+        enhanced_strategy = params_data.get('enhanced_strategy', False)
+        
+        print("Loaded parameters:")
+        for param, value in sorted(opt_params.items()):
+            print(f"  {param}: {value:.4f}")
+        print(f"Strategy type: {'Enhanced' if enhanced_strategy else 'Basic'}")
+        
+    except Exception as e:
+        print(f"Error loading parameters: {e}")
+        return 1
+    
+    # Load data
+    try:
+        print(f"\nLoading data from: {args.data}")
+        if args.data.endswith('.csv'):
+            df = pd.read_csv(args.data, parse_dates=True, index_col=0)
+        else:
+            df = pd.read_parquet(args.data)
+        
+        # Standardize columns
+        df.columns = df.columns.str.lower()
+        
+        # Handle adjusted close
+        adj_close_variations = ["adj close", "adj_close", "adjusted_close", "adjustedclose"]
+        for col in adj_close_variations:
+            if col in df.columns:
+                print(f"Using '{col}' as close price")
+                df["close"] = df[col]
+                break
+        
+        df = prepare_data(df)
+        print(f"Data loaded: {len(df)} bars")
+        print(f"Date range: {df.index[0]} to {df.index[-1]}")
+        
+    except Exception as e:
+        print(f"Error loading data: {e}")
+        return 1
+    
+    # Convert to dollar bars if requested
+    if args.dollar_bars:
+        print(f"\nCreating dollar bars (threshold: ${args.dollar_threshold:,.0f})...")
+        df = create_dollar_bars(df, args.dollar_threshold)
+        print(f"Dollar bars created: {len(df)}")
+    
+    # Calculate factors with optimized parameters
+    print("\nCalculating indicators...")
+    weights = {
+        'trend': opt_params.get('weight_trend', 0.4),
+        'volatility': opt_params.get('weight_volatility', 0.3),
+        'exhaustion': opt_params.get('weight_exhaustion', 0.3)
+    }
+    total_weight = sum(weights.values())
+    weights = {k: v/total_weight for k, v in weights.items()}
+    
+    lookback = int(opt_params.get('lookback_int', 20))
+    factors_df, regimes = calculate_mss(df, lookback, weights)
+    
+    # Add indicators
+    macd_data = calculate_macd(df)
+    factors_df['macd_hist'] = macd_data['histogram']
+    factors_df['rsi'] = calculate_rsi(df)
+    
+    # Merge data
+    combined_df = pd.concat([df, factors_df], axis=1)
+    
+    # Create strategy based on saved parameters
+    print(f"\nRunning backtest with {('enhanced' if enhanced_strategy else 'basic')} strategy...")
+    
+    if enhanced_strategy:
+        from strategy_enhanced import EnhancedTradingStrategy
+        strategy = EnhancedTradingStrategy(
+            initial_capital=args.capital,
+            max_position_fraction=opt_params.get('max_position_pct', 1.0),
+            entry_step_size=opt_params.get('entry_step_size', 0.2),
+            stop_loss_multiplier_strong=opt_params.get('stop_loss_multiplier_strong', 2.0),
+            stop_loss_multiplier_weak=opt_params.get('stop_loss_multiplier_weak', 1.0),
+            strong_bull_threshold=opt_params.get('strong_bull_threshold', 50.0),
+            weak_bull_threshold=opt_params.get('weak_bull_threshold', 20.0),
+            neutral_upper=opt_params.get('neutral_threshold_upper', 20.0),
+            neutral_lower=opt_params.get('neutral_threshold_lower', -20.0),
+            weak_bear_threshold=opt_params.get('weak_bear_threshold', -20.0),
+            strong_bear_threshold=opt_params.get('strong_bear_threshold', -50.0),
+        )
+    else:
+        strategy = TradingStrategy(
+            initial_capital=args.capital,
+            max_position_pct=opt_params.get('max_position_pct', 0.95),
+            min_position_pct=opt_params.get('min_position_pct', 0.1)
+        )
+    
+    # Run backtest
+    results = strategy.run_backtest(combined_df, combined_df)
+    trades_summary = strategy.get_trade_summary()
+    
+    # Generate performance report
+    performance_report = generate_performance_report(results, trades_summary, args.capital)
+    print("\n" + performance_report)
+    
+    # Save results if requested
+    if args.save_results:
+        print("\nSaving results...")
+        results_dir = Path(args.output_dir)
+        results_dir.mkdir(exist_ok=True)
+        
+        # Save backtest results
+        results_file = results_dir / "backtest_results.csv"
+        results.to_csv(results_file)
+        print(f"   Backtest results saved to: {results_file}")
+        
+        # Save performance report
+        report_file = results_dir / "performance_report.txt"
+        with open(report_file, "w") as f:
+            f.write(performance_report)
+        print(f"   Performance report saved to: {report_file}")
+        
+        # Save trades log if enhanced strategy
+        if enhanced_strategy and hasattr(strategy, 'trades'):
+            trades_file = results_dir / "trades_log.csv"
+            trades_df = pd.DataFrame([
+                {
+                    'timestamp': t.timestamp,
+                    'action': t.action,
+                    'units': t.units,
+                    'price': t.price,
+                    'pnl': t.pnl,
+                    'reason': t.reason,
+                    'portfolio_value': t.portfolio_value
+                }
+                for t in strategy.trades
+            ])
+            trades_df.to_csv(trades_file, index=False)
+            print(f"   Trades log saved to: {trades_file}")
     
     return 0
 

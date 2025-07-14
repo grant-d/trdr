@@ -1,0 +1,84 @@
+{
+  "parameters": {
+    "weight_trend": 0.18601187560329369,
+    "weight_volatility": 0.07836860121071398,
+    "weight_exhaustion": 0.6216115664674731,
+    "lookback_int": 37.0,
+    "strong_bull_threshold": 75.8849779810772,
+    "weak_bull_threshold": 17.431760718751327,
+    "neutral_threshold_upper": 40.0,
+    "neutral_threshold_lower": -37.63665347369365,
+    "weak_bear_threshold": -31.938896901906315,
+    "strong_bear_threshold": -58.549666229106755,
+    "stop_loss_multiplier_strong": 2.923260614143007,
+    "stop_loss_multiplier_weak": 3.0,
+    "entry_step_size": 0.4737148504611376,
+    "max_position_pct": 0.606659144448993
+  },
+  "fitness": 11.975069038886346,
+  "fitness_metric": "sortino",
+  "enhanced_strategy": true,
+  "data_file": "../data/BTCUSD-feed.csv",
+  "dollar_bars": true,
+  "dollar_threshold": 1000000,
+  "population_size": 20,
+  "generations": 20,
+  "parameter_ranges": {
+    "weight_trend": [
+      0.0,
+      1.0
+    ],
+    "weight_volatility": [
+      0.0,
+      1.0
+    ],
+    "weight_exhaustion": [
+      0.0,
+      1.0
+    ],
+    "lookback_int": [
+      10.0,
+      50.0
+    ],
+    "strong_bull_threshold": [
+      30.0,
+      80.0
+    ],
+    "weak_bull_threshold": [
+      10.0,
+      40.0
+    ],
+    "neutral_threshold_upper": [
+      10.0,
+      40.0
+    ],
+    "neutral_threshold_lower": [
+      -40.0,
+      -10.0
+    ],
+    "weak_bear_threshold": [
+      -40.0,
+      -10.0
+    ],
+    "strong_bear_threshold": [
+      -80.0,
+      -30.0
+    ],
+    "stop_loss_multiplier_strong": [
+      1.0,
+      5.0
+    ],
+    "stop_loss_multiplier_weak": [
+      0.5,
+      3.0
+    ],
+    "entry_step_size": [
+      0.1,
+      1.0
+    ],
+    "max_position_pct": [
+      0.5,
+      1.0
+    ]
+  }
+}

@@ -1,0 +1,32 @@
+============================================================
+HELIOS TRADER PERFORMANCE REPORT
+============================================================
+
+OVERALL PERFORMANCE
+------------------------------
+Initial Capital:        $100,000.00
+Final Portfolio Value:  $100,554.13
+Total P&L:             $554.13
+Total Return:          0.55%
+Annualized Return:     0.07%
+
+RISK METRICS
+------------------------------
+Volatility (Annual):   0.15%
+Maximum Drawdown:      -0.01%
+Sharpe Ratio:          -13.14
+Sortino Ratio:         -15.31
+Calmar Ratio:          9.49
+
+TRADING STATISTICS
+------------------------------
+Total Trades:          5
+Position Cycles:       0
+Winning Trades:        2
+Losing Trades:         1
+Win Rate:              66.67%
+Average Win:           5.53%
+Average Loss:          -0.44%
+Profit Factor:         75.64
+
+============================================================

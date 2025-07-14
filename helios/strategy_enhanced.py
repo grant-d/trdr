@@ -419,17 +419,22 @@ class EnhancedTradingStrategy:
         losing_returns = []
         
         for t in winning_trades:
-            if abs(t.units) > 0:
-                # Estimate entry price from cost basis
-                entry_price = abs(t.cost_basis_before / t.units_before) if t.units_before != 0 else t.price
-                ret = (t.price / entry_price - 1) * 100
-                winning_returns.append(ret)
+            if abs(t.units) > 0 and abs(t.units_before) > 1e-9:
+                # Calculate entry price from cost basis
+                entry_price = abs(t.cost_basis_before / t.units_before)
+                if entry_price > 1e-9:  # Avoid division by zero
+                    ret = (t.price / entry_price - 1) * 100
+                    if not np.isnan(ret) and not np.isinf(ret):
+                        winning_returns.append(ret)
                 
         for t in losing_trades:
-            if abs(t.units) > 0:
-                entry_price = abs(t.cost_basis_before / t.units_before) if t.units_before != 0 else t.price
-                ret = (t.price / entry_price - 1) * 100
-                losing_returns.append(ret)
+            if abs(t.units) > 0 and abs(t.units_before) > 1e-9:
+                # Calculate entry price from cost basis  
+                entry_price = abs(t.cost_basis_before / t.units_before)
+                if entry_price > 1e-9:  # Avoid division by zero
+                    ret = (t.price / entry_price - 1) * 100
+                    if not np.isnan(ret) and not np.isinf(ret):
+                        losing_returns.append(ret)
         
         return {
             'total_trades': len(self.trades),
