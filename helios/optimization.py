@@ -14,7 +14,6 @@ import json
 from pathlib import Path
 
 from factors import calculate_mss, calculate_macd, calculate_rsi
-from strategy import TradingStrategy
 from strategy_enhanced import EnhancedTradingStrategy
 from performance import calculate_sortino_ratio, calculate_calmar_ratio
 from data_processing import prepare_data
@@ -326,11 +325,10 @@ class GeneticAlgorithm:
                     allow_shorts=self.allow_shorts,
                 )
             else:
-                # Use basic strategy
-                strategy = TradingStrategy(
+                # Use enhanced strategy with default parameters
+                strategy = EnhancedTradingStrategy(
                     initial_capital=initial_capital,
-                    max_position_pct=genes.get('max_position_pct', 0.95),
-                    min_position_pct=genes.get('min_position_pct', 0.1),
+                    max_position_fraction=genes.get('max_position_pct', 0.95),
                     allow_shorts=self.allow_shorts
                 )
             

@@ -121,13 +121,14 @@ class TradingContext:
 
     def _init_strategy(self):
         """Initialize strategy components based on state"""
-        from strategy import TradingStrategy, Position
+        from strategy_enhanced import EnhancedTradingStrategy
+        from strategy import Position
 
         # Create strategy instance
-        self.strategy = TradingStrategy(
+        self.strategy = EnhancedTradingStrategy(
             initial_capital=self.state.initial_capital,
-            max_position_pct=self.state.parameters["max_position_pct"],
-            min_position_pct=self.state.parameters["min_position_pct"],
+            max_position_fraction=self.state.parameters.get("max_position_pct", 0.95),
+            allow_shorts=self.state.parameters.get("allow_shorts", False)
         )
 
         # Restore position state

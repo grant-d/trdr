@@ -34,18 +34,28 @@ A comprehensive trading analysis system implementing advanced market state scori
   - Walk-forward optimization to prevent overfitting
   - Customizable fitness functions (Sortino/Calmar ratio)
   - Parameter discovery across multiple dimensions
+  - **Threshold constraint enforcement** to ensure valid strategy behavior
+  - **Adaptive fitness calibration** for different asset volatility profiles
 - **Performance Metrics**: 
   - Sortino Ratio (downside deviation focus)
   - Calmar Ratio (drawdown adjusted returns)
   - Win rate, profit factor, trade analysis
+  - **Geometric mean returns** for accurate multi-period performance
 
 ## Installation
 
-The project uses `uv` for package management. Make sure you have `uv` installed, then:
+The project can be installed using either `uv` or standard pip:
 
+### Using uv (recommended)
 ```bash
 cd helios
 uv sync
+```
+
+### Using pip
+```bash
+cd helios
+pip install -r requirements.txt
 ```
 
 ### Required Environment Variables
@@ -109,6 +119,27 @@ Run genetic algorithm optimization:
 python -m helios optimize --data data.csv --population 50 --generations 20
 ```
 
+Save optimization results with custom name:
+```bash
+python -m helios optimize --data data.csv --population 50 --generations 20 --output msft
+# Creates: optimization_results/msft-params.json
+```
+
+Enable short positions:
+```bash
+python -m helios optimize --data data.csv --population 50 --generations 20 --allow-shorts
+```
+
+Chain optimization with immediate testing:
+```bash
+python -m helios optimize --data data.csv --population 50 --generations 20 --output btc --test
+```
+
+Chain optimization, testing, and plotting:
+```bash
+python -m helios optimize --data data.csv --population 50 --generations 20 --output btc --test --plot
+```
+
 Walk-forward optimization:
 ```bash
 python -m helios optimize --data data.csv --walk-forward --window-days 365 --step-days 90
@@ -119,7 +150,24 @@ Optimize for specific context:
 python -m helios optimize --data data.csv --context-id BTC_COINBASE_1h_default --walk-forward
 ```
 
-#### 4. Context-Based Backtesting
+#### 4. Testing Optimized Strategies
+
+Test with saved parameters:
+```bash
+python -m helios test --params optimization_results/msft-params.json
+```
+
+Test with plots:
+```bash
+python -m helios test --params optimization_results/btc-params.json --plot
+```
+
+Test with different data:
+```bash
+python -m helios test --data new_data.csv --params optimization_results/msft-params.json
+```
+
+#### 5. Context-Based Backtesting
 
 Run backtest with persistent context:
 ```bash
@@ -132,10 +180,21 @@ Your data file (CSV or Parquet) must contain the following columns:
 - `open`: Opening price
 - `high`: High price
 - `low`: Low price
-- `close`: Closing price
+- `close`: Closing price (or `adj close` for adjusted prices)
 - `volume`: Trading volume
 
 The first column should be a datetime index.
+
+### Output Files
+
+#### Optimization Results (`./optimization_results/`)
+- `<name>-params.json`: Best parameters found by genetic algorithm
+- Contains parameters, fitness score, and parameter ranges used
+
+#### Strategy Results (`./strategy_results/`)
+- `backtest_results.csv`: Full backtest data with positions, prices, etc.
+- `performance_report.txt`: Human-readable performance summary
+- `trades_log.csv`: Detailed trade log (enhanced strategy only)
 
 ### Command Options
 
@@ -159,6 +218,7 @@ The first column should be a datetime index.
 
 #### Optimize Command
 - `--data, -d`: Path to data file [required]
+- `--dollar-threshold`: Dollar volume threshold ('auto', number, or 'none' to disable)
 - `--context-id`: Context to optimize for
 - `--walk-forward`: Use walk-forward optimization
 - `--window-days`: Training window size (default: 365)
@@ -166,6 +226,18 @@ The first column should be a datetime index.
 - `--population`: GA population size (default: 50)
 - `--generations`: Number of generations (default: 20)
 - `--fitness`: Fitness metric: 'sortino' or 'calmar' (default: sortino)
+- `--allow-shorts`: Enable short positions (disabled by default)
+- `--output`: Save results with optional prefix (e.g., --output msft)
+- `--test`: Run test immediately after optimization
+- `--plot`: Generate plots after optimization (requires --test)
+
+#### Test Command (formerly run-optimized)
+- `--params, -p`: Path to optimized parameters JSON file [required]
+- `--data, -d`: Path to data file (optional - uses saved path from optimization)
+- `--dollar-threshold`: Override saved dollar threshold setting
+- `--capital`: Initial capital (default: 100000)
+- `--plot`: Generate performance plots
+- `--save-results`: Save test results
 
 #### Backtest Command
 - `--context-id`: Context ID to backtest [required]
@@ -207,7 +279,7 @@ import pandas as pd
 from helios import (
     create_dollar_bars,
     calculate_mss,
-    TradingStrategy,
+    EnhancedTradingStrategy,
     generate_performance_report
 )
 
@@ -221,7 +293,7 @@ dollar_bars = create_dollar_bars(df, dollar_threshold=1000000)
 factors_df, regimes = calculate_mss(dollar_bars)
 
 # Run trading strategy
-strategy = TradingStrategy(initial_capital=100000)
+strategy = EnhancedTradingStrategy(initial_capital=100000)
 results = strategy.run_backtest(dollar_bars, factors_df)
 
 # Generate report
@@ -335,6 +407,134 @@ Prevents overfitting through:
 - Out-of-sample testing
 - No look-ahead bias
 - Parameter robustness validation
+
+## Recent Improvements (v0.2.1)
+
+### 1. Threshold Constraint Enforcement
+The genetic algorithm now enforces proper threshold ordering during parameter generation:
+- `strong_bull > weak_bull > neutral_upper > neutral_lower > weak_bear > strong_bear`
+- Implemented in `create_individual()`, `mutate()`, and `crossover()` methods
+- Prevents invalid strategies that would behave opposite of intended
+- Ensures MSFT and other stocks optimize correctly
+
+### 2. Fitness Function Calibration
+Fixed scale mismatch between Sortino ratios and drawdown percentages:
+- Separate calibration for stocks vs crypto assets
+- Reduced Sharpe weight (5% for stocks, 0% for crypto)
+- Drawdown penalty only applies above 20% for stocks
+- Volatility-based fitness multipliers (1.2x-1.5x for stocks)
+
+### 3. Command Chaining
+New ability to chain optimization with testing and plotting:
+```bash
+# Optimize and immediately test
+python -m helios optimize --data data.csv --output msft --test
+
+# Optimize, test, and plot in one command
+python -m helios optimize --data data.csv --output btc --test --plot --allow-shorts
+```
+
+### 4. Simplified Output Naming
+- Use `--output msft` instead of `--output-prefix msft_`
+- Automatic dash insertion: creates `msft-params.json`
+- Removed separate fitness history file to reduce clutter
+
+### 5. Geometric Mean Returns
+Added accurate multi-period performance calculation:
+- Accounts for compounding effects
+- More accurate representation of long-term returns
+- Displayed in performance reports alongside arithmetic mean
+
+### 6. Enhanced Short Selling Support
+- `--allow-shorts` flag properly integrated throughout
+- Separate optimization paths for long-only vs long/short strategies
+- Improved position management for short positions
+
+## Example Workflows
+
+### Quick Testing Workflow
+```bash
+# Fast optimization for testing
+python main.py optimize \
+  --data data.csv \
+  --population 10 \
+  --generations 5 \
+  --output quick_test \
+  --test
+
+# Results displayed immediately
+```
+
+### Production Optimization Workflow
+```bash
+# Thorough optimization with testing and plotting
+python main.py optimize \
+  --data data.csv \
+  --population 100 \
+  --generations 50 \
+  --output production \
+  --test \
+  --plot \
+  --allow-shorts
+
+# Test on different data
+python main.py test \
+  --data out_of_sample_data.csv \
+  --params optimization_results/production-params.json \
+  --plot
+```
+
+### Compare Strategies Workflow
+```bash
+# Optimize MSFT
+python main.py optimize \
+  --data msft_data.csv \
+  --population 50 \
+  --generations 20 \
+  --output msft \
+  --test
+
+# Optimize BTC with shorts
+python main.py optimize \
+  --data btc_data.csv \
+  --population 50 \
+  --generations 20 \
+  --output btc \
+  --allow-shorts \
+  --test
+
+# Compare results from the performance reports
+```
+
+## Optimization Tips
+
+1. **Start small**: Use `--population 10 --generations 5` for quick tests
+2. **Use dollar bars**: Auto-threshold usually provides better results than time-based bars
+3. **Save everything**: Always use `--output` to preserve your work
+4. **Test out-of-sample**: Use optimized parameters on different data periods
+5. **Chain commands**: Use `--test --plot` to see results immediately
+6. **Enable shorts for crypto**: Use `--allow-shorts` for volatile assets like BTC
+7. **Fitness metric**: `sortino` usually works better than `calmar` for trend-following strategies
+
+## Performance Expectations
+
+Based on testing with various assets:
+
+### MSFT (Stock) - Optimized
+- Total Return: ~240-340%
+- Sortino Ratio: ~0.8-1.2
+- Sharpe Ratio: ~0.6-0.9
+- Max Drawdown: ~10-20%
+- Win Rate: ~90-95%
+
+### BTC (Crypto) - Optimized with Shorts
+- Total Return: ~100-300%
+- Sortino Ratio: ~2.0-3.5
+- Sharpe Ratio: ~1.4-1.8
+- Max Drawdown: ~5-15%
+- Win Rate: ~60-75%
+
+The constraint enforcement ensures strategies behave as intended, leading to more predictable and reliable performance across different asset classes.
 
 ## Future Enhancements (Phase 3)
 

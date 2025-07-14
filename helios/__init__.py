@@ -31,8 +31,11 @@ from .factors import (
 from .strategy import (
     Action,
     Position,
-    Trade,
-    TradingStrategy
+    Trade
+)
+
+from .strategy_enhanced import (
+    EnhancedTradingStrategy
 )
 
 from .performance import (
@@ -66,7 +69,7 @@ __all__ = [
     'Action',
     'Position',
     'Trade',
-    'TradingStrategy',
+    'EnhancedTradingStrategy',
     
     # Performance
     'calculate_returns_metrics',

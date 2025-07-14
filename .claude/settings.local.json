@@ -111,7 +111,8 @@
       "Bash(uv run:*)",
       "Bash(/opt/homebrew/bin/python3:*)",
       "Bash(~/.pyenv/versions/3.10.13/bin/python:*)",
-      "Bash(cp:*)"
+      "Bash(cp:*)",
+      "Bash(/Users/grantdickinson/repos/rest-backend/.venv/bin/python main.py analyze --data ../data/MSFT.csv --save-results)"
     ],
     "deny": []
   }

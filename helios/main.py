@@ -20,7 +20,7 @@ from factors import (
     calculate_stddev,
     calculate_mss,
 )
-from strategy import TradingStrategy
+from strategy_enhanced import EnhancedTradingStrategy
 from performance import (
     generate_performance_report,
 )
@@ -108,10 +108,9 @@ def run_helios_analysis(df, config):
     # 5. Run trading strategy
     print("\n5. Running trading strategy backtest...")
     initial_capital = config.get("initial_capital", 100000)
-    strategy = TradingStrategy(
+    strategy = EnhancedTradingStrategy(
         initial_capital=initial_capital,
-        max_position_pct=config.get("max_position_pct", 0.95),
-        min_position_pct=config.get("min_position_pct", 0.1),
+        max_position_fraction=config.get("max_position_pct", 0.95),
     )
 
     results = strategy.run_backtest(df, df)

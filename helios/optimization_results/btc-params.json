@@ -1,25 +1,25 @@
 {
   "parameters": {
-    "weight_trend": 0.7298704379070041,
-    "weight_volatility": 0.40326762847852526,
-    "weight_exhaustion": 0.2525296538293943,
-    "lookback_int": 12.0,
-    "strong_bull_threshold": 9.5,
-    "weak_bull_threshold": 12.5,
-    "neutral_threshold_upper": 2.2,
-    "neutral_threshold_lower": -1.5,
-    "weak_bear_threshold": -12.5,
-    "strong_bear_threshold": -7.5,
-    "stop_loss_multiplier_strong": 1.8,
-    "stop_loss_multiplier_weak": 0.8,
+    "weight_trend": 0.6284046051542493,
+    "weight_volatility": 0.30337506333857645,
+    "weight_exhaustion": 0.37669356695050854,
+    "lookback_int": 15.0,
+    "stop_loss_multiplier_strong": 4.5,
+    "stop_loss_multiplier_weak": 1.0,
     "entry_step_size": 0.7,
-    "max_position_pct": 0.8
+    "max_position_pct": 0.6,
+    "strong_bull_threshold": 45.0,
+    "weak_bull_threshold": 22.5,
+    "neutral_threshold_upper": 4.0,
+    "neutral_threshold_lower": -12.2,
+    "weak_bear_threshold": -20.4,
+    "strong_bear_threshold": -45.0
   },
-  "fitness": -2.0,
+  "fitness": 6.460652798539627,
   "fitness_metric": "sortino",
   "allow_shorts": false,
-  "data_file": "../data/MSFT.csv",
-  "dollar_threshold": 137367245.7,
+  "data_file": "/Users/grantdickinson/repos/trdr/data/BTCUSD.csv",
+  "dollar_threshold": 8812236.5,
   "population_size": 20,
   "generations": 20,
   "parameter_ranges": {
@@ -46,55 +46,55 @@
     "strong_bull_threshold": {
       "type": "log_range",
       "values": [
-        7.5,
-        9.5,
-        14.2,
-        25.0
+        13.5,
+        17.2,
+        25.6,
+        45.0
       ]
     },
     "weak_bull_threshold": {
       "type": "log_range",
       "values": [
-        2.5,
-        3.7,
-        6.3,
-        12.5
+        4.5,
+        6.6,
+        11.4,
+        22.5
       ]
     },
     "neutral_threshold_upper": {
       "type": "log_range",
       "values": [
-        1.5,
-        2.2,
-        3.8,
-        7.5
+        2.7,
+        4.0,
+        6.8,
+        13.5
       ]
     },
     "neutral_threshold_lower": {
       "type": "log_range",
       "values": [
-        -7.5,
-        -6.8,
-        -5.2,
-        -1.5
+        -13.5,
+        -12.2,
+        -9.4,
+        -2.7
       ]
     },
     "weak_bear_threshold": {
       "type": "log_range",
       "values": [
-        -12.5,
-        -11.3,
-        -8.7,
-        -2.5
+        -22.5,
+        -20.4,
+        -15.6,
+        -4.5
       ]
     },
     "strong_bear_threshold": {
       "type": "log_range",
       "values": [
-        -25.0,
-        -23.0,
-        -18.3,
-        -7.5
+        -45.0,
+        -41.3,
+        -32.9,
+        -13.5
       ]
     },
     "stop_loss_multiplier_strong": {
@@ -133,5 +133,11 @@
         1.0
       ]
     }
+  },
+  "fitness_progression": {
+    "initial": 6.420807448295367,
+    "final": 6.460652798539627,
+    "improvement": 0.03984535024425995,
+    "generations_to_converge": 9
   }
 }
