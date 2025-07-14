@@ -300,7 +300,9 @@ def calculate_atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
     high_close = np.abs(df["high"] - df["close"].shift())
     low_close = np.abs(df["low"] - df["close"].shift())
 
-    true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    true_range = pd.DataFrame(
+        {"high_low": high_low, "high_close": high_close, "low_close": low_close}
+    ).max(axis=1)
     atr = true_range.rolling(window=period).mean()
 
     return atr

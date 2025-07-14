@@ -65,7 +65,7 @@ def calculate_dynamic_mss(
 
     # Normalize volatility to -100 to 100
     volatility_norm = 100 - (volatility * 2)
-    volatility_norm = np.clip(volatility_norm, -100, 100)
+    volatility_norm = pd.Series(np.clip(volatility_norm, -100, 100), index=df.index)
 
     # First pass: Calculate static MSS to determine initial regimes
     static_weights = {"trend": 0.4, "volatility": 0.3, "exhaustion": 0.3}

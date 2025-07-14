@@ -59,6 +59,9 @@ def calculate_macd(
     ) * 100
     histogram_normalized = np.clip(histogram_normalized, -100, 100)
 
+    # Ensure histogram_normalized is a pandas Series
+    if not isinstance(histogram_normalized, pd.Series):
+        histogram_normalized = pd.Series(histogram_normalized, index=macd.index)
     return {
         "macd": macd,
         "signal": signal_line,
@@ -90,8 +93,9 @@ def calculate_rsi(
     close = df["close"]
     delta = close.diff()
 
-    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    delta = delta.astype(float)
+    gain = (delta.where(delta > 0, 0.0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0.0)).rolling(window=period).mean()
 
     rs = gain / loss
     rsi = 100 - (100 / (1 + rs))
@@ -146,7 +150,12 @@ def calculate_trend_factor(df: pd.DataFrame, lookback: int = 20) -> pd.Series:
         x = np.arange(lookback)
 
         # Linear regression
-        slope = np.polyfit(x, y, 1)[0]
+        y = np.asarray(close[i - lookback : i], dtype=float)
+        x = np.arange(lookback, dtype=float)
+        if np.all(np.isfinite(y)) and np.all(np.isfinite(x)):
+            slope = np.polyfit(x, y, 1)[0]
+        else:
+            slope = 0.0
 
         # Normalize by price level
         trend_factor[i] = slope / close[i] * 100
@@ -174,7 +183,11 @@ def calculate_volatility_factor(df: pd.DataFrame, lookback: int = 20) -> pd.Seri
     high_close = np.abs(df["high"] - df["close"].shift())
     low_close = np.abs(df["low"] - df["close"].shift())
 
-    true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    true_range = pd.DataFrame({
+        "high_low": high_low,
+        "high_close": high_close,
+        "low_close": low_close
+    }).max(axis=1)
     atr = true_range.rolling(window=lookback).mean()
 
     # Normalize by price level
@@ -206,7 +219,11 @@ def calculate_exhaustion_factor(df: pd.DataFrame, lookback: int = 20) -> pd.Seri
     high_low = df["high"] - df["low"]
     high_close = np.abs(df["high"] - df["close"].shift())
     low_close = np.abs(df["low"] - df["close"].shift())
-    true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    true_range = pd.DataFrame({
+        "high_low": high_low,
+        "high_close": high_close,
+        "low_close": low_close
+    }).max(axis=1)
     atr = true_range.rolling(window=lookback).mean()
 
     # Distance from SMA normalized by ATR
@@ -220,7 +237,7 @@ def calculate_exhaustion_factor(df: pd.DataFrame, lookback: int = 20) -> pd.Seri
     scaling_factor = 100 / 10
     exhaustion_factor = np.clip(exhaustion_factor * scaling_factor, -100, 100)
 
-    return exhaustion_factor
+    return pd.Series(exhaustion_factor, index=df.index)
 
 
 def calculate_mss(

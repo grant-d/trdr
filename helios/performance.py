@@ -6,6 +6,7 @@ Includes Sortino Ratio, Calmar Ratio, and other metrics
 import pandas as pd
 import numpy as np
 from typing import Dict, Tuple, Optional
+from utils import safe_prod
 
 
 def calculate_geometric_mean(returns: pd.Series) -> float:
@@ -31,7 +32,7 @@ def calculate_geometric_mean(returns: pd.Series) -> float:
 
     # Calculate geometric mean: (product of growth factors)^(1/n) - 1
     # Use pandas prod() method for better type handling
-    product = float(growth_factors.prod())
+    product = safe_prod(growth_factors)
     geometric_mean = product ** (1 / len(returns)) - 1
 
     return float(geometric_mean)
@@ -74,7 +75,7 @@ def calculate_returns_metrics(
 
     # Basic metrics
     # Calculate total return using pandas for consistent types
-    total_return = float((1.0 + returns).prod() - 1.0)
+    total_return = safe_prod(1.0 + returns) - 1.0
 
     # Calculate both arithmetic and geometric means
     arithmetic_mean = float(returns.mean())
@@ -85,7 +86,7 @@ def calculate_returns_metrics(
     n_periods = len(returns)
 
     # Traditional annualized return (using total return)
-    annualized_return = (1 + total_return) ** (periods_per_year / n_periods) - 1
+    annualized_return = (1 + total_return) ** (periods_per_year / max(n_periods, 1)) - 1
 
     # Geometric annualized return (more accurate for compounding)
     annualized_return_geometric = (1 + geometric_mean) ** periods_per_year - 1
@@ -112,7 +113,7 @@ def calculate_returns_metrics(
 
     # Win rate
     returns_array = np.asarray(returns.values)
-    win_rate = float(np.mean(returns_array > 0.0)) * 100
+    win_rate = float(np.mean(returns_array > 0.0)) * 100 if len(returns_array) > 0 else 0.0
 
     return {
         "total_return": total_return * 100,  # As percentage
@@ -275,7 +276,7 @@ def calculate_calmar_ratio(returns: pd.Series, periods_per_year: int = 252) -> f
         return 0
 
     # Calculate annualized return
-    total_return = float((1.0 + returns).prod() - 1.0)
+    total_return = safe_prod(1.0 + returns) - 1.0
     n_periods = len(returns)
     annualized_return = (1 + total_return) ** (periods_per_year / n_periods) - 1
 

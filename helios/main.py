@@ -581,6 +581,7 @@ def handle_optimize_command(args):
     dollar_threshold_arg = args.dollar_threshold
     use_dollar_bars = True
     dollar_threshold = None
+    dollar_bars_already_created = False
 
     if dollar_threshold_arg in ["none", "off", "disable", "false"]:
         use_dollar_bars = False
@@ -588,9 +589,15 @@ def handle_optimize_command(args):
     elif dollar_threshold_arg == "auto":
         # Auto-detect threshold
         from optimization import auto_detect_dollar_thresholds
+        from chalk import black
 
         dollar_threshold = auto_detect_dollar_thresholds(df)
-        print(f"Selected dollar threshold: ${dollar_threshold:,.0f}")
+        # Create dollar bars immediately to get count
+        df_dollar = create_dollar_bars(df, dollar_threshold)
+        print(f"  {black('Dollar bar threshold:'.ljust(22))} ${dollar_threshold:,.0f}")
+        print(f"  {black('Dollar bars created:'.ljust(22))} {len(df_dollar)}")
+        df = df_dollar  # Update df to use dollar bars
+        dollar_bars_already_created = True
     else:
         try:
             dollar_threshold = float(dollar_threshold_arg)
@@ -600,12 +607,18 @@ def handle_optimize_command(args):
                 f"Warning: Invalid dollar threshold '{dollar_threshold_arg}', using auto-detect"
             )
             from optimization import auto_detect_dollar_thresholds
+            from chalk import black
 
             dollar_threshold = auto_detect_dollar_thresholds(df)
-            print(f"Auto-detected dollar threshold: ${dollar_threshold:,.0f}")
+            # Create dollar bars immediately to get count
+            df_dollar = create_dollar_bars(df, dollar_threshold)
+            print(f"  {black('Dollar bar threshold:'.ljust(22))} ${dollar_threshold:,.0f}")
+            print(f"  {black('Dollar bars created:'.ljust(22))} {len(df_dollar)}")
+            df = df_dollar  # Update df to use dollar bars
+            dollar_bars_already_created = True
 
-    if use_dollar_bars and dollar_threshold is not None:
-        # Convert to dollar bars
+    if use_dollar_bars and dollar_threshold is not None and not dollar_bars_already_created:
+        # Convert to dollar bars (skip if already created during auto-detection)
         print(f"Creating dollar bars (threshold: ${dollar_threshold:,.0f})...")
         df = create_dollar_bars(df, dollar_threshold)
         print(f"Dollar bars created: {len(df)}")

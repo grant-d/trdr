@@ -16,18 +16,16 @@ from typing import Dict, List, Tuple
 import pandas as pd
 import numpy as np
 from pathlib import Path
-
 from alpaca.data.historical import StockHistoricalDataClient, CryptoHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest, CryptoBarsRequest
 from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
 from alpaca.trading.enums import OrderSide
-
 from alpaca_client import AlpacaClient
 from main import handle_optimize_command, handle_test_command
 from data_processing import prepare_data, create_dollar_bars, impute_missing_bars
 from factors import calculate_mss, calculate_macd, calculate_rsi
 from strategy_enhanced import EnhancedTradingStrategy, Position
-from chalk import Chalk, green, red, yellow, blue, cyan, magenta, white, bold
+from chalk import Chalk, green, red, yellow, blue, cyan, magenta, white, bold, black
 from args_types import OptimizeArgs, TestArgs
 from portfolio_tracker import PortfolioTracker
 
@@ -399,7 +397,11 @@ class LiveTrader:
             if self.dollar_threshold == "auto":
                 from optimization import auto_detect_dollar_thresholds
                 dollar_threshold = auto_detect_dollar_thresholds(df_prepared)
-                print(f"Selected dollar threshold: ${dollar_threshold:,.0f}")
+                # Create dollar bars immediately to get count
+                df_dollar = create_dollar_bars(df_prepared, dollar_threshold)
+                print(f"  {black('Dollar bar threshold:'.ljust(22))} ${dollar_threshold:,.0f}")
+                print(f"  {black('Dollar bars created:'.ljust(22))} {len(df_dollar)}")
+                df_prepared = df_dollar
             else:
                 try:
                     dollar_threshold = float(self.dollar_threshold)
@@ -409,9 +411,11 @@ class LiveTrader:
                     dollar_threshold = auto_detect_dollar_thresholds(df_prepared)
                     print(f"Invalid threshold, using auto-detect: ${dollar_threshold:,.0f}")
             
-            print(f"Creating dollar bars (threshold: ${dollar_threshold:,.0f})...")
-            df_prepared = create_dollar_bars(df_prepared, dollar_threshold)
-            print(f"Dollar bars created: {len(df_prepared)}")
+            if self.dollar_threshold != "auto":
+                # Only create dollar bars if not already done during auto-detection
+                print(f"\n{black('Creating dollar bars')} (threshold: {cyan(f'${dollar_threshold:,.0f}')})...")
+                df_prepared = create_dollar_bars(df_prepared, dollar_threshold)
+                print(f"  {black('Dollar bars created:'.ljust(22))} {len(df_prepared)}")
         
         # Estimate volatility scale
         volatility_scale = estimate_asset_volatility_scale(df_prepared)
@@ -429,7 +433,7 @@ class LiveTrader:
         
         # Seed with previous best parameters if available
         if self.current_params is not None:
-            print("\nSeeding GA with previous best parameters...")
+            print(f"\n{black('Seeding GA with previous best parameters...')}")
             # Add previous best to archive so it gets used in population creation
             ga.candidate_archive.insert(0, self.current_params.copy())
             
@@ -438,8 +442,7 @@ class LiveTrader:
             ga.candidate_archive = self.ga_archive.copy()
             print(f"Loaded archive with {len(self.ga_archive)} top candidates")
         
-        print("\nRunning optimization...")
-        print()
+        # Optimization starts here
         
         # Run optimization
         best_individual, fitness_history, ensemble_params = ga.optimize(df_prepared, verbose=True)
@@ -569,12 +572,22 @@ class LiveTrader:
         # Check if results DataFrame has required columns
         if results.empty:
             print("Warning: Backtest returned empty results")
-            return None
+            return {
+                'results': pd.DataFrame(),
+                'trades_summary': {},
+                'performance_report': '',
+                'strategy': None
+            }
             
         if 'portfolio_value' not in results.columns:
             print(f"Warning: Backtest results missing 'portfolio_value' column")
             print(f"Available columns: {list(results.columns)}")
-            return None
+            return {
+                'results': results,
+                'trades_summary': {},
+                'performance_report': '',
+                'strategy': None
+            }
         
         # Generate performance report
         performance_report = generate_performance_report(
@@ -725,10 +738,8 @@ class LiveTrader:
                 regime = 'Strong Bull'
             elif mss_score >= params.get('weak_bull_threshold', 20):
                 regime = 'Weak Bull'
-            elif mss_score >= params.get('neutral_threshold_upper', 20):
-                regime = 'Neutral Upper'
             elif mss_score >= params.get('neutral_threshold_lower', -20):
-                regime = 'Neutral Lower'
+                regime = 'Neutral'  # Unified neutral regime
             elif mss_score >= params.get('weak_bear_threshold', -20):
                 regime = 'Weak Bear'
             else:
@@ -765,7 +776,7 @@ class LiveTrader:
             reason = ""
             
             position_diff = target_position_fraction - current_position_fraction
-            
+
             if abs(position_diff) > 0.05:  # 5% threshold for position changes
                 if position_diff > 0:
                     buy_signal = True
@@ -897,52 +908,19 @@ class LiveTrader:
             print(f"{red('TRADE EXECUTION FAILED:')} {e}")
             print(f"Side: {side}, Quantity: {quantity}, Price: {price}")
             raise
-            
-        # Sell logic now handled in the main execute_trade method above
-            
-            print(f"\n{red('═' * 60)}")
-            print(f"{red('🔔 SELL SIGNAL')} - {white(str(datetime.now()))}")
-            print(f"{red('═' * 60)}")
-            print(f"{white('Symbol:')} {bold(self.symbol)}")
-            print(f"{white('Reason:')} {red(reason)}")
-            print(f"{white('Quantity:')} {red(f'{self.position.units:.4f}')}")
-            print(f"{white('Price:')} ${red(f'{price:.2f}')}")
-            print(f"{white('Proceeds:')} ${cyan(f'{proceeds:.2f}')}")
-            print(f"{white('Entry Price:')} ${white(f'{self.position.avg_price:.2f}')}")
-            print(f"{white('Profit:')} {profit_color(f'${profit:.2f} ({profit_pct:.2f}%)')}")
-            print(f"{white('Cash After Sale:')} ${cyan(f'{self.cash:.2f}')}")
-            print(f"\n{yellow('📋 MANUAL ORDER DETAILS:')}")
-            print(f"   {white('Order Type:')} {red('MARKET SELL')}")
-            print(f"   {white('Symbol:')} {bold(self.symbol)}")
-            print(f"   {white('Quantity:')} {red(f'{self.position.units:.4f}')}")
-            print(f"   {white('Estimated Price:')} ${red(f'{price:.2f}')}")
-            print(f"{red('═' * 60)}\n")
-            
-            # Record trade
-            self.trades.append({
-                'entry_time': self.position.entry_time,
-                'exit_time': datetime.now(timezone.utc),
-                'entry_price': self.position.avg_price,
-                'exit_price': price,
-                'quantity': self.position.units,
-                'profit': profit,
-                'profit_pct': profit_pct,
-                'exit_reason': reason
-            })
-            
-            # Reset position
-            self.position = Position()
     
     def update_equity_curve(self, current_price: float):
         """Update equity tracking"""
-        position_value = self.position.units * current_price if self.position.is_open else 0
-        total_equity = self.cash + position_value
+        portfolio = self.tracker.get_portfolio_value(current_price)
+        total_equity = portfolio.get('total_value', self.capital)
         self.equity_curve.append(total_equity)
     
     def print_status(self, current_price: float, df: pd.DataFrame, market_info: Dict | None = None):
         """Print current trading status with colors"""
-        position_value = self.position.units * current_price if self.position.is_open else 0
-        total_equity = self.cash + position_value
+        portfolio = self.tracker.get_portfolio_value(current_price)
+        position_value = portfolio.get('position_value', 0)
+        total_equity = portfolio.get('total_value', self.capital)
+        cash = portfolio.get('cash', self.capital)
         
         # Calculate returns
         total_return = ((total_equity - self.capital) / self.capital * 100)
@@ -998,17 +976,19 @@ class LiveTrader:
         # Account Status
         print(f"\n{yellow('📊 SIMULATED ACCOUNT')}")
         print(f"  {white('Equity:')} ${bold(f'{total_equity:.2f}')} | "
-              f"{white('Cash:')} ${f'{self.cash:.2f}'} | "
+              f"{white('Cash:')} ${f'{cash:.2f}'} | "
               f"{white('Return:')} {return_color(bold(f'{total_return:+.2f}%'))}")
         
         # Position Info
-        if self.position.is_open:
-            unrealized_pnl = position_value - self.position.cost_basis
-            unrealized_pct = (unrealized_pnl / self.position.cost_basis) * 100
+        position_size = portfolio.get('position_size', 0)
+        if position_size > 0:
+            avg_price = portfolio.get('avg_price', current_price)
+            unrealized_pnl = portfolio.get('unrealized_pnl', 0)
+            unrealized_pct = portfolio.get('unrealized_pnl_pct', 0)
             pnl_color = green if unrealized_pnl >= 0 else red
             
             print(f"\n{yellow('📈 POSITION')}")
-            print(f"  {white('Size:')} {self.position.units:.4f} @ ${self.position.avg_price:.2f}")
+            print(f"  {white('Size:')} {position_size:.4f} @ ${avg_price:.2f}")
             print(f"  {white('Value:')} ${position_value:.2f} | "
                   f"{white('P&L:')} {pnl_color(f'${unrealized_pnl:+.2f} ({unrealized_pct:+.2f}%)')}")
         else:
@@ -1041,13 +1021,15 @@ class LiveTrader:
         print(f"\n{cyan('═' * 60)}")
         print(f"{yellow('📈 LIVE PAPER TRADING SYSTEM')}")
         print(f"{cyan('═' * 60)}")
-        print(f"{white('Symbol:')} {bold(self.symbol)}")
-        print(f"{white('Timeframe:')} {cyan(f'{self.timeframe_minutes} minute bars')}")
-        print(f"{white('GA Settings:')} Population={cyan(str(self.population))}, Generations={cyan(str(self.generations))}")
-        print(f"{white('Walk-Forward:')} {cyan(f'{self.max_optimization_bars} bars')} rolling window")
-        print(f"{white('Cache file:')} {cyan(self.csv_filename.name)}")
+        print(f"{white('Symbol:'.ljust(13))} {bold(self.symbol)}")
+        print(f"{white('Timeframe:'.ljust(13))} {cyan(f'{self.timeframe_minutes} minute bars')}")
+        print(f"{white('GA Settings:'.ljust(13))} Pop={cyan(str(self.population))}, Gen={cyan(str(self.generations))}")
+        print(f"{white('Walk-Forward:'.ljust(13))} {cyan(f'{self.max_optimization_bars} bars')} rolling window")
+        print(f"{white('Cache file:'.ljust(13))} {cyan(self.csv_filename.name)}")
         if not self.cached_df.empty:
-            print(f"{white('Cached data:')} {green(f'{len(self.cached_df)} bars')} from {cyan(str(self.cached_df['timestamp'].min()))} to {cyan(str(self.cached_df['timestamp'].max()))}")
+            min_time = self.cached_df['timestamp'].min().strftime('%Y-%m-%d %H:%M')
+            max_time = self.cached_df['timestamp'].max().strftime('%Y-%m-%d %H:%M')
+            print(f"{white('Cached data:'.ljust(13))} {green(f'{len(self.cached_df)} bars')} from {cyan(min_time)} to {cyan(max_time)}")
         print(f"\n{yellow('Waiting for first bar...')}")
         print(f"{white('Press')} {red('Ctrl+C')} {white('to stop')}")
         print(f"{cyan('═' * 60)}")
@@ -1067,14 +1049,24 @@ class LiveTrader:
                     bars_since_midnight = minutes_since_midnight // self.timeframe_minutes
                     next_bar_minutes = (bars_since_midnight + 1) * self.timeframe_minutes
                     
-                    next_bar_time = now.replace(
-                        hour=next_bar_minutes // 60,
-                        minute=next_bar_minutes % 60,
-                        second=0,
-                        microsecond=0
-                    )
-                    
                     # Handle day rollover
+                    if next_bar_minutes >= 1440:  # 24 hours * 60 minutes
+                        # Next bar is tomorrow
+                        next_bar_time = (now + timedelta(days=1)).replace(
+                            hour=(next_bar_minutes - 1440) // 60,
+                            minute=(next_bar_minutes - 1440) % 60,
+                            second=0,
+                            microsecond=0
+                        )
+                    else:
+                        next_bar_time = now.replace(
+                            hour=next_bar_minutes // 60,
+                            minute=next_bar_minutes % 60,
+                            second=0,
+                            microsecond=0
+                        )
+                    
+                    # Additional safety check
                     if next_bar_time <= now:
                         next_bar_time += timedelta(days=1)
                 
@@ -1086,11 +1078,7 @@ class LiveTrader:
                     print(f"\n{blue('─' * 80)}")
                     print(f"{blue('🕐')} {white(f'New {self.timeframe_minutes}-min bar at')} {cyan(str(self.last_bar_time))}")
                     
-                    # Initialize position if not exists
-                    if not hasattr(self, 'position'):
-                        self.position = Position()
-                    if not hasattr(self, 'cash'):
-                        self.cash = self.capital
+                    # Position and cash are now tracked by PortfolioTracker
                     
                     # Run optimization and test using main.py functions
                     self.current_params, params_data = self.run_optimization_and_test(df)
@@ -1119,10 +1107,10 @@ class LiveTrader:
                             else:
                                 quantity = int(quantity)
                             
-                            if quantity > 0 and quantity * current_price <= self.cash:
+                            if quantity > 0 and quantity * current_price <= self.available_cash:
                                 self.execute_trade(OrderSide.BUY, quantity, current_price, reason)
                     
-                    elif sell_signal and self.position.is_open:
+                    elif sell_signal and self.current_position_size > 0:
                         # Calculate how much to sell based on target position fraction
                         target_fraction = market_info.get('target_position_fraction', 0)
                         portfolio_value = self.get_portfolio_value(current_price)
@@ -1132,7 +1120,7 @@ class LiveTrader:
                         position_change = current_position_value - target_position_value
                         
                         if position_change > 0:
-                            quantity = min(position_change / current_price, self.position.units)
+                            quantity = min(position_change / current_price, self.current_position_size)
                             
                             if self.is_crypto:
                                 quantity = round(quantity, 4)
@@ -1156,10 +1144,10 @@ class LiveTrader:
             except KeyboardInterrupt:
                 print(f"\n\n{red('⏹  Stopping live trader...')}")
                 # Close any open positions
-                if self.position.is_open:
+                if self.current_position_size > 0:
                     print(f"{yellow('Closing open position...')}")
                     current_price = self.get_current_price()
-                    self.execute_trade(OrderSide.SELL, self.position.units, current_price, "Manual close")
+                    self.execute_trade(OrderSide.SELL, self.current_position_size, current_price, "Manual close")
                 break
                 
             except Exception as e:

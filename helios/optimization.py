@@ -255,10 +255,7 @@ class GeneticAlgorithm:
         else:
             self.crossover_rate = self.base_crossover_rate
         
-        # Only print adaptive info every 5 generations or on significant changes
-        if generation % 5 == 0 or self.generations_without_improvement == 1:
-            from chalk import black
-            print(f"  {black(f'Adaptive: Div={diversity:.2f}, Mut={self.mutation_rate:.2f}, Stag={self.generations_without_improvement}')}")
+        # Adaptive info removed for cleaner output
     
     def age_based_replacement(self, population: List[Individual], generation: int) -> List[Individual]:
         """Replace old elites to prevent premature convergence"""
@@ -293,10 +290,7 @@ class GeneticAlgorithm:
             else:
                 new_population.append(ind)
         
-        # Only print if elites were replaced
-        if elites_replaced > 0:
-            from chalk import yellow
-            print(f"  {yellow(f'↻ Replaced {elites_replaced} old elites')}")
+        # Elite replacement info removed for cleaner output
         
         # Clean up age tracking for individuals not in population
         current_ids = {id(ind) for ind in new_population}
@@ -360,15 +354,15 @@ class GeneticAlgorithm:
         if diversity < 0.15:  # Very low diversity
             # Increase population to encourage exploration
             new_size = min(current_size + 10, self.max_population_size)
-            if new_size > current_size:
-                from chalk import cyan
-                print(f"  {cyan(f'↑ Low diversity ({diversity:.2f}), population: {current_size} → {new_size}')}")
+            # if new_size > current_size:
+            #     from chalk import cyan
+            #     print(f"  {cyan(f'↑ Low div ({diversity:.2f}), pop: {current_size} → {new_size}')}")
         elif diversity > 0.45 and current_size > self.min_population_size:  # High diversity
             # Can reduce population for efficiency
             new_size = max(current_size - 5, self.min_population_size)
-            if new_size < current_size:
-                from chalk import cyan
-                print(f"  {cyan(f'↓ High diversity ({diversity:.2f}), population: {current_size} → {new_size}')}")
+            # if new_size < current_size:
+            #     from chalk import cyan
+            #     print(f"  {cyan(f'↓ High div ({diversity:.2f}), pop: {current_size} → {new_size}')}")
         else:
             new_size = current_size
         
@@ -904,7 +898,7 @@ class GeneticAlgorithm:
         current_pop_size = len(population)
         
         # Pre-calculate volatility scale once for efficiency
-        volatility_scale = estimate_asset_volatility_scale(train_data, sample_size=min(500, len(train_data)))
+        volatility_scale = estimate_asset_volatility_scale(train_data, sample_size=min(500, len(train_data)), verbose=False)
         
         # Prepare augmented datasets if enabled
         augmented_datasets = []
@@ -930,6 +924,10 @@ class GeneticAlgorithm:
         
         self.best_fitness_history = []
         ensemble_params = None
+        
+        # Add separator before generation progress
+        if verbose:
+            print()  # Empty line for separation
         
         # Evolution loop
         for generation in range(self.generations):
@@ -980,17 +978,11 @@ class GeneticAlgorithm:
                 from chalk import green, cyan, bold, black
                 avg_fitness = np.mean([ind.fitness for ind in population])
                 
-                # Progress bar
-                progress = (generation + 1) / self.generations
-                bar_length = 20
-                filled = int(bar_length * progress)
-                bar = green("█" * filled) + black("░" * (bar_length - filled))
-                
-                # Compact output
-                print(f"\r{bar} Gen {bold(f'{generation+1}/{self.generations}')} | "
+                # Compact output - no graph
+                print(f"\rGen {bold(f'{generation+1:>2}/{self.generations}')} | "
                       f"Best: {cyan(f'{best_individual.fitness:.3f}')} | "
                       f"Avg: {black(f'{avg_fitness:.3f}')} | "
-                      f"Pop: {current_pop_size}", end='', flush=True)
+                      f"Pop: {current_pop_size:>3}", end='', flush=True)
         
         # Get final best individual
         best_individual = max(population, key=lambda x: x.fitness)
@@ -1170,7 +1162,7 @@ class WalkForwardOptimizer:
 
 
 
-def estimate_asset_volatility_scale(data: pd.DataFrame, sample_size: int = 500) -> float:
+def estimate_asset_volatility_scale(data: pd.DataFrame, sample_size: int = 500, verbose: bool = True) -> float:
     """
     Estimate volatility scale factor for the asset based on recent price movements
     
@@ -1202,8 +1194,10 @@ def estimate_asset_volatility_scale(data: pd.DataFrame, sample_size: int = 500) 
     annualized_vol = daily_vol * np.sqrt(252)  # Assuming daily data
     
     
-    print(f"\nAsset volatility analysis:")
-    print(f"  Annualized volatility: {annualized_vol*100:.1f}%")
+    if verbose:
+        from chalk import black
+        print(f"\n{black('Asset volatility analysis:')}")
+        print(f"  {black('Annualized volatility:'.ljust(22))} {annualized_vol*100:.1f}%")
     
     # Enhanced volatility categories for better granularity
     # More categories = better regime threshold tuning
@@ -1239,8 +1233,9 @@ def estimate_asset_volatility_scale(data: pd.DataFrame, sample_size: int = 500) 
         scale = 2.0
         asset_type = "Extreme volatility (meme coins/penny stocks)"
     
-    print(f"  Detected asset type: {asset_type}")
-    print(f"  Volatility scale factor: {scale}")
+    if verbose:
+        print(f"  {black('Detected asset type:'.ljust(22))} {asset_type}")
+        print(f"  {black('Volatility scale:'.ljust(22))} {scale}")
     
     return scale
 
@@ -1276,11 +1271,12 @@ def auto_detect_dollar_thresholds(data: pd.DataFrame, sample_size: int = 1000) -
     avg_price = float(sample_data['close'].mean())
     avg_volume = float(sample_data['volume'].mean())
     
-    print(f"Auto-threshold analysis:")
-    print(f"  Average price: ${avg_price:.2f}")
-    print(f"  Average volume: {avg_volume:,.0f}")
-    print(f"  Median dollar volume: ${median_dollar_vol:,.0f}")
-    print(f"  Mean dollar volume: ${mean_dollar_vol:,.0f}")
+    from chalk import black
+    print(f"\n{black('Auto-threshold analysis:')}")
+    print(f"  {black('Average price:'.ljust(22))} ${avg_price:.2f}")
+    print(f"  {black('Average volume:'.ljust(22))} {avg_volume:,.0f}")
+    print(f"  {black('Median dollar volume:'.ljust(22))} ${median_dollar_vol:,.0f}")
+    print(f"  {black('Mean dollar volume:'.ljust(22))} ${mean_dollar_vol:,.0f}")
     
     # Calculate target bars per day (aim for 20-50 bars)
     target_bars_per_day = 30  # Good balance for most assets
@@ -1299,7 +1295,7 @@ def auto_detect_dollar_thresholds(data: pd.DataFrame, sample_size: int = 1000) -
     min_threshold = max(reasonable_min, min(min_threshold, 100_000_000.0))
     max_threshold = max(min_threshold * 2, min(max_threshold, 500_000_000.0))
     
-    print(f"  Target: ~{target_bars_per_day} bars per day")
+    print(f"  {black('Target:'.ljust(22))} ~{target_bars_per_day} bars per day")
     
     # Create logarithmic range with 4 points
     threshold_range = create_log_range(float(min_threshold), float(max_threshold), 4)
