@@ -81,6 +81,7 @@ class EnhancedTradingStrategy:
         neutral_lower: float = -20.0,
         weak_bear_threshold: float = -20.0,
         strong_bear_threshold: float = -50.0,
+        allow_shorts: bool = False,
     ):
         """
         Initialize enhanced trading strategy
@@ -91,6 +92,7 @@ class EnhancedTradingStrategy:
         self.cash = initial_capital
         self.max_position_fraction = max_position_fraction
         self.entry_step_size = entry_step_size
+        self.allow_shorts = allow_shorts
         
         # Stop-loss multipliers
         self.stop_loss_multipliers = {
@@ -156,6 +158,8 @@ class EnhancedTradingStrategy:
             return 0.0  # Flat in neutral
             
         elif regime == 'Weak Bear':
+            if not self.allow_shorts:
+                return 0.0  # No shorts allowed
             # Scale position based on MSS within weak bear range
             # Weak bear goes from strong_bear_threshold to weak_bear_threshold
             if (self.thresholds['weak_bear'] - self.thresholds['strong_bear']) > 0:
@@ -166,6 +170,8 @@ class EnhancedTradingStrategy:
             return -self.max_position_fraction * 0.7 * np.clip(1 - normalized_mss, 0, 1)  # 70% max in weak regime
             
         elif regime == 'Strong Bear':
+            if not self.allow_shorts:
+                return 0.0  # No shorts allowed
             # Scale from -100 to strong_bear_threshold
             if (self.thresholds['strong_bear'] - (-100)) > 0:
                 normalized_mss = (mss - (-100)) / (self.thresholds['strong_bear'] - (-100))

@@ -10,10 +10,13 @@ optimal trading parameters using a more intelligent, constrained parameter space
 It then runs a final backtest simulation and evaluates the performance.
 
 Usage:
-  - Backtest with default parameters:
+  - Backtest with default parameters (long-only):
     python helios_trader.py --input_file /path/to/your/data.csv
 
-  - Run GA optimization before the backtest:
+  - To allow short selling:
+    python helios_trader.py --input_file /path/to/your/data.csv --allow-shorts
+
+  - To run GA optimization before the backtest:
     python helios_trader.py --input_file /path/to/your/data.csv --optimize
 """
 
@@ -298,7 +301,8 @@ class HeliosTrader:
             price, regime, abs_vol = row['Close'], row['Regime'], row['Abs_Volatility']
             target_pos_fraction = 0.0
             if regime == 'Strong Bull': target_pos_fraction = 1.0
-            elif regime == 'Strong Bear': target_pos_fraction = -1.0
+            elif regime == 'Strong Bear' and self.config.get('allow_shorts', False): # MODIFIED CHECK
+                target_pos_fraction = -1.0
             
             pos_change_fraction = np.clip(target_pos_fraction - (total_units * price / current_capital if current_capital > 0 else 0), -entry_step, entry_step)
             
@@ -330,7 +334,7 @@ class HeliosTrader:
                         pnl = (price - avg_entry_price) * total_units
                         current_capital += pnl
                         total_units, cost_basis, stop_loss, take_profit, peak_price = 0, 0, 0, 0, -float('inf')
-                else: # Short
+                elif self.config.get('allow_shorts', False): # MODIFIED CHECK
                     stop_dist = abs_vol * (stop_mult_strong if regime == 'Strong Bear' else stop_mult_weak)
                     tp_dist = abs_vol * (tp_mult_strong if regime == 'Strong Bear' else tp_mult_weak)
                     valley_price = min(valley_price, price)
@@ -493,6 +497,7 @@ if __name__ == '__main__':
     parser.add_argument('--dollar_threshold', type=float, default=DEFAULT_DOLLAR_THRESHOLD)
     parser.add_argument('--optimize', action='store_true', help="Run Genetic Algorithm to find optimal parameters.")
     parser.add_argument('--plot', action='store_true', help="Display the equity curve plot.")
+    parser.add_argument('--allow-shorts', action='store_true', help="Allow short selling. Default is long-only.")
     args = parser.parse_args()
 
     config = {
@@ -501,6 +506,7 @@ if __name__ == '__main__':
         'dollar_threshold': args.dollar_threshold,
         'optimize': args.optimize,
         'plot': args.plot,
+        'allow_shorts': args.allow_shorts,
     }
 
     trader = HeliosTrader(config)

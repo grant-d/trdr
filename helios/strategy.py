@@ -64,6 +64,7 @@ class TradingStrategy:
         initial_capital: float = 100000.0,
         max_position_pct: float = 0.95,
         min_position_pct: float = 0.1,
+        allow_shorts: bool = False,
     ):
         """
         Initialize trading strategy
@@ -81,6 +82,7 @@ class TradingStrategy:
         self.cash = initial_capital
         self.max_position_pct = max_position_pct
         self.min_position_pct = min_position_pct
+        self.allow_shorts = allow_shorts
         self.position = Position()
         self.trades: List[Trade] = []
 
@@ -186,9 +188,9 @@ class TradingStrategy:
         elif combined_value >= 0.5:
             return Action.BUY
         elif combined_value <= -1.5:
-            return Action.STRONG_SELL
+            return Action.STRONG_SELL if self.allow_shorts else Action.HOLD
         elif combined_value <= -0.5:
-            return Action.SELL
+            return Action.SELL if self.allow_shorts else Action.HOLD
         else:
             return Action.HOLD
 

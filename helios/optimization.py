@@ -44,7 +44,8 @@ class GeneticAlgorithm:
                  mutation_rate: float = 0.1,
                  crossover_rate: float = 0.8,
                  elitism_rate: float = 0.1,
-                 fitness_metric: str = 'sortino'):
+                 fitness_metric: str = 'sortino',
+                 allow_shorts: bool = False):
         """
         Initialize genetic algorithm
         
@@ -72,6 +73,7 @@ class GeneticAlgorithm:
         self.crossover_rate = crossover_rate
         self.elitism_rate = elitism_rate
         self.fitness_metric = fitness_metric
+        self.allow_shorts = allow_shorts
         
         # Calculate elite size
         self.elite_size = max(1, int(population_size * elitism_rate))
@@ -160,13 +162,15 @@ class GeneticAlgorithm:
                     neutral_lower=genes.get('neutral_threshold_lower', -20.0),
                     weak_bear_threshold=genes.get('weak_bear_threshold', -20.0),
                     strong_bear_threshold=genes.get('strong_bear_threshold', -50.0),
+                    allow_shorts=self.allow_shorts,
                 )
             else:
                 # Use basic strategy
                 strategy = TradingStrategy(
                     initial_capital=initial_capital,
                     max_position_pct=genes.get('max_position_pct', 0.95),
-                    min_position_pct=genes.get('min_position_pct', 0.1)
+                    min_position_pct=genes.get('min_position_pct', 0.1),
+                    allow_shorts=self.allow_shorts
                 )
             
             results = strategy.run_backtest(combined_df, combined_df)
@@ -566,13 +570,13 @@ def create_enhanced_parameter_ranges() -> Dict[str, Tuple[float, float]]:
         # Lookback periods
         'lookback_int': (10, 50),
         
-        # Regime thresholds (as floats, not ints)
-        'strong_bull_threshold': (30.0, 80.0),
-        'weak_bull_threshold': (10.0, 40.0),
-        'neutral_threshold_upper': (10.0, 40.0),
-        'neutral_threshold_lower': (-40.0, -10.0),
-        'weak_bear_threshold': (-40.0, -10.0),
-        'strong_bear_threshold': (-80.0, -30.0),
+        # Regime thresholds (fine-tuned around successful values)
+        'strong_bull_threshold': (30.0, 50.0),  # Around successful 39.34
+        'weak_bull_threshold': (10.0, 25.0),    # Around successful 15.71
+        'neutral_threshold_upper': (8.0, 18.0), # Around successful 12.40
+        'neutral_threshold_lower': (-20.0, -8.0), # Around successful -14.75
+        'weak_bear_threshold': (-25.0, -10.0),  # Around successful -15.91  
+        'strong_bear_threshold': (-50.0, -30.0), # Around successful -39.66
         
         # Stop-loss multipliers
         'stop_loss_multiplier_strong': (1.0, 5.0),

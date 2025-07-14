@@ -201,6 +201,7 @@ def main():
     optimize_parser.add_argument('--fitness', choices=['sortino', 'calmar'], default='sortino',
                                 help='Fitness metric to optimize')
     optimize_parser.add_argument('--save-results', action='store_true', help='Save optimization results and parameters')
+    optimize_parser.add_argument('--allow-shorts', action='store_true', help='Allow short positions (disabled by default)')
     
     # Run-optimized command
     run_opt_parser = subparsers.add_parser('run-optimized', help='Run backtest with saved optimization parameters')
@@ -211,6 +212,7 @@ def main():
     run_opt_parser.add_argument('--capital', type=float, default=100000, help='Initial capital')
     run_opt_parser.add_argument('--save-results', action='store_true', help='Save backtest results')
     run_opt_parser.add_argument('--output-dir', default='./strategy_results', help='Output directory for results')
+    run_opt_parser.add_argument('--allow-shorts', action='store_true', help='Allow short positions (disabled by default)')
     
     # Backtest command
     backtest_parser = subparsers.add_parser('backtest', help='Run backtest with trading context')
@@ -466,7 +468,8 @@ def handle_optimize_command(args):
         parameter_ranges=param_ranges,
         population_size=args.population,
         generations=args.generations,
-        fitness_metric=args.fitness
+        fitness_metric=args.fitness,
+        allow_shorts=args.allow_shorts
     )
     
     if args.walk_forward:
@@ -512,6 +515,7 @@ def handle_optimize_command(args):
                 "fitness": float(best_individual.fitness),
                 "fitness_metric": args.fitness,
                 "enhanced_strategy": args.enhanced,
+                "allow_shorts": args.allow_shorts,
                 "data_file": args.data,
                 "dollar_bars": args.dollar_bars,
                 "dollar_threshold": args.dollar_threshold if args.dollar_bars else None,
@@ -548,11 +552,15 @@ def handle_run_optimized_command(args):
         
         opt_params = params_data['parameters']
         enhanced_strategy = params_data.get('enhanced_strategy', False)
+        saved_allow_shorts = params_data.get('allow_shorts', False)
+        # Use command line flag if provided, otherwise use saved setting
+        allow_shorts = args.allow_shorts or saved_allow_shorts
         
         print("Loaded parameters:")
         for param, value in sorted(opt_params.items()):
             print(f"  {param}: {value:.4f}")
         print(f"Strategy type: {'Enhanced' if enhanced_strategy else 'Basic'}")
+        print(f"Allow shorts: {allow_shorts}")
         
     except Exception as e:
         print(f"Error loading parameters: {e}")
@@ -629,12 +637,14 @@ def handle_run_optimized_command(args):
             neutral_lower=opt_params.get('neutral_threshold_lower', -20.0),
             weak_bear_threshold=opt_params.get('weak_bear_threshold', -20.0),
             strong_bear_threshold=opt_params.get('strong_bear_threshold', -50.0),
+            allow_shorts=allow_shorts,
         )
     else:
         strategy = TradingStrategy(
             initial_capital=args.capital,
             max_position_pct=opt_params.get('max_position_pct', 0.95),
-            min_position_pct=opt_params.get('min_position_pct', 0.1)
+            min_position_pct=opt_params.get('min_position_pct', 0.1),
+            allow_shorts=allow_shorts
         )
     
     # Run backtest

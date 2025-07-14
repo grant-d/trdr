@@ -1,0 +1,25 @@
+{
+  "parameters": {
+    "weight_trend": 0.87,
+    "weight_volatility": 0.58,
+    "weight_exhaustion": 0.90,
+    "lookback_int": 19.0,
+    "strong_bull_threshold": 35.0,
+    "weak_bull_threshold": 18.0,
+    "neutral_threshold_upper": 15.0,
+    "neutral_threshold_lower": -12.0,
+    "weak_bear_threshold": -18.0,
+    "strong_bear_threshold": -35.0,
+    "stop_loss_multiplier_strong": 2.5,
+    "stop_loss_multiplier_weak": 2.0,
+    "entry_step_size": 0.3,
+    "max_position_pct": 0.6
+  },
+  "fitness": -0.32,
+  "fitness_metric": "sortino",
+  "enhanced_strategy": true,
+  "allow_shorts": true,
+  "data_file": "../data/BTCUSD-feed.csv",
+  "dollar_bars": true,
+  "dollar_threshold": 1000000
+}
