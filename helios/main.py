@@ -261,6 +261,9 @@ def main():
         action="store_true",
         help="Generate plots after optimization (requires --test)",
     )
+    optimize_parser.add_argument(
+        "--llm", action="store_true", help="Generate LLM analysis report after optimization (requires --test)"
+    )
 
     # Test command (formerly run-optimized)
     test_parser = subparsers.add_parser(
@@ -297,6 +300,9 @@ def main():
     )
     test_parser.add_argument(
         "--plot", action="store_true", help="Show performance plots"
+    )
+    test_parser.add_argument(
+        "--llm", action="store_true", help="Generate LLM analysis report with trade data and market context"
     )
 
     # Backtest command
@@ -714,6 +720,7 @@ def handle_optimize_command(args):
                         self.dollar_threshold = None  # Use saved threshold
                         self.capital = 100000
                         self.plot = args.plot  # Pass through plot flag
+                        self.llm = args.llm  # Pass through llm flag
                         self.allow_shorts = False  # Use saved setting
                         self.save_results = False  # Default for test command
 
@@ -888,6 +895,13 @@ def handle_test_command(args):
         results, trades_summary, args.capital
     )
     print("\n" + performance_report)
+    
+    # Generate LLM analysis report if requested
+    if args.llm:
+        generate_llm_analysis_report(
+            results, strategy, combined_df, opt_params, performance_report, 
+            data_file, args.capital, dollar_threshold, use_dollar_bars
+        )
 
     # Show plots if requested
     if args.plot:
@@ -1094,6 +1108,210 @@ def handle_backtest_command(args):
         return 1
 
     return 0
+
+
+def generate_llm_analysis_report(results, strategy, combined_df, opt_params, performance_report, 
+                                data_file, initial_capital, dollar_threshold, use_dollar_bars):
+    """Generate comprehensive LLM analysis report for performance review"""
+    import json
+    from datetime import datetime
+    
+    # Create output directory
+    results_dir = Path("./llm_analysis")
+    results_dir.mkdir(exist_ok=True)
+    
+    # Generate timestamp for filename
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_file = results_dir / f"llm_analysis_report_{timestamp}.md"
+    
+    # Calculate additional metrics for analysis
+    portfolio_values = results['portfolio_value']
+    returns = portfolio_values.pct_change().dropna()
+    
+    # Analyze trades by market regime
+    trades_by_regime = {}
+    regime_performance = {}
+    
+    if hasattr(strategy, 'trades') and len(strategy.trades) > 0:
+        for trade in strategy.trades:
+            # Find the regime at trade time
+            trade_idx = combined_df.index.get_indexer([trade.timestamp], method='nearest')[0]
+            if trade_idx >= 0 and trade_idx < len(combined_df):
+                mss_score = combined_df.iloc[trade_idx].get('mss_score', 0)
+                
+                # Determine regime based on thresholds
+                if mss_score >= opt_params.get('strong_bull_threshold', 50):
+                    regime = 'Strong Bull'
+                elif mss_score >= opt_params.get('weak_bull_threshold', 20):
+                    regime = 'Weak Bull'
+                elif mss_score >= opt_params.get('neutral_threshold_upper', 20):
+                    regime = 'Neutral Upper'
+                elif mss_score >= opt_params.get('neutral_threshold_lower', -20):
+                    regime = 'Neutral Lower'
+                elif mss_score >= opt_params.get('weak_bear_threshold', -20):
+                    regime = 'Weak Bear'
+                else:
+                    regime = 'Strong Bear'
+                
+                if regime not in trades_by_regime:
+                    trades_by_regime[regime] = []
+                    regime_performance[regime] = {'total_pnl': 0, 'trades': 0, 'wins': 0, 'losses': 0}
+                
+                trades_by_regime[regime].append(trade)
+                regime_performance[regime]['total_pnl'] += trade.pnl if trade.pnl else 0
+                regime_performance[regime]['trades'] += 1
+                if trade.pnl and trade.pnl > 0:
+                    regime_performance[regime]['wins'] += 1
+                else:
+                    regime_performance[regime]['losses'] += 1
+    
+    # Analyze volatility periods
+    if 'atr' in combined_df.columns:
+        volatility_periods = combined_df['atr'].rolling(20).mean()
+        high_vol_threshold = volatility_periods.quantile(0.75)
+        low_vol_threshold = volatility_periods.quantile(0.25)
+    else:
+        volatility_periods = returns.rolling(20).std()
+        high_vol_threshold = volatility_periods.quantile(0.75)
+        low_vol_threshold = volatility_periods.quantile(0.25)
+    
+    # Identify drawdown periods
+    peak = portfolio_values.expanding().max()
+    drawdown = (portfolio_values - peak) / peak
+    max_drawdown_idx = drawdown.idxmin()
+    max_drawdown_value = drawdown.min()
+    
+    # Calculate Sortino ratio
+    negative_returns = returns[returns < 0]
+    sortino_ratio = (returns.mean() / negative_returns.std() * np.sqrt(252)) if len(negative_returns) > 0 else None
+    sortino_str = f"{sortino_ratio:.2f}" if sortino_ratio is not None else "N/A"
+    
+    # Generate the LLM analysis report
+    report_content = f"""# Helios Trading Strategy - LLM Performance Analysis Report
+Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+
+## EXECUTIVE SUMMARY
+{performance_report}
+
+## STRATEGY CONFIGURATION
+### Data Source
+- **File**: {data_file}
+- **Initial Capital**: ${initial_capital:,.2f}
+- **Dollar Bars**: {'Enabled' if use_dollar_bars else 'Disabled'}
+- **Dollar Threshold**: {"${:,.0f}".format(dollar_threshold) if use_dollar_bars and dollar_threshold else "N/A"}
+
+### Optimized Parameters
+```json
+{json.dumps(opt_params, indent=2)}
+```
+
+### Market Regime Thresholds
+- **Strong Bull**: MSS ≥ {opt_params.get('strong_bull_threshold', 50):.1f}
+- **Weak Bull**: {opt_params.get('weak_bull_threshold', 20):.1f} ≤ MSS < {opt_params.get('strong_bull_threshold', 50):.1f}
+- **Neutral Upper**: {opt_params.get('neutral_threshold_upper', 20):.1f} ≤ MSS < {opt_params.get('weak_bull_threshold', 20):.1f}
+- **Neutral Lower**: {opt_params.get('neutral_threshold_lower', -20):.1f} ≤ MSS < {opt_params.get('neutral_threshold_upper', 20):.1f}
+- **Weak Bear**: {opt_params.get('weak_bear_threshold', -20):.1f} ≤ MSS < {opt_params.get('neutral_threshold_lower', -20):.1f}
+- **Strong Bear**: MSS < {opt_params.get('strong_bear_threshold', -50):.1f}
+
+## REGIME-BASED PERFORMANCE ANALYSIS
+
+### Trading Performance by Market Regime
+"""
+
+    for regime, perf in regime_performance.items():
+        if perf['trades'] > 0:
+            win_rate = (perf['wins'] / perf['trades']) * 100
+            avg_pnl = perf['total_pnl'] / perf['trades']
+            report_content += f"""
+#### {regime}
+- **Total Trades**: {perf['trades']}
+- **Win Rate**: {win_rate:.1f}%
+- **Total P&L**: ${perf['total_pnl']:,.2f}
+- **Average P&L per Trade**: ${avg_pnl:.2f}
+- **Wins**: {perf['wins']}, **Losses**: {perf['losses']}
+"""
+
+    report_content += f"""
+
+## DETAILED TRADE LOG ANALYSIS
+
+### Sample Recent Trades (Last 20)
+"""
+
+    if hasattr(strategy, 'trades') and len(strategy.trades) > 0:
+        recent_trades = strategy.trades[-20:] if len(strategy.trades) >= 20 else strategy.trades
+        report_content += "| Timestamp | Action | Units | Price | P&L | Reason | Portfolio Value |\n"
+        report_content += "|-----------|--------|-------|-------|-----|--------|----------------|\n"
+        
+        for trade in recent_trades:
+            timestamp = trade.timestamp.strftime("%Y-%m-%d %H:%M") if hasattr(trade.timestamp, 'strftime') else str(trade.timestamp)
+            pnl_str = f"${trade.pnl:.2f}" if trade.pnl else "N/A"
+            portfolio_str = f"${trade.portfolio_value:,.2f}" if trade.portfolio_value else "N/A"
+            report_content += f"| {timestamp} | {trade.action} | {trade.units:.2f} | ${trade.price:.2f} | {pnl_str} | {trade.reason} | {portfolio_str} |\n"
+
+    report_content += f"""
+
+## MARKET CONDITIONS ANALYSIS
+
+### Volatility Analysis
+- **High Volatility Threshold**: {high_vol_threshold:.4f}
+- **Low Volatility Threshold**: {low_vol_threshold:.4f}
+- **Current Volatility Regime**: {"High" if volatility_periods.iloc[-1] > high_vol_threshold else "Low" if volatility_periods.iloc[-1] < low_vol_threshold else "Medium"}
+
+### Maximum Drawdown Event
+- **Date**: {max_drawdown_idx}
+- **Drawdown**: {max_drawdown_value:.2%}
+- **Portfolio Value at Drawdown**: ${portfolio_values.loc[max_drawdown_idx]:,.2f}
+
+## KEY PERFORMANCE INDICATORS
+
+### Return Metrics
+- **Total Return**: {((portfolio_values.iloc[-1] / initial_capital) - 1) * 100:.2f}%
+- **Annualized Return**: {(((portfolio_values.iloc[-1] / initial_capital) ** (252 / len(portfolio_values))) - 1) * 100:.2f}%
+- **Volatility (Annualized)**: {returns.std() * np.sqrt(252) * 100:.2f}%
+
+### Risk Metrics
+- **Maximum Drawdown**: {max_drawdown_value:.2%}
+- **Sharpe Ratio**: {(returns.mean() / returns.std() * np.sqrt(252)):.2f}
+- **Sortino Ratio**: {sortino_str}
+
+## PROMPTS FOR LLM ANALYSIS
+
+### Performance Review Questions
+1. **Regime Analysis**: Which market regime shows the worst performance? What specific pattern in the trade log suggests the strategy is struggling in that regime?
+
+2. **Volatility Impact**: How does the strategy perform during high vs. low volatility periods? Are there specific volatility conditions where the strategy consistently loses money?
+
+3. **Drawdown Analysis**: What market conditions led to the maximum drawdown period? What regime and volatility characteristics were present?
+
+4. **Trade Timing**: Looking at the recent trades, are there patterns in entry/exit timing that suggest systematic issues?
+
+5. **Parameter Optimization**: Based on the regime-specific performance, which parameters (thresholds, stop losses, position sizing) appear most problematic?
+
+### Weakness Identification
+Please analyze the above data and identify:
+- **Single Biggest Weakness**: The most significant performance issue (e.g., "losing money in high-volatility chop", "poor exits in bear markets")
+- **Root Cause Hypothesis**: What specific aspect of the strategy logic causes this weakness?
+- **Proposed Rule Change**: A concrete, implementable modification to address the weakness
+
+### Market State Analysis
+Focus on these specific scenarios:
+- High volatility + neutral/choppy markets
+- Regime transitions (bull to bear, bear to bull)
+- Extended periods in single regimes
+- Volatility breakouts and breakdowns
+
+---
+
+*This report contains all necessary data for comprehensive strategy analysis. Copy the relevant sections to your LLM for detailed performance review and weakness identification.*
+"""
+
+    # Write the report
+    with open(report_file, 'w') as f:
+        f.write(report_content)
+    
+    print(f"\n✅ LLM Analysis Report generated: {report_file}")
+    print("   Copy relevant sections to your LLM for strategy analysis and weakness identification.")
 
 
 if __name__ == "__main__":

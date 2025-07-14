@@ -24,9 +24,7 @@ from .factors import (
     calculate_dynamic_weights,
 )
 
-from .strategy import Action, Position, Trade
-
-from .strategy_enhanced import EnhancedTradingStrategy
+from .strategy_enhanced import EnhancedTradingStrategy, Action, Position, Trade
 
 from .performance import (
     calculate_returns_metrics,

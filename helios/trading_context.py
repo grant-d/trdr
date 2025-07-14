@@ -11,7 +11,27 @@ from typing import Dict, Any, Optional
 from dataclasses import dataclass, asdict
 import pandas as pd
 import numpy as np
+from enum import Enum
 
+@dataclass
+class Trade:
+    """Trade record"""
+
+    timestamp: pd.Timestamp
+    action: str
+    shares: float
+    price: float
+    position_before: float
+    position_after: float
+    cash_before: float
+    cash_after: float
+    portfolio_value: float
+
+    def __repr__(self):
+        return (
+            f"Trade({self.timestamp}, {self.action}, "
+            f"shares={self.shares:.0f}, price=${self.price:.2f})"
+        )
 
 @dataclass
 class TradingContextState:
@@ -122,7 +142,7 @@ class TradingContext:
     def _init_strategy(self):
         """Initialize strategy components based on state"""
         from strategy_enhanced import EnhancedTradingStrategy
-        from strategy import Position
+        from strategy_enhanced import Position
 
         # Create strategy instance
         self.strategy = EnhancedTradingStrategy(
@@ -134,7 +154,7 @@ class TradingContext:
         # Restore position state
         self.strategy.cash = self.state.cash
         self.strategy.position = Position(
-            shares=self.state.position_shares,
+            units=self.state.position_shares,
             entry_price=self.state.entry_price,
             entry_time=(
                 pd.Timestamp(self.state.entry_time) if self.state.entry_time else None
@@ -324,9 +344,9 @@ class TradingContext:
             timestamp = datetime.now()
             shares_to_close = -self.state.position_shares
 
-            from strategy import Action
+            from strategy_enhanced import Action
 
-            action = Action.SELL if self.state.position_shares > 0 else Action.BUY
+            action = Action.LONG if self.state.position_shares > 0 else Action.SHORT
 
             self.strategy.execute_trade(
                 timestamp, action, shares_to_close, current_price
