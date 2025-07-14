@@ -112,7 +112,11 @@
       "Bash(/opt/homebrew/bin/python3:*)",
       "Bash(~/.pyenv/versions/3.10.13/bin/python:*)",
       "Bash(cp:*)",
-      "Bash(/Users/grantdickinson/repos/rest-backend/.venv/bin/python main.py analyze --data ../data/MSFT.csv --save-results)"
+      "Bash(uv pip install:*)",
+      "Bash(pip install:*)",
+      "Bash(./.venv/bin/python:*)",
+      "Bash(../.venv/bin/python:*)",
+      "Bash(./run_adaptive.sh:*)"
     ],
     "deny": []
   }
