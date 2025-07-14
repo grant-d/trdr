@@ -14,6 +14,7 @@ from pathlib import Path
 
 from factors import calculate_mss, calculate_macd, calculate_rsi
 from strategy import TradingStrategy
+from strategy_enhanced import EnhancedTradingStrategy
 from performance import calculate_sortino_ratio, calculate_calmar_ratio
 from data_processing import prepare_data
 
@@ -136,19 +137,37 @@ class GeneticAlgorithm:
             # Merge with main dataframe
             combined_df = pd.concat([train_data, factors_df], axis=1)
             
-            # Run backtest
+            # Run backtest with enhanced strategy if parameters are available
             initial_capital = 100000
-            strategy = TradingStrategy(
-                initial_capital=initial_capital,
-                max_position_pct=genes.get('max_position_pct', 0.95),
-                min_position_pct=genes.get('min_position_pct', 0.1)
-            )
             
-            # Override action matrix thresholds if provided
-            if 'strong_bull_threshold_int' in genes:
-                # Update strategy based on GA parameters
-                # This would require modifying the strategy class
-                pass
+            # Check if we have enhanced parameters
+            has_enhanced_params = any(param in genes for param in [
+                'entry_step_size', 'stop_loss_multiplier_strong', 'stop_loss_multiplier_weak',
+                'strong_bull_threshold', 'weak_bull_threshold', 'strong_bear_threshold'
+            ])
+            
+            if has_enhanced_params:
+                # Use enhanced strategy
+                strategy = EnhancedTradingStrategy(
+                    initial_capital=initial_capital,
+                    max_position_fraction=genes.get('max_position_pct', 1.0),
+                    entry_step_size=genes.get('entry_step_size', 0.2),
+                    stop_loss_multiplier_strong=genes.get('stop_loss_multiplier_strong', 2.0),
+                    stop_loss_multiplier_weak=genes.get('stop_loss_multiplier_weak', 1.0),
+                    strong_bull_threshold=genes.get('strong_bull_threshold', 50.0),
+                    weak_bull_threshold=genes.get('weak_bull_threshold', 20.0),
+                    neutral_upper=genes.get('neutral_threshold_upper', 20.0),
+                    neutral_lower=genes.get('neutral_threshold_lower', -20.0),
+                    weak_bear_threshold=genes.get('weak_bear_threshold', -20.0),
+                    strong_bear_threshold=genes.get('strong_bear_threshold', -50.0),
+                )
+            else:
+                # Use basic strategy
+                strategy = TradingStrategy(
+                    initial_capital=initial_capital,
+                    max_position_pct=genes.get('max_position_pct', 0.95),
+                    min_position_pct=genes.get('min_position_pct', 0.1)
+                )
             
             results = strategy.run_backtest(combined_df, combined_df)
             
@@ -530,4 +549,36 @@ def create_default_parameter_ranges() -> Dict[str, Tuple[float, float]]:
         'strong_bear_threshold_int': (-80, -50),
         'stop_loss_multiplier_strong': (1.5, 3.0),
         'stop_loss_multiplier_weak': (0.5, 1.5)
+    }
+
+
+def create_enhanced_parameter_ranges() -> Dict[str, Tuple[float, float]]:
+    """
+    Create enhanced parameter ranges matching the old notebook implementation
+    Includes gradual entry parameters and all thresholds
+    """
+    return {
+        # Factor weights
+        'weight_trend': (0.0, 1.0),
+        'weight_volatility': (0.0, 1.0),
+        'weight_exhaustion': (0.0, 1.0),
+        
+        # Lookback periods
+        'lookback_int': (10, 50),
+        
+        # Regime thresholds (as floats, not ints)
+        'strong_bull_threshold': (30.0, 80.0),
+        'weak_bull_threshold': (10.0, 40.0),
+        'neutral_threshold_upper': (10.0, 40.0),
+        'neutral_threshold_lower': (-40.0, -10.0),
+        'weak_bear_threshold': (-40.0, -10.0),
+        'strong_bear_threshold': (-80.0, -30.0),
+        
+        # Stop-loss multipliers
+        'stop_loss_multiplier_strong': (1.0, 5.0),
+        'stop_loss_multiplier_weak': (0.5, 3.0),
+        
+        # Gradual entry parameters
+        'entry_step_size': (0.1, 1.0),
+        'max_position_pct': (0.5, 1.0),
     }
