@@ -473,10 +473,8 @@ def handle_optimize_command(args):
     elif dollar_threshold_arg == "auto":
         # Auto-detect threshold
         from optimization import auto_detect_dollar_thresholds
-        threshold_range = auto_detect_dollar_thresholds(df)
-        # Use the median value from the detected range for this optimization run
-        dollar_threshold = threshold_range.values[len(threshold_range.values)//2]
-        print(f"Auto-detected dollar threshold: ${dollar_threshold:,.0f}")
+        dollar_threshold = auto_detect_dollar_thresholds(df)
+        print(f"Selected dollar threshold: ${dollar_threshold:,.0f}")
     else:
         try:
             dollar_threshold = float(dollar_threshold_arg)
@@ -484,8 +482,7 @@ def handle_optimize_command(args):
         except (ValueError, TypeError):
             print(f"Warning: Invalid dollar threshold '{dollar_threshold_arg}', using auto-detect")
             from optimization import auto_detect_dollar_thresholds
-            threshold_range = auto_detect_dollar_thresholds(df)
-            dollar_threshold = threshold_range.values[len(threshold_range.values)//2]
+            dollar_threshold = auto_detect_dollar_thresholds(df)
             print(f"Auto-detected dollar threshold: ${dollar_threshold:,.0f}")
     
     if use_dollar_bars and dollar_threshold is not None:
@@ -494,9 +491,11 @@ def handle_optimize_command(args):
         df = create_dollar_bars(df, dollar_threshold)
         print(f"Dollar bars created: {len(df)}")
     
-    from optimization import create_enhanced_parameter_ranges
-    param_ranges = create_enhanced_parameter_ranges()
-    print("Using enhanced strategy with gradual entries and regime thresholds")
+    # Estimate volatility scale for adaptive regime thresholds
+    from optimization import create_enhanced_parameter_ranges, estimate_asset_volatility_scale
+    volatility_scale = estimate_asset_volatility_scale(df)
+    param_ranges = create_enhanced_parameter_ranges(volatility_scale)
+    print("Using enhanced strategy with gradual entries and adaptive regime thresholds")
         
     ga = GeneticAlgorithm(
         parameter_config=param_ranges,
@@ -642,8 +641,7 @@ def handle_run_optimized_command(args):
         elif args.dollar_threshold == "auto":
             use_dollar_bars = True
             from optimization import auto_detect_dollar_thresholds
-            threshold_range = auto_detect_dollar_thresholds(df)
-            dollar_threshold = threshold_range.values[len(threshold_range.values)//2]
+            dollar_threshold = auto_detect_dollar_thresholds(df)
             print(f"Command line override: Auto-detected dollar threshold: ${dollar_threshold:,.0f}")
         else:
             try:

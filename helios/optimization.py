@@ -319,21 +319,27 @@ class GeneticAlgorithm:
                 mar = 0  # Risk-free rate
                 downside_returns = returns[returns < mar]
                 
+                # For low-volatility assets, use a volatility-adjusted fitness
+                # This prevents low-vol assets from appearing to have artificially high Sortino ratios
+                volatility_adjustment = 1.0
+                if returns.std() < 0.001:  # Very low volatility (< 0.1% daily)
+                    volatility_adjustment = 0.5  # Reduce fitness to encourage more active trading
+                
                 if len(downside_returns) == 0 or total_return <= 0:
                     # No downside or negative total return
-                    base_fitness = max(-10.0, total_return * 10)  # Scale total return
+                    base_fitness = max(-10.0, total_return * 10 * volatility_adjustment)
                 else:
                     downside_deviation = downside_returns.std()
                     if downside_deviation == 0 or np.isnan(downside_deviation):
                         # Perfect strategy - high but finite score
-                        base_fitness = min(50.0, annualized_return * 20)
+                        base_fitness = min(50.0, annualized_return * 20 * volatility_adjustment)
                     else:
                         # Standard Sortino calculation using actual time-based annualization
                         annualized_downside_dev = downside_deviation * np.sqrt(periods_per_year)
                         sortino = annualized_return / annualized_downside_dev
                         
-                        # Cap at reasonable values but allow higher scores
-                        base_fitness = max(-10.0, min(50.0, sortino))
+                        # Apply volatility adjustment for more realistic fitness
+                        base_fitness = max(-10.0, min(50.0, sortino * volatility_adjustment))
                 
                 # Handle edge cases
                 if np.isnan(base_fitness) or np.isinf(base_fitness):
@@ -393,10 +399,24 @@ class GeneticAlgorithm:
                 print(f"  Time span: {time_span_days} days, Periods: {n_periods}, Freq: {periods_per_year:.1f}/year")
             
             # Additional penalties for extreme parameters
-            if weights['trend'] < 0.1 or weights['trend'] > 0.7:
-                fitness -= 0.5
+            if weights['trend'] < 0.05 or weights['trend'] > 0.95:
+                fitness -= 1.0
             if lookback < 5 or lookback > 100:
-                fitness -= 0.5
+                fitness -= 1.0
+            
+            # Penalty for too few trades (strategy not active enough)
+            # Count actual position changes
+            position_changes = 0
+            if 'position' in results.columns:
+                positions = results['position']
+                position_changes = (positions.diff() != 0).sum()
+            
+            min_trades = max(10, n_periods / 200)  # At least 1 trade per 200 periods
+            if position_changes < min_trades:
+                trade_penalty = 2.0 * (1 - position_changes / min_trades)
+                fitness -= trade_penalty
+                if False:  # Debug
+                    print(f"  Trade penalty: {trade_penalty:.2f} (only {position_changes} position changes)")
             
             return fitness
             
@@ -666,7 +686,69 @@ class WalkForwardOptimizer:
 
 
 
-def auto_detect_dollar_thresholds(data: pd.DataFrame, sample_size: int = 1000) -> LogRange:
+def estimate_asset_volatility_scale(data: pd.DataFrame, sample_size: int = 500) -> float:
+    """
+    Estimate volatility scale factor for the asset based on recent price movements
+    
+    Parameters:
+    -----------
+    data : pd.DataFrame
+        OHLCV data
+    sample_size : int
+        Number of recent bars to analyze
+        
+    Returns:
+    --------
+    float
+        Volatility scale factor (0.1 to 3.0)
+        ~0.3-0.5 for traditional stocks
+        ~0.7-1.5 for volatile stocks/ETFs
+        ~1.0-3.0 for crypto
+    """
+    # Use most recent data
+    sample_data = data.tail(sample_size)
+    
+    # Calculate various volatility metrics
+    returns = sample_data['close'].pct_change().dropna()
+    
+    # Daily volatility (standard deviation of returns)
+    daily_vol = returns.std()
+    
+    # Annualized volatility
+    annualized_vol = daily_vol * np.sqrt(252)  # Assuming daily data
+    
+    
+    print(f"\nAsset volatility analysis:")
+    print(f"  Annualized volatility: {annualized_vol*100:.1f}%")
+    
+    # Calculate scale based on volatility characteristics
+    # Traditional stocks: ~15-30% annual vol -> scale 0.3-0.5
+    # Volatile stocks: ~30-60% annual vol -> scale 0.5-1.0
+    # Crypto: ~60-150% annual vol -> scale 1.0-3.0
+    
+    if annualized_vol < 0.25:  # < 25% annual vol
+        scale = 0.3
+        asset_type = "Low volatility (bonds/stable stocks)"
+    elif annualized_vol < 0.40:  # 25-40% annual vol
+        scale = 0.5
+        asset_type = "Traditional stocks"
+    elif annualized_vol < 0.60:  # 40-60% annual vol
+        scale = 0.8
+        asset_type = "Volatile stocks/ETFs"
+    elif annualized_vol < 1.0:  # 60-100% annual vol
+        scale = 1.5
+        asset_type = "High volatility (small caps/crypto)"
+    else:  # > 100% annual vol
+        scale = 2.0
+        asset_type = "Extreme volatility (crypto/meme stocks)"
+    
+    print(f"  Detected asset type: {asset_type}")
+    print(f"  Volatility scale factor: {scale}")
+    
+    return scale
+
+
+def auto_detect_dollar_thresholds(data: pd.DataFrame, sample_size: int = 1000, return_range: bool = False) -> Union[float, LogRange]:
     """
     Automatically detect appropriate dollar bar thresholds based on asset characteristics
     
@@ -676,11 +758,14 @@ def auto_detect_dollar_thresholds(data: pd.DataFrame, sample_size: int = 1000) -
         OHLCV data with columns: open, high, low, close, volume
     sample_size : int
         Number of recent bars to analyze for threshold detection
+    return_range : bool
+        If True, returns the full LogRange. If False (default), returns recommended single threshold
         
     Returns:
     --------
-    LogRange
-        Optimized threshold range for this asset
+    Union[float, LogRange]
+        If return_range=False: Single recommended threshold value
+        If return_range=True: Full threshold range for advanced use
     """
     # Use most recent data for analysis
     sample_data = data.tail(sample_size)
@@ -704,42 +789,49 @@ def auto_detect_dollar_thresholds(data: pd.DataFrame, sample_size: int = 1000) -
     print(f"  Median dollar volume: ${median_dollar_vol:,.0f}")
     print(f"  Mean dollar volume: ${mean_dollar_vol:,.0f}")
     
-    # Set threshold ranges based on asset characteristics
-    if avg_price > 100 and median_dollar_vol > 10_000_000:
-        # High-priced, high-volume assets (e.g., BTC, TSLA)
-        min_threshold = max(200_000.0, float(median_dollar_vol * 0.1))
-        max_threshold = min(5_000_000.0, float(median_dollar_vol * 2.0))
-        print(f"  Detected: High-priced, high-volume asset")
-        
-    elif avg_price > 10 and median_dollar_vol > 1_000_000:
-        # Medium-priced assets (e.g., AAPL, GOOGL)
-        min_threshold = max(100_000.0, float(median_dollar_vol * 0.15))
-        max_threshold = min(2_000_000.0, float(median_dollar_vol * 1.5))
-        print(f"  Detected: Medium-priced asset")
-        
-    elif avg_price < 1 and median_dollar_vol > 100_000:
-        # Low-priced, high-volume assets (e.g., altcoins, penny stocks)
-        min_threshold = max(50_000.0, float(median_dollar_vol * 0.2))
-        max_threshold = min(1_000_000.0, float(median_dollar_vol * 1.0))
-        print(f"  Detected: Low-priced, high-volume asset")
-        
-    else:
-        # Default case - use median-based approach
-        min_threshold = max(100_000.0, float(median_dollar_vol * 0.2))
-        max_threshold = min(2_000_000.0, float(median_dollar_vol * 1.5))
-        print(f"  Detected: Standard asset")
+    # Calculate target bars per day (aim for 20-50 bars)
+    target_bars_per_day = 30  # Good balance for most assets
     
-    print(f"  Threshold range: ${min_threshold:,.0f} - ${max_threshold:,.0f}")
+    # Calculate threshold to achieve target bars per day
+    target_threshold = median_dollar_vol / target_bars_per_day
+    
+    # Set reasonable bounds (0.5x to 2x the target)
+    min_threshold = float(target_threshold * 0.5)
+    max_threshold = float(target_threshold * 2.0)
+    
+    # Apply absolute limits to prevent extreme values
+    min_threshold = max(100_000.0, min(min_threshold, 100_000_000.0))
+    max_threshold = max(min_threshold * 2, min(max_threshold, 500_000_000.0))
+    
+    print(f"  Target: ~{target_bars_per_day} bars per day")
     
     # Create logarithmic range with 4 points
-    return create_log_range(float(min_threshold), float(max_threshold), 4)
+    threshold_range = create_log_range(float(min_threshold), float(max_threshold), 4)
+    
+    if return_range:
+        return threshold_range
+    else:
+        # Return the second value (index 1) from the 4-point range
+        # This gives us a more conservative threshold for more bars per day
+        # With 4 values: [min, lower-mid, upper-mid, max], we pick lower-mid
+        return threshold_range.values[1]
 
 
-def create_enhanced_parameter_ranges() -> Dict[str, ParameterRange]:
+def create_enhanced_parameter_ranges(volatility_scale: float = 1.0) -> Dict[str, ParameterRange]:
     """
     Create enhanced parameter ranges using polymorphic configuration
     Uses LogRange for discrete threshold values and MinMaxRange for continuous weights
+    
+    Parameters:
+    -----------
+    volatility_scale : float
+        Scale factor for regime thresholds based on asset volatility (0.1 to 3.0)
+        Lower values for low-volatility assets like stocks
+        Higher values for high-volatility assets like crypto
     """
+    # Clamp volatility scale to reasonable bounds
+    volatility_scale = max(0.1, min(3.0, volatility_scale))
+    
     return {
         # Factor weights (continuous ranges for fine-tuning)
         'weight_trend': MinMaxRange(0.0, 1.0),
@@ -749,13 +841,13 @@ def create_enhanced_parameter_ranges() -> Dict[str, ParameterRange]:
         # Lookback periods (continuous range)
         'lookback_int': MinMaxRange(10, 50),
         
-        # Regime thresholds (discrete logarithmic spacing)
-        'strong_bull_threshold': create_log_range(28.0, 42.0, 4),
-        'weak_bull_threshold': create_log_range(14.0, 24.0, 4),
-        'neutral_threshold_upper': create_log_range(9.0, 16.0, 4),
-        'neutral_threshold_lower': create_log_range(-16.0, -9.0, 4),
-        'weak_bear_threshold': create_log_range(-24.0, -14.0, 4),
-        'strong_bear_threshold': create_log_range(-42.0, -28.0, 4),
+        # Regime thresholds (scaled by volatility)
+        'strong_bull_threshold': create_log_range(15.0 * volatility_scale, 50.0 * volatility_scale, 4),
+        'weak_bull_threshold': create_log_range(5.0 * volatility_scale, 25.0 * volatility_scale, 4),
+        'neutral_threshold_upper': create_log_range(3.0 * volatility_scale, 15.0 * volatility_scale, 4),
+        'neutral_threshold_lower': create_log_range(-15.0 * volatility_scale, -3.0 * volatility_scale, 4),
+        'weak_bear_threshold': create_log_range(-25.0 * volatility_scale, -5.0 * volatility_scale, 4),
+        'strong_bear_threshold': create_log_range(-50.0 * volatility_scale, -15.0 * volatility_scale, 4),
         
         # Stop-loss multipliers (discrete logarithmic spacing)
         'stop_loss_multiplier_strong': create_log_range(1.5, 4.5, 4),

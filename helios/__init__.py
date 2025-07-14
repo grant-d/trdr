@@ -14,7 +14,6 @@ __version__ = "0.1.0"
 from .data_processing import (
     create_dollar_bars,
     prepare_data,
-    calculate_returns,
     calculate_atr
 )
 
@@ -51,7 +50,6 @@ __all__ = [
     # Data processing
     'create_dollar_bars',
     'prepare_data',
-    'calculate_returns',
     'calculate_atr',
     
     # Factors
