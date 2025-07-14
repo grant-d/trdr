@@ -33,8 +33,8 @@ DEFAULT_DOLLAR_THRESHOLD = 100_000_000.0
 GA_POPULATION_SIZE = 50 # 20
 GA_GENERATIONS = 100 # 10
 GA_MUTATION_RATE = 0.2
-GA_WALKFORWARD_PERIODS = 5 # 3
-GA_TRAIN_RATIO = 0.7
+# GA_WALKFORWARD_PERIODS = 5 # 3
+# GA_TRAIN_RATIO = 0.7
 
 # --- Enhanced, Constrained Parameter Space ---
 PARAMETER_SPACE = {
@@ -55,6 +55,11 @@ PARAMETER_SPACE = {
     # --- Risk Management ---
     'stop_loss_multiplier_strong': (1.5, 5.0, 0.25),
     'stop_loss_multiplier_weak': (0.5, 3.0, 0.25),
+    'take_profit_multiplier_strong': (2.0, 6.0, 0.25),
+    'take_profit_multiplier_weak': (1.0, 4.0, 0.25),
+    
+    # --- Position Sizing ---
+    'entry_step_size': (0.1, 0.5, 0.05),
 }
 
 # --- Default Parameters (if not optimizing) ---
@@ -66,6 +71,9 @@ DEFAULT_PARAMS = {
     'weak_zone_width': 30.0,
     'stop_loss_multiplier_strong': 2.5,
     'stop_loss_multiplier_weak': 1.5,
+    'take_profit_multiplier_strong': 4.0,
+    'take_profit_multiplier_weak': 2.0,
+    'entry_step_size': 0.2,
 }
 
 
@@ -172,11 +180,9 @@ class HeliosTrader:
             df.dropna(subset=numeric_cols, inplace=True)
             
             self.raw_df = df.sort_index()
-
-            # Fallback for 'Adj Close'
+            self.raw_df = df.sort_index()
             if 'Adj Close' not in self.raw_df.columns:
                 self.raw_df['Adj Close'] = self.raw_df['Close']
-                
             print("Data loaded and cleaned successfully.")
         except FileNotFoundError:
             print(f"ERROR: Input file not found at '{self.config['input_file']}'.")
@@ -229,49 +235,134 @@ class HeliosTrader:
                 'Volatility': params['lookback_medium'],
                 'Exhaustion': params['lookback_short']
             }
+            # Calculate absolute volatility first for stop-loss calculations
+            df_out['Abs_Volatility'] = self.indicator_functions['Volatility'][params['indicator_volatility']](df_out, lookback_map['Volatility'])
             
-            df_out['Volatility'] = self.indicator_functions['Volatility'][params['indicator_volatility']](df_out, lookback_map['Volatility'])
             df_out['Trend'] = self.indicator_functions['Trend'][params['indicator_trend']](df_out, lookback_map['Trend'])
-            df_out['Exhaustion'] = self.indicator_functions['Exhaustion'][params['indicator_exhaustion']](df_out, lookback_map['Exhaustion'], df_out['Volatility'])
+            df_out['Exhaustion'] = self.indicator_functions['Exhaustion'][params['indicator_exhaustion']](df_out, lookback_map['Exhaustion'], df_out['Abs_Volatility'])
+            
+            # Normalize factors for MSS
+            df_out['Norm_Trend'] = (df_out['Trend'].rank(pct=True) - 0.5) * 200
+            df_out['Norm_Volatility'] = (df_out['Abs_Volatility'].rank(pct=True) - 0.5) * 200
+            df_out['Norm_Exhaustion'] = (df_out['Exhaustion'].rank(pct=True) - 0.5) * 200
+
         except KeyError as e:
             print(f"ERROR: Invalid indicator name in params: {e}")
             return None
-
-        for factor in ['Trend', 'Volatility', 'Exhaustion']:
-            df_out[factor] = (df_out[factor].rank(pct=True) - 0.5) * 200
-            df_out[factor] = np.clip(df_out[factor], -100, 100)
             
         return df_out.dropna()
 
     def _run_simulation(self, df_with_factors, params):
-        equity = self.config['initial_capital']
-        position = 0
-        entry_price = 0
-        
+        """
+        Runs the full, sophisticated backtest simulation using the logic
+        from the original notebook.
+        """
         df = df_with_factors.copy()
-        weights = {'trend': 0.5, 'volatility': 0.2, 'exhaustion': 0.3}
-        df['MSS'] = (weights['trend'] * df['Trend'] +
-                     weights['volatility'] * df['Volatility'] +
-                     weights['exhaustion'] * df['Exhaustion'])
+        
+        # --- Initialize Simulation State ---
+        initial_capital = self.config['initial_capital']
+        current_capital = initial_capital
+        position_size = 0.0
+        entry_price = 0.0
+        stop_loss = 0.0
+        take_profit = 0.0
+        peak_price_since_entry = -float('inf')
+        valley_price_since_entry = float('inf')
+        equity_curve = []
+        trade_log = []
 
-        # --- Dynamic Threshold Calculation ---
+        # --- Get Parameters from GA or Defaults ---
+        weights = {'trend': 0.5, 'volatility': 0.2, 'exhaustion': 0.3} # Fixed weights for now
         neutral_size = params.get('neutral_zone_size', 20.0)
         weak_width = params.get('weak_zone_width', 30.0)
+        stop_mult_strong = params.get('stop_loss_multiplier_strong', 2.5)
+        stop_mult_weak = params.get('stop_loss_multiplier_weak', 1.5)
+        tp_mult_strong = params.get('take_profit_multiplier_strong', 4.0)
+        tp_mult_weak = params.get('take_profit_multiplier_weak', 2.0)
+        entry_step = params.get('entry_step_size', 0.2)
+        max_pos_fraction = 1.0
 
-        strong_bull_threshold = neutral_size + weak_width
-        weak_bull_threshold = neutral_size
-        weak_bear_threshold = -neutral_size
-        strong_bear_threshold = -neutral_size - weak_width
+        # --- Calculate MSS and Regimes ---
+        df['MSS'] = (weights['trend'] * df['Norm_Trend'] +
+                     weights['volatility'] * df['Norm_Volatility'] +
+                     weights['exhaustion'] * df['Norm_Exhaustion'])
+
+        strong_bull_thresh = neutral_size + weak_width
+        weak_bull_thresh = neutral_size
+        weak_bear_thresh = -neutral_size
+        strong_bear_thresh = -neutral_size - weak_width
 
         def classify_regime(mss):
-            if mss > strong_bull_threshold: return 'Strong Bull'
-            if mss > weak_bull_threshold: return 'Weak Bull'
-            if mss < strong_bear_threshold: return 'Strong Bear'
-            if mss < weak_bear_threshold: return 'Weak Bear'
+            if mss > strong_bull_thresh: return 'Strong Bull'
+            if mss > weak_bull_thresh: return 'Weak Bull'
+            if mss < strong_bear_thresh: return 'Strong Bear'
+            if mss < weak_bear_thresh: return 'Weak Bear'
             return 'Neutral'
         df['Regime'] = df['MSS'].apply(classify_regime)
-        
-        equity_curve = [equity] * len(df)
+
+        # --- Main Simulation Loop ---
+        for index, row in df.iterrows():
+            price = row['Close']
+            regime = row['Regime']
+            mss = row['MSS']
+            abs_vol = row['Abs_Volatility']
+
+            # --- Target Position Sizing ---
+            target_pos = 0.0
+            if regime == 'Strong Bull':
+                target_pos = 1.0
+            elif regime == 'Strong Bear':
+                target_pos = -1.0
+            elif regime == 'Neutral':
+                target_pos = 0.0
+            
+            # --- Gradual Entry/Exit ---
+            pos_change = np.clip(target_pos - position_size, -entry_step, entry_step)
+            
+            if abs(pos_change) > 1e-9:
+                if position_size != 0 and np.sign(pos_change) != np.sign(position_size): # Reducing position
+                    pnl = (price - entry_price) * pos_change
+                    current_capital += pnl
+                    trade_log.append(f"{index}: Reduce Position @ {price:.2f}, PnL: {pnl:.2f}")
+                else: # Increasing position
+                    new_total_size = position_size + pos_change
+                    entry_price = (entry_price * abs(position_size) + price * abs(pos_change)) / abs(new_total_size)
+                    trade_log.append(f"{index}: Change Position @ {price:.2f}")
+                position_size += pos_change
+
+            # --- Risk Management ---
+            if position_size > 0: # Long
+                stop_dist = abs_vol * (stop_mult_strong if regime == 'Strong Bull' else stop_mult_weak)
+                tp_dist = abs_vol * (tp_mult_strong if regime == 'Strong Bull' else tp_mult_weak)
+                peak_price_since_entry = max(peak_price_since_entry, price)
+                stop_loss = max(stop_loss, peak_price_since_entry - stop_dist)
+                take_profit = entry_price + tp_dist
+                
+                if price <= stop_loss or price >= take_profit:
+                    pnl = (price - entry_price) * position_size
+                    current_capital += pnl
+                    trade_log.append(f"{index}: Exit Long @ {price:.2f}, PnL: {pnl:.2f}")
+                    position_size, entry_price, stop_loss, take_profit = 0, 0, 0, 0
+                    peak_price_since_entry = -float('inf')
+
+            elif position_size < 0: # Short
+                stop_dist = abs_vol * (stop_mult_strong if regime == 'Strong Bear' else stop_mult_weak)
+                tp_dist = abs_vol * (tp_mult_strong if regime == 'Strong Bear' else tp_mult_weak)
+                valley_price_since_entry = min(valley_price_since_entry, price)
+                stop_loss = min(stop_loss, valley_price_since_entry + stop_dist)
+                take_profit = entry_price - tp_dist
+                
+                if price >= stop_loss or price <= take_profit:
+                    pnl = (entry_price - price) * abs(position_size)
+                    current_capital += pnl
+                    trade_log.append(f"{index}: Exit Short @ {price:.2f}, PnL: {pnl:.2f}")
+                    position_size, entry_price, stop_loss, take_profit = 0, 0, 0, 0
+                    valley_price_since_entry = float('inf')
+
+            # --- Update Equity Curve ---
+            unrealized_pnl = (price - entry_price) * position_size if entry_price > 0 else 0
+            equity_curve.append(current_capital + unrealized_pnl)
+
         df['Equity'] = equity_curve
         return df
 
@@ -284,12 +375,10 @@ class HeliosTrader:
         if sim_results.empty:
             return -1000
             
-        final_equity = sim_results['Equity'].iloc[-1]
-        
         returns = sim_results['Equity'].pct_change()
         downside_std = returns[returns < 0].std()
         
-        sortino = (returns.mean() * (252**0.5)) / downside_std if downside_std > 0 else 0
+        sortino = (returns.mean() * (252**0.5)) / (downside_std + 1e-9)
         return sortino if np.isfinite(sortino) else -1000
 
     def _generate_random_param(self, param, space):
@@ -352,7 +441,7 @@ class HeliosTrader:
         
         downside_returns = returns[returns < 0]
         downside_std = downside_returns.std()
-        sortino_ratio = (returns.mean() * (252**0.5)) / downside_std if downside_std > 0 else 0
+        sortino_ratio = (returns.mean() * (252**0.5)) / (downside_std + 1e-9)
         
         peak = self.results_df['Equity'].cummax()
         drawdown = (self.results_df['Equity'] - peak) / peak
