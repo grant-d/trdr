@@ -31,9 +31,9 @@ DEFAULT_DOLLAR_THRESHOLD = 100_000_000.0
 
 # --- Genetic Algorithm Configuration ---
 GA_POPULATION_SIZE = 50
-GA_GENERATIONS = 100
+GA_GENERATIONS = 50
 GA_MUTATION_RATE = 0.2
-GA_WALKFORWARD_PERIODS = 3 # Reduced to create larger, more robust windows
+GA_WALKFORWARD_PERIODS = 5 
 GA_TRAIN_RATIO = 0.7
 
 # --- Enhanced, Constrained Parameter Space ---
@@ -252,16 +252,16 @@ class HeliosTrader:
 
     def _run_simulation(self, df_with_factors, params):
         """
-        Runs the full, sophisticated backtest simulation using the logic
-        from the original notebook.
+        This is the complete, restored backtesting logic that accurately handles
+        fractional positions, cost basis, and risk management.
         """
         df = df_with_factors.copy()
         
         # --- Initialize Simulation State ---
         initial_capital = self.config['initial_capital']
         current_capital = initial_capital
-        position_size = 0.0
-        entry_price = 0.0
+        total_units = 0.0
+        cost_basis = 0.0
         stop_loss = 0.0
         take_profit = 0.0
         peak_price, valley_price = -float('inf'), float('inf')
@@ -277,7 +277,7 @@ class HeliosTrader:
         tp_mult_weak = params.get('take_profit_multiplier_weak', 2.0)
         entry_step = params.get('entry_step_size', 0.2)
 
-         # --- Calculate MSS and Regimes ---
+        # --- Calculate MSS and Regimes ---
         df['MSS'] = (weights['trend'] * df['Norm_Trend'] +
                      weights['volatility'] * df['Norm_Volatility'] +
                      weights['exhaustion'] * df['Norm_Exhaustion'])
@@ -296,52 +296,52 @@ class HeliosTrader:
         # --- Main Simulation Loop ---
         for index, row in df.iterrows():
             price, regime, abs_vol = row['Close'], row['Regime'], row['Abs_Volatility']
-            target_pos = 0.0
-            if regime == 'Strong Bull': target_pos = 1.0
-            elif regime == 'Strong Bear': target_pos = -1.0
+            target_pos_fraction = 0.0
+            if regime == 'Strong Bull': target_pos_fraction = 1.0
+            elif regime == 'Strong Bear': target_pos_fraction = -1.0
             
-            # --- Gradual Entry/Exit ---
-            pos_change = np.clip(target_pos - position_size, -entry_step, entry_step)
+            pos_change_fraction = np.clip(target_pos_fraction - (total_units * price / current_capital if current_capital > 0 else 0), -entry_step, entry_step)
             
-            if abs(pos_change) > 1e-9:
-                units_to_trade = (pos_change * initial_capital) / price
-                if abs(position_size) < 1e-9: # New position
-                    entry_price = price
+            if abs(pos_change_fraction) > 1e-9:
+                capital_to_trade = pos_change_fraction * current_capital
+                units_to_trade = capital_to_trade / price if price > 0 else 0
+
+                if abs(total_units) < 1e-9: # New position
+                    cost_basis = units_to_trade * price
                 else: # Adjusting position
-                    if np.sign(pos_change) != np.sign(position_size): # Reducing
-                        pnl = (price - entry_price) * units_to_trade
+                    if np.sign(units_to_trade) != np.sign(total_units): # Reducing
+                        pnl = (price - (cost_basis / total_units)) * abs(units_to_trade)
                         current_capital += pnl
+                        cost_basis *= (1 - abs(units_to_trade / total_units))
                     else: # Increasing
-                        new_total_size = position_size + pos_change
-                        if abs(new_total_size) > 1e-9:
-                            entry_price = (entry_price * abs(position_size) + price * abs(pos_change)) / abs(new_total_size)
-                position_size += pos_change
+                        cost_basis += units_to_trade * price
+                total_units += units_to_trade
                 trade_log.append(index)
 
-             # --- Risk Management ---
-            if position_size > 0:
-                stop_dist = abs_vol * (stop_mult_strong if regime == 'Strong Bull' else stop_mult_weak)
-                tp_dist = abs_vol * (tp_mult_strong if regime == 'Strong Bull' else tp_mult_weak)
-                peak_price = max(peak_price, price)
-                stop_loss = max(stop_loss, peak_price - stop_dist) if stop_loss != 0 else peak_price - stop_dist
-                take_profit = entry_price + tp_dist
-                if (stop_loss > 0 and price <= stop_loss) or (take_profit > 0 and price >= take_profit):
-                    pnl = (price - entry_price) * position_size * initial_capital / entry_price
-                    current_capital += pnl
-                    position_size, entry_price, stop_loss, take_profit, peak_price = 0, 0, 0, 0, -float('inf')
-            elif position_size < 0: # Short
-                stop_dist = abs_vol * (stop_mult_strong if regime == 'Strong Bear' else stop_mult_weak)
-                tp_dist = abs_vol * (tp_mult_strong if regime == 'Strong Bear' else tp_mult_weak)
-                valley_price = min(valley_price, price)
-                stop_loss = min(stop_loss, valley_price + stop_dist) if stop_loss != 0 else valley_price + stop_dist
-                take_profit = entry_price - tp_dist
-                if (stop_loss > 0 and price >= stop_loss) or (take_profit > 0 and price <= take_profit):
-                    pnl = (entry_price - price) * abs(position_size) * initial_capital / entry_price
-                    current_capital += pnl
-                    position_size, entry_price, stop_loss, take_profit, valley_price = 0, 0, 0, 0, float('inf')
+            if abs(total_units) > 1e-9:
+                avg_entry_price = cost_basis / total_units
+                if total_units > 0: # Long
+                    stop_dist = abs_vol * (stop_mult_strong if regime == 'Strong Bull' else stop_mult_weak)
+                    tp_dist = abs_vol * (tp_mult_strong if regime == 'Strong Bull' else tp_mult_weak)
+                    peak_price = max(peak_price, price)
+                    stop_loss = max(stop_loss, peak_price - stop_dist) if stop_loss != 0 else peak_price - stop_dist
+                    take_profit = avg_entry_price + tp_dist
+                    if (stop_loss > 0 and price <= stop_loss) or (take_profit > 0 and price >= take_profit):
+                        pnl = (price - avg_entry_price) * total_units
+                        current_capital += pnl
+                        total_units, cost_basis, stop_loss, take_profit, peak_price = 0, 0, 0, 0, -float('inf')
+                else: # Short
+                    stop_dist = abs_vol * (stop_mult_strong if regime == 'Strong Bear' else stop_mult_weak)
+                    tp_dist = abs_vol * (tp_mult_strong if regime == 'Strong Bear' else tp_mult_weak)
+                    valley_price = min(valley_price, price)
+                    stop_loss = min(stop_loss, valley_price + stop_dist) if stop_loss != 0 else valley_price + stop_dist
+                    take_profit = avg_entry_price - tp_dist
+                    if (stop_loss > 0 and price >= stop_loss) or (take_profit > 0 and price <= take_profit):
+                        pnl = (avg_entry_price - price) * abs(total_units)
+                        current_capital += pnl
+                        total_units, cost_basis, stop_loss, take_profit, valley_price = 0, 0, 0, 0, float('inf')
 
-            # --- Update Equity Curve ---
-            unrealized_pnl = (price - entry_price) * position_size * initial_capital / entry_price if entry_price > 0 else 0
+            unrealized_pnl = (price - (cost_basis / total_units if total_units != 0 else 0)) * total_units
             equity_curve.append(current_capital + unrealized_pnl)
 
         df['Equity'] = equity_curve
@@ -349,7 +349,6 @@ class HeliosTrader:
         return df
 
     def _fitness_function(self, params, df_train):
-        # A more robust fitness function to prevent overfitting
         min_trades_required = 5
         max_sortino_cap = 10.0
 
@@ -360,14 +359,13 @@ class HeliosTrader:
         if sim_results.empty or 'Trade_Count' not in sim_results.columns: return -1000
             
         if sim_results['Trade_Count'].iloc[0] < min_trades_required:
-            return -500 # Penalize for not trading enough
+            return -500
 
         returns = sim_results['Equity'].pct_change()
         downside_std = returns[returns < 0].std()
         
         sortino = (returns.mean() * (252**0.5)) / (downside_std + 1e-9)
         
-        # Cap the sortino to prevent chasing extreme, overfitted values
         capped_sortino = min(sortino, max_sortino_cap)
         
         return capped_sortino if np.isfinite(capped_sortino) else -1000
