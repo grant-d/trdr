@@ -1,0 +1,137 @@
+{
+  "parameters": {
+    "weight_trend": 0.6547639671610092,
+    "weight_volatility": 0.17768133617752457,
+    "weight_exhaustion": 0.1379139814214565,
+    "lookback_int": 28.0,
+    "strong_bull_threshold": 13.5,
+    "weak_bull_threshold": 6.6,
+    "neutral_threshold_upper": 6.8,
+    "neutral_threshold_lower": -9.4,
+    "weak_bear_threshold": -22.5,
+    "strong_bear_threshold": -41.3,
+    "stop_loss_multiplier_strong": 4.5,
+    "stop_loss_multiplier_weak": 1.5,
+    "entry_step_size": 0.7,
+    "max_position_pct": 0.6
+  },
+  "fitness": 32.0412139299327,
+  "fitness_metric": "sortino",
+  "allow_shorts": false,
+  "data_file": "/Users/grantdickinson/repos/trdr/data/BTCUSD.csv",
+  "dollar_threshold": 8812236.5,
+  "population_size": 20,
+  "generations": 20,
+  "parameter_ranges": {
+    "weight_trend": {
+      "type": "min_max",
+      "min": 0.0,
+      "max": 1.0
+    },
+    "weight_volatility": {
+      "type": "min_max",
+      "min": 0.0,
+      "max": 1.0
+    },
+    "weight_exhaustion": {
+      "type": "min_max",
+      "min": 0.0,
+      "max": 1.0
+    },
+    "lookback_int": {
+      "type": "min_max",
+      "min": 10,
+      "max": 50
+    },
+    "strong_bull_threshold": {
+      "type": "log_range",
+      "values": [
+        13.5,
+        17.2,
+        25.6,
+        45.0
+      ]
+    },
+    "weak_bull_threshold": {
+      "type": "log_range",
+      "values": [
+        4.5,
+        6.6,
+        11.4,
+        22.5
+      ]
+    },
+    "neutral_threshold_upper": {
+      "type": "log_range",
+      "values": [
+        2.7,
+        4.0,
+        6.8,
+        13.5
+      ]
+    },
+    "neutral_threshold_lower": {
+      "type": "log_range",
+      "values": [
+        -13.5,
+        -12.2,
+        -9.4,
+        -2.7
+      ]
+    },
+    "weak_bear_threshold": {
+      "type": "log_range",
+      "values": [
+        -22.5,
+        -20.4,
+        -15.6,
+        -4.5
+      ]
+    },
+    "strong_bear_threshold": {
+      "type": "log_range",
+      "values": [
+        -45.0,
+        -41.3,
+        -32.9,
+        -13.5
+      ]
+    },
+    "stop_loss_multiplier_strong": {
+      "type": "log_range",
+      "values": [
+        1.5,
+        1.8,
+        2.7,
+        4.5
+      ]
+    },
+    "stop_loss_multiplier_weak": {
+      "type": "log_range",
+      "values": [
+        0.8,
+        1.0,
+        1.5,
+        2.7
+      ]
+    },
+    "entry_step_size": {
+      "type": "log_range",
+      "values": [
+        0.2,
+        0.2,
+        0.4,
+        0.7
+      ]
+    },
+    "max_position_pct": {
+      "type": "log_range",
+      "values": [
+        0.6,
+        0.6,
+        0.8,
+        1.0
+      ]
+    }
+  }
+}

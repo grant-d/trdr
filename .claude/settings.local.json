@@ -110,7 +110,8 @@
       "Bash(source:*)",
       "Bash(uv run:*)",
       "Bash(/opt/homebrew/bin/python3:*)",
-      "Bash(~/.pyenv/versions/3.10.13/bin/python:*)"
+      "Bash(~/.pyenv/versions/3.10.13/bin/python:*)",
+      "Bash(cp:*)"
     ],
     "deny": []
   }

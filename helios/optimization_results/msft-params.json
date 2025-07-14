@@ -1,0 +1,143 @@
+{
+  "parameters": {
+    "weight_trend": 0.37498858106897254,
+    "weight_volatility": 0.8925578016965309,
+    "weight_exhaustion": 0.1866620837202406,
+    "lookback_int": 20.0,
+    "stop_loss_multiplier_strong": 4.5,
+    "stop_loss_multiplier_weak": 1.5,
+    "entry_step_size": 0.7,
+    "max_position_pct": 0.6,
+    "strong_bull_threshold": 20.0,
+    "weak_bull_threshold": 2.9,
+    "neutral_threshold_upper": 1.8,
+    "neutral_threshold_lower": -4.2,
+    "weak_bear_threshold": -6.9,
+    "strong_bear_threshold": -14.6
+  },
+  "fitness": 8.977867014405597,
+  "fitness_metric": "sortino",
+  "allow_shorts": false,
+  "data_file": "/Users/grantdickinson/repos/trdr/data/MSFT.csv",
+  "dollar_threshold": 137367245.7,
+  "population_size": 20,
+  "generations": 20,
+  "parameter_ranges": {
+    "weight_trend": {
+      "type": "min_max",
+      "min": 0.0,
+      "max": 1.0
+    },
+    "weight_volatility": {
+      "type": "min_max",
+      "min": 0.0,
+      "max": 1.0
+    },
+    "weight_exhaustion": {
+      "type": "min_max",
+      "min": 0.0,
+      "max": 1.0
+    },
+    "lookback_int": {
+      "type": "min_max",
+      "min": 10,
+      "max": 50
+    },
+    "strong_bull_threshold": {
+      "type": "log_range",
+      "values": [
+        6.0,
+        7.6,
+        11.4,
+        20.0
+      ]
+    },
+    "weak_bull_threshold": {
+      "type": "log_range",
+      "values": [
+        2.0,
+        2.9,
+        5.1,
+        10.0
+      ]
+    },
+    "neutral_threshold_upper": {
+      "type": "log_range",
+      "values": [
+        1.2,
+        1.8,
+        3.0,
+        6.0
+      ]
+    },
+    "neutral_threshold_lower": {
+      "type": "log_range",
+      "values": [
+        -6.0,
+        -5.4,
+        -4.2,
+        -1.2
+      ]
+    },
+    "weak_bear_threshold": {
+      "type": "log_range",
+      "values": [
+        -10.0,
+        -9.1,
+        -6.9,
+        -2.0
+      ]
+    },
+    "strong_bear_threshold": {
+      "type": "log_range",
+      "values": [
+        -20.0,
+        -18.4,
+        -14.6,
+        -6.0
+      ]
+    },
+    "stop_loss_multiplier_strong": {
+      "type": "log_range",
+      "values": [
+        1.5,
+        1.8,
+        2.7,
+        4.5
+      ]
+    },
+    "stop_loss_multiplier_weak": {
+      "type": "log_range",
+      "values": [
+        0.8,
+        1.0,
+        1.5,
+        2.7
+      ]
+    },
+    "entry_step_size": {
+      "type": "log_range",
+      "values": [
+        0.2,
+        0.2,
+        0.4,
+        0.7
+      ]
+    },
+    "max_position_pct": {
+      "type": "log_range",
+      "values": [
+        0.6,
+        0.6,
+        0.8,
+        1.0
+      ]
+    }
+  },
+  "fitness_progression": {
+    "initial": 8.499607873544958,
+    "final": 8.977867014405597,
+    "improvement": 0.47825914086063825,
+    "generations_to_converge": 9
+  }
+}

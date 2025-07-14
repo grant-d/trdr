@@ -8,6 +8,35 @@ import numpy as np
 from typing import Dict, Tuple, Optional
 
 
+def calculate_geometric_mean(returns: pd.Series) -> float:
+    """
+    Calculate geometric mean of returns
+    
+    Parameters:
+    -----------
+    returns : pd.Series
+        Series of returns (as decimals, not percentages)
+    
+    Returns:
+    --------
+    float
+        Geometric mean return
+    """
+    returns = returns.dropna()
+    if len(returns) == 0:
+        return 0.0
+    
+    # Convert returns to growth factors (1 + r)
+    growth_factors = 1 + returns
+    
+    # Calculate geometric mean: (product of growth factors)^(1/n) - 1
+    # Convert to numpy for consistent types
+    product = np.prod(growth_factors.values)
+    geometric_mean = product ** (1 / len(returns)) - 1
+    
+    return float(geometric_mean)
+
+
 def calculate_returns_metrics(returns: pd.Series, risk_free_rate: float = 0.02) -> Dict[str, float]:
     """
     Calculate comprehensive return metrics
@@ -30,6 +59,9 @@ def calculate_returns_metrics(returns: pd.Series, risk_free_rate: float = 0.02) 
         return {
             'total_return': 0,
             'annualized_return': 0,
+            'annualized_return_geometric': 0,
+            'arithmetic_mean_return': 0,
+            'geometric_mean_return': 0,
             'volatility': 0,
             'sharpe_ratio': 0,
             'sortino_ratio': 0,
@@ -39,17 +71,31 @@ def calculate_returns_metrics(returns: pd.Series, risk_free_rate: float = 0.02) 
         }
     
     # Basic metrics
-    total_return = (1 + returns).prod() - 1
+    # Use numpy for consistent scalar types
+    returns_array = np.asarray(returns.values)
+    total_return = float(np.prod(1.0 + returns_array) - 1.0)
+    
+    # Calculate both arithmetic and geometric means
+    arithmetic_mean = float(np.mean(returns.values))
+    geometric_mean = calculate_geometric_mean(returns)
     
     # Annualized metrics (assuming daily returns)
     periods_per_year = 252
     n_periods = len(returns)
+    
+    # Traditional annualized return (using total return)
     annualized_return = (1 + total_return) ** (periods_per_year / n_periods) - 1
-    annualized_vol = returns.std() * np.sqrt(periods_per_year)
+    
+    # Geometric annualized return (more accurate for compounding)
+    annualized_return_geometric = (1 + geometric_mean) ** periods_per_year - 1
+    
+    annualized_vol = float(np.std(returns.values)) * np.sqrt(periods_per_year)
     
     # Sharpe Ratio
     excess_returns = returns - risk_free_rate / periods_per_year
-    sharpe_ratio = excess_returns.mean() / returns.std() * np.sqrt(periods_per_year) if returns.std() > 0 else 0
+    returns_std = float(np.std(returns.values))
+    excess_mean = float(np.mean(excess_returns.values))
+    sharpe_ratio = excess_mean / returns_std * np.sqrt(periods_per_year) if returns_std > 0 else 0.0
     
     # Sortino Ratio
     sortino_ratio = calculate_sortino_ratio(returns, risk_free_rate)
@@ -57,14 +103,18 @@ def calculate_returns_metrics(returns: pd.Series, risk_free_rate: float = 0.02) 
     # Maximum Drawdown and Calmar Ratio
     cumulative_returns = (1 + returns).cumprod()
     max_drawdown = calculate_max_drawdown(cumulative_returns)
-    calmar_ratio = annualized_return / abs(max_drawdown) if max_drawdown != 0 else 0
+    calmar_ratio = annualized_return / abs(max_drawdown) if max_drawdown != 0 else 0.0
     
     # Win rate
-    win_rate = (returns > 0).mean() * 100
+    returns_array = np.asarray(returns.values)
+    win_rate = float(np.mean(returns_array > 0.0)) * 100
     
     return {
         'total_return': total_return * 100,  # As percentage
         'annualized_return': annualized_return * 100,
+        'annualized_return_geometric': annualized_return_geometric * 100,
+        'arithmetic_mean_return': arithmetic_mean * 100,
+        'geometric_mean_return': geometric_mean * 100,
         'volatility': annualized_vol * 100,
         'sharpe_ratio': sharpe_ratio,
         'sortino_ratio': sortino_ratio,
@@ -117,7 +167,7 @@ def calculate_sortino_ratio(returns: pd.Series, risk_free_rate: float = 0.02,
         return 10.0  # Cap at 10 if no downside deviation
     
     # Annualized Sortino Ratio
-    sortino = excess_returns.mean() / downside_std * np.sqrt(periods_per_year)
+    sortino = float(np.mean(excess_returns.values)) / downside_std * np.sqrt(periods_per_year)
     
     return sortino
 
@@ -165,7 +215,7 @@ def calculate_sortino_ratio_classic(returns: pd.Series, mar: float = 0.0,
     # Annualized Sortino Ratio
     sortino = (mean_return - mar) * np.sqrt(periods_per_year) / downside_deviation
     
-    return sortino
+    return float(sortino)
 
 
 def calculate_max_drawdown(cumulative_returns: pd.Series) -> float:
@@ -192,7 +242,7 @@ def calculate_max_drawdown(cumulative_returns: pd.Series) -> float:
     drawdown = (cumulative_returns - running_max) / running_max
     
     # Return maximum drawdown (most negative value)
-    return drawdown.min()
+    return float(np.min(drawdown.values))
 
 
 def calculate_calmar_ratio(returns: pd.Series, periods_per_year: int = 252) -> float:
@@ -216,7 +266,8 @@ def calculate_calmar_ratio(returns: pd.Series, periods_per_year: int = 252) -> f
         return 0
     
     # Calculate annualized return
-    total_return = (1 + returns).prod() - 1
+    returns_array = np.asarray(returns.values)
+    total_return = float(np.prod(1.0 + returns_array) - 1.0)
     n_periods = len(returns)
     annualized_return = (1 + total_return) ** (periods_per_year / n_periods) - 1
     
@@ -227,7 +278,7 @@ def calculate_calmar_ratio(returns: pd.Series, periods_per_year: int = 252) -> f
     if max_dd == 0:
         return 0
     
-    return annualized_return / abs(max_dd)
+    return float(annualized_return / abs(max_dd))
 
 
 def evaluate_strategy_performance(results_df: pd.DataFrame, 
@@ -258,7 +309,7 @@ def evaluate_strategy_performance(results_df: pd.DataFrame,
     metrics = calculate_returns_metrics(returns)
     
     # Add strategy-specific metrics
-    final_value = portfolio_values.iloc[-1]
+    final_value = float(portfolio_values.values[-1])
     metrics['final_portfolio_value'] = final_value
     metrics['total_pnl'] = final_value - initial_capital
     metrics['total_return_pct'] = (final_value / initial_capital - 1) * 100
@@ -375,6 +426,7 @@ def generate_performance_report(results_df: pd.DataFrame, trades_summary: Dict,
     report.append(f"Total P&L:             ${metrics['total_pnl']:,.2f}")
     report.append(f"Total Return:          {metrics['total_return_pct']:.2f}%")
     report.append(f"Annualized Return:     {metrics['annualized_return']:.2f}%")
+    report.append(f"Geometric Ann. Return: {metrics.get('annualized_return_geometric', metrics['annualized_return']):.2f}%")
     
     # Risk Metrics
     report.append("\nRISK METRICS")
@@ -384,6 +436,12 @@ def generate_performance_report(results_df: pd.DataFrame, trades_summary: Dict,
     report.append(f"Sharpe Ratio:          {metrics['sharpe_ratio']:.2f}")
     report.append(f"Sortino Ratio:         {metrics['sortino_ratio']:.2f}")
     report.append(f"Calmar Ratio:          {metrics['calmar_ratio']:.2f}")
+    
+    # Mean Returns (for advanced analysis)
+    report.append("\nRETURN STATISTICS")
+    report.append("-" * 30)
+    report.append(f"Arithmetic Mean:       {metrics.get('arithmetic_mean_return', 0):.4f}%")
+    report.append(f"Geometric Mean:        {metrics.get('geometric_mean_return', 0):.4f}%")
     
     # Trading Statistics
     report.append("\nTRADING STATISTICS")

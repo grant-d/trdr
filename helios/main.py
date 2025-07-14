@@ -210,8 +210,11 @@ def main():
     optimize_parser.add_argument('--generations', type=int, default=20, help='Number of generations')
     optimize_parser.add_argument('--fitness', choices=['sortino', 'calmar'], default='sortino',
                                 help='Fitness metric to optimize')
-    optimize_parser.add_argument('--save-results', action='store_true', help='Save optimization results and parameters')
     optimize_parser.add_argument('--allow-shorts', action='store_true', help='Allow short positions (disabled by default)')
+    optimize_parser.add_argument('--output', nargs='?', const='', default=None,
+                                help='Save results (use alone for params.json, or with prefix like --output msft for msft-params.json)')
+    optimize_parser.add_argument('--test', action='store_true', help='Run test immediately after optimization')
+    optimize_parser.add_argument('--plot', action='store_true', help='Generate plots after optimization (requires --test)')
     
     # Test command (formerly run-optimized)
     test_parser = subparsers.add_parser('test', help='Test strategy with saved optimization parameters')
@@ -541,8 +544,8 @@ def handle_optimize_command(args):
         # Sound notification when optimization completes
         play_completion_sound()
         
-        # Save results if requested
-        if args.save_results:
+        # Save results if output specified
+        if args.output is not None:
             print("\nSaving optimization results...")
             results_dir = Path("./optimization_results")
             results_dir.mkdir(exist_ok=True)
@@ -562,19 +565,53 @@ def handle_optimize_command(args):
                 "dollar_threshold": dollar_threshold,  # None if disabled, number if enabled
                 "population_size": args.population,
                 "generations": args.generations,
-                "parameter_ranges": {k: v.to_dict() for k, v in param_ranges.items()}
+                "parameter_ranges": {k: v.to_dict() for k, v in param_ranges.items()},
+                "fitness_progression": {
+                    "initial": float(fitness_history[0]) if fitness_history else None,
+                    "final": float(fitness_history[-1]) if fitness_history else None,
+                    "improvement": float(fitness_history[-1] - fitness_history[0]) if fitness_history else None,
+                    "generations_to_converge": len(set(fitness_history))  # Unique fitness values
+                }
             }
             
-            params_file = results_dir / "optimized_parameters.json"
+            # Use output prefix if provided
+            if args.output and args.output.strip():  # If output has a value
+                prefix = args.output.strip()
+                params_filename = f"{prefix}-params.json"
+            else:  # If output is empty string or just flag
+                params_filename = "params.json"
+            
+            params_file = results_dir / params_filename
             with open(params_file, "w") as f:
                 json.dump(params_data, f, indent=2)
             print(f"   Optimized parameters saved to: {params_file}")
-            
-            # Save fitness history
-            fitness_file = results_dir / "fitness_history.json"
-            with open(fitness_file, "w") as f:
-                json.dump({"fitness_history": [float(f) for f in fitness_history]}, f, indent=2)
-            print(f"   Fitness history saved to: {fitness_file}")
+
+            # Run test if requested
+            if args.test:
+                print("\n" + "="*60)
+                print("Running test with optimized parameters...")
+                print("="*60)
+                
+                # Create test args object
+                class TestArgs:
+                    def __init__(self):
+                        self.params = str(params_file)
+                        self.data = None  # Use saved data path
+                        self.dollar_threshold = None  # Use saved threshold
+                        self.capital = 100000
+                        self.plot = args.plot  # Pass through plot flag
+                        self.allow_shorts = False  # Use saved setting
+                        self.save_results = False  # Default for test command
+                
+                test_args = TestArgs()
+                
+                # Run the test
+                result = handle_test_command(test_args)
+                
+                if result != 0:
+                    print("Warning: Test command failed")
+                elif args.plot:
+                    print("\nPlots have been generated (if test was successful)")
     
     return 0
 

@@ -186,17 +186,62 @@ class GeneticAlgorithm:
         self.elite_size = max(1, int(population_size * elitism_rate))
     
     def create_individual(self) -> Individual:
-        """Create a random individual using polymorphic parameter ranges"""
+        """Create a random individual with enforced threshold constraints
+        
+        Generates parameters in two phases:
+        1. Non-threshold parameters are sampled normally
+        2. Threshold parameters are generated in a loop until valid ordering is achieved
+           (strong_bull > weak_bull > neutral_upper > neutral_lower > weak_bear > strong_bear)
+        
+        Falls back to default valid thresholds after 100 attempts to prevent infinite loops.
+        """
         genes = {}
         
+        # First, generate non-threshold parameters
         for param, param_range in self.parameter_ranges.items():
-            if param.endswith('_int'):
-                # Integer parameters - sample and convert to int
-                value = param_range.sample()
-                genes[param] = int(value)
-            else:
-                # All other parameters use the parameter range's sample method
-                genes[param] = param_range.sample()
+            if 'threshold' not in param:
+                if param.endswith('_int'):
+                    # Integer parameters - sample and convert to int
+                    value = param_range.sample()
+                    genes[param] = int(value)
+                else:
+                    # All other parameters use the parameter range's sample method
+                    genes[param] = param_range.sample()
+        
+        # Generate threshold parameters with constraints
+        # Keep trying until we get valid thresholds
+        max_attempts = 100
+        for attempt in range(max_attempts):
+            # Sample all thresholds
+            for param, param_range in self.parameter_ranges.items():
+                if 'threshold' in param:
+                    genes[param] = param_range.sample()
+            
+            # Check constraints
+            strong_bull = genes.get('strong_bull_threshold', 50.0)
+            weak_bull = genes.get('weak_bull_threshold', 20.0)
+            neutral_upper = genes.get('neutral_threshold_upper', 10.0)
+            neutral_lower = genes.get('neutral_threshold_lower', -10.0)
+            weak_bear = genes.get('weak_bear_threshold', -20.0)
+            strong_bear = genes.get('strong_bear_threshold', -50.0)
+            
+            # Validate ordering
+            if (strong_bull > weak_bull and 
+                weak_bull > neutral_upper and
+                neutral_upper > neutral_lower and
+                neutral_lower > weak_bear and
+                weak_bear > strong_bear):
+                # All constraints satisfied
+                break
+        else:
+            # If we couldn't generate valid thresholds randomly, fix them
+            # Set default valid thresholds
+            genes['strong_bull_threshold'] = 50.0
+            genes['weak_bull_threshold'] = 20.0
+            genes['neutral_threshold_upper'] = 10.0
+            genes['neutral_threshold_lower'] = -10.0
+            genes['weak_bear_threshold'] = -20.0
+            genes['strong_bear_threshold'] = -50.0
         
         return Individual(genes=genes)
     
@@ -329,14 +374,14 @@ class GeneticAlgorithm:
                 # Volatility-aware fitness adjustments
                 # Low-vol assets need different expectations
                 if volatility_scale < 0.3:  # Very stable assets (blue-chips)
-                    fitness_multiplier = 1.2  # Reward consistency
-                    sharpe_weight = 0.6  # Focus more on risk-adjusted returns
+                    fitness_multiplier = 1.5  # Reward consistency more
+                    sharpe_weight = 0.1  # Focus on Sortino for trend following
                 elif volatility_scale < 0.5:  # Traditional stocks
-                    fitness_multiplier = 1.0
-                    sharpe_weight = 0.4
+                    fitness_multiplier = 1.2  # Slight boost for stocks
+                    sharpe_weight = 0.05  # Minimal Sharpe weight - Sortino is better for our strategy
                 else:  # High volatility (crypto, etc)
-                    fitness_multiplier = 0.8  # Slightly reduce to normalize across assets
-                    sharpe_weight = 0.2  # Focus more on absolute returns
+                    fitness_multiplier = 1.0  # Baseline
+                    sharpe_weight = 0.0  # Pure Sortino for high volatility assets
                 
                 if len(downside_returns) == 0 or total_return <= 0:
                     # No downside or negative total return
@@ -345,20 +390,31 @@ class GeneticAlgorithm:
                     downside_deviation = downside_returns.std()
                     if downside_deviation == 0 or np.isnan(downside_deviation):
                         # Perfect strategy - high but finite score
-                        base_fitness = min(50.0, annualized_return * 20 * fitness_multiplier)
+                        base_fitness = min(10.0, annualized_return * 20 * fitness_multiplier)
                     else:
                         # Standard Sortino calculation using actual time-based annualization
                         annualized_downside_dev = downside_deviation * np.sqrt(periods_per_year)
                         sortino = annualized_return / annualized_downside_dev
                         
                         # Also calculate Sharpe for stable assets
-                        sharpe = annualized_return / (returns.std() * np.sqrt(periods_per_year))
+                        returns_vol = returns.std() * np.sqrt(periods_per_year)
+                        if returns_vol > 0:
+                            sharpe = annualized_return / returns_vol
+                        else:
+                            sharpe = 0.0
+                        
+                        # Cap Sharpe contribution to avoid negative drag
+                        # If Sharpe is negative but Sortino is positive, limit the damage
+                        if sharpe < 0 and sortino > 0:
+                            sharpe_contribution = max(sharpe * sharpe_weight, -0.5)  # Cap negative contribution
+                        else:
+                            sharpe_contribution = sharpe * sharpe_weight
                         
                         # Blend Sortino and Sharpe based on asset type
-                        blended_ratio = sortino * (1 - sharpe_weight) + sharpe * sharpe_weight
+                        blended_ratio = sortino * (1 - sharpe_weight) + sharpe_contribution
                         
                         # Apply volatility adjustment for more realistic fitness
-                        base_fitness = max(-10.0, min(50.0, blended_ratio * fitness_multiplier))
+                        base_fitness = max(-10.0, min(10.0, blended_ratio * fitness_multiplier))
                 
                 # Handle edge cases
                 if np.isnan(base_fitness) or np.isinf(base_fitness):
@@ -403,10 +459,24 @@ class GeneticAlgorithm:
             if np.isnan(max_drawdown_pct) or np.isinf(max_drawdown_pct):
                 max_drawdown_pct = 100.0
             
-            # Combined fitness with drawdown penalty (from old implementation)
-            weight_primary = 0.7
-            weight_drawdown = 0.3
-            fitness = (base_fitness * weight_primary) - (max_drawdown_pct * weight_drawdown)
+            # Combined fitness with drawdown penalty (simplified approach)
+            # Use the base fitness (Sortino/Sharpe blend) directly for stocks
+            # Apply minimal drawdown penalty since Sortino already accounts for downside risk
+            
+            if volatility_scale < 0.5:  # Stocks
+                # For stocks, use mostly the risk-adjusted return metrics
+                # Small penalty for extreme drawdowns only
+                if max_drawdown_pct > 20:  # Only penalize large drawdowns
+                    drawdown_penalty = (max_drawdown_pct - 20) / 100 * 0.5
+                else:
+                    drawdown_penalty = 0
+                fitness = base_fitness - drawdown_penalty
+            else:  # Crypto and high volatility
+                # For crypto, drawdown matters more
+                weight_primary = 0.8
+                weight_drawdown = 0.2
+                drawdown_ratio = max_drawdown_pct / 100.0
+                fitness = (base_fitness * weight_primary) - (drawdown_ratio * 5 * weight_drawdown)
             
             # Debug output (remove later)
             if False:  # Set to True for debugging
@@ -422,6 +492,31 @@ class GeneticAlgorithm:
                 fitness -= 1.0
             if lookback < 5 or lookback > 100:
                 fitness -= 1.0
+            
+            # Penalty for inverted thresholds (critical for proper strategy operation)
+            # Bull thresholds: strong should be > weak
+            strong_bull = genes.get('strong_bull_threshold', 50.0)
+            weak_bull = genes.get('weak_bull_threshold', 20.0)
+            if strong_bull <= weak_bull:
+                fitness -= 5.0  # Heavy penalty
+                if False:  # Debug
+                    print(f"  Inverted bull thresholds: strong={strong_bull:.1f} <= weak={weak_bull:.1f}")
+            
+            # Bear thresholds: strong should be < weak (more negative)
+            strong_bear = genes.get('strong_bear_threshold', -50.0)
+            weak_bear = genes.get('weak_bear_threshold', -20.0)
+            if strong_bear >= weak_bear:
+                fitness -= 5.0  # Heavy penalty
+                if False:  # Debug
+                    print(f"  Inverted bear thresholds: strong={strong_bear:.1f} >= weak={weak_bear:.1f}")
+            
+            # Neutral thresholds should be between weak bull and weak bear
+            neutral_upper = genes.get('neutral_threshold_upper', 20.0)
+            neutral_lower = genes.get('neutral_threshold_lower', -20.0)
+            if neutral_upper >= weak_bull or neutral_lower <= weak_bear:
+                fitness -= 2.0
+            if neutral_upper <= neutral_lower:
+                fitness -= 3.0
             
             # Volatility-aware penalty for too few trades
             # Low-vol assets naturally trade less frequently
@@ -466,7 +561,12 @@ class GeneticAlgorithm:
         return max(tournament, key=lambda x: x.fitness)
     
     def crossover(self, parent1: Individual, parent2: Individual) -> Tuple[Individual, Individual]:
-        """Perform crossover between two parents"""
+        """Perform crossover between two parents with threshold constraint fixing
+        
+        After standard single-point crossover, both children are checked for 
+        threshold constraint violations. Any violations are fixed by swapping 
+        the values to maintain proper ordering.
+        """
         if random.random() > self.crossover_rate:
             return parent1, parent2
         
@@ -481,14 +581,47 @@ class GeneticAlgorithm:
             param = param_names[i]
             genes1[param], genes2[param] = genes2[param], genes1[param]
         
+        # Check if both children still have valid threshold constraints
+        def fix_thresholds(genes):
+            """Fix threshold ordering if needed"""
+            strong_bull = genes.get('strong_bull_threshold', 50.0)
+            weak_bull = genes.get('weak_bull_threshold', 20.0)
+            neutral_upper = genes.get('neutral_threshold_upper', 10.0)
+            neutral_lower = genes.get('neutral_threshold_lower', -10.0)
+            weak_bear = genes.get('weak_bear_threshold', -20.0)
+            strong_bear = genes.get('strong_bear_threshold', -50.0)
+            
+            # If constraints are violated, swap values to fix them
+            if strong_bull <= weak_bull:
+                genes['strong_bull_threshold'], genes['weak_bull_threshold'] = max(strong_bull, weak_bull), min(strong_bull, weak_bull)
+            if weak_bull <= neutral_upper:
+                genes['weak_bull_threshold'], genes['neutral_threshold_upper'] = max(weak_bull, neutral_upper), min(weak_bull, neutral_upper)
+            if neutral_upper <= neutral_lower:
+                genes['neutral_threshold_upper'], genes['neutral_threshold_lower'] = max(neutral_upper, neutral_lower), min(neutral_upper, neutral_lower)
+            if neutral_lower <= weak_bear:
+                genes['neutral_threshold_lower'], genes['weak_bear_threshold'] = max(neutral_lower, weak_bear), min(neutral_lower, weak_bear)
+            if weak_bear <= strong_bear:
+                genes['weak_bear_threshold'], genes['strong_bear_threshold'] = max(weak_bear, strong_bear), min(weak_bear, strong_bear)
+        
+        fix_thresholds(genes1)
+        fix_thresholds(genes2)
+        
         return Individual(genes=genes1), Individual(genes=genes2)
     
     def mutate(self, individual: Individual) -> Individual:
-        """Mutate an individual using polymorphic parameter ranges"""
+        """Mutate an individual while maintaining threshold constraints
+        
+        Mutation strategy:
+        - Non-threshold parameters mutate normally based on mutation rate
+        - Threshold parameters only accept mutations that preserve valid ordering
+        - Tries up to 10 times to find a valid mutation for each threshold
+        - Reverts to original value if no valid mutation is found
+        """
         genes = individual.genes.copy()
         
+        # Mutate non-threshold parameters normally
         for param, param_range in self.parameter_ranges.items():
-            if random.random() < self.mutation_rate:
+            if 'threshold' not in param and random.random() < self.mutation_rate:
                 if param.endswith('_int'):
                     # Integer mutation - mutate and convert to int
                     mutated_value = param_range.mutate(genes[param])
@@ -496,6 +629,38 @@ class GeneticAlgorithm:
                 else:
                     # All other parameters use the parameter range's mutate method
                     genes[param] = param_range.mutate(genes[param])
+        
+        # Mutate threshold parameters with constraint checking
+        threshold_params = [p for p in self.parameter_ranges.keys() if 'threshold' in p]
+        for param in threshold_params:
+            if random.random() < self.mutation_rate:
+                param_range = self.parameter_ranges[param]
+                # Try multiple times to get valid mutation
+                for _ in range(10):
+                    new_value = param_range.mutate(genes[param])
+                    
+                    # Temporarily set the new value
+                    old_value = genes[param]
+                    genes[param] = new_value
+                    
+                    # Check if constraints are still satisfied
+                    strong_bull = genes.get('strong_bull_threshold', 50.0)
+                    weak_bull = genes.get('weak_bull_threshold', 20.0)
+                    neutral_upper = genes.get('neutral_threshold_upper', 10.0)
+                    neutral_lower = genes.get('neutral_threshold_lower', -10.0)
+                    weak_bear = genes.get('weak_bear_threshold', -20.0)
+                    strong_bear = genes.get('strong_bear_threshold', -50.0)
+                    
+                    if (strong_bull > weak_bull and 
+                        weak_bull > neutral_upper and
+                        neutral_upper > neutral_lower and
+                        neutral_lower > weak_bear and
+                        weak_bear > strong_bear):
+                        # Constraints satisfied, keep the mutation
+                        break
+                    else:
+                        # Revert the mutation
+                        genes[param] = old_value
         
         return Individual(genes=genes)
     
