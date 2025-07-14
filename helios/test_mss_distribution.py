@@ -8,7 +8,7 @@ from data_processing import create_dollar_bars, prepare_data
 from factors import calculate_mss
 
 # Load test data
-df = pd.read_csv('/Users/grantdickinson/repos/trdr/data/BTCUSD-feed.csv', parse_dates=True, index_col=0)
+df = pd.read_csv('./data/BTCUSD.csv', parse_dates=True, index_col=0)
 df.columns = df.columns.str.lower()
 df = prepare_data(df)
 

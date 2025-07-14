@@ -26,7 +26,7 @@ from performance import (
 )
 from trading_context import TradingContext, TradingContextManager
 from playbook import Playbook, PlaybookManager
-from optimization import GeneticAlgorithm, WalkForwardOptimizer, create_default_parameter_ranges
+from optimization import GeneticAlgorithm, WalkForwardOptimizer
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
@@ -41,6 +41,18 @@ def setup_environment():
     data_path = os.getenv("HELIOS_DATA_PATH", "./data")
 
     return {"api_key": api_key, "data_path": Path(data_path)}
+
+
+def play_completion_sound():
+    """Play a sound notification when process completes"""
+    try:
+        import os
+        os.system("afplay /System/Library/Sounds/Glass.aiff")  # macOS
+    except:
+        try:
+            print("\a")  # Terminal bell as fallback
+        except:
+            pass
 
 
 def run_helios_analysis(df, config):
@@ -189,9 +201,7 @@ def main():
     # Optimize command
     optimize_parser = subparsers.add_parser('optimize', help='Run genetic algorithm optimization')
     optimize_parser.add_argument("--data", "-d", required=True, help="Path to data file")
-    optimize_parser.add_argument('--enhanced', action='store_true', help='Use enhanced strategy with gradual entries and regime thresholds')
-    optimize_parser.add_argument('--dollar-bars', action='store_true', help='Convert to dollar bars before optimization')
-    optimize_parser.add_argument('--dollar-threshold', type=float, default=1000000, help='Dollar volume threshold for bars')
+    optimize_parser.add_argument('--dollar-threshold', default='auto', help='Dollar volume threshold for bars (default: auto-detect, number, or "none" to disable dollar bars)')
     optimize_parser.add_argument('--context-id', help='Context ID to optimize for')
     optimize_parser.add_argument('--walk-forward', action='store_true', help='Use walk-forward optimization')
     optimize_parser.add_argument('--window-days', type=int, default=365, help='Training window in days')
@@ -207,12 +217,12 @@ def main():
     run_opt_parser = subparsers.add_parser('run-optimized', help='Run backtest with saved optimization parameters')
     run_opt_parser.add_argument("--data", "-d", required=True, help="Path to data file")
     run_opt_parser.add_argument("--params", "-p", required=True, help="Path to optimized parameters JSON file")
-    run_opt_parser.add_argument('--dollar-bars', action='store_true', help='Convert to dollar bars before analysis')
-    run_opt_parser.add_argument('--dollar-threshold', type=float, default=1000000, help='Dollar volume threshold for bars')
+    run_opt_parser.add_argument('--dollar-threshold', default=None, help='Dollar volume threshold for bars (number, "auto", or "none" to disable - overrides saved setting if specified)')
     run_opt_parser.add_argument('--capital', type=float, default=100000, help='Initial capital')
     run_opt_parser.add_argument('--save-results', action='store_true', help='Save backtest results')
     run_opt_parser.add_argument('--output-dir', default='./strategy_results', help='Output directory for results')
     run_opt_parser.add_argument('--allow-shorts', action='store_true', help='Allow short positions (disabled by default)')
+    run_opt_parser.add_argument('--plot', action='store_true', help='Show performance plots')
     
     # Backtest command
     backtest_parser = subparsers.add_parser('backtest', help='Run backtest with trading context')
@@ -328,8 +338,11 @@ def main():
         print("  backtest     - Run backtest with trading context")
         print("\nExamples:")
         print("  python -m helios analyze --data data.csv --dollar-bars")
-        print("  python -m helios optimize --data data.csv --enhanced --population 50 --generations 20")
+        print("  python -m helios optimize --data data.csv --population 50 --generations 20")
+        print("  python -m helios optimize --data data.csv --dollar-threshold none --population 50")
         print("  python -m helios run-optimized --data data.csv --params results/optimized_parameters.json")
+        print("  python -m helios run-optimized --data data.csv --params results/optimized_parameters.json --plot")
+        print("  python -m helios run-optimized --data data.csv --params results/optimized_parameters.json --dollar-threshold none")
         print("  python -m helios context create --instrument BTC --exchange COINBASE --timeframe 1h")
         print("\nFor command help:")
         print("  python -m helios <command> --help")
@@ -449,23 +462,44 @@ def handle_optimize_command(args):
         print(f"Error loading data: {e}")
         return 1
     
-    # Convert to dollar bars if requested
-    if args.dollar_bars:
-        print(f"Creating dollar bars (threshold: ${args.dollar_threshold:,.0f})...")
-        df = create_dollar_bars(df, args.dollar_threshold)
+    # Parse dollar threshold argument
+    dollar_threshold_arg = args.dollar_threshold
+    use_dollar_bars = True
+    dollar_threshold = None
+    
+    if dollar_threshold_arg in ["none", "off", "disable", "false"]:
+        use_dollar_bars = False
+        print("Using traditional candle data (dollar bars disabled)")
+    elif dollar_threshold_arg == "auto":
+        # Auto-detect threshold
+        from optimization import auto_detect_dollar_thresholds
+        threshold_range = auto_detect_dollar_thresholds(df)
+        # Use the median value from the detected range for this optimization run
+        dollar_threshold = threshold_range.values[len(threshold_range.values)//2]
+        print(f"Auto-detected dollar threshold: ${dollar_threshold:,.0f}")
+    else:
+        try:
+            dollar_threshold = float(dollar_threshold_arg)
+            print(f"Using specified dollar threshold: ${dollar_threshold:,.0f}")
+        except (ValueError, TypeError):
+            print(f"Warning: Invalid dollar threshold '{dollar_threshold_arg}', using auto-detect")
+            from optimization import auto_detect_dollar_thresholds
+            threshold_range = auto_detect_dollar_thresholds(df)
+            dollar_threshold = threshold_range.values[len(threshold_range.values)//2]
+            print(f"Auto-detected dollar threshold: ${dollar_threshold:,.0f}")
+    
+    if use_dollar_bars and dollar_threshold is not None:
+        # Convert to dollar bars
+        print(f"Creating dollar bars (threshold: ${dollar_threshold:,.0f})...")
+        df = create_dollar_bars(df, dollar_threshold)
         print(f"Dollar bars created: {len(df)}")
     
-    # Create GA with appropriate parameter ranges
-    if args.enhanced:
-        from optimization import create_enhanced_parameter_ranges
-        param_ranges = create_enhanced_parameter_ranges()
-        print("Using enhanced strategy with gradual entries and regime thresholds")
-    else:
-        param_ranges = create_default_parameter_ranges()
-        print("Using basic strategy")
+    from optimization import create_enhanced_parameter_ranges
+    param_ranges = create_enhanced_parameter_ranges()
+    print("Using enhanced strategy with gradual entries and regime thresholds")
         
     ga = GeneticAlgorithm(
-        parameter_ranges=param_ranges,
+        parameter_config=param_ranges,
         population_size=args.population,
         generations=args.generations,
         fitness_metric=args.fitness,
@@ -485,6 +519,9 @@ def handle_optimize_command(args):
         print(f"\nAverage Train Fitness: {results['avg_train_fitness']:.4f}")
         print(f"Average Test Fitness: {results['avg_test_fitness']:.4f}")
         
+        # Sound notification when walk-forward optimization completes
+        play_completion_sound()
+        
         # Update playbook if context specified
         if args.context_id:
             playbook_mgr = PlaybookManager()
@@ -502,6 +539,9 @@ def handle_optimize_command(args):
         for param, value in best_individual.genes.items():
             print(f"  {param}: {value:.4f}")
         
+        # Sound notification when optimization completes
+        play_completion_sound()
+        
         # Save results if requested
         if args.save_results:
             print("\nSaving optimization results...")
@@ -514,14 +554,12 @@ def handle_optimize_command(args):
                 "parameters": {k: float(v) for k, v in best_individual.genes.items()},
                 "fitness": float(best_individual.fitness),
                 "fitness_metric": args.fitness,
-                "enhanced_strategy": args.enhanced,
                 "allow_shorts": args.allow_shorts,
                 "data_file": args.data,
-                "dollar_bars": args.dollar_bars,
-                "dollar_threshold": args.dollar_threshold if args.dollar_bars else None,
+                "dollar_threshold": dollar_threshold,  # None if disabled, number if enabled
                 "population_size": args.population,
                 "generations": args.generations,
-                "parameter_ranges": {k: [float(v[0]), float(v[1])] for k, v in param_ranges.items()}
+                "parameter_ranges": {k: v.to_dict() for k, v in param_ranges.items()}
             }
             
             params_file = results_dir / "optimized_parameters.json"
@@ -551,16 +589,18 @@ def handle_run_optimized_command(args):
             params_data = json.load(f)
         
         opt_params = params_data['parameters']
-        enhanced_strategy = params_data.get('enhanced_strategy', False)
-        saved_allow_shorts = params_data.get('allow_shorts', False)
-        # Use command line flag if provided, otherwise use saved setting
-        allow_shorts = args.allow_shorts or saved_allow_shorts
+        allow_shorts = args.allow_shorts or params_data.get('allow_shorts', False)
+        dollar_threshold = params_data.get('dollar_threshold')
+        use_dollar_bars = dollar_threshold is not None
         
-        print("Loaded parameters:")
+        print("Loaded strategy parameters:")
         for param, value in sorted(opt_params.items()):
             print(f"  {param}: {value:.4f}")
-        print(f"Strategy type: {'Enhanced' if enhanced_strategy else 'Basic'}")
+        print(f"Original fitness: {params_data.get('fitness', 'N/A')}")
         print(f"Allow shorts: {allow_shorts}")
+        print(f"Use dollar bars: {use_dollar_bars}")
+        if use_dollar_bars and dollar_threshold:
+            print(f"Dollar threshold: ${dollar_threshold:,.0f}")
         
     except Exception as e:
         print(f"Error loading parameters: {e}")
@@ -593,11 +633,33 @@ def handle_run_optimized_command(args):
         print(f"Error loading data: {e}")
         return 1
     
-    # Convert to dollar bars if requested
-    if args.dollar_bars:
-        print(f"\nCreating dollar bars (threshold: ${args.dollar_threshold:,.0f})...")
-        df = create_dollar_bars(df, args.dollar_threshold)
+    # Parse dollar threshold override if provided
+    if args.dollar_threshold is not None:
+        if args.dollar_threshold in ["none", "off", "disable", "false"]:
+            use_dollar_bars = False
+            dollar_threshold = None
+            print("Command line override: Dollar bars disabled")
+        elif args.dollar_threshold == "auto":
+            use_dollar_bars = True
+            from optimization import auto_detect_dollar_thresholds
+            threshold_range = auto_detect_dollar_thresholds(df)
+            dollar_threshold = threshold_range.values[len(threshold_range.values)//2]
+            print(f"Command line override: Auto-detected dollar threshold: ${dollar_threshold:,.0f}")
+        else:
+            try:
+                use_dollar_bars = True
+                dollar_threshold = float(args.dollar_threshold)
+                print(f"Command line override: Using dollar threshold: ${dollar_threshold:,.0f}")
+            except ValueError:
+                print(f"Warning: Invalid dollar threshold '{args.dollar_threshold}', using saved setting")
+    
+    # Convert to dollar bars if enabled
+    if use_dollar_bars and dollar_threshold is not None:
+        print(f"\nCreating dollar bars (threshold: ${dollar_threshold:,.0f})...")
+        df = create_dollar_bars(df, dollar_threshold)
         print(f"Dollar bars created: {len(df)}")
+    else:
+        print(f"\nUsing traditional candle data ({len(df)} bars)")
     
     # Calculate factors with optimized parameters
     print("\nCalculating indicators...")
@@ -620,32 +682,24 @@ def handle_run_optimized_command(args):
     # Merge data
     combined_df = pd.concat([df, factors_df], axis=1)
     
-    # Create strategy based on saved parameters
-    print(f"\nRunning backtest with {('enhanced' if enhanced_strategy else 'basic')} strategy...")
+    # Always use enhanced strategy with dollar bars
+    print(f"\nRunning backtest with enhanced strategy...")
     
-    if enhanced_strategy:
-        from strategy_enhanced import EnhancedTradingStrategy
-        strategy = EnhancedTradingStrategy(
-            initial_capital=args.capital,
-            max_position_fraction=opt_params.get('max_position_pct', 1.0),
-            entry_step_size=opt_params.get('entry_step_size', 0.2),
-            stop_loss_multiplier_strong=opt_params.get('stop_loss_multiplier_strong', 2.0),
-            stop_loss_multiplier_weak=opt_params.get('stop_loss_multiplier_weak', 1.0),
-            strong_bull_threshold=opt_params.get('strong_bull_threshold', 50.0),
-            weak_bull_threshold=opt_params.get('weak_bull_threshold', 20.0),
-            neutral_upper=opt_params.get('neutral_threshold_upper', 20.0),
-            neutral_lower=opt_params.get('neutral_threshold_lower', -20.0),
-            weak_bear_threshold=opt_params.get('weak_bear_threshold', -20.0),
-            strong_bear_threshold=opt_params.get('strong_bear_threshold', -50.0),
-            allow_shorts=allow_shorts,
-        )
-    else:
-        strategy = TradingStrategy(
-            initial_capital=args.capital,
-            max_position_pct=opt_params.get('max_position_pct', 0.95),
-            min_position_pct=opt_params.get('min_position_pct', 0.1),
-            allow_shorts=allow_shorts
-        )
+    from strategy_enhanced import EnhancedTradingStrategy
+    strategy = EnhancedTradingStrategy(
+        initial_capital=args.capital,
+        max_position_fraction=opt_params.get('max_position_pct', 1.0),
+        entry_step_size=opt_params.get('entry_step_size', 0.2),
+        stop_loss_multiplier_strong=opt_params.get('stop_loss_multiplier_strong', 2.0),
+        stop_loss_multiplier_weak=opt_params.get('stop_loss_multiplier_weak', 1.0),
+        strong_bull_threshold=opt_params.get('strong_bull_threshold', 50.0),
+        weak_bull_threshold=opt_params.get('weak_bull_threshold', 20.0),
+        neutral_upper=opt_params.get('neutral_threshold_upper', 20.0),
+        neutral_lower=opt_params.get('neutral_threshold_lower', -20.0),
+        weak_bear_threshold=opt_params.get('weak_bear_threshold', -20.0),
+        strong_bear_threshold=opt_params.get('strong_bear_threshold', -50.0),
+        allow_shorts=allow_shorts,
+    )
     
     # Run backtest
     results = strategy.run_backtest(combined_df, combined_df)
@@ -654,6 +708,75 @@ def handle_run_optimized_command(args):
     # Generate performance report
     performance_report = generate_performance_report(results, trades_summary, args.capital)
     print("\n" + performance_report)
+    
+    # Show plots if requested
+    if args.plot:
+        try:
+            import matplotlib.pyplot as plt
+            import matplotlib.dates as mdates
+            
+            print("\nGenerating performance plots...")
+            
+            # Create figure with subplots
+            fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))
+            fig.suptitle('Strategy Performance Analysis', fontsize=16)
+            
+            # 1. Equity Curve
+            portfolio_values = results['portfolio_value']
+            ax1.plot(portfolio_values.index, portfolio_values.values, 'b-', linewidth=2, label='Portfolio Value')
+            ax1.axhline(y=args.capital, color='gray', linestyle='--', alpha=0.7, label='Initial Capital')
+            ax1.set_title('Equity Curve')
+            ax1.set_ylabel('Portfolio Value ($)')
+            ax1.legend()
+            ax1.grid(True, alpha=0.3)
+            
+            # 2. Drawdown
+            peak = portfolio_values.expanding().max()
+            drawdown = (portfolio_values - peak) / peak * 100
+            ax2.fill_between(drawdown.index, drawdown.values, 0, color='red', alpha=0.3)
+            ax2.plot(drawdown.index, drawdown.values, 'r-', linewidth=1)
+            ax2.set_title('Drawdown (%)')
+            ax2.set_ylabel('Drawdown (%)')
+            ax2.grid(True, alpha=0.3)
+            
+            # 3. Returns Distribution
+            returns = portfolio_values.pct_change().dropna()
+            ax3.hist(returns * 100, bins=50, alpha=0.7, color='green', edgecolor='black')
+            ax3.axvline(returns.mean() * 100, color='red', linestyle='--', label=f'Mean: {returns.mean()*100:.2f}%')
+            ax3.set_title('Returns Distribution')
+            ax3.set_xlabel('Returns (%)')
+            ax3.set_ylabel('Frequency')
+            ax3.legend()
+            ax3.grid(True, alpha=0.3)
+            
+            # 4. Rolling Sharpe Ratio (30-period)
+            if len(returns) > 30:
+                rolling_sharpe = returns.rolling(30).mean() / returns.rolling(30).std() * np.sqrt(252)
+                ax4.plot(rolling_sharpe.index, rolling_sharpe.values, 'purple', linewidth=2)
+                ax4.axhline(y=1.0, color='gray', linestyle='--', alpha=0.7, label='Sharpe = 1.0')
+                ax4.set_title('Rolling Sharpe Ratio (30-period)')
+                ax4.set_ylabel('Sharpe Ratio')
+                ax4.legend()
+                ax4.grid(True, alpha=0.3)
+            else:
+                ax4.text(0.5, 0.5, 'Insufficient data\nfor rolling Sharpe', 
+                        ha='center', va='center', transform=ax4.transAxes)
+                ax4.set_title('Rolling Sharpe Ratio (Insufficient Data)')
+            
+            # Format x-axes for dates
+            for ax in [ax1, ax2, ax4]:
+                if len(portfolio_values) > 0:
+                    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+                    ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+                    plt.setp(ax.xaxis.get_majorticklabels(), rotation=45)
+            
+            plt.tight_layout()
+            plt.show()
+            
+        except ImportError:
+            print("\nMatplotlib not available. Install with: pip install matplotlib")
+        except Exception as e:
+            print(f"\nError generating plots: {e}")
     
     # Save results if requested
     if args.save_results:
@@ -672,8 +795,8 @@ def handle_run_optimized_command(args):
             f.write(performance_report)
         print(f"   Performance report saved to: {report_file}")
         
-        # Save trades log if enhanced strategy
-        if enhanced_strategy and hasattr(strategy, 'trades'):
+        # Save trades log (always enhanced strategy now)
+        if hasattr(strategy, 'trades'):
             trades_file = results_dir / "trades_log.csv"
             trades_df = pd.DataFrame([
                 {

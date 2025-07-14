@@ -5,8 +5,9 @@ Implements walk-forward optimization of strategy parameters
 
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Tuple, Optional, Callable
+from typing import Dict, List, Tuple, Optional, Callable, Union
 from dataclasses import dataclass
+from abc import ABC, abstractmethod
 import random
 from datetime import datetime, timedelta
 import json
@@ -17,6 +18,101 @@ from strategy import TradingStrategy
 from strategy_enhanced import EnhancedTradingStrategy
 from performance import calculate_sortino_ratio, calculate_calmar_ratio
 from data_processing import prepare_data
+
+
+class ParameterRange(ABC):
+    """Abstract base class for parameter range configurations"""
+    
+    @abstractmethod
+    def sample(self) -> float:
+        """Sample a value from this parameter range"""
+        pass
+    
+    @abstractmethod
+    def mutate(self, current_value: float) -> float:
+        """Mutate the current value within this parameter range"""
+        pass
+    
+    @abstractmethod
+    def to_dict(self) -> Dict:
+        """Convert to dictionary for serialization"""
+        pass
+
+
+@dataclass
+class MinMaxRange(ParameterRange):
+    """Traditional continuous min-max range"""
+    min_val: float
+    max_val: float
+    
+    def sample(self) -> float:
+        """Sample uniformly from min to max"""
+        return random.uniform(self.min_val, self.max_val)
+    
+    def mutate(self, current_value: float) -> float:
+        """Gaussian mutation within bounds"""
+        noise = random.gauss(0, (self.max_val - self.min_val) * 0.1)
+        return max(self.min_val, min(self.max_val, current_value + noise))
+    
+    def to_dict(self) -> Dict:
+        return {"type": "min_max", "min": self.min_val, "max": self.max_val}
+
+
+@dataclass
+class LogRange(ParameterRange):
+    """Discrete logarithmic-spaced values"""
+    values: List[float]
+    
+    def sample(self) -> float:
+        """Sample from discrete values"""
+        return random.choice(self.values)
+    
+    def mutate(self, current_value: float) -> float:
+        """Mutate to nearby discrete value"""
+        try:
+            current_idx = self.values.index(current_value)
+            # Pick adjacent value (within 1 step)
+            if current_idx == 0:
+                return self.values[1]  # Move up
+            elif current_idx == len(self.values) - 1:
+                return self.values[-2]  # Move down
+            else:
+                # Randomly pick adjacent
+                return random.choice([self.values[current_idx-1], self.values[current_idx+1]])
+        except ValueError:
+            # If current value not in discrete set, pick random
+            return random.choice(self.values)
+    
+    def to_dict(self) -> Dict:
+        return {"type": "log_range", "values": self.values}
+
+
+def create_log_range(start: float, end: float, num_points: int = 4) -> LogRange:
+    """
+    Create logarithmic range with fine spacing at start, larger gaps at end
+    
+    Examples:
+    - create_log_range(28, 42, 4) -> [28.0, 32.0, 37.0, 42.0]
+    - create_log_range(1.5, 4.5, 4) -> [1.5, 2.2, 3.2, 4.5]
+    """
+    if num_points <= 1:
+        return LogRange([start])
+    
+    log_factor = 2.5  # Controls curve steepness
+    points = []
+    
+    for i in range(num_points):
+        # Normalize i to [0, 1]
+        t = i / (num_points - 1)
+        
+        # Apply logarithmic curve
+        curved_t = (np.exp(t * log_factor) - 1) / (np.exp(log_factor) - 1)
+        
+        # Scale to [start, end]
+        value = start + (end - start) * curved_t
+        points.append(round(value, 1))
+    
+    return LogRange(points)
 
 
 @dataclass
@@ -38,7 +134,7 @@ class GeneticAlgorithm:
     """
     
     def __init__(self, 
-                 parameter_ranges: Dict[str, Tuple[float, float]],
+                 parameter_config: Dict[str, Union[ParameterRange, Tuple[float, float]]],
                  population_size: int = 50,
                  generations: int = 20,
                  mutation_rate: float = 0.1,
@@ -51,8 +147,8 @@ class GeneticAlgorithm:
         
         Parameters:
         -----------
-        parameter_ranges : Dict[str, Tuple[float, float]]
-            Min and max values for each parameter
+        parameter_config : Dict[str, Union[ParameterRange, Tuple[float, float]]]
+            Parameter configuration using polymorphic range types or legacy tuples
         population_size : int
             Number of individuals in population
         generations : int
@@ -65,8 +161,19 @@ class GeneticAlgorithm:
             Percentage of best individuals to keep
         fitness_metric : str
             Metric to optimize ('sortino' or 'calmar')
+        allow_shorts : bool
+            Whether to allow short positions
         """
-        self.parameter_ranges = parameter_ranges
+        # Convert parameter config to uniform ParameterRange objects
+        self.parameter_ranges = {}
+        for param, config in parameter_config.items():
+            if isinstance(config, ParameterRange):
+                self.parameter_ranges[param] = config
+            elif isinstance(config, tuple) and len(config) == 2:
+                # Legacy tuple format - convert to MinMaxRange
+                self.parameter_ranges[param] = MinMaxRange(config[0], config[1])
+            else:
+                raise ValueError(f"Invalid parameter config for {param}: {config}")
         self.population_size = population_size
         self.generations = generations
         self.mutation_rate = mutation_rate
@@ -79,15 +186,17 @@ class GeneticAlgorithm:
         self.elite_size = max(1, int(population_size * elitism_rate))
     
     def create_individual(self) -> Individual:
-        """Create a random individual"""
+        """Create a random individual using polymorphic parameter ranges"""
         genes = {}
-        for param, (min_val, max_val) in self.parameter_ranges.items():
+        
+        for param, param_range in self.parameter_ranges.items():
             if param.endswith('_int'):
-                # Integer parameters
-                genes[param] = random.randint(int(min_val), int(max_val))
+                # Integer parameters - sample and convert to int
+                value = param_range.sample()
+                genes[param] = int(value)
             else:
-                # Float parameters
-                genes[param] = random.uniform(min_val, max_val)
+                # All other parameters use the parameter range's sample method
+                genes[param] = param_range.sample()
         
         return Individual(genes=genes)
     
@@ -185,40 +294,53 @@ class GeneticAlgorithm:
             # Calculate returns  
             returns = portfolio_values.pct_change().dropna()
             
-            # Calculate base fitness metric using OLD CODE APPROACH
+            # Initialize common variables for debug output
+            total_return = (portfolio_values.iloc[-1] / initial_capital) - 1
+            n_periods = len(returns)
+            
+            # Calculate actual time span using timestamps
+            try:
+                time_span_days = (portfolio_values.index[-1] - portfolio_values.index[0]).days
+                years_elapsed = max(time_span_days / 365.25, 1/365.25)  # At least 1 day
+                annualized_return = (1 + total_return) ** (1 / years_elapsed) - 1
+                periods_per_year = n_periods / years_elapsed  # Actual frequency
+            except (AttributeError, TypeError):
+                # Fallback if timestamp calculation fails
+                periods_per_year = min(8760, n_periods * 4)  # Conservative estimate
+                annualized_return = (1 + total_return) ** (periods_per_year / n_periods) - 1 if n_periods > 1 else 0
+                time_span_days = n_periods  # Fallback for debug output
+            
+            # Calculate base fitness metric using IMPROVED APPROACH
             if self.fitness_metric == 'sortino':
-                # OLD CODE: MAR = 0, no risk-free rate
-                mar = 0
+                if n_periods < 2:
+                    return -1000  # Not enough data
+                
+                # Calculate downside deviation
+                mar = 0  # Risk-free rate
                 downside_returns = returns[returns < mar]
                 
-                if len(downside_returns) == 0:
-                    # No downside returns
-                    sortino = float('inf')
+                if len(downside_returns) == 0 or total_return <= 0:
+                    # No downside or negative total return
+                    base_fitness = max(-10.0, total_return * 10)  # Scale total return
                 else:
                     downside_deviation = downside_returns.std()
                     if downside_deviation == 0 or np.isnan(downside_deviation):
-                        sortino = float('inf')
+                        # Perfect strategy - high but finite score
+                        base_fitness = min(50.0, annualized_return * 20)
                     else:
-                        # Annualized return and Sortino
-                        periods_per_year = 365  # Dollar bars, not 252
-                        n_periods = len(returns)
-                        total_return = (portfolio_values.iloc[-1] / initial_capital) - 1
-                        annualized_return = (1 + total_return) ** (periods_per_year / n_periods) - 1
-                        sortino = (annualized_return - mar) / (downside_deviation * np.sqrt(periods_per_year))
+                        # Standard Sortino calculation using actual time-based annualization
+                        annualized_downside_dev = downside_deviation * np.sqrt(periods_per_year)
+                        sortino = annualized_return / annualized_downside_dev
+                        
+                        # Cap at reasonable values but allow higher scores
+                        base_fitness = max(-10.0, min(50.0, sortino))
                 
-                # Handle special cases
-                if np.isnan(sortino):
-                    return -1000  # Invalid strategy
-                elif np.isinf(sortino):
-                    sortino = 10.0  # Cap infinite Sortino at 10
-                base_fitness = sortino
+                # Handle edge cases
+                if np.isnan(base_fitness) or np.isinf(base_fitness):
+                    base_fitness = -10.0
                 
             elif self.fitness_metric == 'calmar':
-                # Calculate using old approach
-                periods_per_year = 365
-                n_periods = len(returns)
-                total_return = (portfolio_values.iloc[-1] / initial_capital) - 1
-                annualized_return = (1 + total_return) ** (periods_per_year / n_periods) - 1
+                # Use already calculated annualized_return (time-based)
                 
                 # Max drawdown calculation
                 equity_curve = portfolio_values
@@ -266,6 +388,9 @@ class GeneticAlgorithm:
                 print(f"  Base fitness (Sortino): {base_fitness:.4f}")
                 print(f"  Max drawdown %: {max_drawdown_pct:.2f}%")
                 print(f"  Combined fitness: {fitness:.4f}")
+                print(f"  Total return: {total_return:.4f}")
+                print(f"  Annualized return: {annualized_return:.4f}")
+                print(f"  Time span: {time_span_days} days, Periods: {n_periods}, Freq: {periods_per_year:.1f}/year")
             
             # Additional penalties for extreme parameters
             if weights['trend'] < 0.1 or weights['trend'] > 0.7:
@@ -282,7 +407,9 @@ class GeneticAlgorithm:
     def tournament_selection(self, population: List[Individual], 
                            tournament_size: int = 3) -> Individual:
         """Select individual using tournament selection"""
-        tournament = random.sample(population, tournament_size)
+        # Ensure tournament size doesn't exceed population size
+        actual_tournament_size = min(tournament_size, len(population))
+        tournament = random.sample(population, actual_tournament_size)
         return max(tournament, key=lambda x: x.fitness)
     
     def crossover(self, parent1: Individual, parent2: Individual) -> Tuple[Individual, Individual]:
@@ -304,19 +431,18 @@ class GeneticAlgorithm:
         return Individual(genes=genes1), Individual(genes=genes2)
     
     def mutate(self, individual: Individual) -> Individual:
-        """Mutate an individual"""
+        """Mutate an individual using polymorphic parameter ranges"""
         genes = individual.genes.copy()
         
-        for param, (min_val, max_val) in self.parameter_ranges.items():
+        for param, param_range in self.parameter_ranges.items():
             if random.random() < self.mutation_rate:
                 if param.endswith('_int'):
-                    # Integer mutation
-                    genes[param] = random.randint(int(min_val), int(max_val))
+                    # Integer mutation - mutate and convert to int
+                    mutated_value = param_range.mutate(genes[param])
+                    genes[param] = int(mutated_value)
                 else:
-                    # Float mutation with Gaussian noise
-                    current = genes[param]
-                    noise = random.gauss(0, (max_val - min_val) * 0.1)
-                    genes[param] = max(min_val, min(max_val, current + noise))
+                    # All other parameters use the parameter range's mutate method
+                    genes[param] = param_range.mutate(genes[param])
         
         return Individual(genes=genes)
     
@@ -538,51 +664,104 @@ class WalkForwardOptimizer:
         return optimization_results
 
 
-def create_default_parameter_ranges() -> Dict[str, Tuple[float, float]]:
-    """Create default parameter ranges for optimization"""
-    return {
-        'weight_trend': (0.1, 0.6),
-        'weight_volatility': (0.1, 0.5),
-        'weight_exhaustion': (0.1, 0.5),
-        'lookback_int': (10, 50),
-        'max_position_pct': (0.5, 1.0),
-        'min_position_pct': (0.05, 0.2),
-        'strong_bull_threshold_int': (50, 80),
-        'weak_bull_threshold_int': (10, 40),
-        'weak_bear_threshold_int': (-40, -10),
-        'strong_bear_threshold_int': (-80, -50),
-        'stop_loss_multiplier_strong': (1.5, 3.0),
-        'stop_loss_multiplier_weak': (0.5, 1.5)
-    }
 
 
-def create_enhanced_parameter_ranges() -> Dict[str, Tuple[float, float]]:
+def auto_detect_dollar_thresholds(data: pd.DataFrame, sample_size: int = 1000) -> LogRange:
     """
-    Create enhanced parameter ranges matching the old notebook implementation
-    Includes gradual entry parameters and all thresholds
+    Automatically detect appropriate dollar bar thresholds based on asset characteristics
+    
+    Parameters:
+    -----------
+    data : pd.DataFrame
+        OHLCV data with columns: open, high, low, close, volume
+    sample_size : int
+        Number of recent bars to analyze for threshold detection
+        
+    Returns:
+    --------
+    LogRange
+        Optimized threshold range for this asset
+    """
+    # Use most recent data for analysis
+    sample_data = data.tail(sample_size)
+    
+    # Calculate dollar volume per bar
+    dollar_volume = (sample_data['high'] + sample_data['low'] + sample_data['close']) / 3 * sample_data['volume']
+    
+    # Calculate statistics - ensure we get numeric values
+    # Convert to numpy array first to avoid pandas type issues
+    dollar_vol_array = dollar_volume.values
+    median_dollar_vol = float(np.median(dollar_vol_array))
+    mean_dollar_vol = float(np.mean(dollar_vol_array))
+    
+    # Determine asset class based on price level and volume characteristics
+    avg_price = float(sample_data['close'].mean())
+    avg_volume = float(sample_data['volume'].mean())
+    
+    print(f"Auto-threshold analysis:")
+    print(f"  Average price: ${avg_price:.2f}")
+    print(f"  Average volume: {avg_volume:,.0f}")
+    print(f"  Median dollar volume: ${median_dollar_vol:,.0f}")
+    print(f"  Mean dollar volume: ${mean_dollar_vol:,.0f}")
+    
+    # Set threshold ranges based on asset characteristics
+    if avg_price > 100 and median_dollar_vol > 10_000_000:
+        # High-priced, high-volume assets (e.g., BTC, TSLA)
+        min_threshold = max(200_000.0, float(median_dollar_vol * 0.1))
+        max_threshold = min(5_000_000.0, float(median_dollar_vol * 2.0))
+        print(f"  Detected: High-priced, high-volume asset")
+        
+    elif avg_price > 10 and median_dollar_vol > 1_000_000:
+        # Medium-priced assets (e.g., AAPL, GOOGL)
+        min_threshold = max(100_000.0, float(median_dollar_vol * 0.15))
+        max_threshold = min(2_000_000.0, float(median_dollar_vol * 1.5))
+        print(f"  Detected: Medium-priced asset")
+        
+    elif avg_price < 1 and median_dollar_vol > 100_000:
+        # Low-priced, high-volume assets (e.g., altcoins, penny stocks)
+        min_threshold = max(50_000.0, float(median_dollar_vol * 0.2))
+        max_threshold = min(1_000_000.0, float(median_dollar_vol * 1.0))
+        print(f"  Detected: Low-priced, high-volume asset")
+        
+    else:
+        # Default case - use median-based approach
+        min_threshold = max(100_000.0, float(median_dollar_vol * 0.2))
+        max_threshold = min(2_000_000.0, float(median_dollar_vol * 1.5))
+        print(f"  Detected: Standard asset")
+    
+    print(f"  Threshold range: ${min_threshold:,.0f} - ${max_threshold:,.0f}")
+    
+    # Create logarithmic range with 4 points
+    return create_log_range(float(min_threshold), float(max_threshold), 4)
+
+
+def create_enhanced_parameter_ranges() -> Dict[str, ParameterRange]:
+    """
+    Create enhanced parameter ranges using polymorphic configuration
+    Uses LogRange for discrete threshold values and MinMaxRange for continuous weights
     """
     return {
-        # Factor weights
-        'weight_trend': (0.0, 1.0),
-        'weight_volatility': (0.0, 1.0),
-        'weight_exhaustion': (0.0, 1.0),
+        # Factor weights (continuous ranges for fine-tuning)
+        'weight_trend': MinMaxRange(0.0, 1.0),
+        'weight_volatility': MinMaxRange(0.0, 1.0),
+        'weight_exhaustion': MinMaxRange(0.0, 1.0),
         
-        # Lookback periods
-        'lookback_int': (10, 50),
+        # Lookback periods (continuous range)
+        'lookback_int': MinMaxRange(10, 50),
         
-        # Regime thresholds (fine-tuned around successful values)
-        'strong_bull_threshold': (30.0, 50.0),  # Around successful 39.34
-        'weak_bull_threshold': (10.0, 25.0),    # Around successful 15.71
-        'neutral_threshold_upper': (8.0, 18.0), # Around successful 12.40
-        'neutral_threshold_lower': (-20.0, -8.0), # Around successful -14.75
-        'weak_bear_threshold': (-25.0, -10.0),  # Around successful -15.91  
-        'strong_bear_threshold': (-50.0, -30.0), # Around successful -39.66
+        # Regime thresholds (discrete logarithmic spacing)
+        'strong_bull_threshold': create_log_range(28.0, 42.0, 4),
+        'weak_bull_threshold': create_log_range(14.0, 24.0, 4),
+        'neutral_threshold_upper': create_log_range(9.0, 16.0, 4),
+        'neutral_threshold_lower': create_log_range(-16.0, -9.0, 4),
+        'weak_bear_threshold': create_log_range(-24.0, -14.0, 4),
+        'strong_bear_threshold': create_log_range(-42.0, -28.0, 4),
         
-        # Stop-loss multipliers
-        'stop_loss_multiplier_strong': (1.0, 5.0),
-        'stop_loss_multiplier_weak': (0.5, 3.0),
+        # Stop-loss multipliers (discrete logarithmic spacing)
+        'stop_loss_multiplier_strong': create_log_range(1.5, 4.5, 4),
+        'stop_loss_multiplier_weak': create_log_range(0.8, 2.7, 4),
         
-        # Gradual entry parameters
-        'entry_step_size': (0.1, 1.0),
-        'max_position_pct': (0.5, 1.0),
+        # Gradual entry parameters (discrete logarithmic spacing)
+        'entry_step_size': create_log_range(0.15, 0.7, 4),
+        'max_position_pct': create_log_range(0.6, 1.0, 4),
     }

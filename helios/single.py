@@ -28,7 +28,7 @@ import matplotlib.pyplot as plt
 import random
 
 # --- Default Configuration ---
-DEFAULT_INPUT_FILE = '../data/BTCUSD-feed.csv'
+DEFAULT_INPUT_FILE = '../data/BTCUSD.csv'
 DEFAULT_CAPITAL = 100000.0
 DEFAULT_DOLLAR_THRESHOLD = 100_000_000.0
 
@@ -193,6 +193,9 @@ class HeliosTrader:
             exit()
 
     def _create_dollar_bars(self):
+        """
+        Creates dollar bars from raw data using a fixed threshold.
+        """
         print(f"[Step 2/6] Creating dollar bars with threshold: ${self.config['dollar_threshold']:,}...")
         bars = []
         df = self.raw_df
@@ -301,7 +304,7 @@ class HeliosTrader:
             price, regime, abs_vol = row['Close'], row['Regime'], row['Abs_Volatility']
             target_pos_fraction = 0.0
             if regime == 'Strong Bull': target_pos_fraction = 1.0
-            elif regime == 'Strong Bear' and self.config.get('allow_shorts', False): # MODIFIED CHECK
+            elif regime == 'Strong Bear' and self.config.get('allow_shorts', False):
                 target_pos_fraction = -1.0
             
             pos_change_fraction = np.clip(target_pos_fraction - (total_units * price / current_capital if current_capital > 0 else 0), -entry_step, entry_step)
@@ -334,7 +337,7 @@ class HeliosTrader:
                         pnl = (price - avg_entry_price) * total_units
                         current_capital += pnl
                         total_units, cost_basis, stop_loss, take_profit, peak_price = 0, 0, 0, 0, -float('inf')
-                elif self.config.get('allow_shorts', False): # MODIFIED CHECK
+                elif self.config.get('allow_shorts', False):
                     stop_dist = abs_vol * (stop_mult_strong if regime == 'Strong Bear' else stop_mult_weak)
                     tp_dist = abs_vol * (tp_mult_strong if regime == 'Strong Bear' else tp_mult_weak)
                     valley_price = min(valley_price, price)
@@ -387,7 +390,7 @@ class HeliosTrader:
     def _run_ga_optimization(self):
         print("\n[Step 3/6] Running Genetic Algorithm with Walk-Forward Optimization...")
         
-        all_data = self.dollar_bars_df
+        all_data = self.dollar_bars_df # Use pre-computed dollar bars
         n_periods = self.config.get('walkforward_periods', GA_WALKFORWARD_PERIODS)
         train_ratio = self.config.get('train_ratio', GA_TRAIN_RATIO)
         
@@ -407,7 +410,7 @@ class HeliosTrader:
             test_data = all_data.iloc[train_end_idx:test_end_idx]
             
             print(f"\n--- Walk-Forward Window {i+1}/{n_periods} ---")
-            print(f"  Training on {len(train_data)} bars...")
+            print(f"  Training on {len(train_data)} dollar bars...")
 
             population = [{p: self._generate_random_param(p, s) for p, s in PARAMETER_SPACE.items()} for _ in range(GA_POPULATION_SIZE)]
             best_window_fitness = -float('inf')
@@ -481,7 +484,7 @@ class HeliosTrader:
 
     def run(self):
         self._load_and_prepare_data()
-        self._create_dollar_bars()
+        self._create_dollar_bars() # Create dollar bars once
         if self.config.get('optimize'):
             self._run_ga_optimization()
         self._run_final_backtest()
@@ -494,7 +497,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Helios Trader - A quantitative trading algorithm.")
     parser.add_argument('--input_file', type=str, default=DEFAULT_INPUT_FILE)
     parser.add_argument('--initial_capital', type=float, default=DEFAULT_CAPITAL)
-    parser.add_argument('--dollar_threshold', type=float, default=DEFAULT_DOLLAR_THRESHOLD)
+    parser.add_argument('--dollar_threshold', type=float, default=DEFAULT_DOLLAR_THRESHOLD, help="Dollar volume threshold for creating dollar bars.")
     parser.add_argument('--optimize', action='store_true', help="Run Genetic Algorithm to find optimal parameters.")
     parser.add_argument('--plot', action='store_true', help="Display the equity curve plot.")
     parser.add_argument('--allow-shorts', action='store_true', help="Allow short selling. Default is long-only.")

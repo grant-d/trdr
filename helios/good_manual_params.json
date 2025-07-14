@@ -19,7 +19,7 @@
   "fitness_metric": "sortino",
   "enhanced_strategy": true,
   "allow_shorts": true,
-  "data_file": "../data/BTCUSD-feed.csv",
+  "data_file": "../data/BTCUSD.csv",
   "dollar_bars": true,
   "dollar_threshold": 1000000
 }

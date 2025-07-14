@@ -15,7 +15,7 @@ Import pandas and load the CSV file into a DataFrame, then display the head and 
 
 import pandas as pd
 
-df = pd.read_csv('/content/drive/MyDrive/BTCUSD-feed.csv')
+df = pd.read_csv('/content/drive/MyDrive/BTCUSD.csv')
 
 display(df.head())
 display(df.info())

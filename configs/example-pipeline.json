@@ -2,7 +2,7 @@
   "input": {
     "type": "file",
     "format": "csv",
-    "path": "./data/BTCUSD-feed.csv",
+    "path": "./data/BTCUSD.csv",
     "columnMapping": {
       "timestamp": "Date",
       "open": "Open",
