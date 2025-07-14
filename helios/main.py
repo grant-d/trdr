@@ -213,16 +213,16 @@ def main():
     optimize_parser.add_argument('--save-results', action='store_true', help='Save optimization results and parameters')
     optimize_parser.add_argument('--allow-shorts', action='store_true', help='Allow short positions (disabled by default)')
     
-    # Run-optimized command
-    run_opt_parser = subparsers.add_parser('run-optimized', help='Run backtest with saved optimization parameters')
-    run_opt_parser.add_argument("--data", "-d", required=True, help="Path to data file")
-    run_opt_parser.add_argument("--params", "-p", required=True, help="Path to optimized parameters JSON file")
-    run_opt_parser.add_argument('--dollar-threshold', default=None, help='Dollar volume threshold for bars (number, "auto", or "none" to disable - overrides saved setting if specified)')
-    run_opt_parser.add_argument('--capital', type=float, default=100000, help='Initial capital')
-    run_opt_parser.add_argument('--save-results', action='store_true', help='Save backtest results')
-    run_opt_parser.add_argument('--output-dir', default='./strategy_results', help='Output directory for results')
-    run_opt_parser.add_argument('--allow-shorts', action='store_true', help='Allow short positions (disabled by default)')
-    run_opt_parser.add_argument('--plot', action='store_true', help='Show performance plots')
+    # Test command (formerly run-optimized)
+    test_parser = subparsers.add_parser('test', help='Test strategy with saved optimization parameters')
+    test_parser.add_argument("--data", "-d", help="Path to data file (optional - uses saved path from optimization if not provided)")
+    test_parser.add_argument("--params", "-p", required=True, help="Path to optimized parameters JSON file")
+    test_parser.add_argument('--dollar-threshold', default=None, help='Dollar volume threshold for bars (number, "auto", or "none" to disable - overrides saved setting if specified)')
+    test_parser.add_argument('--capital', type=float, default=100000, help='Initial capital')
+    test_parser.add_argument('--save-results', action='store_true', help='Save test results')
+    test_parser.add_argument('--output-dir', default='./strategy_results', help='Output directory for results')
+    test_parser.add_argument('--allow-shorts', action='store_true', help='Allow short positions (disabled by default)')
+    test_parser.add_argument('--plot', action='store_true', help='Show performance plots')
     
     # Backtest command
     backtest_parser = subparsers.add_parser('backtest', help='Run backtest with trading context')
@@ -321,8 +321,8 @@ def main():
     elif args.command == 'optimize':
         return handle_optimize_command(args)
     
-    elif args.command == 'run-optimized':
-        return handle_run_optimized_command(args)
+    elif args.command == 'test':
+        return handle_test_command(args)
     
     elif args.command == 'backtest':
         return handle_backtest_command(args)
@@ -333,16 +333,16 @@ def main():
         print("\nAvailable commands:")
         print("  analyze      - Run basic analysis on historical data")
         print("  optimize     - Run genetic algorithm optimization")
-        print("  run-optimized - Run backtest with saved optimization parameters")
+        print("  test         - Test strategy with saved optimization parameters")
         print("  context      - Manage trading contexts")
         print("  backtest     - Run backtest with trading context")
         print("\nExamples:")
         print("  python -m helios analyze --data data.csv --dollar-bars")
         print("  python -m helios optimize --data data.csv --population 50 --generations 20")
         print("  python -m helios optimize --data data.csv --dollar-threshold none --population 50")
-        print("  python -m helios run-optimized --data data.csv --params results/optimized_parameters.json")
-        print("  python -m helios run-optimized --data data.csv --params results/optimized_parameters.json --plot")
-        print("  python -m helios run-optimized --data data.csv --params results/optimized_parameters.json --dollar-threshold none")
+        print("  python -m helios test --params optimization_results/optimized_parameters.json")
+        print("  python -m helios test --params optimization_results/optimized_parameters.json --plot")
+        print("  python -m helios test --data new_data.csv --params optimization_results/optimized_parameters.json")
         print("  python -m helios context create --instrument BTC --exchange COINBASE --timeframe 1h")
         print("\nFor command help:")
         print("  python -m helios <command> --help")
@@ -549,12 +549,16 @@ def handle_optimize_command(args):
             
             # Save optimized parameters
             import json
+            
+            # Convert data path to absolute path for portability
+            data_path = Path(args.data).resolve()
+            
             params_data = {
                 "parameters": {k: float(v) for k, v in best_individual.genes.items()},
                 "fitness": float(best_individual.fitness),
                 "fitness_metric": args.fitness,
                 "allow_shorts": args.allow_shorts,
-                "data_file": args.data,
+                "data_file": str(data_path),  # Save absolute path
                 "dollar_threshold": dollar_threshold,  # None if disabled, number if enabled
                 "population_size": args.population,
                 "generations": args.generations,
@@ -575,9 +579,9 @@ def handle_optimize_command(args):
     return 0
 
 
-def handle_run_optimized_command(args):
-    """Handle run-optimized commands"""
-    print("\nHelios Run with Optimized Parameters")
+def handle_test_command(args):
+    """Handle test commands"""
+    print("\nHelios Strategy Testing")
     print("=" * 40)
     
     # Load optimized parameters
@@ -605,13 +609,24 @@ def handle_run_optimized_command(args):
         print(f"Error loading parameters: {e}")
         return 1
     
+    # Determine data file path
+    if args.data:
+        data_file = args.data
+    else:
+        # Use saved data file from optimization
+        data_file = params_data.get('data_file')
+        if not data_file:
+            print("Error: No data file specified and none found in parameters file")
+            return 1
+        print(f"Using data file from optimization: {data_file}")
+    
     # Load data
     try:
-        print(f"\nLoading data from: {args.data}")
-        if args.data.endswith('.csv'):
-            df = pd.read_csv(args.data, parse_dates=True, index_col=0)
+        print(f"\nLoading data from: {data_file}")
+        if data_file.endswith('.csv'):
+            df = pd.read_csv(data_file, parse_dates=True, index_col=0)
         else:
-            df = pd.read_parquet(args.data)
+            df = pd.read_parquet(data_file)
         
         # Standardize columns
         df.columns = df.columns.str.lower()

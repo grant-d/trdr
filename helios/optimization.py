@@ -205,9 +205,10 @@ class GeneticAlgorithm:
         return [self.create_individual() for _ in range(self.population_size)]
     
     def evaluate_fitness(self, individual: Individual, 
-                        train_data: pd.DataFrame) -> float:
+                        train_data: pd.DataFrame, 
+                        volatility_scale: Optional[float] = None) -> float:
         """
-        Evaluate fitness of an individual
+        Evaluate fitness of an individual with volatility-aware adjustments
         
         Parameters:
         -----------
@@ -215,6 +216,8 @@ class GeneticAlgorithm:
             Individual to evaluate
         train_data : pd.DataFrame
             Training data with OHLCV
+        volatility_scale : Optional[float]
+            Pre-calculated volatility scale, or None to auto-detect
         
         Returns:
         --------
@@ -222,6 +225,10 @@ class GeneticAlgorithm:
             Fitness score
         """
         genes = individual.genes
+        
+        # Auto-detect volatility scale if not provided
+        if volatility_scale is None:
+            volatility_scale = estimate_asset_volatility_scale(train_data, sample_size=min(500, len(train_data)))
         
         # Extract parameters
         weights = {
@@ -319,27 +326,39 @@ class GeneticAlgorithm:
                 mar = 0  # Risk-free rate
                 downside_returns = returns[returns < mar]
                 
-                # For low-volatility assets, use a volatility-adjusted fitness
-                # This prevents low-vol assets from appearing to have artificially high Sortino ratios
-                volatility_adjustment = 1.0
-                if returns.std() < 0.001:  # Very low volatility (< 0.1% daily)
-                    volatility_adjustment = 0.5  # Reduce fitness to encourage more active trading
+                # Volatility-aware fitness adjustments
+                # Low-vol assets need different expectations
+                if volatility_scale < 0.3:  # Very stable assets (blue-chips)
+                    fitness_multiplier = 1.2  # Reward consistency
+                    sharpe_weight = 0.6  # Focus more on risk-adjusted returns
+                elif volatility_scale < 0.5:  # Traditional stocks
+                    fitness_multiplier = 1.0
+                    sharpe_weight = 0.4
+                else:  # High volatility (crypto, etc)
+                    fitness_multiplier = 0.8  # Slightly reduce to normalize across assets
+                    sharpe_weight = 0.2  # Focus more on absolute returns
                 
                 if len(downside_returns) == 0 or total_return <= 0:
                     # No downside or negative total return
-                    base_fitness = max(-10.0, total_return * 10 * volatility_adjustment)
+                    base_fitness = max(-10.0, total_return * 10 * fitness_multiplier)
                 else:
                     downside_deviation = downside_returns.std()
                     if downside_deviation == 0 or np.isnan(downside_deviation):
                         # Perfect strategy - high but finite score
-                        base_fitness = min(50.0, annualized_return * 20 * volatility_adjustment)
+                        base_fitness = min(50.0, annualized_return * 20 * fitness_multiplier)
                     else:
                         # Standard Sortino calculation using actual time-based annualization
                         annualized_downside_dev = downside_deviation * np.sqrt(periods_per_year)
                         sortino = annualized_return / annualized_downside_dev
                         
+                        # Also calculate Sharpe for stable assets
+                        sharpe = annualized_return / (returns.std() * np.sqrt(periods_per_year))
+                        
+                        # Blend Sortino and Sharpe based on asset type
+                        blended_ratio = sortino * (1 - sharpe_weight) + sharpe * sharpe_weight
+                        
                         # Apply volatility adjustment for more realistic fitness
-                        base_fitness = max(-10.0, min(50.0, sortino * volatility_adjustment))
+                        base_fitness = max(-10.0, min(50.0, blended_ratio * fitness_multiplier))
                 
                 # Handle edge cases
                 if np.isnan(base_fitness) or np.isinf(base_fitness):
@@ -404,19 +423,33 @@ class GeneticAlgorithm:
             if lookback < 5 or lookback > 100:
                 fitness -= 1.0
             
-            # Penalty for too few trades (strategy not active enough)
-            # Count actual position changes
+            # Volatility-aware penalty for too few trades
+            # Low-vol assets naturally trade less frequently
             position_changes = 0
             if 'position' in results.columns:
                 positions = results['position']
                 position_changes = (positions.diff() != 0).sum()
             
-            min_trades = max(10, n_periods / 200)  # At least 1 trade per 200 periods
+            # Adjust minimum trade expectations based on volatility
+            if volatility_scale < 0.3:  # Blue-chip stocks
+                trades_per_period = 300  # 1 trade per 300 periods (less frequent)
+                penalty_multiplier = 0.5  # Lower penalty
+            elif volatility_scale < 0.5:  # Traditional stocks
+                trades_per_period = 250  # 1 trade per 250 periods
+                penalty_multiplier = 1.0
+            elif volatility_scale < 1.0:  # Volatile stocks/crypto
+                trades_per_period = 200  # 1 trade per 200 periods
+                penalty_multiplier = 1.5
+            else:  # Very high volatility
+                trades_per_period = 150  # 1 trade per 150 periods (more frequent)
+                penalty_multiplier = 2.0
+            
+            min_trades = max(5, n_periods / trades_per_period)
             if position_changes < min_trades:
-                trade_penalty = 2.0 * (1 - position_changes / min_trades)
+                trade_penalty = penalty_multiplier * (1 - position_changes / min_trades)
                 fitness -= trade_penalty
                 if False:  # Debug
-                    print(f"  Trade penalty: {trade_penalty:.2f} (only {position_changes} position changes)")
+                    print(f"  Trade penalty: {trade_penalty:.2f} (only {position_changes} position changes, vol_scale={volatility_scale:.2f})")
             
             return fitness
             
@@ -512,9 +545,12 @@ class GeneticAlgorithm:
         # Create initial population
         population = self.create_population()
         
+        # Pre-calculate volatility scale once for efficiency
+        volatility_scale = estimate_asset_volatility_scale(train_data, sample_size=min(500, len(train_data)))
+        
         # Evaluate initial population
         for individual in population:
-            individual.fitness = self.evaluate_fitness(individual, train_data)
+            individual.fitness = self.evaluate_fitness(individual, train_data, volatility_scale)
         
         best_fitness_history = []
         
@@ -526,7 +562,7 @@ class GeneticAlgorithm:
             # Evaluate new individuals
             for individual in population:
                 if individual.fitness == 0:  # Not evaluated yet
-                    individual.fitness = self.evaluate_fitness(individual, train_data)
+                    individual.fitness = self.evaluate_fitness(individual, train_data, volatility_scale)
             
             # Track best fitness
             best_individual = max(population, key=lambda x: x.fitness)
@@ -631,7 +667,7 @@ class WalkForwardOptimizer:
             # Optimize on training data
             best_individual, fitness_history = ga.optimize(train_data, verbose=False)
             
-            # Evaluate on test data
+            # Evaluate on test data (let it auto-detect volatility for test period)
             test_fitness = ga.evaluate_fitness(best_individual, test_data)
             
             window_result = {
@@ -721,26 +757,39 @@ def estimate_asset_volatility_scale(data: pd.DataFrame, sample_size: int = 500) 
     print(f"\nAsset volatility analysis:")
     print(f"  Annualized volatility: {annualized_vol*100:.1f}%")
     
-    # Calculate scale based on volatility characteristics
-    # Traditional stocks: ~15-30% annual vol -> scale 0.3-0.5
-    # Volatile stocks: ~30-60% annual vol -> scale 0.5-1.0
-    # Crypto: ~60-150% annual vol -> scale 1.0-3.0
+    # Enhanced volatility categories for better granularity
+    # More categories = better regime threshold tuning
     
-    if annualized_vol < 0.25:  # < 25% annual vol
+    if annualized_vol < 0.15:  # < 15% annual vol
+        scale = 0.2
+        asset_type = "Ultra-low volatility (bonds/utilities)"
+    elif annualized_vol < 0.20:  # 15-20% annual vol
+        scale = 0.25
+        asset_type = "Blue-chip stocks (mega-caps)"
+    elif annualized_vol < 0.25:  # 20-25% annual vol
         scale = 0.3
-        asset_type = "Low volatility (bonds/stable stocks)"
-    elif annualized_vol < 0.40:  # 25-40% annual vol
+        asset_type = "Large-cap stocks"
+    elif annualized_vol < 0.30:  # 25-30% annual vol
+        scale = 0.4
+        asset_type = "Traditional stocks (S&P 500)"
+    elif annualized_vol < 0.40:  # 30-40% annual vol
         scale = 0.5
-        asset_type = "Traditional stocks"
-    elif annualized_vol < 0.60:  # 40-60% annual vol
-        scale = 0.8
-        asset_type = "Volatile stocks/ETFs"
-    elif annualized_vol < 1.0:  # 60-100% annual vol
+        asset_type = "Growth stocks"
+    elif annualized_vol < 0.50:  # 40-50% annual vol
+        scale = 0.7
+        asset_type = "Volatile stocks/sector ETFs"
+    elif annualized_vol < 0.60:  # 50-60% annual vol
+        scale = 0.9
+        asset_type = "Small-cap stocks"
+    elif annualized_vol < 0.80:  # 60-80% annual vol
+        scale = 1.2
+        asset_type = "High volatility (emerging markets/crypto)"
+    elif annualized_vol < 1.0:  # 80-100% annual vol
         scale = 1.5
-        asset_type = "High volatility (small caps/crypto)"
+        asset_type = "Very high volatility (altcoins)"
     else:  # > 100% annual vol
         scale = 2.0
-        asset_type = "Extreme volatility (crypto/meme stocks)"
+        asset_type = "Extreme volatility (meme coins/penny stocks)"
     
     print(f"  Detected asset type: {asset_type}")
     print(f"  Volatility scale factor: {scale}")
@@ -748,7 +797,7 @@ def estimate_asset_volatility_scale(data: pd.DataFrame, sample_size: int = 500) 
     return scale
 
 
-def auto_detect_dollar_thresholds(data: pd.DataFrame, sample_size: int = 1000, return_range: bool = False) -> Union[float, LogRange]:
+def auto_detect_dollar_thresholds(data: pd.DataFrame, sample_size: int = 1000) -> float:
     """
     Automatically detect appropriate dollar bar thresholds based on asset characteristics
     
@@ -758,14 +807,11 @@ def auto_detect_dollar_thresholds(data: pd.DataFrame, sample_size: int = 1000, r
         OHLCV data with columns: open, high, low, close, volume
     sample_size : int
         Number of recent bars to analyze for threshold detection
-    return_range : bool
-        If True, returns the full LogRange. If False (default), returns recommended single threshold
         
     Returns:
     --------
-    Union[float, LogRange]
-        If return_range=False: Single recommended threshold value
-        If return_range=True: Full threshold range for advanced use
+    float
+        Single recommended threshold value
     """
     # Use most recent data for analysis
     sample_data = data.tail(sample_size)
@@ -808,14 +854,10 @@ def auto_detect_dollar_thresholds(data: pd.DataFrame, sample_size: int = 1000, r
     # Create logarithmic range with 4 points
     threshold_range = create_log_range(float(min_threshold), float(max_threshold), 4)
     
-    if return_range:
-        return threshold_range
-    else:
-        # Return the second value (index 1) from the 4-point range
-        # This gives us a more conservative threshold for more bars per day
-        # With 4 values: [min, lower-mid, upper-mid, max], we pick lower-mid
-        return threshold_range.values[1]
-
+    # Return the second value (index 1) from the 4-point range
+    # This gives us a more conservative threshold for more bars per day
+    # With 4 values: [min, lower-mid, upper-mid, max], we pick lower-mid
+    return threshold_range.values[1]
 
 def create_enhanced_parameter_ranges(volatility_scale: float = 1.0) -> Dict[str, ParameterRange]:
     """
