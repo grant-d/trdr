@@ -9,3 +9,4 @@ jupyter>=1.0.0
 alpaca-py>=0.42.0
 pychalk>=2.0.1
 statsmodels>=0.14.0
+deap>=1.4.0

@@ -14,7 +14,9 @@
       "Bash(find:*)",
       "Bash(./run.sh:*)",
       "Bash(mv:*)",
-      "Bash(touch:*)"
+      "Bash(touch:*)",
+      "Bash(uv pip:*)",
+      "Bash(pip install:*)"
     ],
     "deny": []
   }
