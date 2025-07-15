@@ -7,10 +7,13 @@ import os
 import sys
 import argparse
 import pandas as pd
+from generic_algorithm import estimate_asset_volatility_scale
 import numpy as np
 from dotenv import load_dotenv
 from pathlib import Path
 import warnings
+from chalk import black
+import json
 
 # Import Helios modules
 from data_processing import create_dollar_bars, prepare_data
@@ -26,7 +29,9 @@ from performance import (
 )
 from trading_context import TradingContext, TradingContextManager
 from playbook import Playbook, PlaybookManager
-from optimization import GeneticAlgorithm, WalkForwardOptimizer
+from optimization import GeneticAlgorithm, WalkForwardOptimizer, auto_detect_dollar_thresholds, create_enhanced_parameter_ranges
+from args_types import OptimizeArgs, TestArgs, AnalysisConfig
+from typing import Union
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
@@ -56,7 +61,7 @@ def play_completion_sound():
             pass
 
 
-def run_helios_analysis(df, config):
+def run_helios_analysis(df: pd.DataFrame, config: Union[dict, AnalysisConfig]) -> tuple:
     """Run Helios trading analysis on data"""
     print("\nRunning Helios Trading Analysis...")
     print("=" * 40)
@@ -67,7 +72,7 @@ def run_helios_analysis(df, config):
     print(f"   - Data shape: {df.shape}")
     print(f"   - Date range: {df.index[0]} to {df.index[-1]}")
 
-    # 2. Create dollar bars if requested
+    # 2. Create dollar bars
     dollar_threshold = config.get("dollar_threshold", 1000000)
     if config.get("use_dollar_bars", False):
         print(f"\n2. Creating dollar bars (threshold: ${dollar_threshold:,.0f})...")
@@ -220,15 +225,6 @@ def main():
         help='Dollar volume threshold for bars (default: auto-detect, number, or "none" to disable dollar bars)',
     )
     optimize_parser.add_argument("--context-id", help="Context ID to optimize for")
-    optimize_parser.add_argument(
-        "--walk-forward", action="store_true", help="Use walk-forward optimization"
-    )
-    optimize_parser.add_argument(
-        "--window-days", type=int, default=365, help="Training window in days"
-    )
-    optimize_parser.add_argument(
-        "--step-days", type=int, default=90, help="Step size in days"
-    )
     optimize_parser.add_argument(
         "--population", type=int, default=50, help="GA population size"
     )
@@ -386,16 +382,16 @@ def main():
                 return 1
 
             # Build configuration from arguments
-            config = {
-                "use_dollar_bars": args.dollar_bars,
-                "dollar_threshold": args.dollar_threshold,
-                "lookback": args.lookback,
-                "initial_capital": args.capital,
-                "save_results": args.save_results,
-                "output_dir": args.output_dir,
-                "max_position_pct": 0.95,
-                "min_position_pct": 0.1,
-            }
+            config = AnalysisConfig(
+                use_dollar_bars=args.dollar_bars,
+                dollar_threshold=args.dollar_threshold,
+                lookback=args.lookback,
+                initial_capital=args.capital,
+                save_results=args.save_results,
+                output_dir=args.output_dir,
+                max_position_pct=0.95,
+                min_position_pct=0.1
+            )
 
             print("\nHelios Trading Analysis")
             print("=" * 40)
@@ -553,8 +549,19 @@ def handle_context_command(args):
     return 0
 
 
-def handle_optimize_command(args):
-    """Handle optimization commands"""
+def handle_optimize_command(args: Union[argparse.Namespace, OptimizeArgs]) -> int:
+    """Handle optimization commands
+    
+    Parameters
+    ----------
+    args : Union[argparse.Namespace, OptimizeArgs]
+        Optimization command arguments
+        
+    Returns
+    -------
+    int
+        Exit code (0 for success, 1 for error)
+    """
     print("\nHelios Genetic Algorithm Optimization")
     print("=" * 40)
 
@@ -577,76 +584,44 @@ def handle_optimize_command(args):
         print(f"Error loading data: {e}")
         return 1
 
-    # Parse dollar threshold argument
-    dollar_threshold_arg = args.dollar_threshold
-    use_dollar_bars = True
-    dollar_threshold = None
-    dollar_bars_already_created = False
-
-    if dollar_threshold_arg in ["none", "off", "disable", "false"]:
-        use_dollar_bars = False
-        print("Using traditional candle data (dollar bars disabled)")
-    elif dollar_threshold_arg == "auto":
-        # Auto-detect threshold
-        from optimization import auto_detect_dollar_thresholds
-        from chalk import black
-
-        dollar_threshold = auto_detect_dollar_thresholds(df)
-        # Create dollar bars immediately to get count
-        df_dollar = create_dollar_bars(df, dollar_threshold)
-        print(f"  {black('Dollar bar threshold:'.ljust(22))} ${dollar_threshold:,.0f}")
-        print(f"  {black('Dollar bars created:'.ljust(22))} {len(df_dollar)}")
-        df = df_dollar  # Update df to use dollar bars
-        dollar_bars_already_created = True
-    else:
-        try:
-            dollar_threshold = float(dollar_threshold_arg)
-            print(f"Using specified dollar threshold: ${dollar_threshold:,.0f}")
-        except (ValueError, TypeError):
-            print(
-                f"Warning: Invalid dollar threshold '{dollar_threshold_arg}', using auto-detect"
-            )
-            from optimization import auto_detect_dollar_thresholds
-            from chalk import black
-
-            dollar_threshold = auto_detect_dollar_thresholds(df)
-            # Create dollar bars immediately to get count
-            df_dollar = create_dollar_bars(df, dollar_threshold)
-            print(f"  {black('Dollar bar threshold:'.ljust(22))} ${dollar_threshold:,.0f}")
-            print(f"  {black('Dollar bars created:'.ljust(22))} {len(df_dollar)}")
-            df = df_dollar  # Update df to use dollar bars
-            dollar_bars_already_created = True
-
-    if use_dollar_bars and dollar_threshold is not None and not dollar_bars_already_created:
-        # Convert to dollar bars (skip if already created during auto-detection)
-        print(f"Creating dollar bars (threshold: ${dollar_threshold:,.0f})...")
-        df = create_dollar_bars(df, dollar_threshold)
-        print(f"Dollar bars created: {len(df)}")
-
-    # Estimate volatility scale for adaptive regime thresholds
-    from optimization import (
-        create_enhanced_parameter_ranges,
-        estimate_asset_volatility_scale,
-    )
-
-    volatility_scale = estimate_asset_volatility_scale(df)
-    param_ranges = create_enhanced_parameter_ranges(volatility_scale)
-    print("Using enhanced strategy with gradual entries and adaptive regime thresholds")
-
     # Extract symbol and timeframe for fitness history
     data_filename = Path(args.data).stem  # Get filename without extension
-    if use_dollar_bars and dollar_threshold is not None:
-        timeframe = f"dollar_{int(dollar_threshold)}"
-    else:
-        timeframe = "candle_data"  # Default for time-based data
-    
     # Try to extract symbol from filename (common patterns)
     symbol = "UNKNOWN"
     if "_" in data_filename:
         parts = data_filename.split("_")
         if len(parts) >= 2:
             symbol = f"{parts[0]}_{parts[1]}"  # e.g., BTC_USD from BTC_USD_1min.csv
-    
+
+    # Parse dollar threshold argument
+    dollar_threshold_arg = args.dollar_threshold or "auto"
+    dollar_threshold = None
+
+    try:
+        dollar_threshold = float(dollar_threshold_arg)
+        print(f"Using specified dollar threshold: ${dollar_threshold:,.0f}")
+    except (ValueError, TypeError):
+        print(f"Warning: Invalid dollar threshold '{dollar_threshold_arg}', using auto-detect")
+        dollar_threshold = "auto"
+
+    # Auto-detect threshold
+    if dollar_threshold == "auto":
+        # Use 5 walk-forward windows by default for robust optimization
+        dollar_threshold = auto_detect_dollar_thresholds(df, walk_forward_windows=5, symbol=symbol)
+        # Create dollar bars immediately to get count
+
+    df = create_dollar_bars(df, dollar_threshold)
+    print(f"  {black('Dollar bar threshold:'.ljust(22))} ${dollar_threshold:,.0f}")
+    print(f"  {black('Dollar bars created:'.ljust(22))} {len(df)}")
+
+    # Estimate volatility scale for adaptive regime thresholds
+    volatility_scale = estimate_asset_volatility_scale(df)
+    param_ranges = create_enhanced_parameter_ranges(volatility_scale)
+    print("Using enhanced strategy with gradual entries and adaptive regime thresholds")
+
+    # Determine timeframe string
+    timeframe = f"dollar_{int(dollar_threshold)}"
+
     ga = GeneticAlgorithm(
         parameter_config=param_ranges,
         symbol=symbol,
@@ -656,127 +631,160 @@ def handle_optimize_command(args):
         allow_shorts=args.allow_shorts,
     )
 
-    if args.walk_forward:
-        # Walk-forward optimization
-        print("\nRunning walk-forward optimization...")
-        wfo = WalkForwardOptimizer(
-            window_size=args.window_days, step_size=args.step_days
-        )
+    # Walk-forward optimization
+    print("\nRunning walk-forward optimization...")
 
-        results = wfo.optimize(df, ga, save_results=True, output_dir=args.output_dir)
-
-        print(f"\nAverage Train Fitness: {results['avg_train_fitness']:.4f}")
-        print(f"Average Test Fitness: {results['avg_test_fitness']:.4f}")
-
-        # Sound notification when walk-forward optimization completes
-        play_completion_sound()
-
-        # Update playbook if context specified
-        if args.context_id:
-            playbook_mgr = PlaybookManager()
-            # Convert results to playbook format
-            # This would need more sophisticated mapping
-            print(f"\nUpdating playbook for context: {args.context_id}")
-
+    # Calculate number of windows based on available bars
+    # For dollar bars, we use bar count not time-based windows
+    total_bars = len(df)
+    # With 70/30 split, we need ~333 bars per window to get 100 bars in test set
+    min_bars_per_window = 333  # Ensures ~100 bars in test set with 70/30 split
+    
+    # Calculate how many windows we can actually support with the minimum requirement
+    max_possible_windows = total_bars // min_bars_per_window
+    
+    if max_possible_windows >= 1:
+        # We have enough data for at least one proper window
+        n_windows = min(max_possible_windows, 5)  # Use up to 5 windows if possible
     else:
-        # Simple optimization
-        print("\nRunning optimization...")
-        best_individual, fitness_history, ensemble_params = ga.optimize(df)
+        # Not enough data for even one proper window
+        # Use just 1 window with whatever data we have
+        n_windows = 1
+        print(f"⚠️  Warning: Only {total_bars} bars available (need {min_bars_per_window} per window)")
+        print(f"   Using 1 window with limited data")
+    
+    bars_per_window = total_bars // n_windows
+    test_bars = int(bars_per_window * 0.3)
+    
+    print(f"  Total bars: {total_bars}")
+    print(f"  Windows: {n_windows} (each with {bars_per_window} bars, ~{test_bars} in test)")
 
-        print(f"\nBest fitness: {best_individual.fitness:.4f}")
-        print("\nBest parameters:")
-        for param, value in best_individual.genes.items():
-            print(f"  {param}: {value:.4f}")
-        
-        if ensemble_params:
-            print("\nEnsemble parameters (weighted average of top 3):")
-            for param, value in ensemble_params.items():
-                print(f"  {param}: {value:.4f}")
+    wfo = WalkForwardOptimizer(
+        n_windows=n_windows, 
+        train_ratio=0.7  # Default 70/30 train/test split
+    )
 
-        # Sound notification when optimization completes
-        play_completion_sound()
+    results = wfo.optimize(df, ga, save_results=True, output_dir=args.output_dir)
 
-        # Save results if output specified
-        if args.output is not None:
-            print("\nSaving optimization results...")
-            results_dir = Path(args.output_dir)
-            results_dir.mkdir(exist_ok=True)
+    # Extract best parameters from walk-forward results
+    best_test_fitness = -float('inf')
+    best_individual = None
 
-            # Save optimized parameters
-            import json
+    for window_result in results['windows']:
+        if window_result['test_fitness'] > best_test_fitness:
+            best_test_fitness = window_result['test_fitness']
+            # Recreate Individual from saved genes
+            from generic_algorithm import Individual
+            best_individual = Individual(ga.parameter_ranges)
+            best_individual.genes = window_result['best_parameters']
+            best_individual.fitness = window_result['train_fitness']
 
-            # Convert data path to absolute path for portability
-            data_path = Path(args.data).resolve()
+    if best_individual is None:
+        print("Error: No valid parameters found in walk-forward optimization")
+        return 1
 
-            params_data = {
-                "parameters": {k: float(v) for k, v in best_individual.genes.items()},
-                "fitness": float(best_individual.fitness),
-                "allow_shorts": args.allow_shorts,
-                "data_file": str(data_path),  # Save absolute path
-                "dollar_threshold": dollar_threshold,  # None if disabled, number if enabled
-                "population_size": args.population,
-                "generations": args.generations,
-                "parameter_ranges": {k: v.to_dict() for k, v in param_ranges.items()},
-                "fitness_progression": {
-                    "initial": float(fitness_history[0]) if fitness_history else None,
-                    "final": float(fitness_history[-1]) if fitness_history else None,
-                    "improvement": (
-                        float(fitness_history[-1] - fitness_history[0])
-                        if fitness_history
-                        else None
-                    ),
-                    "generations_to_converge": len(
-                        set(fitness_history)
-                    ),  # Unique fitness values
-                },
-                "ensemble_parameters": ensemble_params if ensemble_params else None,
+    print(f"\nAverage Train Fitness: {results['avg_train_fitness']:.4f}")
+    print(f"Average Test Fitness: {results['avg_test_fitness']:.4f}")
+    print(f"\nBest fitness: {best_individual.fitness:.4f}")
+    print("Best parameters:")
+    for param, value in best_individual.genes.items():
+        print(f"  {param}: {value:.4f}")
+
+    # Sound notification when walk-forward optimization completes
+    play_completion_sound()
+
+    # Save results if output specified
+    if args.output is not None:
+        print("\nSaving optimization results...")
+        results_dir = Path(args.output_dir)
+        results_dir.mkdir(exist_ok=True)
+
+        # Save optimized parameters
+        # Convert data path to absolute path for portability
+        data_path = Path(args.data).resolve()
+
+        params_data = {
+            "parameters": {k: float(v) for k, v in best_individual.genes.items()},
+            "fitness": float(best_individual.fitness),
+            "allow_shorts": args.allow_shorts,
+            "data_file": str(data_path),  # Save absolute path
+            "dollar_threshold": dollar_threshold,  # None if disabled, number if enabled
+            "population_size": args.population,
+            "generations": args.generations,
+            "parameter_ranges": {k: v.to_dict() for k, v in param_ranges.items()},
+            "walk_forward_results": {
+                "avg_train_fitness": results['avg_train_fitness'],
+                "avg_test_fitness": results['avg_test_fitness'],
+                "best_test_fitness": float(best_test_fitness),
+                "n_windows": n_windows
             }
+        }
 
-            # Use output prefix if provided
-            if args.output and args.output.strip():  # If output has a value
-                prefix = args.output.strip()
-                params_filename = f"{prefix}-params.json"
-            else:  # If output is empty string or just flag
-                params_filename = "params.json"
+        # Use output prefix if provided
+        if args.output and args.output.strip():  # If output has a value
+            prefix = args.output.strip()
+            params_filename = f"{prefix}-params.json"
+        else:  # If output is empty string or just flag
+            params_filename = "params.json"
 
-            params_file = results_dir / params_filename
-            with open(params_file, "w") as f:
-                json.dump(params_data, f, indent=2)
-            print(f"   Optimized parameters saved to: {params_file}")
+        params_file = results_dir / params_filename
+        with open(params_file, "w") as f:
+            json.dump(params_data, f, indent=2)
+        print(f"   Optimized parameters saved to: {params_file}")
 
-            # Run test if requested
-            if args.test:
-                print("\n" + "=" * 60)
-                print("Running test with optimized parameters...")
-                print("=" * 60)
+        # Run test if requested
+        if args.test:
+            print("\n" + "=" * 60)
+            print("Running test with optimized parameters...")
+            print("=" * 60)
 
-                # Create test args object
-                class TestArgs:
-                    def __init__(self):
-                        self.params = str(params_file)
-                        self.data = None  # Use saved data path
-                        self.dollar_threshold = None  # Use saved threshold
-                        self.capital = 100000
-                        self.plot = args.plot  # Pass through plot flag
-                        self.llm = args.llm  # Pass through llm flag
-                        self.allow_shorts = False  # Use saved setting
-                        self.save_results = False  # Default for test command
+            # Import TestArgs properly
+            from args_types import TestArgs
+            
+            # Create a proper TestArgs instance
+            test_args = TestArgs(
+                params=str(params_file),
+                data=None,  # Use saved data path
+                dollar_threshold=None,  # Use saved threshold
+                capital=100000,
+                save_results=False,  # Default for test command
+                output_dir="./strategy_results",
+                allow_shorts=False,  # Use saved setting
+                plot=args.plot,  # Pass through plot flag
+                llm=args.llm  # Pass through llm flag
+            )
 
-                test_args = TestArgs()
+            # Run the test
+            result = handle_test_command(test_args)
 
-                # Run the test
-                result = handle_test_command(test_args)
+            if result != 0:
+                print("Warning: Test command failed")
+            elif args.plot:
+                print("\nPlots have been generated (if test was successful)")
 
-                if result != 0:
-                    print("Warning: Test command failed")
-                elif args.plot:
-                    print("\nPlots have been generated (if test was successful)")
+    # Update playbook if context specified
+    if args.context_id:
+        playbook_mgr = PlaybookManager()
+        # Convert results to playbook format
+        # This would need more sophisticated mapping
+        print(f"\nUpdating playbook for context: {args.context_id}")
 
     return 0
 
 
-def handle_test_command(args):
-    """Handle test commands"""
+def handle_test_command(args: Union[argparse.Namespace, TestArgs]) -> int:
+    """Handle test commands
+    
+    Parameters
+    ----------
+    args : Union[argparse.Namespace, TestArgs]
+        Test command arguments
+        
+    Returns
+    -------
+    int
+        Exit code (0 for success, 1 for error)
+    """
     print("\nHelios Strategy Testing")
     print("=" * 40)
 
@@ -849,6 +857,14 @@ def handle_test_command(args):
         print(f"Error loading data: {e}")
         return 1
 
+    # Extract symbol from data filename for caching
+    data_filename = Path(data_file).stem
+    symbol = "UNKNOWN"
+    if "_" in data_filename:
+        parts = data_filename.split("_")
+        if len(parts) >= 2:
+            symbol = f"{parts[0]}_{parts[1]}"
+
     # Parse dollar threshold override if provided
     if args.dollar_threshold is not None:
         if args.dollar_threshold in ["none", "off", "disable", "false"]:
@@ -859,7 +875,7 @@ def handle_test_command(args):
             use_dollar_bars = True
             from optimization import auto_detect_dollar_thresholds
 
-            dollar_threshold = auto_detect_dollar_thresholds(df)
+            dollar_threshold = auto_detect_dollar_thresholds(df, walk_forward_windows=5, symbol=symbol)
             print(
                 f"Command line override: Auto-detected dollar threshold: ${dollar_threshold:,.0f}"
             )

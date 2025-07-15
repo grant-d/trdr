@@ -35,7 +35,7 @@ if [ -z "$1" ]; then
     echo "  --population SIZE        GA population size (default: 20)"
     echo "  --generations COUNT      GA generations (default: 10)"
     echo "  --lookback BARS         Lookback bars for optimization (default: 200)"
-    echo "  --initial-bars COUNT    Initial historical bars to fetch (default: 1000)"
+    echo "  --initial-bars COUNT    Initial historical bars to fetch (default: 4000)"
     echo "  --capital AMOUNT        Initial capital (default: 100000)"
     echo "  --check-interval SECS   Check interval in seconds (default: 5)"
     echo "  --max-opt-bars BARS     Max bars for optimization window (default: 2000)"

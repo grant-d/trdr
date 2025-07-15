@@ -24,6 +24,7 @@ from alpaca_client import AlpacaClient
 from main import handle_optimize_command, handle_test_command
 from data_processing import prepare_data, create_dollar_bars, impute_missing_bars
 from factors import calculate_mss, calculate_macd, calculate_rsi
+from optimization import WalkForwardOptimizer
 from strategy_enhanced import EnhancedTradingStrategy, Position
 from chalk import Chalk, green, red, yellow, blue, cyan, magenta, white, bold, black
 from args_types import OptimizeArgs, TestArgs
@@ -42,10 +43,12 @@ class LiveTrader:
                  population: int = 50,
                  generations: int = 20,
                  lookback_bars: int = 200,
-                 initial_history_bars: int = 1000,
+                 initial_history_bars: int = 4000,
                  capital: float = 100_000.0,
                  check_interval: int = 5,
                  max_optimization_bars: int = 2000,
+                 walk_forward_windows: int = 5,
+                 train_ratio: float = 0.7,
                  dollar_threshold: str = "auto",
                  fitness: str = "sortino",
                  allow_shorts: bool = False,
@@ -74,6 +77,8 @@ class LiveTrader:
         self.capital = capital
         self.check_interval = check_interval
         self.max_optimization_bars = max_optimization_bars
+        self.walk_forward_windows = max(walk_forward_windows, 1)  # Always use at least 1 window
+        self.train_ratio = min(max(0.05, train_ratio), 0.95)  # [0.05, 0.95] range for train ratio
         self.dollar_threshold = dollar_threshold
         self.fitness = fitness
         self.allow_shorts = allow_shorts
@@ -404,7 +409,8 @@ class LiveTrader:
     
     def run_optimization_on_dataframe(self, df: pd.DataFrame) -> Dict:
         """Run optimization directly on DataFrame without file I/O"""
-        from optimization import GeneticAlgorithm, create_enhanced_parameter_ranges, estimate_asset_volatility_scale
+        from optimization import create_enhanced_parameter_ranges
+        from generic_algorithm import GeneticAlgorithm, estimate_asset_volatility_scale
         from data_processing import prepare_data, create_dollar_bars
         
         # Prepare data
@@ -412,14 +418,24 @@ class LiveTrader:
         
         # Handle dollar bars
         use_dollar_bars = self.dollar_threshold not in [None, "none", "off", "disable", "false"]
+        dollar_threshold = None
         if use_dollar_bars:
             if self.dollar_threshold == "auto":
                 from optimization import auto_detect_dollar_thresholds
-                dollar_threshold = auto_detect_dollar_thresholds(df_prepared)
-                # Create dollar bars immediately to get count
+                # Pass walk-forward parameters to get appropriate threshold
+                dollar_threshold = auto_detect_dollar_thresholds(
+                    df_prepared, 
+                    walk_forward_windows=self.walk_forward_windows,
+                    symbol=self.symbol
+                )
+                
+                # Create dollar bars with final threshold
                 df_dollar = create_dollar_bars(df_prepared, dollar_threshold)
+                final_bars = len(df_dollar)
+                bars_per_window = final_bars // self.walk_forward_windows
                 print(f"  {black('Dollar bar threshold:'.ljust(22))} ${dollar_threshold:,.0f}")
-                print(f"  {black('Dollar bars created:'.ljust(22))} {len(df_dollar)}")
+                print(f"  {black('Dollar bars created:'.ljust(22))} {final_bars}")
+                print(f"  {black('Bars per window:'.ljust(22))} {bars_per_window} ({int(bars_per_window * self.train_ratio)} train, {bars_per_window - int(bars_per_window * self.train_ratio)} test)")
                 df_prepared = df_dollar
             else:
                 try:
@@ -427,7 +443,11 @@ class LiveTrader:
                     print(f"Using specified dollar threshold: ${dollar_threshold:,.0f}")
                 except (ValueError, TypeError):
                     from optimization import auto_detect_dollar_thresholds
-                    dollar_threshold = auto_detect_dollar_thresholds(df_prepared)
+                    dollar_threshold = auto_detect_dollar_thresholds(
+                        df_prepared,
+                        walk_forward_windows=self.walk_forward_windows,
+                        symbol=self.symbol
+                    )
                     print(f"Invalid threshold, using auto-detect: ${dollar_threshold:,.0f}")
             
             if self.dollar_threshold != "auto":
@@ -470,12 +490,56 @@ class LiveTrader:
         
         # Optimization starts here
         
-        # Run optimization
-        best_individual, fitness_history, ensemble_params = ga.optimize(df_prepared, verbose=True)
+        # Use WalkForwardOptimizer for consistent approach
+        # Create walk-forward optimizer (always bar-based)
+        wfo = WalkForwardOptimizer(
+            n_windows=self.walk_forward_windows,
+            train_ratio=self.train_ratio
+        )
+        
+        # Run walk-forward optimization
+        print(f"\n{cyan(f'Running walk-forward optimization with {self.walk_forward_windows} window{"s" if self.walk_forward_windows > 1 else ""}...')}")
+        
+        # For single window, make GA verbose
+        if self.walk_forward_windows == 1:
+            ga.generations = self.generations  # Ensure we use the right number of generations
+        results = wfo.optimize(df_prepared, ga, save_results=False)
+        
+        # Extract best parameters from results
+        best_test_fitness = -float('inf')
+        best_individual = None
+        all_test_fitness = []
+        
+        for window_result in results['windows']:
+            test_fitness = window_result['test_fitness']
+            all_test_fitness.append(test_fitness)
+            
+            if test_fitness > best_test_fitness:
+                best_test_fitness = test_fitness
+                # Recreate Individual from saved genes
+                from generic_algorithm import Individual
+                best_individual = Individual(ga.parameter_ranges)
+                best_individual.genes = window_result['best_parameters']
+                best_individual.fitness = window_result['train_fitness']
+        
+        # Use fitness history from first window if single window
+        fitness_history = results['windows'][0]['fitness_history'] if self.walk_forward_windows == 1 else []
+        
+        # Report results
+        if self.walk_forward_windows > 1:
+            avg_test_fitness = sum(all_test_fitness) / len(all_test_fitness) if all_test_fitness else 0
+            print(f"\n{green('Walk-forward complete:')}")
+            print(f"  Average test fitness: {avg_test_fitness:.4f}")
+            print(f"  Best test fitness: {best_test_fitness:.4f}")
+            print(f"  Selected parameters from window with best test performance")
         
         # Save the updated archive for next optimization
         self.ga_archive = ga.candidate_archive.copy()
         
+        if best_individual is None:
+            print(f"\n{red('Optimization failed to find valid parameters')}")
+            raise Exception("No valid parameters found during optimization")
+            
         print(f"\nBest fitness: {best_individual.fitness:.4f}")
         print("\nBest parameters:")
         for param, value in best_individual.genes.items():
@@ -1068,7 +1132,7 @@ class LiveTrader:
         print(f"{white('Symbol:'.ljust(13))} {bold(self.symbol)}")
         print(f"{white('Timeframe:'.ljust(13))} {cyan(f'{self.timeframe_minutes} minute bars')}")
         print(f"{white('GA Settings:'.ljust(13))} Pop={cyan(str(self.population))}, Gen={cyan(str(self.generations))}")
-        print(f"{white('Walk-Forward:'.ljust(13))} {cyan(f'{self.max_optimization_bars} bars')} rolling window")
+        print(f"{white('Walk-Forward:'.ljust(13))} {cyan(f'{self.walk_forward_windows} window{"s" if self.walk_forward_windows > 1 else ""}')} × {cyan(f'{int(self.max_optimization_bars/self.walk_forward_windows)} bars')} ({cyan(f'{self.train_ratio:.0%}')} train)")
         print(f"{white('Cache file:'.ljust(13))} {cyan(self.csv_filename.name)}")
         if not self.cached_df.empty:
             min_time = self.cached_df['timestamp'].min().strftime('%Y-%m-%d %H:%M')
@@ -1213,8 +1277,10 @@ def main():
     parser.add_argument('--population', type=int, default=50, help='GA population size (default: 50)')
     parser.add_argument('--generations', type=int, default=20, help='GA generations (default: 20)')
     parser.add_argument('--lookback', type=int, default=200, help='Lookback bars for optimization (default: 200)')
-    parser.add_argument('--initial-bars', type=int, default=1000, help='Initial historical bars to fetch (default: 1000)')
+    parser.add_argument('--initial-bars', type=int, default=4000, help='Initial historical bars to fetch (default: 4000)')
     parser.add_argument('--max-opt-bars', type=int, default=2000, help='Max bars for walk-forward optimization window (default: 2000)')
+    parser.add_argument('--walk-forward-windows', type=int, default=5, help='Number of walk-forward windows (default: 5, use 1 to disable)')
+    parser.add_argument('--train-ratio', type=float, default=0.7, help='Train/test split ratio for walk-forward (default: 0.7)')
     parser.add_argument('--dollar-threshold', default="auto", help='Dollar volume threshold for bars (default: auto-detect, number, or "none" to disable)')
     parser.add_argument('--fitness', choices=['sortino', 'calmar'], default='sortino', help='Fitness metric to optimize (default: sortino)')
     parser.add_argument('--allow-shorts', action='store_true', help='Allow short positions (disabled by default)')
@@ -1239,6 +1305,8 @@ def main():
         capital=args.capital,
         check_interval=args.check_interval,
         max_optimization_bars=args.max_opt_bars,
+        walk_forward_windows=args.walk_forward_windows,
+        train_ratio=args.train_ratio,
         dollar_threshold=args.dollar_threshold,
         fitness=args.fitness,
         allow_shorts=args.allow_shorts

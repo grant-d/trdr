@@ -410,26 +410,24 @@ class EnhancedTradingStrategy:
             # Record results
             portfolio_value = self.cash + self.position.units * current_price
 
-            results.append(
-                {
-                    "timestamp": timestamp,
-                    "close": current_price,
-                    "regime": regime,
-                    "mss": mss_value,
-                    "atr": atr,
-                    "position_units": self.position.units,
-                    "position_fraction": self.position.units
-                    * current_price
-                    / self.initial_capital,
-                    "target_fraction": target_position_fraction,
-                    "cash": self.cash,
-                    "portfolio_value": portfolio_value,
-                    "returns": (portfolio_value / self.initial_capital - 1) * 100,
-                    "stop_loss": (
-                        self.position.stop_loss if self.position.is_open else 0.0
-                    ),
-                }
-            )
+            results.append({
+                "timestamp": timestamp,
+                "close": current_price,
+                "regime": regime,
+                "mss": mss_value,
+                "atr": atr,
+                "position_units": self.position.units,
+                "position_fraction": self.position.units
+                * current_price
+                / self.initial_capital,
+                "target_fraction": target_position_fraction,
+                "cash": self.cash,
+                "portfolio_value": portfolio_value,
+                "returns": (portfolio_value / self.initial_capital - 1) * 100,
+                "stop_loss": (
+                    self.position.stop_loss if self.position.is_open else 0.0
+                ),
+            })
 
         return pd.DataFrame(results)
 

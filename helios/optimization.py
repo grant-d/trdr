@@ -3,74 +3,86 @@ Genetic Algorithm optimization for Helios Trader
 Implements walk-forward optimization of strategy parameters
 """
 
+import math
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Tuple, Optional, Callable, Union, Mapping
-from dataclasses import dataclass
-import random
-from datetime import datetime, timedelta
+from typing import Dict, List, Tuple
+from datetime import datetime
 import json
 from pathlib import Path
-import signal
-import time
-import threading
-from chalk import black, cyan, green, yellow, red, bold
-from .factors import calculate_mss, calculate_macd, calculate_rsi
-from .strategy_enhanced import EnhancedTradingStrategy
-from .performance import calculate_sortino_ratio, calculate_calmar_ratio
-from .data_processing import prepare_data
-from .ranges import ParameterRange, MinMaxRange, LogRange, DiscreteRange, create_log_range, create_discrete_range
-from .generic_algorithm import GeneticAlgorithm, estimate_asset_volatility_scale
+from chalk import black
+from ranges import ParameterRange, MinMaxRange, create_log_range
+from generic_algorithm import GeneticAlgorithm
 
 class WalkForwardOptimizer:
     """
     Walk-forward optimization for genetic algorithm
     """
     
-    def __init__(self, 
-                 window_size: int = 365,
-                 step_size: int = 90,
-                 test_size: int = 90):
+    def __init__(self, n_windows: int = 5, train_ratio: float = 0.7):
         """
-        Initialize walk-forward optimizer
+        Initialize walk-forward optimizer (always uses bar-based, non-overlapping windows)
         
         Parameters:
         -----------
-        window_size : int
-            Training window size in days
-        step_size : int
-            Step size for moving window
-        test_size : int
-            Test period size in days
+        n_windows : int
+            Number of windows to create (minimum 1)
+        train_ratio : float
+            Train/test split ratio (e.g., 0.7 means 70% train, 30% test)
         """
-        self.window_size = window_size
-        self.step_size = step_size
-        self.test_size = test_size
+        self.n_windows = math.trunc(max(n_windows, 1))  # Ensure at least 1 window
+        self.train_ratio = min(max(0.05, train_ratio), 0.95)
     
-    def generate_windows(self, data: pd.DataFrame) -> List[Tuple[pd.Timestamp, pd.Timestamp, pd.Timestamp, pd.Timestamp]]:
+    def generate_windows(self, data: pd.DataFrame) -> List[Tuple[int, int, int, int]]:
         """
-        Generate train/test windows
+        Generate train/test windows (always bar-based, non-overlapping)
         
         Returns:
         --------
-        List of tuples (train_start, train_end, test_start, test_end)
+        List of tuples (train_start, train_end, test_start, test_end) as bar indices
         """
         windows = []
+        total_bars = len(data)
         
-        start_date = data.index[0]
-        end_date = data.index[-1]
+        # Calculate minimum bars needed based on test split requirement
+        # We need at least 100 bars in the TEST set for meaningful evaluation
+        min_test_bars = 100
+        min_bars_per_window = int(min_test_bars / (1 - self.train_ratio))  # e.g., 100 / 0.3 = 333
         
-        current_start = start_date
+        # Check if we should adjust the number of windows
+        if total_bars < min_bars_per_window * self.n_windows:
+            # Not enough data for requested windows with minimum size
+            # Recalculate to use fewer windows
+            actual_n_windows = max(1, total_bars // min_bars_per_window)
+            
+            if actual_n_windows < self.n_windows:
+                print(f"⚠️  Adjusting from {self.n_windows} to {actual_n_windows} windows due to insufficient data")
+                if actual_n_windows == 0:
+                    actual_n_windows = 1
+                    print(f"   Using 1 window with only {total_bars} bars (minimum recommended: {min_bars_per_window})")
+        else:
+            actual_n_windows = self.n_windows
         
-        while current_start + timedelta(days=self.window_size + self.test_size) <= end_date:
-            train_start = current_start
-            train_end = current_start + timedelta(days=self.window_size)
+        # Calculate actual window size
+        window_size = total_bars // actual_n_windows
+        
+        if window_size < min_bars_per_window:
+            print(f"Warning: Only {window_size} bars per window (minimum recommended: {min_bars_per_window})")
+            print(f"  With {self.train_ratio:.0%} train split, test set has only {int(window_size * (1 - self.train_ratio))} bars")
+        
+        train_size = int(window_size * self.train_ratio)
+        test_size = window_size - train_size
+        
+        for i in range(actual_n_windows):
+            train_start = i * window_size
+            train_end = train_start + train_size
             test_start = train_end
-            test_end = test_start + timedelta(days=self.test_size)
+            test_end = min(test_start + test_size, total_bars)
             
+            if test_end > total_bars:
+                break
+                
             windows.append((train_start, train_end, test_start, test_end))
-            
-            current_start += timedelta(days=self.step_size)
         
         return windows
     
@@ -105,9 +117,9 @@ class WalkForwardOptimizer:
             print(f"Train: {train_start} to {train_end}")
             print(f"Test: {test_start} to {test_end}")
             
-            # Get train and test data
-            train_data = data[train_start:train_end]
-            test_data = data[test_start:test_end]
+            # Get train and test data (always bar-based)
+            train_data = data.iloc[train_start:train_end]
+            test_data = data.iloc[test_start:test_end]
             
             # Optimize on training data
             best_individual, fitness_history, ensemble_params = ga.optimize(train_data, verbose=False)
@@ -117,10 +129,10 @@ class WalkForwardOptimizer:
             
             window_result = {
                 'window': i,
-                'train_start': train_start.isoformat(),
-                'train_end': train_end.isoformat(),
-                'test_start': test_start.isoformat(),
-                'test_end': test_end.isoformat(),
+                'train_start': train_start,
+                'train_end': train_end,
+                'test_start': test_start,
+                'test_end': test_end,
                 'best_parameters': best_individual.genes,
                 'train_fitness': best_individual.fitness,
                 'test_fitness': test_fitness,
@@ -163,7 +175,7 @@ class WalkForwardOptimizer:
         
         return optimization_results
 
-def auto_detect_dollar_thresholds(data: pd.DataFrame, sample_size: int = 1000) -> float:
+def auto_detect_dollar_thresholds(data: pd.DataFrame, walk_forward_windows: int = 1, symbol: str = "UNKNOWN", cache_dir: str = "./helios/data") -> float:
     """
     Automatically detect appropriate dollar bar thresholds based on asset characteristics
     
@@ -171,61 +183,114 @@ def auto_detect_dollar_thresholds(data: pd.DataFrame, sample_size: int = 1000) -
     -----------
     data : pd.DataFrame
         OHLCV data with columns: open, high, low, close, volume
-    sample_size : int
-        Number of recent bars to analyze for threshold detection
+    walk_forward_windows : int
+        Number of walk-forward windows needed (affects bar count requirements)
+    symbol : str
+        Symbol name for caching the threshold
+    cache_dir : str
+        Directory to cache the threshold file
         
     Returns:
     --------
     float
         Single recommended threshold value
     """
-    # Use most recent data for analysis
-    sample_data = data.tail(sample_size)
+    # Check if we have a cached threshold for this symbol
+    cache_file = Path(cache_dir) / f"{symbol}_dollar_threshold.json"
+    if cache_file.exists():
+        try:
+            with open(cache_file, 'r') as f:
+                cache_data = json.load(f)
+                cached_threshold = cache_data.get('dollar_threshold')
+                if cached_threshold:
+                    print(f"\n{black('Using cached dollar threshold for {}'.format(symbol))}: ${cached_threshold:,.0f}")
+                    return float(cached_threshold)
+        except Exception as e:
+            print(f"Warning: Could not load cached threshold: {e}")
+    # Calculate dollar volume for ALL bars in the dataset
+    dollar_volume = (data['high'] + data['low'] + data['close']) / 3 * data['volume']
     
-    # Calculate dollar volume per bar
-    dollar_volume = (sample_data['high'] + sample_data['low'] + sample_data['close']) / 3 * sample_data['volume']
+    # Calculate total dollar volume
+    total_dollar_volume = float(dollar_volume.sum())
     
-    # Calculate statistics - ensure we get numeric values
-    # Use pandas methods for better type handling
+    # Calculate basic statistics
     median_dollar_vol = float(dollar_volume.median())
     mean_dollar_vol = float(dollar_volume.mean())
+    std_dollar_vol = float(dollar_volume.std())
     
-    # Determine asset class based on price level and volume characteristics
-    avg_price = float(sample_data['close'].mean())
-    avg_volume = float(sample_data['volume'].mean())
+    # Calculate target number of bars needed
+    # We need at least 100 bars in TEST set, with 70/30 split that means ~333 bars per window
+    min_test_bars = 100
+    train_ratio = 0.7  # Standard 70/30 split
+    min_bars_per_window = int(min_test_bars / (1 - train_ratio))  # 100 / 0.3 = 333
+    safety_factor = 1.5  # Standard safety factor
+    target_total_bars = walk_forward_windows * min_bars_per_window * safety_factor
     
+    # Simple calculation: total volume / target bars = threshold
+    # This ensures we get approximately the right number of bars
+    base_threshold = total_dollar_volume / target_total_bars
+    
+    # Adjust for volume distribution
+    # If volume is highly skewed (common in crypto), we need a lower threshold
+    volume_skewness = std_dollar_vol / (mean_dollar_vol + 1e-9)
+    
+    if volume_skewness > 3.0:
+        # High skewness - many small bars, few large bars
+        adjustment_factor = 0.3
+    elif volume_skewness > 1.5:
+        # Moderate skewness
+        adjustment_factor = 0.6
+    else:
+        # Low skewness - relatively uniform volume
+        adjustment_factor = 0.9
+    
+    target_threshold = base_threshold * adjustment_factor
+    
+    # Simple bounds check
+    if median_dollar_vol > 0:
+        # Don't let threshold be too extreme relative to median
+        min_threshold = median_dollar_vol * 0.01
+        max_threshold = median_dollar_vol * 100
+        target_threshold = float(np.clip(target_threshold, min_threshold, max_threshold))
+    
+    # Print analysis
     print(f"\n{black('Auto-threshold analysis:')}")
-    print(f"  {black('Average price:'.ljust(22))} ${avg_price:.2f}")
-    print(f"  {black('Average volume:'.ljust(22))} {avg_volume:,.0f}")
-    print(f"  {black('Median dollar volume:'.ljust(22))} ${median_dollar_vol:,.0f}")
-    print(f"  {black('Mean dollar volume:'.ljust(22))} ${mean_dollar_vol:,.0f}")
+    print(f"  {black('Total bars:'.ljust(22))} {len(data)}")
+    print(f"  {black('Total dollar volume:'.ljust(22))} ${total_dollar_volume:,.0f}")
+    print(f"  {black('Mean dollar vol/bar:'.ljust(22))} ${mean_dollar_vol:,.0f}")
+    print(f"  {black('Median dollar vol/bar:'.ljust(22))} ${median_dollar_vol:,.0f}")
+    print(f"  {black('Volume skewness:'.ljust(22))} {volume_skewness:.2f}")
+    print(f"  {black('Walk-forward windows:'.ljust(22))} {walk_forward_windows}")
+    print(f"  {black('Target bars needed:'.ljust(22))} {int(target_total_bars)}")
+    print(f"  {black('Base threshold:'.ljust(22))} ${base_threshold:,.0f}")
+    print(f"  {black('Adjustment factor:'.ljust(22))} {adjustment_factor}")
+    print(f"  {black('Target threshold:'.ljust(22))} ${target_threshold:,.0f}")
     
-    # Calculate target bars per day (aim for 20-50 bars)
-    target_bars_per_day = 30  # Good balance for most assets
+    # Save the calculated threshold for future use
+    try:
+        cache_dir_path = Path(cache_dir)
+        cache_dir_path.mkdir(parents=True, exist_ok=True)
+        cache_file = cache_dir_path / f"{symbol}_dollar_threshold.json"
+        
+        cache_data = {
+            'dollar_threshold': float(target_threshold),
+            'symbol': symbol,
+            'calculated_at': datetime.now().isoformat(),
+            'walk_forward_windows': walk_forward_windows,
+            'total_bars': len(data),
+            'mean_dollar_volume': mean_dollar_vol,
+            'median_dollar_volume': median_dollar_vol,
+            'volume_skewness': volume_skewness
+        }
+        
+        with open(cache_file, 'w') as f:
+            json.dump(cache_data, f, indent=2)
+        
+        print(f"  {black('Saved threshold to:'.ljust(22))} {cache_file}")
+    except Exception as e:
+        print(f"Warning: Could not save threshold to cache: {e}")
     
-    # Calculate threshold to achieve target bars per day
-    target_threshold = median_dollar_vol / target_bars_per_day
-    
-    # Set reasonable bounds (0.5x to 2x the target)
-    min_threshold = float(target_threshold * 0.5)
-    max_threshold = float(target_threshold * 2.0)
-    
-    # Apply absolute limits to prevent extreme values
-    # Use a more reasonable minimum based on the actual data
-    data_max_dollar_vol = float(dollar_volume.max())
-    reasonable_min = max(1000.0, data_max_dollar_vol * 0.01)  # At least $1k or 1% of max volume
-    min_threshold = max(reasonable_min, min(min_threshold, 100_000_000.0))
-    max_threshold = max(min_threshold * 2, min(max_threshold, 500_000_000.0))
-    
-    print(f"  {black('Target:'.ljust(22))} ~{target_bars_per_day} bars per day")
-    
-    # Create logarithmic range with 4 points
-    threshold_range = create_log_range(float(min_threshold), float(max_threshold), 4)
-    
-    # Return the second value (index 1) from the 4-point range
-    # This gives us a more conservative threshold for more bars per day
-    # With 4 values: [min, lower-mid, upper-mid, max], we pick lower-mid
-    return threshold_range.values[1]
+    return float(target_threshold)
 
 def create_enhanced_parameter_ranges(volatility_scale: float = 1.0) -> Dict[str, ParameterRange]:
     """

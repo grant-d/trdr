@@ -15,7 +15,6 @@ from chalk import black, cyan, green, yellow, red, bold
 from factors import calculate_mss, calculate_macd, calculate_rsi
 from strategy_enhanced import EnhancedTradingStrategy
 from performance import calculate_sortino_ratio, calculate_calmar_ratio
-from data_processing import prepare_data
 from ranges import ParameterRange, MinMaxRange, LogRange, DiscreteRange, create_log_range, create_discrete_range
 
 
@@ -988,35 +987,21 @@ class GeneticAlgorithm:
             # Run backtest with enhanced strategy if parameters are available
             initial_capital = 100000
             
-            # Check if we have enhanced parameters
-            has_enhanced_params = any(param in genes for param in [
-                'entry_step_size', 'stop_loss_multiplier_strong', 'stop_loss_multiplier_weak',
-                'strong_bull_threshold', 'weak_bull_threshold', 'strong_bear_threshold'
-            ])
-            
-            if has_enhanced_params:
-                # Use enhanced strategy
-                strategy = EnhancedTradingStrategy(
-                    initial_capital=initial_capital,
-                    max_position_fraction=genes.get('max_position_pct', 1.0),
-                    entry_step_size=genes.get('entry_step_size', 0.2),
-                    stop_loss_multiplier_strong=genes.get('stop_loss_multiplier_strong', 2.0),
-                    stop_loss_multiplier_weak=genes.get('stop_loss_multiplier_weak', 1.0),
-                    strong_bull_threshold=genes.get('strong_bull_threshold', 50.0),
-                    weak_bull_threshold=genes.get('weak_bull_threshold', 20.0),
-                    neutral_upper=genes.get('neutral_threshold_upper', 20.0),
-                    neutral_lower=genes.get('neutral_threshold_lower', -20.0),
-                    weak_bear_threshold=genes.get('weak_bear_threshold', -20.0),
-                    strong_bear_threshold=genes.get('strong_bear_threshold', -50.0),
-                    allow_shorts=self.allow_shorts,
-                )
-            else:
-                # Use enhanced strategy with default parameters
-                strategy = EnhancedTradingStrategy(
-                    initial_capital=initial_capital,
-                    max_position_fraction=genes.get('max_position_pct', 0.95),
-                    allow_shorts=self.allow_shorts
-                )
+            # Use enhanced strategy
+            strategy = EnhancedTradingStrategy(
+                initial_capital=initial_capital,
+                max_position_fraction=genes.get('max_position_pct', 1.0),
+                entry_step_size=genes.get('entry_step_size', 0.2),
+                stop_loss_multiplier_strong=genes.get('stop_loss_multiplier_strong', 2.0),
+                stop_loss_multiplier_weak=genes.get('stop_loss_multiplier_weak', 1.0),
+                strong_bull_threshold=genes.get('strong_bull_threshold', 50.0),
+                weak_bull_threshold=genes.get('weak_bull_threshold', 20.0),
+                neutral_upper=genes.get('neutral_threshold_upper', 20.0),
+                neutral_lower=genes.get('neutral_threshold_lower', -20.0),
+                weak_bear_threshold=genes.get('weak_bear_threshold', -20.0),
+                strong_bear_threshold=genes.get('strong_bear_threshold', -50.0),
+                allow_shorts=self.allow_shorts,
+            )
             
             # Enhanced error handling for malformed strategy results
             try:

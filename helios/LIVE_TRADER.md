@@ -37,7 +37,7 @@ The live trader is a comprehensive paper trading system that runs genetic algori
     --population 100 \
     --generations 50 \
     --lookback 500 \
-    --initial-bars 2000 \
+    --initial-bars 4000 \
     --capital 50000 \
     --check-interval 10
 ```
