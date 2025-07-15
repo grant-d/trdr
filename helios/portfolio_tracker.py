@@ -35,11 +35,17 @@ class PortfolioTracker:
         self.timeframe_minutes = timeframe_minutes
         self.initial_cash = initial_cash
         
-        # Setup file paths
+        # Setup file paths using standardized filename generation
+        from utils import generate_filename
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        safe_symbol = symbol.replace("/", "_")
-        self.trades_filename = self.data_dir / f"{safe_symbol}_{timeframe_minutes}min_trades.csv"
+        self.trades_filename = generate_filename(
+            symbol=symbol,
+            timeframe=timeframe_minutes,
+            postfix="trades",
+            extension=".csv",
+            directory=data_dir
+        )
         
         # Load existing trades or create new
         self.trades_df = self._load_trades()

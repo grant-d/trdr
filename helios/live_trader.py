@@ -94,12 +94,17 @@ class LiveTrader:
         self.cache_fetch_count = 0
         self.cache_message_printed = False
         
-        # CSV caching setup
+        # CSV caching setup using standardized filename generation
+        from utils import generate_filename
         self.cache_dir = Path("./data/cache")
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        # Replace slash with underscore for filename
-        safe_symbol = symbol.replace("/", "_")
-        self.csv_filename = self.cache_dir / f"{safe_symbol}_{timeframe_minutes}min.csv"
+        self.csv_filename = generate_filename(
+            symbol=symbol,
+            timeframe=timeframe_minutes,
+            postfix="cache",
+            extension=".csv",
+            directory="./data/cache"
+        )
         self.cached_df = self.load_cached_data()
         
         # Trading portfolio tracker setup
@@ -131,7 +136,21 @@ class LiveTrader:
     def load_previous_params(self):
         """Load previous optimization parameters if available"""
         try:
-            params_file = Path("./optimization_results/live_trader-params.json")
+            # Try to load params file with current symbol/timeframe first
+            from utils import generate_filename
+            # Use the current timeframe format
+            timeframe_str = f"{self.timeframe_minutes}min"  # Default assumption
+            params_file = generate_filename(
+                symbol=self.symbol,
+                timeframe=timeframe_str,
+                postfix="live_trader_params",
+                extension=".json",
+                directory="./optimization_results"
+            )
+            
+            # Fallback to legacy filename if new one doesn't exist
+            if not params_file.exists():
+                params_file = Path("./optimization_results/live_trader-params.json")
             if params_file.exists():
                 with open(params_file, 'r') as f:
                     data = json.load(f)
@@ -424,11 +443,18 @@ class LiveTrader:
         param_ranges = create_enhanced_parameter_ranges(volatility_scale)
         
         # Initialize genetic algorithm
+        # Determine timeframe string for fitness history
+        if dollar_threshold:
+            timeframe_str = f"dollar_{int(dollar_threshold)}"
+        else:
+            timeframe_str = f"{self.timeframe_minutes}min"
+            
         ga = GeneticAlgorithm(
+            symbol=self.symbol,
+            timeframe=timeframe_str,
             parameter_config=param_ranges,
             population_size=self.population,
             generations=self.generations,
-            fitness_metric=self.fitness
         )
         
         # Seed with previous best parameters if available
@@ -459,7 +485,6 @@ class LiveTrader:
         result_data = {
             'parameters': best_individual.genes.copy(),
             'fitness': best_individual.fitness,
-            'fitness_metric': self.fitness,
             'allow_shorts': self.allow_shorts,
             'data_file': "live_trader_dataframe",  # Indicate it was from DataFrame
             'dollar_threshold': dollar_threshold if use_dollar_bars else None,
@@ -474,12 +499,19 @@ class LiveTrader:
             }
         }
         
-        # Save results for compatibility with test function
+        # Save results for compatibility with test function using standardized filename
         print("\nSaving optimization results...")
         results_dir = Path("./optimization_results")
         results_dir.mkdir(exist_ok=True)
         
-        params_file = results_dir / "live_trader-params.json"
+        from utils import generate_filename
+        params_file = generate_filename(
+            symbol=self.symbol,
+            timeframe=timeframe_str,
+            postfix="live_trader_params",
+            extension=".json",
+            directory="./optimization_results"
+        )
         with open(params_file, 'w') as f:
             json.dump(result_data, f, indent=2)
         
@@ -606,6 +638,11 @@ class LiveTrader:
         """Run optimization and test using main.py functions directly"""
         print(f"\n{cyan(datetime.now().strftime('%H:%M:%S'))} - {yellow('Running optimization...')}", end='', flush=True)
         
+        from utils import generate_filename
+        
+        # Determine timeframe string for consistent filename generation
+        timeframe_str = f"{self.timeframe_minutes}min"
+        
         start_time = time.time()
         
         # Use rolling window with maximum number of bars
@@ -630,7 +667,14 @@ class LiveTrader:
             opt_params = params_data['parameters']
             
             # Parameters file is saved for test command compatibility
-            params_file = Path("./optimization_results/live_trader-params.json")
+            # Use the same standardized filename that was saved earlier
+            params_file = generate_filename(
+                symbol=self.symbol,
+                timeframe=timeframe_str,  # Use same timeframe_str from earlier in the function
+                postfix="live_trader_params",
+                extension=".json",
+                directory="./optimization_results"
+            )
             
             # Run test directly on DataFrame
             test_result = self.run_test_on_dataframe(df_opt, params_data)

@@ -633,11 +633,26 @@ def handle_optimize_command(args):
     param_ranges = create_enhanced_parameter_ranges(volatility_scale)
     print("Using enhanced strategy with gradual entries and adaptive regime thresholds")
 
+    # Extract symbol and timeframe for fitness history
+    data_filename = Path(args.data).stem  # Get filename without extension
+    if use_dollar_bars and dollar_threshold is not None:
+        timeframe = f"dollar_{int(dollar_threshold)}"
+    else:
+        timeframe = "candle_data"  # Default for time-based data
+    
+    # Try to extract symbol from filename (common patterns)
+    symbol = "UNKNOWN"
+    if "_" in data_filename:
+        parts = data_filename.split("_")
+        if len(parts) >= 2:
+            symbol = f"{parts[0]}_{parts[1]}"  # e.g., BTC_USD from BTC_USD_1min.csv
+    
     ga = GeneticAlgorithm(
         parameter_config=param_ranges,
+        symbol=symbol,
+        timeframe=timeframe,
         population_size=args.population,
         generations=args.generations,
-        fitness_metric=args.fitness,
         allow_shorts=args.allow_shorts,
     )
 
@@ -696,7 +711,6 @@ def handle_optimize_command(args):
             params_data = {
                 "parameters": {k: float(v) for k, v in best_individual.genes.items()},
                 "fitness": float(best_individual.fitness),
-                "fitness_metric": args.fitness,
                 "allow_shorts": args.allow_shorts,
                 "data_file": str(data_path),  # Save absolute path
                 "dollar_threshold": dollar_threshold,  # None if disabled, number if enabled

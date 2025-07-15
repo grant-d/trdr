@@ -351,8 +351,7 @@ param_ranges = create_default_parameter_ranges()
 ga = GeneticAlgorithm(
     parameter_ranges=param_ranges,
     population_size=100,
-    generations=50,
-    fitness_metric='sortino'
+    generations=50
 )
 
 # Run walk-forward optimization
