@@ -37,6 +37,29 @@ from .performance import (
     generate_performance_report,
 )
 
+from .ranges import (
+    ParameterRange,
+    MinMaxRange,
+    LogRange,
+    DiscreteRange,
+    create_log_range,
+    create_discrete_range,
+)
+
+from .optimization import (
+    WalkForwardOptimizer,
+    auto_detect_dollar_thresholds,
+    create_enhanced_parameter_ranges,
+)
+
+from .generic_algorithm import (
+    Individual,
+    GeneticAlgorithm,
+    estimate_asset_volatility_scale,
+)
+
+from .utils import safe_prod
+
 __all__ = [
     # Data processing
     "create_dollar_bars",
@@ -65,4 +88,21 @@ __all__ = [
     "compare_strategies",
     "calculate_rolling_metrics",
     "generate_performance_report",
+    # Ranges
+    "ParameterRange",
+    "MinMaxRange",
+    "LogRange",
+    "DiscreteRange",
+    "create_log_range",
+    "create_discrete_range",
+    # Optimization
+    "WalkForwardOptimizer",
+    "auto_detect_dollar_thresholds",
+    "create_enhanced_parameter_ranges",
+    # Genetic Algorithm
+    "Individual",
+    "GeneticAlgorithm",
+    "estimate_asset_volatility_scale",
+    # Utils
+    "safe_prod",
 ]

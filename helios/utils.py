@@ -45,7 +45,7 @@ def generate_filename(symbol: str,
     """
     # Clean symbol for safe filename
     safe_symbol = symbol.replace("/", "_").replace("\\", "_").replace(":", "_")
-    
+
     # Standardize timeframe format
     if isinstance(timeframe, int):
         # Convert integer minutes to standard format
@@ -60,12 +60,12 @@ def generate_filename(symbol: str,
     else:
         # String timeframe - use as-is but clean for filename
         tf_str = str(timeframe).replace("/", "_").replace("\\", "_").replace(":", "_")
-    
+
     # Build filename parts
     parts = [safe_symbol, tf_str]
     if postfix:
         parts.append(postfix)
-    
+
     filename = "_".join(parts) + extension
     return Path(directory) / filename
 
