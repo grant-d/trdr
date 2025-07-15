@@ -7,7 +7,10 @@
       "Bash(mkdir:*)",
       "Bash(source:*)",
       "Bash(python:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(cp:*)",
+      "Bash(rm:*)",
+      "Bash(flake8:*)"
     ],
     "deny": []
   }
