@@ -21,6 +21,7 @@ Example:
 """
 
 import sys
+import os
 import argparse
 from dotenv import load_dotenv
 import chalk
@@ -44,17 +45,86 @@ def main():
         "--config",
         "-c",
         type=str,
-        default="config.json",
-        help="Path to config file (default: config.json)"
+        default="btc_usd_1m_config.json",
+        help="Config file name or path (default: btc_usd_1m_config.json, auto-searches in configs/)"
+    )
+    parser.add_argument(
+        "--init",
+        action="store_true",
+        help="Initialize a new configuration file"
+    )
+    parser.add_argument(
+        "--symbol",
+        "-s",
+        type=str,
+        help="Trading symbol (required with --init)"
+    )
+    parser.add_argument(
+        "--timeframe",
+        "-t",
+        type=str,
+        help="Timeframe (required with --init)"
+    )
+    parser.add_argument(
+        "--min-bars",
+        type=int,
+        default=1000,
+        help="Minimum number of bars to load (default: 1000)"
+    )
+    parser.add_argument(
+        "--paper",
+        action="store_true",
+        default=True,
+        help="Use paper trading mode (default: True)"
     )
 
     args = parser.parse_args()
+    
+    # Handle --init mode
+    if args.init:
+        if not args.symbol or not args.timeframe:
+            print(chalk.red + "Error: --symbol and --timeframe are required with --init" + chalk.RESET)
+            parser.print_help()
+            sys.exit(1)
+            
+        print(chalk.green + chalk.bold + "Trading Data Loader - Config Initialization" + chalk.RESET)
+        print(chalk.blue + f"Symbol: {args.symbol}" + chalk.RESET)
+        print(chalk.blue + f"Timeframe: {args.timeframe}" + chalk.RESET)
+        print(chalk.blue + f"Min bars: {args.min_bars}" + chalk.RESET)
+        print(chalk.blue + f"Paper mode: {args.paper}" + chalk.RESET)
+        
+        try:
+            config_path = Config.create_config_file(
+                args.symbol,
+                args.timeframe,
+                args.min_bars,
+                args.paper
+            )
+            print(chalk.green + f"\n✓ Config file created: {config_path}" + chalk.RESET)
+            print(chalk.cyan + f"\nTo use this config, run:" + chalk.RESET)
+            print(f"  python main.py --config {config_path}")
+        except Exception as e:
+            print(chalk.red + f"\n✗ Error creating config: {e}" + chalk.RESET)
+            sys.exit(1)
+        return
 
     print(chalk.green + chalk.bold + "Trading Data Loader" + chalk.RESET)
-    print(chalk.blue + f"Config file: {args.config}" + chalk.RESET)
+    
+    # Determine config path
+    config_path = args.config
+    # If config path doesn't exist and doesn't contain path separators, check configs/ directory
+    if not os.path.exists(config_path) and os.sep not in config_path and "/" not in config_path:
+        configs_path = os.path.join("configs", config_path)
+        if os.path.exists(configs_path):
+            config_path = configs_path
+        else:
+            # If not found in configs/, create full path for new file
+            config_path = configs_path
+    
+    print(chalk.blue + f"Config file: {config_path}" + chalk.RESET)
 
     # Load configuration
-    config = Config(args.config)
+    config = Config(config_path)
     print(chalk.cyan + f"Symbol: {config.symbol}" + chalk.RESET)
     print(chalk.cyan + f"Timeframe: {config.timeframe}" + chalk.RESET)
     print(chalk.cyan + f"Min bars: {config.min_bars}" + chalk.RESET)

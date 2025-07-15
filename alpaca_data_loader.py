@@ -84,10 +84,7 @@ class AlpacaDataLoader(BaseDataLoader):
         alpaca_unit = unit_mapping.get(custom_tf.unit)
         if alpaca_unit is None:
             raise ValueError(f"Cannot convert timeframe unit: {custom_tf.unit}")
-        # Ensure alpaca_unit is a TimeFrameUnit, not a string
-        if isinstance(alpaca_unit, str):
-            alpaca_unit = TimeFrameUnit[alpaca_unit]
-        return TimeFrame(custom_tf.amount, alpaca_unit)
+        return TimeFrame(custom_tf.amount, TimeFrameUnit(alpaca_unit))
 
     def fetch_bars(self, start: datetime, end: Optional[datetime] = None) -> pd.DataFrame:
         """
@@ -171,6 +168,6 @@ class AlpacaDataLoader(BaseDataLoader):
 
         # Add calculated columns
         df['hlc3'] = (df['high'] + df['low'] + df['close']) / 3
-        df['dv'] = df['hlc3'] * df['volume']
+        # df['dv'] = df['hlc3'] * df['volume']
 
         return df

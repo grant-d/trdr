@@ -10,7 +10,10 @@
       "Bash(ls:*)",
       "Bash(cp:*)",
       "Bash(rm:*)",
-      "Bash(flake8:*)"
+      "Bash(flake8:*)",
+      "Bash(find:*)",
+      "Bash(./run.sh:*)",
+      "Bash(mv:*)"
     ],
     "deny": []
   }

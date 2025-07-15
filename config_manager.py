@@ -10,6 +10,7 @@ import json
 import os
 from typing import Optional, Union
 from datetime import datetime
+from filename_utils import generate_filename, get_data_path
 
 
 ConfigValue = Union[str, int, bool, None]
@@ -181,3 +182,36 @@ class Config:
         if timestamp is None:
             timestamp = datetime.utcnow().isoformat()
         self.set_state("last_update", timestamp)
+    
+    @staticmethod
+    def create_config_file(symbol: str, timeframe: str, min_bars: int = 1000, paper_mode: bool = True) -> str:
+        """
+        Create a new configuration file for the given symbol and timeframe.
+        
+        Args:
+            symbol: Trading symbol (e.g., "BTC/USD", "AAPL")
+            timeframe: Time interval (e.g., "1m", "1d")
+            min_bars: Minimum number of bars to load (default: 1000)
+            paper_mode: Whether to use paper trading mode (default: True)
+            
+        Returns:
+            Path to the created config file
+        """
+        # Generate config filename
+        config_filename = generate_filename(symbol, timeframe, "config", "json")
+        config_path = get_data_path(config_filename, "configs")
+        
+        # Create config data
+        config_data = {
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "min_bars": min_bars,
+            "paper_mode": paper_mode,
+            "state": {}
+        }
+        
+        # Write config file
+        with open(config_path, 'w') as f:
+            json.dump(config_data, f, indent=2)
+        
+        return config_path

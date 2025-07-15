@@ -1,0 +1,7 @@
+{
+  "symbol": "DOGE/USD",
+  "timeframe": "15m",
+  "min_bars": 1000,
+  "paper_mode": true,
+  "state": {}
+}
