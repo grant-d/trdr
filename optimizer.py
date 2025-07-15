@@ -39,7 +39,7 @@ class OptimizerConfig(BaseModel):
     
     # Walk-forward parameters
     n_splits: int = Field(default=5, gt=0, description="Number of walk-forward splits")
-    test_size: Optional[int] = Field(default=None, description="Fixed test size (bars)")
+    test_ratio: Optional[float] = Field(default=None, ge=0.1, le=0.9, description="Test ratio as fraction (0.3 = 30% test, 70% train) or None for expanding window")
     gap: int = Field(default=0, ge=0, description="Gap between train and test")
     
     # Genetic algorithm parameters
@@ -80,7 +80,7 @@ class Optimizer(Generic[T]):
         self.config = config
         self.wfo = WalkForwardOptimizer(
             n_splits=config.n_splits,
-            test_size=config.test_size,
+            test_ratio=config.test_ratio,
             gap=config.gap
         )
         self.results: List[WalkForwardResult[T]] = []

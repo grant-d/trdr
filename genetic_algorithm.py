@@ -153,7 +153,7 @@ class GeneticAlgorithm:
         fitness_function: Callable[[T, pd.DataFrame], float],
         data: pd.DataFrame,
         verbose: bool = True
-    ) -> OptimizationResult:
+    ) -> OptimizationResult[T]:
         """
         Run the genetic algorithm optimization.
         
@@ -227,7 +227,7 @@ class GeneticAlgorithm:
             print(f"\nOptimization complete. Best fitness: {best_fitness:.4f}")
             print(f"Best parameters: {best_params.to_dict()}")
             
-        return OptimizationResult(
+        return OptimizationResult[T](
             best_params=best_params,
             best_fitness=best_fitness,
             generation_stats=generation_stats

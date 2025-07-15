@@ -20,7 +20,15 @@ class DollarBarsConfig(BaseModel):
     """Configuration for dollar bar aggregation."""
     enabled: bool = False
     threshold: Optional[float] = Field(default=None, gt=0, description="Dollar volume threshold for bar generation")
-    price_column: Literal["open", "high", "low", "close", "hlc3", "ohlc4"] = "close"
+    price_column: Literal["open", "high", "low", "close", "hlc3", "ohlc4"] = "hlc3"
+
+
+class OptimizerConfig(BaseModel):
+    """Configuration for genetic algorithm optimization."""
+    population_size: int = Field(default=50, gt=0, description="Number of individuals in GA population")
+    generations: int = Field(default=30, gt=0, description="Number of generations to run GA")
+    n_splits: int = Field(default=3, gt=0, description="Number of walk-forward splits")
+    test_ratio: Optional[float] = Field(default=0.3, ge=0.1, le=0.9, description="Test ratio as fraction (0.3 = 30% test, 70% train). None for expanding window.")
 
 
 class PipelineConfig(BaseModel):
@@ -43,9 +51,10 @@ class Config(BaseModel):
     
     symbol: str = "BTC/USD"
     timeframe: Literal["1m", "5m", "15m", "30m", "1h", "4h", "1d", "3d", "1w"] = "1m"
-    min_bars: int = Field(default=3000, gt=0)
+    min_bars: int = Field(default=5000, gt=0)
     paper_mode: bool = True
     pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
+    optimizer: OptimizerConfig = Field(default_factory=OptimizerConfig)
     state: RuntimeState = Field(default_factory=RuntimeState)
     
     # Non-model fields
@@ -203,7 +212,7 @@ class Config(BaseModel):
     def create_config_file(
         symbol: str, 
         timeframe: str, 
-        min_bars: int = 3000, 
+        min_bars: int = 5000, 
         paper_mode: bool = True
     ) -> str:
         """
@@ -212,7 +221,7 @@ class Config(BaseModel):
         Args:
             symbol: Trading symbol (e.g., "BTC/USD", "AAPL")
             timeframe: Time interval (e.g., "1m", "1d")
-            min_bars: Minimum number of bars to load (default: 3000)
+            min_bars: Minimum number of bars to load (default: 5000)
             paper_mode: Whether to use paper trading mode (default: True)
             
         Returns:

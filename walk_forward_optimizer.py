@@ -64,7 +64,7 @@ class WalkForwardOptimizer:
     def __init__(
         self,
         n_splits: int = 5,
-        test_size: Optional[int] = None,
+        test_ratio: Optional[float] = None,
         gap: int = 0
     ) -> None:
         """
@@ -72,17 +72,14 @@ class WalkForwardOptimizer:
         
         Args:
             n_splits: Number of splits for time series cross-validation
-            test_size: Fixed size for each test set (if None, uses expanding window)
+            test_ratio: Test size as fraction (0.3 = 30% test, 70% train) or None for expanding window
             gap: Number of samples to exclude between train and test sets
         """
         self.n_splits = n_splits
-        self.test_size = test_size
+        self.test_ratio = test_ratio
         self.gap = gap
-        self.tscv = TimeSeriesSplit(
-            n_splits=n_splits,
-            test_size=test_size,
-            gap=gap
-        )
+        # We'll calculate the actual test_size in bars during get_splits
+        self.tscv = None
         
     def get_splits(self, df: pd.DataFrame) -> List[SplitInfo]:
         """
@@ -94,6 +91,21 @@ class WalkForwardOptimizer:
         Returns:
             List of SplitInfo objects containing split information
         """        
+        # Calculate test_size in bars if percentage is provided
+        test_size_bars = None
+        if self.test_ratio is not None:
+            # Calculate split size first: total_length / n_splits
+            split_size = len(df) // self.n_splits
+            # Then apply the percentage to each split
+            test_size_bars = int(split_size * self.test_ratio)
+        
+        # Create TimeSeriesSplit with calculated test_size
+        self.tscv = TimeSeriesSplit(
+            n_splits=self.n_splits,
+            test_size=test_size_bars,
+            gap=self.gap
+        )
+        
         splits = []
         
         for i, (train_idx, test_idx) in enumerate(self.tscv.split(df)):
@@ -166,8 +178,11 @@ class WalkForwardOptimizer:
             True if data is sufficient, False otherwise
         """
         min_samples = self.n_splits + 1
-        if self.test_size:
-            min_samples = self.n_splits + self.test_size
+        if self.test_ratio:
+            # Calculate minimum samples needed for percentage-based test_size
+            split_size = len(df) // self.n_splits
+            test_size_bars = int(split_size * self.test_ratio)
+            min_samples = self.n_splits + test_size_bars
             
         if len(df) < min_samples:
             print(f"Warning: DataFrame has {len(df)} samples but needs at least {min_samples} for {self.n_splits} splits")

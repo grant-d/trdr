@@ -150,12 +150,12 @@ class ConstantRange(BaseRange):
 class IntegerRange(MinMaxRange):
     """Integer range between min and max values."""
     
-    min_value: int = Field(description="Minimum value")
-    max_value: int = Field(description="Maximum value")
+    # min_value: int = Field(description="Minimum value")
+    # max_value: int = Field(description="Maximum value")
     
     def sample(self) -> float:
         """Sample uniformly between min and max, return as float."""
-        return float(random.randint(self.min_value, self.max_value))
+        return float(random.randint(int(self.min_value), int(self.max_value)))
     
     def clip(self, value: float) -> float:
         """Clip and round to nearest integer."""
@@ -200,8 +200,24 @@ class StepRange(BaseRange):
         return (self.min_value, self.max_value)
 
 
+class BinaryRange(BaseRange):
+    """Binary choice range (0 or 1)."""
+    
+    def sample(self) -> float:
+        """Sample randomly 0 or 1."""
+        return float(random.randint(0, 1))
+    
+    def clip(self, value: float) -> float:
+        """Round to nearest binary value (0 or 1)."""
+        return 0.0 if value < 0.5 else 1.0
+    
+    def get_bounds(self) -> Tuple[float, float]:
+        """Return (0, 1) bounds."""
+        return (0.0, 1.0)
+
+
 # Type alias for any range type
-RangeType = Union[MinMaxRange, DiscreteRange, LogRange, ConstantRange, IntegerRange, StepRange]
+RangeType = Union[MinMaxRange, DiscreteRange, LogRange, ConstantRange, IntegerRange, StepRange, BinaryRange]
 
 
 class BaseStrategyParameters(BaseModel):
@@ -341,8 +357,8 @@ class MAStrategyParameters(BaseStrategyParameters):
     def validate_constraints(self) -> bool:
         """Ensure fast MA is shorter than slow MA."""
         # Get actual values
-        fast_val = self.fast_ma.sample() if hasattr(self.fast_ma, 'sample') else self.fast_ma.value
-        slow_val = self.slow_ma.sample() if hasattr(self.slow_ma, 'sample') else self.slow_ma.value
+        fast_val = self.fast_ma.sample() if isinstance(self.fast_ma, BaseRange) else self.fast_ma
+        slow_val = self.slow_ma.sample() if isinstance(self.slow_ma, BaseRange) else self.slow_ma
         return fast_val < slow_val
 
 
@@ -364,8 +380,8 @@ class RSIStrategyParameters(BaseStrategyParameters):
     
     def validate_constraints(self) -> bool:
         """Ensure oversold < overbought."""
-        oversold_val = self.rsi_oversold.sample() if hasattr(self.rsi_oversold, 'sample') else self.rsi_oversold.value
-        overbought_val = self.rsi_overbought.sample() if hasattr(self.rsi_overbought, 'sample') else self.rsi_overbought.value
+        oversold_val = self.rsi_oversold.sample() if isinstance(self.rsi_oversold, BaseRange) else self.rsi_oversold
+        overbought_val = self.rsi_overbought.sample() if isinstance(self.rsi_overbought, BaseRange) else self.rsi_overbought
         return oversold_val < overbought_val
 
 

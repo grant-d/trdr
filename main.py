@@ -71,8 +71,8 @@ def main():
     parser.add_argument(
         "--min-bars",
         type=int,
-        default=3000,
-        help="Minimum number of bars to load (default: 3000)"
+        default=5000,
+        help="Minimum number of bars to load (default: 5000)"
     )
     parser.add_argument(
         "--paper",

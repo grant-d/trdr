@@ -16,7 +16,9 @@
       "Bash(mv:*)",
       "Bash(touch:*)",
       "Bash(uv pip:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(grep:*)",
+      "Bash(timeout 10 python:*)"
     ],
     "deny": []
   }

@@ -16,25 +16,31 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 # Check for help flag
 if [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
     echo -e "${GREEN}Trading Data Loader Runner${NC}"
-    echo "This script activates the virtual environment and runs main.py"
+    echo "This script activates the virtual environment and runs main.py or trading_loop.py"
     echo ""
     echo "Usage: $0 [options]"
     echo ""
-    echo "Options are passed directly to main.py:"
-    # Try to get help from main.py without venv (just show the message)
+    echo "Main options:"
+    echo "  --optimize            Run optimization loop (uses trading_loop.py)"
+    echo "  --single              Run single optimization iteration (with --optimize)"
+    echo "  --pause MINUTES       Pause between iterations (auto-calculated from timeframe if not specified)"
     echo ""
-    source "$SCRIPT_DIR/.venv/bin/activate" 2>/dev/null && python "$SCRIPT_DIR/main.py" -h 2>/dev/null && deactivate 2>/dev/null || {
-        echo "  -h, --help            show this help message and exit"
-        echo "  --config CONFIG, -c CONFIG"
-        echo "                        Path to config file (default: btc_usd_1m_config.json)"
-        echo "  --init                Initialize a new configuration file"
-        echo "  --symbol SYMBOL, -s SYMBOL"
-        echo "                        Trading symbol (required with --init)"
-        echo "  --timeframe TIMEFRAME, -t TIMEFRAME"
-        echo "                        Timeframe (required with --init)"
-        echo "  --min-bars MIN_BARS   Minimum number of bars to load (default: 3000)"
-        echo "  --paper               Use paper trading mode (default: True)"
-    }
+    echo "Data loading options (uses main.py):"
+    echo "  --config CONFIG, -c CONFIG"
+    echo "                        Path to config file (default: btc_usd_1m_config.json)"
+    echo "  --init                Initialize a new configuration file"
+    echo "  --symbol SYMBOL, -s SYMBOL"
+    echo "                        Trading symbol (required with --init)"
+    echo "  --timeframe TIMEFRAME, -t TIMEFRAME"
+    echo "                        Timeframe (required with --init)"
+    echo "  --min-bars MIN_BARS   Minimum number of bars to load (default: 5000)"
+    echo "  --paper               Use paper trading mode (default: True)"
+    echo ""
+    echo "Examples:"
+    echo "  $0 --config btc_usd_1m_config.json              # Load data"
+    echo "  $0 --optimize --single --config btc_usd_1m_config.json  # Single optimization"
+    echo "  $0 --optimize --config btc_usd_1m_config.json   # Continuous optimization (auto-pause)"
+    echo "  $0 --optimize --config btc_usd_1m_config.json --pause 30  # Continuous optimization (custom pause)"
     exit 0
 fi
 
@@ -60,9 +66,23 @@ fi
 
 echo -e "${GREEN}Virtual environment activated: $VIRTUAL_ENV${NC}"
 
-# Run main.py with all passed arguments
-echo -e "${BLUE}Running trading data loader...${NC}"
-python "$SCRIPT_DIR/main.py" "$@"
+# Check if --optimize flag is present
+OPTIMIZE_FLAG=false
+for arg in "$@"; do
+    if [[ "$arg" == "--optimize" ]]; then
+        OPTIMIZE_FLAG=true
+        break
+    fi
+done
+
+# Run appropriate script based on --optimize flag
+if [ "$OPTIMIZE_FLAG" = true ]; then
+    echo -e "${BLUE}Running trading optimization loop...${NC}"
+    python "$SCRIPT_DIR/trading_loop.py" "$@"
+else
+    echo -e "${BLUE}Running trading data loader...${NC}"
+    python "$SCRIPT_DIR/main.py" "$@"
+fi
 
 # Capture exit code
 EXIT_CODE=$?

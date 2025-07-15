@@ -60,7 +60,7 @@ python main.py --init --symbol <SYMBOL> --timeframe <TIMEFRAME> [--min-bars <NUM
 Parameters:
 - `--symbol`: Trading symbol (e.g., "BTC/USD", "ETH/USD", "AAPL", "TSLA")
 - `--timeframe`: Time interval - "1m", "5m", "15m", "30m", "1h", "4h", "1d", "3d", "1w"
-- `--min-bars`: Minimum number of bars to load (default: 3000)
+- `--min-bars`: Minimum number of bars to load (default: 5000)
 - `--paper`: Use paper trading mode (default: True)
 
 ### Loading Data
@@ -92,7 +92,7 @@ Configuration files are JSON files stored in the `configs/` directory with the f
 {
   "symbol": "BTC/USD",
   "timeframe": "1m",
-  "min_bars": 3000,
+  "min_bars": 5000,
   "paper_mode": true,
   "pipeline": {
     "enabled": false,

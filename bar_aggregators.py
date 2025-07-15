@@ -1,3 +1,4 @@
+import math
 import pandas as pd
 import numpy as np
 from typing import Optional, Literal, Dict, Any
@@ -222,13 +223,18 @@ class DollarBarAggregator(BaseBarAggregator):
             aggregator = DollarBarAggregator(threshold)
             dollar_bars = aggregator.aggregate(df)
         """
-        # Calculate total dollar volume
-        dollar_values = df[price_column] * df[volume_column]
-        total_dollar_volume = dollar_values.sum()
+        # Use dv column if available, otherwise calculate dollar volume
+        if 'dv' in df.columns:
+            total_dollar_volume = df['dv'].sum()
+            print(f"Using existing dv column")
+        else:
+            dollar_values = df[price_column] * df[volume_column]
+            total_dollar_volume = dollar_values.sum()
+            print(f"Calculating dollar volume: {price_column} * {volume_column}")
         
         # Estimate threshold
-        threshold = total_dollar_volume / target_bars
-        
+        threshold = max(1, math.trunc(total_dollar_volume / target_bars))
+
         print(f"Estimated dollar threshold: ${threshold:,.2f} for ~{target_bars} bars")
         print(f"Total dollar volume: ${total_dollar_volume:,.2f}")
         
