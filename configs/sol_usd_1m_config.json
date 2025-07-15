@@ -1,20 +1,20 @@
 {
-  "symbol": "BTC/USD",
+  "symbol": "SOL/USD",
   "timeframe": "1m",
   "min_bars": 3000,
   "paper_mode": true,
   "pipeline": {
-    "enabled": true,
+    "enabled": false,
     "zero_volume_keep_percentage": 0.1,
     "dollar_bars": {
-      "enabled": true,
-      "threshold": 455.56703409306226,
+      "enabled": false,
+      "threshold": null,
       "price_column": "close"
     }
   },
   "state": {
-    "last_update": "2025-07-15T19:26:00+00:00",
-    "total_bars": 3000,
+    "last_update": null,
+    "total_bars": 0,
     "last_run_duration": null,
     "last_error": null,
     "last_successful_run": null,

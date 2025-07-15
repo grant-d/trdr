@@ -107,6 +107,7 @@ class BaseBarAggregator(ABC):
         """
         if not df.empty:
             df['hlc3'] = (df['high'] + df['low'] + df['close']) / 3
+            df['ohlc4'] = (df['open'] + df['high'] + df['low'] + df['close']) / 4
             df['dv'] = df['hlc3'] * df['volume']
         return df
         

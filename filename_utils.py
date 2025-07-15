@@ -61,3 +61,39 @@ def get_data_path(filename: str, data_dir: str = "data") -> str:
     """
     os.makedirs(data_dir, exist_ok=True)
     return os.path.join(data_dir, filename)
+
+
+def generate_processed_filename(
+    symbol: str,
+    timeframe: str,
+    bar_type: str,
+    threshold: Optional[float] = None
+) -> str:
+    """
+    Generate filename for processed data files.
+    
+    Args:
+        symbol: Trading symbol
+        timeframe: Original timeframe
+        bar_type: Type of bars (cleaned, dollar, volume, tick)
+        threshold: Threshold value for alternative bars
+        
+    Returns:
+        Full path to output file
+    """
+    if threshold is not None:
+        # Format threshold for filename (remove decimals for large numbers)
+        if threshold >= 1000000:
+            threshold_str = f"{int(threshold/1000000)}m"
+        elif threshold >= 1000:
+            threshold_str = f"{int(threshold/1000)}k"
+        else:
+            threshold_str = str(int(threshold))
+        
+        # Include threshold in filename
+        domain = f"{bar_type}_{threshold_str}"
+    else:
+        domain = bar_type
+        
+    filename = generate_filename(symbol, timeframe, domain, "csv")
+    return get_data_path(filename)

@@ -27,6 +27,9 @@ from dotenv import load_dotenv
 import chalk
 from config_manager import Config
 from alpaca_data_loader import AlpacaDataLoader
+from data_pipeline import DataPipeline
+from bar_aggregators import DollarBarAggregator
+from filename_utils import generate_filename, get_data_path, generate_processed_filename
 
 # Load environment variables
 load_dotenv()
@@ -46,7 +49,7 @@ def main():
         "-c",
         type=str,
         default="btc_usd_1m_config.json",
-        help="Config file name or path (default: btc_usd_1m_config.json, auto-searches in configs/)"
+        help="Config file name (default: btc_usd_1m_config.json)"
     )
     parser.add_argument(
         "--init",
@@ -68,14 +71,19 @@ def main():
     parser.add_argument(
         "--min-bars",
         type=int,
-        default=1000,
-        help="Minimum number of bars to load (default: 1000)"
+        default=3000,
+        help="Minimum number of bars to load (default: 3000)"
     )
     parser.add_argument(
         "--paper",
         action="store_true",
         default=True,
         help="Use paper trading mode (default: True)"
+    )
+    parser.add_argument(
+        "--dollar-bars",
+        type=int,
+        help="Calculate dollar bar threshold for target number of bars and update config"
     )
 
     args = parser.parse_args()
@@ -110,18 +118,29 @@ def main():
 
     print(chalk.green + chalk.bold + "Trading Data Loader" + chalk.RESET)
     
-    # Determine config path
-    config_path = args.config
-    # If config path doesn't exist and doesn't contain path separators, check configs/ directory
-    if not os.path.exists(config_path) and os.sep not in config_path and "/" not in config_path:
-        configs_path = os.path.join("configs", config_path)
-        if os.path.exists(configs_path):
-            config_path = configs_path
-        else:
-            # If not found in configs/, create full path for new file
-            config_path = configs_path
+    # Config files are always in the configs/ directory
+    config_filename = args.config
+    # Remove any path components if user accidentally included them
+    config_filename = os.path.basename(config_filename)
+    config_path = os.path.join("configs", config_filename)
     
-    print(chalk.blue + f"Config file: {config_path}" + chalk.RESET)
+    print(chalk.blue + f"Config file: {config_filename}" + chalk.RESET)
+    
+    # Check if config file exists
+    if not os.path.exists(config_path):
+        print(chalk.red + f"\n✗ Error: Config file '{config_filename}' not found in configs/ directory" + chalk.RESET)
+        print(chalk.yellow + "\nAvailable config files:" + chalk.RESET)
+        try:
+            config_files = [f for f in os.listdir("configs") if f.endswith(".json")]
+            if config_files:
+                for f in sorted(config_files):
+                    print(f"  - {f}")
+            else:
+                print("  (No config files found)")
+        except FileNotFoundError:
+            print("  (configs/ directory not found)")
+        print(chalk.cyan + f"\nTo create a new config, use: python main.py --init --symbol SYMBOL --timeframe TIMEFRAME" + chalk.RESET)
+        sys.exit(1)
 
     # Load configuration
     config = Config(config_path)
@@ -157,6 +176,34 @@ def main():
             # Show last few bars
             print(chalk.cyan + "\nLast 5 bars:" + chalk.RESET)
             print(df.tail().to_string(index=False))
+            
+            # Handle --dollar-bars argument
+            if args.dollar_bars:
+                print(chalk.yellow + f"\nCalculating dollar bar threshold for {args.dollar_bars} bars..." + chalk.RESET)
+
+                # Calculate threshold
+                threshold = DollarBarAggregator.estimate_threshold(
+                    df,
+                    target_bars=args.dollar_bars,
+                    price_column=config.dollar_bars_price_column
+                )
+
+                print(chalk.green + f"✓ Calculated threshold: ${threshold:,.2f}" + chalk.RESET)
+
+                # Update config using Pydantic models
+                config.pipeline.enabled = True
+                config.pipeline.dollar_bars.enabled = True
+                config.pipeline.dollar_bars.threshold = threshold
+
+                # Save updated config
+                config.save()
+                print(chalk.green + f"✓ Config updated with dollar bars settings" + chalk.RESET)
+                print(chalk.cyan + f"  - Enabled: True" + chalk.RESET)
+                print(chalk.cyan + f"  - Threshold: ${threshold:,.2f}" + chalk.RESET)
+                print(chalk.cyan + f"  - Target bars: ~{args.dollar_bars}" + chalk.RESET)
+            
+            # Process through pipeline if configured
+            DataPipeline.process_from_config(df, config)
 
     except Exception as e:
         print(chalk.red + f"\n✗ Error loading data: {e}" + chalk.RESET)

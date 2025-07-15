@@ -10,9 +10,8 @@ import pandas as pd
 import numpy as np
 from typing import Optional, Union, Tuple, Literal
 from pathlib import Path
-from scipy import stats
-
 from bar_aggregators import DollarBarAggregator, VolumeBarAggregator
+from config_manager import Config
 
 
 class DataPipeline:
@@ -235,6 +234,8 @@ class DataPipeline:
         # Add HLC3 (typical price) if not present
         if 'hlc3' not in df.columns:
             df['hlc3'] = (df['high'] + df['low'] + df['close']) / 3
+        if 'ohlc4' not in df.columns:
+            df['ohlc4'] = (df['open'] + df['high'] + df['low'] + df['close']) / 4
             
         # Add dollar volume if not present
         if 'dv' not in df.columns and self.volume_column in df.columns:
@@ -310,3 +311,75 @@ class DataPipeline:
             Dictionary with processing statistics
         """
         return self._processing_stats.copy()
+    
+    @staticmethod
+    def process_from_config(df: pd.DataFrame, config: Config) -> None:
+        """
+        Process data based on configuration settings and save results.
+        
+        Args:
+            df: Input DataFrame with market data
+            config: Configuration object with pipeline settings
+        """
+        from bar_aggregators import DollarBarAggregator
+        from filename_utils import generate_processed_filename
+        import chalk
+        
+        if not (config.pipeline_enabled or config.dollar_bars_enabled):
+            return
+            
+        print(chalk.yellow + "\n\nProcessing data through pipeline..." + chalk.RESET)
+        
+        # Create pipeline
+        pipeline = DataPipeline()
+        
+        # Use dollar bar threshold from config
+        dollar_threshold = None
+        if config.dollar_bars_enabled and config.dollar_bars_threshold:
+            dollar_threshold = config.dollar_bars_threshold
+        
+        # Process data
+        cleaned_df, dollar_bars_df = pipeline.process(
+            df=df,
+            zero_volume_keep_percentage=config.zero_volume_keep_percentage,
+            dollar_bar_threshold=dollar_threshold,
+            price_column=config.dollar_bars_price_column
+        )
+        
+        # Show processing results
+        print(chalk.cyan + "\nProcessing Summary:" + chalk.RESET)
+        stats = pipeline.get_processing_stats()
+        for key, value in stats.items():
+            print(f"{key}: {value}")
+        
+        # Show cleaned data summary
+        print(chalk.cyan + f"\nCleaned data: {len(cleaned_df)} bars" + chalk.RESET)
+        if len(cleaned_df) > 0:
+            print("Last 5 cleaned bars:")
+            print(cleaned_df.tail().to_string(index=False))
+            
+            # Save cleaned data if processing was done
+            if config.pipeline_enabled:
+                cleaned_filename = generate_processed_filename(
+                    config.symbol,
+                    config.timeframe,
+                    "cleaned"
+                )
+                cleaned_df.to_csv(cleaned_filename, index=False)
+                print(chalk.green + f"✓ Cleaned data saved to {cleaned_filename}" + chalk.RESET)
+        
+        # Show dollar bars if created
+        if dollar_bars_df is not None and len(dollar_bars_df) > 0:
+            print(chalk.cyan + f"\n\nDollar bars created: {len(dollar_bars_df)} bars" + chalk.RESET)
+            print("Last 5 dollar bars:")
+            print(dollar_bars_df.tail().to_string(index=False))
+            
+            # Save dollar bars with threshold in filename
+            dollar_bars_filename = generate_processed_filename(
+                config.symbol,
+                config.timeframe,
+                "dollar",
+                threshold=dollar_threshold
+            )
+            dollar_bars_df.to_csv(dollar_bars_filename, index=False)
+            print(chalk.green + f"✓ Dollar bars saved to {dollar_bars_filename}" + chalk.RESET)

@@ -13,7 +13,8 @@
       "Bash(flake8:*)",
       "Bash(find:*)",
       "Bash(./run.sh:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(touch:*)"
     ],
     "deny": []
   }

@@ -32,7 +32,7 @@ if [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
         echo "                        Trading symbol (required with --init)"
         echo "  --timeframe TIMEFRAME, -t TIMEFRAME"
         echo "                        Timeframe (required with --init)"
-        echo "  --min-bars MIN_BARS   Minimum number of bars to load (default: 1000)"
+        echo "  --min-bars MIN_BARS   Minimum number of bars to load (default: 3000)"
         echo "  --paper               Use paper trading mode (default: True)"
     }
     exit 0

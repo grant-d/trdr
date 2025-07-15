@@ -1,61 +1,107 @@
 """
-Configuration management for trading data loader.
+Configuration management for trading data loader using Pydantic.
 
 This module provides a Config class that handles reading, writing, and managing
 configuration settings for the trading application. It supports both trading
-parameters (symbol, timeframe, etc.) and persistent state tracking.
+parameters (symbol, timeframe, etc.) and persistent state tracking with
+full validation through Pydantic models.
 """
 
 import json
 import os
-from typing import Optional, Union
+from typing import Optional, Literal
 from datetime import datetime
+from pydantic import BaseModel, Field, field_validator
 from filename_utils import generate_filename, get_data_path
+from state import RuntimeState, StateValue
 
 
-ConfigValue = Union[str, int, bool, None]
-ConfigState = dict[str, ConfigValue]
-ConfigDict = dict[str, Union[ConfigValue, ConfigState]]
+class DollarBarsConfig(BaseModel):
+    """Configuration for dollar bar aggregation."""
+    enabled: bool = False
+    threshold: Optional[float] = Field(default=None, gt=0, description="Dollar volume threshold for bar generation")
+    price_column: Literal["open", "high", "low", "close", "hlc3", "ohlc4"] = "close"
 
 
-class Config:
+class PipelineConfig(BaseModel):
+    """Configuration for data pipeline processing."""
+    enabled: bool = False
+    zero_volume_keep_percentage: float = Field(default=0.1, ge=0.0, le=1.0)
+    dollar_bars: DollarBarsConfig = Field(default_factory=DollarBarsConfig)
+
+
+
+
+class Config(BaseModel):
     """
     Manages configuration settings for trading data operations.
     
     This class provides a persistent configuration system that stores trading
     parameters and application state. Configuration is saved to and loaded from
-    a JSON file. All property setters automatically persist changes to disk.
-    
-    Attributes:
-        config_path: Path to the configuration JSON file
-        config: Dictionary containing all configuration values
+    a JSON file with full Pydantic validation.
     """
     
-    def __init__(self, config_path: str) -> None:
+    symbol: str = "BTC/USD"
+    timeframe: Literal["1m", "5m", "15m", "30m", "1h", "4h", "1d", "3d", "1w"] = "1m"
+    min_bars: int = Field(default=3000, gt=0)
+    paper_mode: bool = True
+    pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
+    state: RuntimeState = Field(default_factory=RuntimeState)
+    
+    # Non-model fields
+    config_path: str = Field(exclude=True)
+    
+    class Config:
+        """Pydantic config."""
+        validate_assignment = True
+        extra = "forbid"
+    
+    @field_validator('symbol')
+    @classmethod
+    def validate_symbol(cls, v: str) -> str:
+        """Validate trading symbol format."""
+        if not v or not v.strip():
+            raise ValueError("Symbol cannot be empty")
+        return v.strip().upper()
+    
+    def __init__(self, config_path: str, **kwargs):
         """
         Initialize configuration manager.
         
         Args:
             config_path: Path where configuration file should be stored/loaded
+            **kwargs: Additional configuration values to override
         """
-        self.config_path = config_path
-        self.config: ConfigDict = {}
-        self.load()
-
-    def load(self) -> None:
-        """
-        Load configuration from file or create with defaults.
-        
-        If the config file exists, it will be loaded. Otherwise, a new config
-        file is created with default values and saved to disk.
-        """
-        if os.path.exists(self.config_path):
-            with open(self.config_path, 'r') as f:
-                self.config = json.load(f)
+        # Load existing config or use defaults
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                config_data = json.load(f)
+                # Handle legacy state format (convert dict to RuntimeState fields)
+                if 'state' in config_data and isinstance(config_data['state'], dict):
+                    state_data = config_data['state']
+                    # Only keep fields that are valid for RuntimeState
+                    valid_state_fields = {
+                        'last_update', 'total_bars', 'last_run_duration', 
+                        'last_error', 'last_successful_run', 'custom_data'
+                    }
+                    # Filter out any invalid fields and ensure custom_data exists
+                    filtered_state = {k: v for k, v in state_data.items() if k in valid_state_fields}
+                    if 'custom_data' not in filtered_state:
+                        filtered_state['custom_data'] = {}
+                    config_data['state'] = filtered_state
+                
+                # Merge with any provided kwargs
+                config_data.update(kwargs)
         else:
-            self.config = self.get_defaults()
+            config_data = kwargs
+        
+        # Initialize with loaded/merged data
+        super().__init__(config_path=config_path, **config_data)
+        
+        # Save if new file
+        if not os.path.exists(config_path):
             self.save()
-
+    
     def save(self) -> None:
         """
         Save current configuration to file.
@@ -66,79 +112,39 @@ class Config:
         dir_path = os.path.dirname(self.config_path)
         if dir_path:
             os.makedirs(dir_path, exist_ok=True)
-        with open(self.config_path, 'w') as f:
-            json.dump(self.config, f, indent=2)
-
-    def get_defaults(self) -> ConfigDict:
-        """
-        Get default configuration values.
         
-        Returns:
-            Dictionary with default settings for a new configuration
-        """
-        return {
-            "symbol": "BTC/USD",
-            "timeframe": "1m",
-            "min_bars": 1000,
-            "paper_mode": True,
-            "state": {
-                "last_update": None,
-                "total_bars": 0
-            }
-        }
-
+        # Export to dict excluding the config_path
+        config_dict = self.model_dump(exclude={'config_path'})
+        
+        with open(self.config_path, 'w') as f:
+            json.dump(config_dict, f, indent=2)
+    
     @property
-    def symbol(self) -> str:
-        value = self.config.get("symbol", "BTC/USD")
-        if isinstance(value, str):
-            return value
-        return "BTC/USD"
-
-    @symbol.setter
-    def symbol(self, value: str) -> None:
-        self.config["symbol"] = value
-        self.save()
-
+    def pipeline_enabled(self) -> bool:
+        """Check if pipeline is enabled."""
+        return self.pipeline.enabled
+    
     @property
-    def timeframe(self) -> str:
-        value = self.config.get("timeframe", "1m")
-        if isinstance(value, str):
-            return value
-        return "1m"
-
-    @timeframe.setter
-    def timeframe(self, value: str) -> None:
-        valid_timeframes = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "3d", "1w"]
-        if value not in valid_timeframes:
-            raise ValueError(f"Invalid timeframe: {value}. Must be one of {valid_timeframes}")
-        self.config["timeframe"] = value
-        self.save()
-
+    def zero_volume_keep_percentage(self) -> float:
+        """Get zero volume keep percentage."""
+        return self.pipeline.zero_volume_keep_percentage
+    
     @property
-    def min_bars(self) -> int:
-        value = self.config.get("min_bars", 1000)
-        if isinstance(value, int):
-            return value
-        return 1000
-
-    @min_bars.setter
-    def min_bars(self, value: int) -> None:
-        self.config["min_bars"] = value
-        self.save()
-
+    def dollar_bars_enabled(self) -> bool:
+        """Check if dollar bars generation is enabled."""
+        return self.pipeline.dollar_bars.enabled
+    
     @property
-    def paper_mode(self) -> bool:
-        value = self.config.get("paper_mode", True)
-        if isinstance(value, bool):
-            return value
-        return True
-
-    @paper_mode.setter
-    def paper_mode(self, value: bool) -> None:
-        self.config["paper_mode"] = value
-        self.save()
-
-    def get_state(self, key: str) -> Optional[ConfigValue]:
+    def dollar_bars_threshold(self) -> Optional[float]:
+        """Get dollar bar threshold."""
+        return self.pipeline.dollar_bars.threshold
+    
+    @property
+    def dollar_bars_price_column(self) -> str:
+        """Get price column for dollar bars."""
+        return self.pipeline.dollar_bars.price_column
+    
+    def get_state(self, key: str) -> Optional[StateValue]:
         """
         Retrieve a value from the state section of configuration.
         
@@ -148,12 +154,13 @@ class Config:
         Returns:
             The state value if found, None otherwise
         """
-        state = self.config.get("state", {})
-        if isinstance(state, dict):
-            return state.get(key)
-        return None
-
-    def set_state(self, key: str, value: ConfigValue) -> None:
+        # Check if it's a predefined field
+        if hasattr(self.state, key):
+            return getattr(self.state, key)
+        # Otherwise check custom data
+        return self.state.get_custom(key)
+    
+    def set_state(self, key: str, value: StateValue) -> None:
         """
         Set a value in the state section of configuration.
         
@@ -162,16 +169,16 @@ class Config:
         
         Args:
             key: The state key to set
-            value: The value to store
+            value: The value to store (must be str, int, float, bool, or None)
         """
-        if "state" not in self.config:
-            self.config["state"] = {}
-        state = self.config.get("state", {})
-        if isinstance(state, dict):
-            state[key] = value
-            self.config["state"] = state
+        # Check if it's a predefined field
+        if hasattr(self.state, key) and key not in ['custom_data']:
+            setattr(self.state, key, value)
+        else:
+            # Store in custom data
+            self.state.set_custom(key, value)
         self.save()
-
+    
     def update_last_sync(self, timestamp: Optional[str] = None) -> None:
         """
         Update the last synchronization timestamp in state.
@@ -179,19 +186,33 @@ class Config:
         Args:
             timestamp: ISO format timestamp string. If None, uses current UTC time.
         """
-        if timestamp is None:
-            timestamp = datetime.utcnow().isoformat()
-        self.set_state("last_update", timestamp)
+        self.state.update_last_sync(timestamp)
+        self.save()
+    
+    @property
+    def config(self) -> dict:
+        """
+        Get configuration as a dictionary for backward compatibility.
+        
+        Returns:
+            Dictionary representation of the configuration
+        """
+        return self.model_dump(exclude={'config_path'})
     
     @staticmethod
-    def create_config_file(symbol: str, timeframe: str, min_bars: int = 1000, paper_mode: bool = True) -> str:
+    def create_config_file(
+        symbol: str, 
+        timeframe: str, 
+        min_bars: int = 3000, 
+        paper_mode: bool = True
+    ) -> str:
         """
         Create a new configuration file for the given symbol and timeframe.
         
         Args:
             symbol: Trading symbol (e.g., "BTC/USD", "AAPL")
             timeframe: Time interval (e.g., "1m", "1d")
-            min_bars: Minimum number of bars to load (default: 1000)
+            min_bars: Minimum number of bars to load (default: 3000)
             paper_mode: Whether to use paper trading mode (default: True)
             
         Returns:
@@ -201,17 +222,16 @@ class Config:
         config_filename = generate_filename(symbol, timeframe, "config", "json")
         config_path = get_data_path(config_filename, "configs")
         
-        # Create config data
-        config_data = {
-            "symbol": symbol,
-            "timeframe": timeframe,
-            "min_bars": min_bars,
-            "paper_mode": paper_mode,
-            "state": {}
-        }
+        # Create config instance
+        config = Config(
+            config_path=config_path,
+            symbol=symbol,
+            timeframe=timeframe,
+            min_bars=min_bars,
+            paper_mode=paper_mode
+        )
         
-        # Write config file
-        with open(config_path, 'w') as f:
-            json.dump(config_data, f, indent=2)
+        # Save to file
+        config.save()
         
         return config_path
