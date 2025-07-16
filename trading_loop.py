@@ -145,12 +145,39 @@ def regime_strategy_fitness(params: RegimeStrategyParameters, data: pd.DataFrame
     # Transaction cost penalty (0 to 1, where 1 = no penalty)
     transaction_penalty = max(0.0, 1.0 - (cost_percentage * 20))  # Linear penalty starting at 0%
     
+    # Calculate average holding period reward
+    holding_periods = []
+    current_hold_start = None
+    for i in range(len(results_df)):
+        pos = results_df.iloc[i]['position_units']
+        prev_pos = results_df.iloc[i-1]['position_units'] if i > 0 else 0
+        
+        # Track when position opens
+        if prev_pos == 0 and pos != 0:
+            current_hold_start = i
+        # Track when position closes
+        elif prev_pos != 0 and pos == 0 and current_hold_start is not None:
+            holding_periods.append(i - current_hold_start)
+            current_hold_start = None
+    
+    # If still holding at end, count it
+    if current_hold_start is not None and results_df.iloc[-1]['position_units'] != 0:
+        holding_periods.append(len(results_df) - current_hold_start)
+    
+    # Calculate holding period bonus
+    avg_holding_period = np.mean(holding_periods) if holding_periods else 0
+    # Reward longer holds: bonus starts at 10 bars, max bonus at 50 bars
+    holding_bonus = 0.0
+    if avg_holding_period > 10:
+        holding_bonus = min((avg_holding_period - 10) / 40, 1.0) * 0.1  # Up to 10% bonus
+    
     # Blend metrics with proper weights
     fitness_score = (
-        0.4 * sharpe_ratio +
-        0.3 * sortino_ratio + 
+        0.35 * sharpe_ratio +
+        0.25 * sortino_ratio + 
         0.2 * calmar_ratio +
-        0.1 * (transaction_penalty * 10)  # Scale transaction penalty to similar range
+        0.1 * (transaction_penalty * 10) +  # Scale transaction penalty to similar range
+        0.1 * (holding_bonus * 10)  # Scale holding bonus to similar range
     )
     
     # Apply transaction cost penalty as multiplicative factor

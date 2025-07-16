@@ -155,6 +155,13 @@ class RegimeStrategy:
 
         self.position = Position()
         self.trades: List[Trade] = []
+        
+        # Trading filters to prevent overtrading
+        self.min_position_change_pct = 0.02  # Minimum 2% position change to trade
+        self.last_trade_bar = -10  # Track last trade to enforce cooldown
+        self.trade_cooldown_bars = 2  # Wait at least 2 bars between trades
+        self.last_mss = None  # Track MSS for change detection
+        self.mss_change_threshold = 1.0  # Minimum MSS change to consider trading
 
     def classify_regime(self, mss: float) -> str:
         """
@@ -410,6 +417,23 @@ class RegimeStrategy:
                 self.execute_trade(
                     timestamp, units_to_close, current_price, 0.0, "Stop Loss"
                 )
+                self.last_trade_bar = i  # Update last trade bar for cooldown
+                self.last_mss = mss_value  # Update MSS tracking
+                # Skip rest of iteration after stop-loss to avoid immediate re-entry
+                # Record state
+                portfolio_value = self.cash + self.position.units * current_price
+                results.append({
+                    "timestamp": timestamp,
+                    "close": current_price,
+                    "portfolio_value": portfolio_value,
+                    "cash": self.cash,
+                    "position_units": self.position.units,
+                    "position_value": self.position.units * current_price,
+                    "trade": None,
+                    "mss": mss_value,
+                    "regime": regime,
+                })
+                continue
 
             # Update trailing stop
             self.update_trailing_stop(current_price, atr, regime)
@@ -450,12 +474,44 @@ class RegimeStrategy:
             else:
                 stop_loss = self.position.stop_loss
 
-            # Execute trade
-            if abs(units_to_trade) > 1e-9:
+            # Apply trading filters to prevent overtrading
+            should_trade = abs(units_to_trade) > 1e-9
+            
+            if should_trade:
+                # Filter 1: Minimum position change (2% of current position or initial)
+                if self.position.units != 0:
+                    position_change_pct = abs(units_to_trade / self.position.units)
+                    should_trade = position_change_pct >= self.min_position_change_pct
+                else:
+                    # For initial positions, require at least 2% of max position
+                    min_units = self.max_position_fraction * self.initial_capital * 0.02 / current_price
+                    should_trade = abs(units_to_trade) >= min_units
+            
+            if should_trade:
+                # Filter 2: Trade cooldown (wait N bars between trades)
+                bars_since_last_trade = i - self.last_trade_bar
+                should_trade = bars_since_last_trade >= self.trade_cooldown_bars
+            
+            if should_trade and self.last_mss is not None:
+                # Filter 3: Significant MSS change required
+                mss_change = abs(mss_value - self.last_mss)
+                # Relax threshold for strong regimes
+                if regime in ['Strong Bull', 'Strong Bear']:
+                    threshold = self.mss_change_threshold * 0.5  # More sensitive in strong regimes
+                else:
+                    threshold = self.mss_change_threshold
+                should_trade = mss_change >= threshold
+            
+            # Execute trade if it passes all filters
+            if should_trade:
                 reason = f"{regime} Signal"
                 self.execute_trade(
                     timestamp, units_to_trade, current_price, stop_loss, reason
                 )
+                self.last_trade_bar = i  # Update last trade bar
+            
+            # Always update last MSS
+            self.last_mss = mss_value
 
             # Record results
             portfolio_value = self.cash + self.position.units * current_price

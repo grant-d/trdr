@@ -595,6 +595,448 @@
       },
       "fitness": -73.017130136651,
       "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T03:48:46.641851",
+      "parameters": {
+        "max_position_fraction": 0.8308161139709083,
+        "entry_step_size": 0.32178163605609156,
+        "stop_loss_multiplier_strong": 2.94450252390336,
+        "stop_loss_multiplier_weak": 0.8366141675400925,
+        "strong_bull_threshold": 53.36123675111234,
+        "weak_bull_threshold": 28.490932235752407,
+        "neutral_upper": 11.720230718416298,
+        "neutral_lower": -11.091655504396641,
+        "weak_bear_threshold": -32.48625829236434,
+        "strong_bear_threshold": -60.666290027348744
+      },
+      "fitness": -67.70110412614932,
+      "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T03:49:58.424925",
+      "parameters": {
+        "max_position_fraction": 0.919287620827957,
+        "entry_step_size": 0.1,
+        "stop_loss_multiplier_strong": 2.0916829160197508,
+        "stop_loss_multiplier_weak": 0.6279330096682094,
+        "strong_bull_threshold": 58.45680981014648,
+        "weak_bull_threshold": 28.2524239887273,
+        "neutral_upper": 12.025777993563995,
+        "neutral_lower": -17.97755874122393,
+        "weak_bear_threshold": -47.91328019003597,
+        "strong_bear_threshold": -59.98952482502854
+      },
+      "fitness": -79.07714042977643,
+      "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T03:51:10.051753",
+      "parameters": {
+        "max_position_fraction": 0.9139882550916785,
+        "entry_step_size": 0.19820392628071742,
+        "stop_loss_multiplier_strong": 2.371491274817958,
+        "stop_loss_multiplier_weak": 1.3925426246452297,
+        "strong_bull_threshold": 55.70523997156799,
+        "weak_bull_threshold": 31.22425377866211,
+        "neutral_upper": 19.444281009197518,
+        "neutral_lower": -5.352223936874822,
+        "weak_bear_threshold": -29.56116269758956,
+        "strong_bear_threshold": -64.08657365821719
+      },
+      "fitness": -79.24780409212487,
+      "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T03:52:22.742237",
+      "parameters": {
+        "max_position_fraction": 0.9779544133161375,
+        "entry_step_size": 0.18923589739749236,
+        "stop_loss_multiplier_strong": 2.4123045349255055,
+        "stop_loss_multiplier_weak": 0.935628140049417,
+        "strong_bull_threshold": 57.00329534001901,
+        "weak_bull_threshold": 25.561518689582908,
+        "neutral_upper": 14.979511531163425,
+        "neutral_lower": -11.16440380670115,
+        "weak_bear_threshold": -42.98445182771618,
+        "strong_bear_threshold": -57.51151320405309
+      },
+      "fitness": -68.41484112644852,
+      "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T03:53:32.541441",
+      "parameters": {
+        "max_position_fraction": 0.7400109581261902,
+        "entry_step_size": 0.4146181787699811,
+        "stop_loss_multiplier_strong": 2.669295557944705,
+        "stop_loss_multiplier_weak": 1.2594283356931522,
+        "strong_bull_threshold": 51.636674785966186,
+        "weak_bull_threshold": 29.17574482778644,
+        "neutral_upper": 6.084021638308156,
+        "neutral_lower": -27.88845721811416,
+        "weak_bear_threshold": -51.16136467543571,
+        "strong_bear_threshold": -53.83659896986411
+      },
+      "fitness": -72.04241785797485,
+      "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T03:54:44.298578",
+      "parameters": {
+        "max_position_fraction": 0.7951205872554055,
+        "entry_step_size": 0.22326717301999863,
+        "stop_loss_multiplier_strong": 1.6068933454541956,
+        "stop_loss_multiplier_weak": 0.6325722462420825,
+        "strong_bull_threshold": 53.38991106319747,
+        "weak_bull_threshold": 26.97329325215862,
+        "neutral_upper": 6.447608867647971,
+        "neutral_lower": -10.236104637959968,
+        "weak_bear_threshold": -36.002076988927456,
+        "strong_bear_threshold": -56.017409572721434
+      },
+      "fitness": -68.28349127028272,
+      "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T03:55:56.244953",
+      "parameters": {
+        "max_position_fraction": 0.7510472958426784,
+        "entry_step_size": 0.131968668903249,
+        "stop_loss_multiplier_strong": 1.542373666848642,
+        "stop_loss_multiplier_weak": 1.176923960111352,
+        "strong_bull_threshold": 51.92263995641848,
+        "weak_bull_threshold": 26.052873606615737,
+        "neutral_upper": 15.180311523506955,
+        "neutral_lower": -20.401505844178118,
+        "weak_bear_threshold": -50.2724313117683,
+        "strong_bear_threshold": -66.85376767838288
+      },
+      "fitness": -72.0848901024997,
+      "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T03:57:07.054479",
+      "parameters": {
+        "max_position_fraction": 0.7203489640344355,
+        "entry_step_size": 0.22438041391085645,
+        "stop_loss_multiplier_strong": 2.8855931631537945,
+        "stop_loss_multiplier_weak": 0.5829291646569082,
+        "strong_bull_threshold": 53.65287155324019,
+        "weak_bull_threshold": 25.29557444255232,
+        "neutral_upper": 6.851237415773703,
+        "neutral_lower": -19.0,
+        "weak_bear_threshold": -38.637913818454045,
+        "strong_bear_threshold": -69.05213566697068
+      },
+      "fitness": -61.245390761100836,
+      "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T03:58:20.656983",
+      "parameters": {
+        "max_position_fraction": 0.5688421272197115,
+        "entry_step_size": 0.27907484852178877,
+        "stop_loss_multiplier_strong": 2.939862273817517,
+        "stop_loss_multiplier_weak": 0.9722369706952559,
+        "strong_bull_threshold": 56.108133334737744,
+        "weak_bull_threshold": 44.79161660407914,
+        "neutral_upper": 17.637659510246593,
+        "neutral_lower": -14.14107872599256,
+        "weak_bear_threshold": -41.27816430965369,
+        "strong_bear_threshold": -56.53868063829534
+      },
+      "fitness": -241.0614541877109,
+      "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T03:59:30.669714",
+      "parameters": {
+        "max_position_fraction": 0.6973411648103185,
+        "entry_step_size": 0.4438285826124744,
+        "stop_loss_multiplier_strong": 1.7037195020486693,
+        "stop_loss_multiplier_weak": 1.4372891608149032,
+        "strong_bull_threshold": 58.13660403618131,
+        "weak_bull_threshold": 43.97210696302373,
+        "neutral_upper": 12.271281146659318,
+        "neutral_lower": -14.278549151686388,
+        "weak_bear_threshold": -30.134037779593115,
+        "strong_bear_threshold": -57.413135112900044
+      },
+      "fitness": -224.5391276841399,
+      "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T04:00:40.009164",
+      "parameters": {
+        "max_position_fraction": 0.5236929315798556,
+        "entry_step_size": 0.32006723903636514,
+        "stop_loss_multiplier_strong": 1.6259345398707061,
+        "stop_loss_multiplier_weak": 0.8102247443196642,
+        "strong_bull_threshold": 64.66239015277134,
+        "weak_bull_threshold": 27.17845055300042,
+        "neutral_upper": 7.024499663301931,
+        "neutral_lower": -15.802554796238855,
+        "weak_bear_threshold": -30.4495162721583,
+        "strong_bear_threshold": -60.51820222755302
+      },
+      "fitness": -1000.0,
+      "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T04:01:08.305982",
+      "parameters": {
+        "max_position_fraction": 0.8283137082162441,
+        "entry_step_size": 0.4893035982241506,
+        "stop_loss_multiplier_strong": 2.2343492863409957,
+        "stop_loss_multiplier_weak": 1.2631058863172302,
+        "strong_bull_threshold": 51.256777211219806,
+        "weak_bull_threshold": 43.855869617347764,
+        "neutral_upper": 16.708988186385227,
+        "neutral_lower": -19.062014990006077,
+        "weak_bear_threshold": -44.98447628834098,
+        "strong_bear_threshold": -57.21396276471002
+      },
+      "fitness": -220.97949485157474,
+      "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T04:02:17.098570",
+      "parameters": {
+        "max_position_fraction": 0.6324175498111204,
+        "entry_step_size": 0.47039760641583483,
+        "stop_loss_multiplier_strong": 2.262950432590255,
+        "stop_loss_multiplier_weak": 1.1031859482285897,
+        "strong_bull_threshold": 53.90918270264479,
+        "weak_bull_threshold": 41.50804093047661,
+        "neutral_upper": 8.519018569510386,
+        "neutral_lower": -19.0,
+        "weak_bear_threshold": -33.323972424391926,
+        "strong_bear_threshold": -59.63398276588511
+      },
+      "fitness": -774.5374647627266,
+      "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T04:03:17.535965",
+      "parameters": {
+        "max_position_fraction": 0.5243750730717829,
+        "entry_step_size": 0.41799713113119863,
+        "stop_loss_multiplier_strong": 2.6483241567929126,
+        "stop_loss_multiplier_weak": 1.225304835239435,
+        "strong_bull_threshold": 68.49308606172532,
+        "weak_bull_threshold": 43.25423058220518,
+        "neutral_upper": 6.612419186922906,
+        "neutral_lower": -50.766000123412475,
+        "weak_bear_threshold": -60.16596933788774,
+        "strong_bear_threshold": -68.60132123729672
+      },
+      "fitness": -176.04295591290432,
+      "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T04:04:27.584395",
+      "parameters": {
+        "max_position_fraction": 0.648871599732284,
+        "entry_step_size": 0.46069768998053984,
+        "stop_loss_multiplier_strong": 1.6516065648612466,
+        "stop_loss_multiplier_weak": 1.4160510572387284,
+        "strong_bull_threshold": 50.35438240006842,
+        "weak_bull_threshold": 43.60030567351146,
+        "neutral_upper": 16.818232537044167,
+        "neutral_lower": -14.61624464817968,
+        "weak_bear_threshold": -30.49209629218352,
+        "strong_bear_threshold": -68.12684443083019
+      },
+      "fitness": -152.98706326252972,
+      "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T04:04:44.640704",
+      "parameters": {
+        "max_position_fraction": 0.541237536072519,
+        "entry_step_size": 0.402116526204358,
+        "stop_loss_multiplier_strong": 2.091119411286553,
+        "stop_loss_multiplier_weak": 1.101699467535699,
+        "strong_bull_threshold": 56.109803595874446,
+        "weak_bull_threshold": 35.33836701388801,
+        "neutral_upper": 5.801045398434686,
+        "neutral_lower": -29.00032828298441,
+        "weak_bear_threshold": -40.06414790608167,
+        "strong_bear_threshold": -50.11246077306499
+      },
+      "fitness": -1000.0,
+      "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T04:05:04.199140",
+      "parameters": {
+        "max_position_fraction": 0.5939363199590622,
+        "entry_step_size": 0.15583245605071094,
+        "stop_loss_multiplier_strong": 1.6058188293648843,
+        "stop_loss_multiplier_weak": 0.6438045233859286,
+        "strong_bull_threshold": 66.59244596546799,
+        "weak_bull_threshold": 42.88352285297722,
+        "neutral_upper": 11.46588220453896,
+        "neutral_lower": -11.798062262238439,
+        "weak_bear_threshold": -44.49461931400045,
+        "strong_bear_threshold": -63.138028567563246
+      },
+      "fitness": -1000.0,
+      "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T04:05:41.476589",
+      "parameters": {
+        "max_position_fraction": 0.6508593449552211,
+        "entry_step_size": 0.48473764443763956,
+        "stop_loss_multiplier_strong": 1.6340025338865187,
+        "stop_loss_multiplier_weak": 0.8343767580328016,
+        "strong_bull_threshold": 50.91871791167521,
+        "weak_bull_threshold": 39.03239741548391,
+        "neutral_upper": 16.520073597898282,
+        "neutral_lower": -22.092930253327637,
+        "weak_bear_threshold": -34.15163924724629,
+        "strong_bear_threshold": -65.33270936948139
+      },
+      "fitness": -1000.0,
+      "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T04:06:38.615222",
+      "parameters": {
+        "max_position_fraction": 0.9941082190308413,
+        "entry_step_size": 0.14840810888128828,
+        "stop_loss_multiplier_strong": 1.8148106602764245,
+        "stop_loss_multiplier_weak": 1.0050489092293178,
+        "strong_bull_threshold": 65.36964643147867,
+        "weak_bull_threshold": 25.69296708704357,
+        "neutral_upper": 5.1588169899711644,
+        "neutral_lower": -15.10842294710844,
+        "weak_bear_threshold": -42.393303500738064,
+        "strong_bear_threshold": -57.330237525037305
+      },
+      "fitness": -1000.0,
+      "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T04:07:47.110595",
+      "parameters": {
+        "max_position_fraction": 0.5817933321369316,
+        "entry_step_size": 0.19253920426404833,
+        "stop_loss_multiplier_strong": 2.306366153326027,
+        "stop_loss_multiplier_weak": 1.2810928740782712,
+        "strong_bull_threshold": 52.20332266565426,
+        "weak_bull_threshold": 41.50978292604496,
+        "neutral_upper": 15.117084480027092,
+        "neutral_lower": -13.913270719197207,
+        "weak_bear_threshold": -27.142592633997793,
+        "strong_bear_threshold": -54.28596244655318
+      },
+      "fitness": -418.41354659034096,
+      "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T04:08:30.322215",
+      "parameters": {
+        "max_position_fraction": 0.7617373265483172,
+        "entry_step_size": 0.1,
+        "stop_loss_multiplier_strong": 2.091849013767916,
+        "stop_loss_multiplier_weak": 1.1857214684279944,
+        "strong_bull_threshold": 60.67414011249686,
+        "weak_bull_threshold": 49.0,
+        "neutral_upper": 15.430546343228116,
+        "neutral_lower": -18.511304370853033,
+        "weak_bear_threshold": -45.51454746841621,
+        "strong_bear_threshold": -65.14668868237662
+      },
+      "fitness": -318.1158381675997,
+      "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T04:09:28.986262",
+      "parameters": {
+        "max_position_fraction": 0.7495480025006916,
+        "entry_step_size": 0.1546009372888696,
+        "stop_loss_multiplier_strong": 1.883479016272078,
+        "stop_loss_multiplier_weak": 0.52591534140687,
+        "strong_bull_threshold": 66.79757606182167,
+        "weak_bull_threshold": 32.473008605117386,
+        "neutral_upper": 5.9374224672167895,
+        "neutral_lower": -25.126722752091798,
+        "weak_bear_threshold": -44.71481255133736,
+        "strong_bear_threshold": -65.82071193535373
+      },
+      "fitness": -1000.0,
+      "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T04:10:41.301556",
+      "parameters": {
+        "max_position_fraction": 0.8519353226657498,
+        "entry_step_size": 0.10697670584742157,
+        "stop_loss_multiplier_strong": 2.664135783438966,
+        "stop_loss_multiplier_weak": 1.4703104381564915,
+        "strong_bull_threshold": 65.42611781258569,
+        "weak_bull_threshold": 43.421558315808966,
+        "neutral_upper": 9.658480885053804,
+        "neutral_lower": -19.0,
+        "weak_bear_threshold": -61.42262702107754,
+        "strong_bear_threshold": -68.78718966579645
+      },
+      "fitness": -181.88414998811828,
+      "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T04:10:59.504355",
+      "parameters": {
+        "max_position_fraction": 0.5401339692930051,
+        "entry_step_size": 0.11850512518737154,
+        "stop_loss_multiplier_strong": 2.3747370324338264,
+        "stop_loss_multiplier_weak": 1.1367431158309556,
+        "strong_bull_threshold": 52.35309415522999,
+        "weak_bull_threshold": 48.4868742706329,
+        "neutral_upper": 14.733266270150793,
+        "neutral_lower": -9.552231403169497,
+        "weak_bear_threshold": -24.517435223981746,
+        "strong_bear_threshold": -58.08024115157001
+      },
+      "fitness": -207.11097867263686,
+      "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T04:12:09.535524",
+      "parameters": {
+        "max_position_fraction": 1.0,
+        "entry_step_size": 0.13856307249646221,
+        "stop_loss_multiplier_strong": 1.859027156206598,
+        "stop_loss_multiplier_weak": 1.1726831830620426,
+        "strong_bull_threshold": 61.082017421256595,
+        "weak_bull_threshold": 44.62521975970058,
+        "neutral_upper": 16.607658810661285,
+        "neutral_lower": -23.06338571299117,
+        "weak_bear_threshold": -31.19537618699907,
+        "strong_bear_threshold": -61.66407693458567
+      },
+      "fitness": -178.71610771612555,
+      "is_best": false
+    },
+    {
+      "timestamp": "2025-07-16T04:13:19.316957",
+      "parameters": {
+        "max_position_fraction": 0.5492764624793257,
+        "entry_step_size": 0.31049519045098195,
+        "stop_loss_multiplier_strong": 2.7492818397133254,
+        "stop_loss_multiplier_weak": 1.2515287393893044,
+        "strong_bull_threshold": 57.142438198954146,
+        "weak_bull_threshold": 49.0,
+        "neutral_upper": 13.890105894569505,
+        "neutral_lower": -31.13332235457639,
+        "weak_bear_threshold": -31.39210957846357,
+        "strong_bear_threshold": -50.0450156759247
+      },
+      "fitness": -282.8846173183562,
+      "is_best": false
     }
   ],
   "hall_of_fame": [],

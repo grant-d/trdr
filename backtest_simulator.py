@@ -112,23 +112,33 @@ class BacktestSimulator:
         # Calculate Sharpe ratio
         mean_return = results_df['returns'].mean()
         std_return = results_df['returns'].std()
-        sharpe_ratio = (mean_return / std_return) * (bars_per_year ** 0.5) if std_return > 0 else 0
+        
+        # Handle case where returns might be too small
+        if std_return < 1e-10 or np.isnan(std_return):
+            sharpe_ratio = 0.0
+        else:
+            sharpe_ratio = (mean_return / std_return) * (bars_per_year ** 0.5)
         
         # Calculate Sortino ratio
         sortino_ratio = calculate_sortino_ratio(results_df['returns'], periods_per_year=int(bars_per_year))
         
-        # Calculate Calmar ratio
+        # Calculate Calmar ratio  
         calmar_ratio = calculate_calmar_ratio(results_df['returns'], periods_per_year=int(bars_per_year))
 
         # Calculate max drawdown
         peak = results_df['portfolio_value'].cummax()
         drawdown = (results_df['portfolio_value'] - peak) / peak
-        max_drawdown = drawdown.min() * 100
+        max_drawdown = drawdown.min() * 100 if len(drawdown) > 0 and not drawdown.isna().all() else 0.0
 
         # Calculate actual trade costs
-        position_changes = results_df['position_units'].diff().abs()
+        position_changes = results_df['position_units'].diff().abs().fillna(0)
         trade_values = position_changes * results_df['close']
         total_costs = (trade_values * 0.0025).sum()  # Alpaca's 0.25% rate
+        
+        # Debug transaction cost calculation
+        if total_costs == 0 and trade_summary['total_trades'] > 0:
+            # Alternative calculation using actual trades
+            total_costs = sum(abs(trade.units) * trade.price * 0.0025 for trade in strategy.trades)
 
         # Prepare metrics
         metrics = {
@@ -171,6 +181,25 @@ class BacktestSimulator:
         print(f"   Total Trades: {trade_summary['total_trades']}")
         print(f"   Win Rate: {trade_summary['win_rate']:.1f}%")
         print(f"   Profit Factor: {trade_summary['profit_factor']:.2f}")
+        
+        # Calculate and display average holding period
+        holding_periods = []
+        current_hold_start = None
+        for i in range(len(results_df)):
+            pos = results_df.iloc[i]['position_units']
+            prev_pos = results_df.iloc[i-1]['position_units'] if i > 0 else 0
+            
+            if prev_pos == 0 and pos != 0:
+                current_hold_start = i
+            elif prev_pos != 0 and pos == 0 and current_hold_start is not None:
+                holding_periods.append(i - current_hold_start)
+                current_hold_start = None
+        
+        if current_hold_start is not None and results_df.iloc[-1]['position_units'] != 0:
+            holding_periods.append(len(results_df) - current_hold_start)
+        
+        avg_holding_period = np.mean(holding_periods) if holding_periods else 0
+        print(f"   Avg Holding Period: {avg_holding_period:.1f} bars")
 
         # Show recent trades
         if strategy.trades:

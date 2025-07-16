@@ -21,7 +21,7 @@ class DataPipeline:
     Handles data quality issues like missing values, extreme outliers,
     and provides conversion to alternative bar formats.
     """
-    
+
     def __init__(
         self,
         outlier_std_threshold: float = 5.0,
@@ -40,7 +40,7 @@ class DataPipeline:
         self.price_columns = price_columns or ["open", "high", "low", "close"]
         self.volume_column = volume_column
         self._processing_stats = {}
-        
+
     def load_csv(self, filepath: Union[str, Path]) -> pd.DataFrame:
         """
         Load data from CSV file.
@@ -54,7 +54,7 @@ class DataPipeline:
         df = pd.read_csv(filepath, parse_dates=['timestamp'])
         print(f"Loaded {len(df)} rows from {filepath}")
         return df
-        
+
     def fill_missing_values(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Fill missing values in data columns using appropriate strategies.
@@ -67,7 +67,7 @@ class DataPipeline:
         """
         df_filled = df.copy()
         filled_count = 0
-        
+
         # Forward fill price columns (carry previous value forward)
         for col in self.price_columns:
             if col in df_filled.columns:
@@ -78,7 +78,7 @@ class DataPipeline:
                     df_filled[col] = df_filled[col].bfill()
                     filled_count += na_count
                     print(f"Filled {na_count} missing values in {col}")
-        
+
         # Fill volume with 0 (no trades)
         if self.volume_column in df_filled.columns:
             na_count = df_filled[self.volume_column].isna().sum()
@@ -86,21 +86,21 @@ class DataPipeline:
                 df_filled[self.volume_column] = df_filled[self.volume_column].fillna(0)
                 filled_count += na_count
                 print(f"Filled {na_count} missing values in {self.volume_column} with 0")
-        
+
         # Fill trade_count with 0
         if 'trade_count' in df_filled.columns:
             na_count = df_filled['trade_count'].isna().sum()
             if na_count > 0:
                 df_filled['trade_count'] = df_filled['trade_count'].fillna(0)
                 filled_count += na_count
-                
+
         self._processing_stats['filled_missing'] = filled_count
-        
+
         if filled_count > 0:
             print(f"Total filled values: {filled_count}")
-            
+
         return df_filled
-        
+
     def clamp_extreme_values(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Clamp extreme outlier values using statistical thresholds.
@@ -116,42 +116,42 @@ class DataPipeline:
         """
         df_clean = df.copy()
         clamped_count = 0
-        
+
         for col in self.price_columns:
             if col not in df_clean.columns:
                 continue
-                
+
             # Calculate rolling statistics for adaptive thresholds
             window_size = min(100, len(df_clean) // 10)
             if window_size < 10:
                 window_size = len(df_clean)
-                
+
             rolling_mean = df_clean[col].rolling(window=window_size, center=True).mean()
             rolling_std = df_clean[col].rolling(window=window_size, center=True).std()
-            
+
             # Fill edge cases
             rolling_mean = rolling_mean.fillna(df_clean[col].mean())
             rolling_std = rolling_std.fillna(df_clean[col].std())
-            
+
             # Calculate thresholds
             upper_threshold = rolling_mean + (self.outlier_std_threshold * rolling_std)
             lower_threshold = rolling_mean - (self.outlier_std_threshold * rolling_std)
-            
+
             # Clamp values
             original_values = df_clean[col].copy()
             df_clean[col] = df_clean[col].clip(lower=lower_threshold, upper=upper_threshold)
-            
+
             # Count clamped values
             clamped = (original_values != df_clean[col]).sum()
             clamped_count += clamped
-            
+
             if clamped > 0:
                 print(f"Clamped {clamped} extreme values in {col}")
-                
+
         self._processing_stats['clamped_values'] = clamped_count
-        
+
         return df_clean
-        
+
     def validate_price_relationships(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Ensure logical price relationships (high >= low, etc).
@@ -164,27 +164,27 @@ class DataPipeline:
         """
         df_clean = df.copy()
         corrections = 0
-        
+
         # Ensure high >= low
         mask = df_clean['high'] < df_clean['low']
         if mask.any():
             # Swap high and low where relationship is violated
             df_clean.loc[mask, ['high', 'low']] = df_clean.loc[mask, ['low', 'high']].values
             corrections += mask.sum()
-            
+
         # Ensure high >= open and high >= close
         df_clean['high'] = df_clean[['high', 'open', 'close']].max(axis=1)
-        
+
         # Ensure low <= open and low <= close
         df_clean['low'] = df_clean[['low', 'open', 'close']].min(axis=1)
-        
+
         if corrections > 0:
             print(f"Corrected {corrections} price relationship violations")
-            
+
         self._processing_stats['price_corrections'] = corrections
-        
+
         return df_clean
-        
+
     def remove_zero_volume_bars(self, df: pd.DataFrame, keep_percentage: float = 0.1) -> pd.DataFrame:
         """
         Remove excessive zero-volume bars while keeping some for continuity.
@@ -198,29 +198,29 @@ class DataPipeline:
         """
         zero_volume_mask = df[self.volume_column] == 0
         zero_volume_count = zero_volume_mask.sum()
-        
+
         if zero_volume_count == 0:
             return df
-            
+
         # Keep all non-zero volume bars
         df_clean = df[~zero_volume_mask].copy()
-        
+
         # Randomly sample some zero-volume bars to keep
         zero_volume_df = df[zero_volume_mask]
         keep_count = int(zero_volume_count * keep_percentage)
-        
+
         if keep_count > 0:
             kept_zeros = zero_volume_df.sample(n=min(keep_count, len(zero_volume_df)))
             df_clean = pd.concat([df_clean, kept_zeros]).sort_values('timestamp').reset_index(drop=True)
-            
+
         removed = zero_volume_count - keep_count
         self._processing_stats['removed_zero_volume'] = removed
-        
+
         if removed > 0:
             print(f"Removed {removed} zero-volume bars (kept {keep_count})")
-            
+
         return df_clean
-        
+
     def add_calculated_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Add useful calculated columns if not present.
@@ -236,13 +236,16 @@ class DataPipeline:
             df['hlc3'] = (df['high'] + df['low'] + df['close']) / 3
         if 'ohlc4' not in df.columns:
             df['ohlc4'] = (df['open'] + df['high'] + df['low'] + df['close']) / 4
-            
+
         # Add dollar volume if not present
         if 'dv' not in df.columns and self.volume_column in df.columns:
             df['dv'] = df['hlc3'] * df[self.volume_column]
-            
+
+        # if 'trade_count' in df.columns:
+        #    df['trade_count'] = np.log(df['trade_count'] / df['trade_count'].shift(1))
+
         return df
-        
+
     def process(
         self,
         df: Optional[pd.DataFrame] = None,
@@ -266,43 +269,70 @@ class DataPipeline:
         """
         # Reset stats
         self._processing_stats = {}
-        
+
         # Load data if needed
         if df is None:
             if csv_path is None:
                 raise ValueError("Must provide either df or csv_path")
             df = self.load_csv(csv_path)
-            
+
         print(f"\nStarting pipeline with {len(df)} rows")
-        
+
         # Processing steps
         df_clean = self.fill_missing_values(df)
         df_clean = self.clamp_extreme_values(df_clean)
         df_clean = self.validate_price_relationships(df_clean)
-        
+
         # Remove zero-volume bars based on keep percentage
         # 0.0 = keep none (remove all), 1.0 = keep all (remove none)
-        if zero_volume_keep_percentage < 1.0:
-            df_clean = self.remove_zero_volume_bars(df_clean, keep_percentage=zero_volume_keep_percentage)
-            
+        # if zero_volume_keep_percentage < 1.0:
+        #    df_clean = self.remove_zero_volume_bars(df_clean, keep_percentage=zero_volume_keep_percentage)
+
         df_clean = self.add_calculated_columns(df_clean)
-        
+
         print(f"Pipeline complete: {len(df_clean)} rows remaining")
-        
+
         # Convert to dollar bars if requested
-        dollar_bars_df = None
-        if dollar_bar_threshold is not None:
-            print(f"\nConverting to dollar bars with threshold: ${dollar_bar_threshold:,.2f}")
-            aggregator = DollarBarAggregator(
-                threshold=dollar_bar_threshold,
-                price_column=price_column,
-                volume_column=self.volume_column
-            )
-            dollar_bars_df = aggregator.aggregate(df_clean)
-            print(f"Created {len(dollar_bars_df)} dollar bars")
-            
-        return df_clean, dollar_bars_df
-        
+        ##dollar_bars_df = None
+        ##if dollar_bar_threshold is not None:
+        ##    print(f"\nConverting to dollar bars with threshold: ${dollar_bar_threshold:,.2f}")
+        ##    aggregator = DollarBarAggregator(
+        ##        threshold=dollar_bar_threshold,
+        ##        price_column=price_column,
+        ##        volume_column=self.volume_column
+        ##    )
+        ##    dollar_bars_df = aggregator.aggregate(df_clean)
+        ##    print(f"Created {len(dollar_bars_df)} dollar bars")
+
+        returns_df = df.copy()
+
+        # Convert prices to returns, guard against division by zero, fill NaNs with 0
+        for col in self.price_columns + ["hlc3", "ohlc4"]:
+            if col in returns_df.columns:
+                prev = returns_df[col].shift(1)
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    returns = np.where(prev != 0, (returns_df[col] - prev) / prev, 0.0)
+                returns_df[f"{col}"] = returns
+
+        # Convert volume and dollar volume to log returns, guard against zero/negative, fill NaNs with 0
+        if self.volume_column in returns_df.columns:
+            prev = returns_df[self.volume_column].shift(1)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                logret = np.where((returns_df[self.volume_column] > 0) & (prev > 0),
+                                 np.log(returns_df[self.volume_column] / prev),
+                                 0.0)
+            returns_df[f"{self.volume_column}"] = logret
+
+        if "dv" in returns_df.columns:
+            prev = returns_df["dv"].shift(1)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                logret = np.where((returns_df["dv"] > 0) & (prev > 0),
+                                 np.log(returns_df["dv"] / prev),
+                                 0.0)
+            returns_df["dv"] = logret
+
+        return df_clean, returns_df
+
     def get_processing_stats(self) -> dict:
         """
         Get statistics from the last processing run.
@@ -311,7 +341,7 @@ class DataPipeline:
             Dictionary with processing statistics
         """
         return self._processing_stats.copy()
-    
+
     @staticmethod
     def process_from_config(df: pd.DataFrame, config: Config) -> None:
         """
@@ -324,20 +354,20 @@ class DataPipeline:
         from bar_aggregators import DollarBarAggregator
         from filename_utils import generate_processed_filename
         import chalk
-        
+
         if not (config.pipeline_enabled or config.dollar_bars_enabled):
             return
-            
+
         print(chalk.yellow + "\n\nProcessing data through pipeline..." + chalk.RESET)
-        
+
         # Create pipeline
         pipeline = DataPipeline()
-        
+
         # Use dollar bar threshold from config
         dollar_threshold = None
         if config.dollar_bars_enabled and config.dollar_bars_threshold:
             dollar_threshold = config.dollar_bars_threshold
-        
+
         # Process data
         cleaned_df, dollar_bars_df = pipeline.process(
             df=df,
@@ -345,19 +375,19 @@ class DataPipeline:
             dollar_bar_threshold=dollar_threshold,
             price_column=config.dollar_bars_price_column
         )
-        
+
         # Show processing results
         print(chalk.cyan + "\nProcessing Summary:" + chalk.RESET)
         stats = pipeline.get_processing_stats()
         for key, value in stats.items():
             print(f"{key}: {value}")
-        
+
         # Show cleaned data summary
         print(chalk.cyan + f"\nCleaned data: {len(cleaned_df)} bars" + chalk.RESET)
         if len(cleaned_df) > 0:
             print("Last 5 cleaned bars:")
             print(cleaned_df.tail().to_string(index=False))
-            
+
             # Save cleaned data if processing was done
             if config.pipeline_enabled:
                 cleaned_filename = generate_processed_filename(
@@ -367,13 +397,13 @@ class DataPipeline:
                 )
                 cleaned_df.to_csv(cleaned_filename, index=False)
                 print(chalk.green + f"✓ Cleaned data saved to {cleaned_filename}" + chalk.RESET)
-        
+
         # Show dollar bars if created
         if dollar_bars_df is not None and len(dollar_bars_df) > 0:
             print(chalk.cyan + f"\n\nDollar bars created: {len(dollar_bars_df)} bars" + chalk.RESET)
             print("Last 5 dollar bars:")
             print(dollar_bars_df.tail().to_string(index=False))
-            
+
             # Save dollar bars with threshold in filename
             dollar_bars_filename = generate_processed_filename(
                 config.symbol,
