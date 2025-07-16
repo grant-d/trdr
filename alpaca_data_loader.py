@@ -5,6 +5,7 @@ from typing import Optional, Union
 from alpaca.data import CryptoHistoricalDataClient, StockHistoricalDataClient
 from alpaca.data.requests import CryptoBarsRequest, StockBarsRequest
 from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
+from alpaca.data.enums import DataFeed
 from dotenv import load_dotenv
 
 from base_data_loader import BaseDataLoader
@@ -128,7 +129,8 @@ class AlpacaDataLoader(BaseDataLoader):
                 symbol_or_symbols=symbol,
                 timeframe=timeframe,
                 start=start,
-                end=end
+                end=end,
+                feed=DataFeed.IEX
             )
             bars = self.stock_client.get_stock_bars(request_params)
 

@@ -13,7 +13,6 @@ from typing import Optional, Literal
 from datetime import datetime
 from pydantic import BaseModel, Field, field_validator
 from filename_utils import generate_filename, get_data_path
-from state import RuntimeState, StateValue
 
 
 class DollarBarsConfig(BaseModel):
@@ -28,7 +27,7 @@ class OptimizerConfig(BaseModel):
     population_size: int = Field(default=50, gt=0, description="Number of individuals in GA population")
     generations: int = Field(default=30, gt=0, description="Number of generations to run GA")
     n_splits: int = Field(default=3, gt=0, description="Number of walk-forward splits")
-    test_ratio: Optional[float] = Field(default=0.3, ge=0.1, le=0.9, description="Test ratio as fraction (0.3 = 30% test, 70% train). None for expanding window.")
+    # test_ratio: Optional[float] = Field(default=0.3, ge=0.1, le=0.9, description="Test ratio as fraction (0.3 = 30% test, 70% train). None for expanding window.")
 
 
 class PipelineConfig(BaseModel):
@@ -51,11 +50,10 @@ class Config(BaseModel):
     
     symbol: str = "BTC/USD"
     timeframe: Literal["1m", "5m", "15m", "30m", "1h", "4h", "1d", "3d", "1w"] = "1m"
-    min_bars: int = Field(default=5000, gt=0)
+    min_bars: int = Field(default=10_000, gt=0)
     paper_mode: bool = True
     pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
     optimizer: OptimizerConfig = Field(default_factory=OptimizerConfig)
-    state: RuntimeState = Field(default_factory=RuntimeState)
     
     # Non-model fields
     config_path: str = Field(exclude=True)
@@ -85,20 +83,7 @@ class Config(BaseModel):
         if os.path.exists(config_path):
             with open(config_path, 'r') as f:
                 config_data = json.load(f)
-                # Handle legacy state format (convert dict to RuntimeState fields)
-                if 'state' in config_data and isinstance(config_data['state'], dict):
-                    state_data = config_data['state']
-                    # Only keep fields that are valid for RuntimeState
-                    valid_state_fields = {
-                        'last_update', 'total_bars', 'last_run_duration', 
-                        'last_error', 'last_successful_run', 'custom_data'
-                    }
-                    # Filter out any invalid fields and ensure custom_data exists
-                    filtered_state = {k: v for k, v in state_data.items() if k in valid_state_fields}
-                    if 'custom_data' not in filtered_state:
-                        filtered_state['custom_data'] = {}
-                    config_data['state'] = filtered_state
-                
+
                 # Merge with any provided kwargs
                 config_data.update(kwargs)
         else:
@@ -153,51 +138,6 @@ class Config(BaseModel):
         """Get price column for dollar bars."""
         return self.pipeline.dollar_bars.price_column
     
-    def get_state(self, key: str) -> Optional[StateValue]:
-        """
-        Retrieve a value from the state section of configuration.
-        
-        Args:
-            key: The state key to retrieve
-            
-        Returns:
-            The state value if found, None otherwise
-        """
-        # Check if it's a predefined field
-        if hasattr(self.state, key):
-            return getattr(self.state, key)
-        # Otherwise check custom data
-        return self.state.get_custom(key)
-    
-    def set_state(self, key: str, value: StateValue) -> None:
-        """
-        Set a value in the state section of configuration.
-        
-        State values are used to track runtime information that should persist
-        between sessions (e.g., last update time, total bars processed).
-        
-        Args:
-            key: The state key to set
-            value: The value to store (must be str, int, float, bool, or None)
-        """
-        # Check if it's a predefined field
-        if hasattr(self.state, key) and key not in ['custom_data']:
-            setattr(self.state, key, value)
-        else:
-            # Store in custom data
-            self.state.set_custom(key, value)
-        self.save()
-    
-    def update_last_sync(self, timestamp: Optional[str] = None) -> None:
-        """
-        Update the last synchronization timestamp in state.
-        
-        Args:
-            timestamp: ISO format timestamp string. If None, uses current UTC time.
-        """
-        self.state.update_last_sync(timestamp)
-        self.save()
-    
     @property
     def config(self) -> dict:
         """
@@ -212,7 +152,7 @@ class Config(BaseModel):
     def create_config_file(
         symbol: str, 
         timeframe: str, 
-        min_bars: int = 5000, 
+        min_bars: int = 10_000, 
         paper_mode: bool = True
     ) -> str:
         """
@@ -221,7 +161,7 @@ class Config(BaseModel):
         Args:
             symbol: Trading symbol (e.g., "BTC/USD", "AAPL")
             timeframe: Time interval (e.g., "1m", "1d")
-            min_bars: Minimum number of bars to load (default: 5000)
+            min_bars: Minimum number of bars to load (default: 10,000)
             paper_mode: Whether to use paper trading mode (default: True)
             
         Returns:

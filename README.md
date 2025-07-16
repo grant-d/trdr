@@ -43,10 +43,10 @@ python main.py --init --symbol BTC/USD --timeframe 1m
 
 2. Fetch the data:
 ```bash
-python main.py --config btc_usd_1m_config.json
+python main.py --config btc_usd_1m.config.json
 ```
 
-That's it! Your data will be saved to `data/btc_usd_1m_bars.csv`.
+That's it! Your data will be saved to `data/btc_usd_1m.bars.csv`.
 
 ## Usage
 
@@ -70,13 +70,13 @@ Load data using a configuration file:
 python main.py --config <CONFIG_FILE>
 ```
 
-The config file should be just the filename (e.g., `btc_usd_1m_config.json`). All configs are stored in the `configs/` directory.
+The config file should be just the filename (e.g., `btc_usd_1m.config.json`). All configs are stored in the `configs/` directory.
 
 ### Generating Dollar Bars
 
 Calculate and enable dollar bars for a specific target number:
 ```bash
-python main.py --config btc_usd_1m_config.json --dollar-bars 500
+python main.py --config btc_usd_1m.config.json --dollar-bars 500
 ```
 
 This will:
@@ -148,12 +148,19 @@ Edit your config file or use the `--dollar-bars` option to enable pipeline proce
 
 ## Output Files
 
-Data files are saved in the `data/` directory with standardized naming:
+Files are organized with standardized naming using dot separators:
 
-- **Time bars**: `{symbol}_{timeframe}_bars.csv` (e.g., `btc_usd_1m_bars.csv`)
-- **Cleaned data**: `{symbol}_{timeframe}_cleaned.csv`
-- **Dollar bars**: `{symbol}_{timeframe}_dollar_{threshold}.csv` (e.g., `btc_usd_1m_dollar_443.csv`)
-- **Volume bars**: `{symbol}_{timeframe}_volume_{threshold}.csv`
+### Data Files (`data/` directory)
+- **Time bars**: `{symbol}_{timeframe}.bars.csv` (e.g., `btc_usd_1m.bars.csv`)
+- **Cleaned data**: `{symbol}_{timeframe}.cleaned.csv`
+- **Dollar bars**: `{symbol}_{timeframe}.dollar-{threshold}.csv` (e.g., `btc_usd_1m.dollar-443k.csv`)
+- **Volume bars**: `{symbol}_{timeframe}.volume-{threshold}.csv`
+
+### Configuration Files (`configs/` directory)
+- **Configuration**: `{symbol}_{timeframe}.config.json` (e.g., `btc_usd_1m.config.json`)
+- **Runtime State**: `{symbol}_{timeframe}.state.json` (e.g., `btc_usd_1m.state.json`)
+
+The state file contains optimization history, hall of fame, and other runtime data separate from configuration.
 
 ## Data Format
 

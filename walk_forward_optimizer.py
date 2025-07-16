@@ -2,49 +2,15 @@
 Walk-Forward Optimization (WFO) for backtesting trading strategies.
 
 This module provides a WalkForwardOptimizer class that implements walk-forward
-analysis using scikit-learn's TimeSeriesSplit. It divides historical data into
+analysis. It uses the SplitManager to divide historical data into
 multiple train/test windows for robust strategy evaluation.
 """
 
 import pandas as pd
 import numpy as np
 from typing import List, Tuple, Optional
-from sklearn.model_selection import TimeSeriesSplit
 from datetime import datetime
-from pydantic import BaseModel, Field
-
-
-class SplitInfo(BaseModel):
-    """Information about a single train/test split in walk-forward optimization."""
-    
-    split_id: int = Field(description="Sequential identifier for the split")
-    train_start_idx: int = Field(description="Start index of training period", ge=0)
-    train_end_idx: int = Field(description="End index of training period", ge=0)
-    test_start_idx: int = Field(description="Start index of test period", ge=0)
-    test_end_idx: int = Field(description="End index of test period", ge=0)
-    train_size: int = Field(description="Number of samples in training set", gt=0)
-    test_size: int = Field(description="Number of samples in test set", gt=0)
-    train_indices: np.ndarray = Field(description="Array of training indices")
-    test_indices: np.ndarray = Field(description="Array of test indices")
-    
-    class Config:
-        """Pydantic config."""
-        arbitrary_types_allowed = True  # Allow numpy arrays
-    
-    @property
-    def train_bars(self) -> int:
-        """Number of bars in training period."""
-        return self.train_size
-    
-    @property
-    def test_bars(self) -> int:
-        """Number of bars in test period."""
-        return self.test_size
-    
-    @property
-    def train_test_ratio(self) -> float:
-        """Calculate ratio of training to test samples."""
-        return self.train_size / self.test_size
+from split_manager import SplitManager, SplitInfo
 
 
 class WalkForwardOptimizer:
@@ -55,16 +21,13 @@ class WalkForwardOptimizer:
     into multiple train/test periods, simulating how a strategy would perform
     in real-time with periodic re-optimization.
     
-    Attributes:
-        n_splits: Number of train/test splits (default: 5)
-        test_size: Fixed size for test sets (optional)
-        gap: Number of samples to exclude between train and test sets
+    Uses SplitManager for flexible split generation strategies.
     """
     
     def __init__(
         self,
         n_splits: int = 5,
-        test_ratio: Optional[float] = None,
+        test_ratio: float = 0.3,  # Always use 70/30 split
         gap: int = 0
     ) -> None:
         """
@@ -72,57 +35,29 @@ class WalkForwardOptimizer:
         
         Args:
             n_splits: Number of splits for time series cross-validation
-            test_ratio: Test size as fraction (0.3 = 30% test, 70% train) or None for expanding window
+            test_ratio: Test size as fraction (0.3 = 30% test, 70% train)
             gap: Number of samples to exclude between train and test sets
         """
-        self.n_splits = n_splits
-        self.test_ratio = test_ratio
-        self.gap = gap
-        # We'll calculate the actual test_size in bars during get_splits
-        self.tscv = None
+        self.split_manager = SplitManager(
+            n_splits=n_splits,
+            test_ratio=test_ratio,
+            gap=gap
+        )
         
     def get_splits(self, df: pd.DataFrame) -> List[SplitInfo]:
         """
         Generate train/test splits for the given DataFrame.
+        
+        Delegates to SplitManager for actual split generation.
+        Uses hybrid sliding window approach by default.
         
         Args:
             df: DataFrame with time series data
             
         Returns:
             List of SplitInfo objects containing split information
-        """        
-        # Calculate test_size in bars if percentage is provided
-        test_size_bars = None
-        if self.test_ratio is not None:
-            # Calculate split size first: total_length / n_splits
-            split_size = len(df) // self.n_splits
-            # Then apply the percentage to each split
-            test_size_bars = int(split_size * self.test_ratio)
-        
-        # Create TimeSeriesSplit with calculated test_size
-        self.tscv = TimeSeriesSplit(
-            n_splits=self.n_splits,
-            test_size=test_size_bars,
-            gap=self.gap
-        )
-        
-        splits = []
-        
-        for i, (train_idx, test_idx) in enumerate(self.tscv.split(df)):
-            split_info = SplitInfo(
-                split_id=i + 1,
-                train_start_idx=int(train_idx[0]),
-                train_end_idx=int(train_idx[-1]),
-                test_start_idx=int(test_idx[0]),
-                test_end_idx=int(test_idx[-1]),
-                train_size=len(train_idx),
-                test_size=len(test_idx),
-                train_indices=train_idx,
-                test_indices=test_idx
-            )
-            splits.append(split_info)
-            
-        return splits
+        """
+        return self.split_manager.generate_hybrid_splits(df)
     
     def get_split_data(
         self, 
@@ -132,6 +67,8 @@ class WalkForwardOptimizer:
         """
         Extract train and test DataFrames for a specific split.
         
+        Delegates to SplitManager.
+        
         Args:
             df: Original DataFrame
             split_info: SplitInfo object from get_splits()
@@ -139,37 +76,24 @@ class WalkForwardOptimizer:
         Returns:
             Tuple of (train_df, test_df)
         """
-        train_df = df.iloc[split_info.train_indices].copy()
-        test_df = df.iloc[split_info.test_indices].copy()
-        
-        return train_df, test_df
+        return self.split_manager.get_split_data(df, split_info)
     
     def print_splits_summary(self, splits: List[SplitInfo]) -> None:
         """
         Print a formatted summary of all splits.
         
+        Delegates to SplitManager.
+        
         Args:
             splits: List of SplitInfo objects
         """
-        print("\nWalk-Forward Optimization Splits Summary")
-        print("=" * 80)
-        
-        for split in splits:
-            print(f"\nSplit {split.split_id}:")
-            print(f"  Training Indices: [{split.train_start_idx:,} to {split.train_end_idx:,}]")
-            print(f"  Training Bars: {split.train_bars:,}")
-            print(f"  Test Indices: [{split.test_start_idx:,} to {split.test_end_idx:,}]")
-            print(f"  Test Bars: {split.test_bars:,}")
-            print(f"  Train/Test Ratio: {split.train_test_ratio:.2f}")
-            
-            if self.gap > 0:
-                print(f"  Gap Bars: {self.gap}")
-        
-        print("\n" + "=" * 80)
+        self.split_manager.print_splits_summary(splits)
         
     def validate_data_sufficiency(self, df: pd.DataFrame) -> bool:
         """
         Check if DataFrame has enough data for the requested number of splits.
+        
+        Delegates to SplitManager.
         
         Args:
             df: DataFrame to validate
@@ -177,46 +101,18 @@ class WalkForwardOptimizer:
         Returns:
             True if data is sufficient, False otherwise
         """
-        min_samples = self.n_splits + 1
-        if self.test_ratio:
-            # Calculate minimum samples needed for percentage-based test_size
-            split_size = len(df) // self.n_splits
-            test_size_bars = int(split_size * self.test_ratio)
-            min_samples = self.n_splits + test_size_bars
-            
-        if len(df) < min_samples:
-            print(f"Warning: DataFrame has {len(df)} samples but needs at least {min_samples} for {self.n_splits} splits")
-            return False
-            
-        return True
+        return self.split_manager.validate_data_sufficiency(df)
     
     def calculate_split_statistics(self, splits: List[SplitInfo]) -> dict[str, float]:
         """
         Calculate statistics about the splits.
         
+        Delegates to SplitManager.
+        
         Args:
             splits: List of SplitInfo objects
             
         Returns:
-            Dictionary with statistics:
-            - avg_train_size: Average training set size
-            - avg_test_size: Average test set size
-            - total_train_bars: Total training bars across all splits
-            - total_test_bars: Total test bars across all splits
-            - train_test_ratio: Average ratio of train to test samples
+            Dictionary with statistics
         """
-        train_sizes = [s.train_size for s in splits]
-        test_sizes = [s.test_size for s in splits]
-        
-        train_bars = [s.train_bars for s in splits]
-        test_bars = [s.test_bars for s in splits]
-        
-        stats = {
-            'avg_train_size': np.mean(train_sizes),
-            'avg_test_size': np.mean(test_sizes),
-            'total_train_bars': sum(train_bars),
-            'total_test_bars': sum(test_bars),
-            'train_test_ratio': np.mean([t/s for t, s in zip(train_sizes, test_sizes)])
-        }
-        
-        return stats
+        return self.split_manager.calculate_split_statistics(splits)

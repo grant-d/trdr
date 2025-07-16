@@ -29,21 +29,22 @@ def generate_filename(
         Generated filename string
 
     Examples:
-        - generate_filename("BTC/USD", "1d", "bars") -> "btc_usd_1d_bars.csv"
-        - generate_filename("AAPL", "1m", "dollar-bars") -> "aapl_1m_dollar-bars.csv"
-        - generate_filename("MSFT", "1d", "config", "json") -> "msft_1d_config.json"
+        - generate_filename("BTC/USD", "1d", "bars") -> "btc_usd_1d.bars.csv"
+        - generate_filename("AAPL", "1m", "dollar-bars") -> "aapl_1m.dollar-bars.csv"
+        - generate_filename("MSFT", "1d", "config", "json") -> "msft_1d.config.json"
     """
     # Clean symbol - replace special characters with underscore
     clean_symbol = symbol.replace("/", "_").replace("-", "_").lower()
 
     # Build filename parts
-    parts = [clean_symbol, timeframe.lower()]
-
+    base_parts = [clean_symbol, timeframe.lower()]
+    base_name = "_".join(base_parts)
+    
+    # Add domain with dot separator if provided
     if domain:
-        parts.append(domain.lower())
-
-    # Join parts and add extension
-    filename = "_".join(parts) + f".{format}"
+        filename = f"{base_name}.{domain.lower()}.{format}"
+    else:
+        filename = f"{base_name}.{format}"
 
     return filename
 
@@ -91,7 +92,7 @@ def generate_processed_filename(
             threshold_str = str(int(threshold))
         
         # Include threshold in filename
-        domain = f"{bar_type}_{threshold_str}"
+        domain = f"{bar_type}-{threshold_str}"
     else:
         domain = bar_type
         

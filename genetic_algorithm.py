@@ -97,8 +97,7 @@ class GeneticAlgorithm:
             self.toolbox.register(f"attr_{i}", range_obj.sample)
         
         # Register individual and population generators
-        attr_list = [getattr(self.toolbox, f"attr_{i}") for i in range(len(self.param_names))]
-        self.toolbox.register("individual", tools.initCycle, creator.Individual, attr_list, n=1)
+        self.toolbox.register("individual", self._create_valid_individual)
         self.toolbox.register("population", tools.initRepeat, list, self.toolbox.individual)
         
         # Register genetic operators
@@ -107,6 +106,101 @@ class GeneticAlgorithm:
         self.toolbox.register("mutate", self._mutate_bounded)
         self.toolbox.register("select", tools.selTournament, tournsize=self.tournament_size)
         
+    def _create_valid_individual(self) -> List[float]:
+        """
+        Create an individual with valid parameter constraints.
+        
+        Returns:
+            List of parameter values that satisfy all constraints
+        """
+        # For regime strategy parameters, use smart generation
+        param_indices = {name: i for i, name in enumerate(self.param_names)}
+        
+        if 'strong_bull_threshold' in param_indices:
+            # Generate regime thresholds with proper ordering
+            max_attempts = 100
+            
+            for _ in range(max_attempts):
+                values = [0.0] * len(self.param_names)
+                
+                # Generate non-threshold parameters first
+                for param_name, i in param_indices.items():
+                    if 'threshold' not in param_name and 'neutral' not in param_name:
+                        range_obj = self.param_ranges[param_name]
+                        values[i] = range_obj.sample()
+                
+                # Generate thresholds in order to ensure constraints
+                # Pick random values but ensure proper spacing
+                strong_bear = random.uniform(-70, -50)
+                weak_bear = random.uniform(strong_bear + 5, -25)
+                neutral_lower = random.uniform(weak_bear, -5)
+                neutral_upper = random.uniform(max(neutral_lower + 5, 5), 20)
+                weak_bull = random.uniform(max(neutral_upper, 25), 45)
+                strong_bull = random.uniform(max(weak_bull + 5, 50), 70)
+                
+                # Assign the values
+                values[param_indices['strong_bear_threshold']] = strong_bear
+                values[param_indices['weak_bear_threshold']] = weak_bear
+                values[param_indices['neutral_lower']] = neutral_lower
+                values[param_indices['neutral_upper']] = neutral_upper
+                values[param_indices['weak_bull_threshold']] = weak_bull
+                values[param_indices['strong_bull_threshold']] = strong_bull
+                
+                # Create individual and verify
+                individual = creator.Individual(values)
+                params = self._individual_to_params(individual)
+                if params.validate_constraints():
+                    return individual
+            
+            # Fallback to guaranteed valid values
+            return self._create_fallback_valid_individual()
+        else:
+            # For non-regime strategies, use the original approach
+            max_attempts = 100
+            
+            for _ in range(max_attempts):
+                values = []
+                for i in range(len(self.param_names)):
+                    param_name = self.param_names[i]
+                    range_obj = self.param_ranges[param_name]
+                    values.append(range_obj.sample())
+                
+                individual = creator.Individual(values)
+                params = self._individual_to_params(individual)
+                if params.validate_constraints():
+                    return individual
+            
+            return self._create_fallback_valid_individual()
+    
+    def _create_fallback_valid_individual(self) -> List[float]:
+        """
+        Create a valid individual with guaranteed valid constraints.
+        Used as fallback when random generation fails.
+        """
+        # Start with middle values for each range
+        values = []
+        for i in range(len(self.param_names)):
+            param_name = self.param_names[i]
+            range_obj = self.param_ranges[param_name]
+            min_val, max_val = range_obj.get_bounds()
+            values.append((min_val + max_val) / 2)
+        
+        # For regime parameters, ensure proper ordering
+        param_indices = {name: i for i, name in enumerate(self.param_names)}
+        
+        # If this looks like regime strategy parameters, fix the ordering
+        if 'strong_bull_threshold' in param_indices:
+            # Set thresholds with proper spacing to guarantee ordering:
+            # strong_bear < weak_bear <= neutral_lower < neutral_upper <= weak_bull < strong_bull
+            values[param_indices['strong_bear_threshold']] = -60.0
+            values[param_indices['weak_bear_threshold']] = -35.0
+            values[param_indices['neutral_lower']] = -12.0
+            values[param_indices['neutral_upper']] = 12.0
+            values[param_indices['weak_bull_threshold']] = 35.0
+            values[param_indices['strong_bull_threshold']] = 60.0
+        
+        return creator.Individual(values)
+    
     def _mutate_bounded(self, individual: List[float]) -> Tuple[List[float]]:
         """
         Mutate an individual with bounds checking using range types.
@@ -131,6 +225,31 @@ class GeneticAlgorithm:
                 
                 # Use range's clip method to ensure valid value
                 individual[i] = range_obj.clip(mutated_value)
+        
+        # After mutation, ensure constraints are still satisfied
+        # If not, try to fix them
+        params = self._individual_to_params(individual)
+        if not params.validate_constraints():
+            # Try smaller mutations until valid
+            for attempt in range(10):
+                valid = True
+                temp_individual = individual[:]
+                
+                for i in range(len(temp_individual)):
+                    if random.random() < self.mutation_indpb:
+                        param_name = self.param_names[i]
+                        range_obj = self.param_ranges[param_name]
+                        min_val, max_val = range_obj.get_bounds()
+                        
+                        # Use progressively smaller sigma
+                        sigma = (max_val - min_val) * 0.1 * (0.5 ** attempt)
+                        mutated_value = temp_individual[i] + random.gauss(0, sigma)
+                        temp_individual[i] = range_obj.clip(mutated_value)
+                
+                params = self._individual_to_params(temp_individual)
+                if params.validate_constraints():
+                    individual[:] = temp_individual
+                    break
                 
         return (individual,)
         
@@ -152,7 +271,8 @@ class GeneticAlgorithm:
         self,
         fitness_function: Callable[[T, pd.DataFrame], float],
         data: pd.DataFrame,
-        verbose: bool = True
+        verbose: bool = True,
+        seed_params: Optional[List[T]] = None
     ) -> OptimizationResult[T]:
         """
         Run the genetic algorithm optimization.
@@ -161,6 +281,7 @@ class GeneticAlgorithm:
             fitness_function: Function that takes (parameters, data) and returns fitness
             data: Data to optimize on
             verbose: Whether to print progress
+            seed_params: Optional list of parameter sets to seed the initial population
             
         Returns:
             OptimizationResult with best parameters and statistics
@@ -168,11 +289,12 @@ class GeneticAlgorithm:
         # Create evaluation wrapper
         def evaluate_wrapper(individual):
             params = self._individual_to_params(individual)
-
-            # Check constraints
+            
+            # Constraints should already be satisfied, but double-check
             if not params.validate_constraints():
-                return (-1000.0,)  # Heavily penalize invalid parameter combinations
-
+                # This should rarely happen with our new approach
+                return (-1000.0,)
+            
             fitness = fitness_function(cast(T, params), data)
             return (fitness,)
         
@@ -180,7 +302,24 @@ class GeneticAlgorithm:
         self.toolbox.register("evaluate", evaluate_wrapper)
         
         # Create initial population
-        population = self.toolbox.population(n=self.population_size)
+        if seed_params:
+            # Seed with provided parameters
+            seeded_individuals = []
+            for params in seed_params[:self.population_size // 2]:  # Use up to half the population
+                individual = creator.Individual(self._params_to_individual(params))
+                seeded_individuals.append(individual)
+            
+            # Fill the rest with random individuals
+            remaining = self.population_size - len(seeded_individuals)
+            random_individuals = self.toolbox.population(n=remaining)
+            
+            population = seeded_individuals + random_individuals
+            
+            if verbose:
+                print(f"Seeded population with {len(seeded_individuals)} hall of fame members")
+        else:
+            # Create fully random population
+            population = self.toolbox.population(n=self.population_size)
         
         # Set up statistics
         stats = tools.Statistics(lambda ind: ind.fitness.values[0])
@@ -195,7 +334,6 @@ class GeneticAlgorithm:
         # Run the genetic algorithm
         if verbose:
             print(f"Starting GA optimization with {self.population_size} individuals for {self.generations} generations")
-            print(f"Parameter space: {self.param_names}")
             
         population, logbook = algorithms.eaSimple(
             population, 

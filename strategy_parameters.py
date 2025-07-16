@@ -5,6 +5,7 @@ This module provides base classes and utilities for defining strongly-typed
 strategy parameters that can be optimized using the genetic algorithm.
 """
 
+import math
 from typing import Dict, Tuple, Type, TypeVar, Union, List, Optional, Any
 from pydantic import BaseModel, Field, field_validator
 from abc import ABC, abstractmethod
@@ -39,7 +40,19 @@ class MinMaxRange(BaseRange):
     
     min_value: float = Field(description="Minimum value")
     max_value: float = Field(description="Maximum value")
-    
+
+    def __init__(
+            self,
+            min_value: float,
+            max_value: float,
+            **kwargs
+    ):
+        # Fix swapped min/max
+        kwargs['min_value'] = min(min_value, max_value)
+        kwargs['max_value'] = max(min_value, max_value)
+        # Set the values in kwargs for parent class
+        super().__init__(**kwargs)
+
     @field_validator('max_value')
     @classmethod
     def validate_max(cls, v: float, info) -> float:

@@ -18,7 +18,9 @@
       "Bash(uv pip:*)",
       "Bash(pip install:*)",
       "Bash(grep:*)",
-      "Bash(timeout 10 python:*)"
+      "Bash(timeout 10 python:*)",
+      "Bash(cat:*)",
+      "Bash(.venv/bin/python:*)"
     ],
     "deny": []
   }

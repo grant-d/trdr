@@ -27,7 +27,7 @@ if [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
     echo ""
     echo "Data loading options (uses main.py):"
     echo "  --config CONFIG, -c CONFIG"
-    echo "                        Path to config file (default: btc_usd_1m_config.json)"
+    echo "                        Path to config file (default: btc_usd_1m.config.json)"
     echo "  --init                Initialize a new configuration file"
     echo "  --symbol SYMBOL, -s SYMBOL"
     echo "                        Trading symbol (required with --init)"
@@ -37,10 +37,10 @@ if [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
     echo "  --paper               Use paper trading mode (default: True)"
     echo ""
     echo "Examples:"
-    echo "  $0 --config btc_usd_1m_config.json              # Load data"
-    echo "  $0 --optimize --single --config btc_usd_1m_config.json  # Single optimization"
-    echo "  $0 --optimize --config btc_usd_1m_config.json   # Continuous optimization (auto-pause)"
-    echo "  $0 --optimize --config btc_usd_1m_config.json --pause 30  # Continuous optimization (custom pause)"
+    echo "  $0 --config btc_usd_1m.config.json              # Load data"
+    echo "  $0 --optimize --single --config btc_usd_1m.config.json  # Single optimization"
+    echo "  $0 --optimize --config btc_usd_1m.config.json   # Continuous optimization (auto-pause)"
+    echo "  $0 --optimize --config btc_usd_1m.config.json --pause 30  # Continuous optimization (custom pause)"
     exit 0
 fi
 

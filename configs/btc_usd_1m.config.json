@@ -1,29 +1,20 @@
 {
   "symbol": "BTC/USD",
   "timeframe": "1m",
-  "min_bars": 5000,
+  "min_bars": 10000,
   "paper_mode": true,
   "pipeline": {
     "enabled": true,
     "zero_volume_keep_percentage": 0.1,
     "dollar_bars": {
       "enabled": true,
-      "threshold": 336.0,
+      "threshold": 300.0,
       "price_column": "hlc3"
     }
   },
   "optimizer": {
     "population_size": 50,
     "generations": 30,
-    "n_splits": 3,
-    "test_ratio": 0.3
-  },
-  "state": {
-    "last_update": "2025-07-15T21:04:00+00:00",
-    "total_bars": 5002,
-    "last_run_duration": null,
-    "last_error": null,
-    "last_successful_run": null,
-    "custom_data": {}
+    "n_splits": 5
   }
 }

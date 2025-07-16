@@ -241,8 +241,4 @@ class BaseDataLoader(ABC):
         df.to_csv(csv_path, index=False)
         print(f"Saved {len(df)} bars to {csv_path}")
 
-        # Update config state
-        self.config.set_state("total_bars", len(df))
-        self.config.update_last_sync(df['timestamp'].max().isoformat() if not df.empty else None)
-
         return df

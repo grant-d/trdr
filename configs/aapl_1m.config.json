@@ -1,0 +1,20 @@
+{
+  "symbol": "AAPL",
+  "timeframe": "1m",
+  "min_bars": 10000,
+  "paper_mode": true,
+  "pipeline": {
+    "enabled": true,
+    "zero_volume_keep_percentage": 0.1,
+    "dollar_bars": {
+      "enabled": true,
+      "threshold": 25000.0,
+      "price_column": "hlc3"
+    }
+  },
+  "optimizer": {
+    "population_size": 10,
+    "generations": 10,
+    "n_splits": 3
+  }
+}

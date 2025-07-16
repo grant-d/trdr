@@ -48,8 +48,8 @@ def main():
         "--config",
         "-c",
         type=str,
-        default="btc_usd_1m_config.json",
-        help="Config file name (default: btc_usd_1m_config.json)"
+        default="btc_usd_1m.config.json",
+        help="Config file name (default: btc_usd_1m.config.json)"
     )
     parser.add_argument(
         "--init",
@@ -108,9 +108,10 @@ def main():
                 args.min_bars,
                 args.paper
             )
+            config_filename = os.path.basename(config_path)
             print(chalk.green + f"\n✓ Config file created: {config_path}" + chalk.RESET)
             print(chalk.cyan + f"\nTo use this config, run:" + chalk.RESET)
-            print(f"  python main.py --config {config_path}")
+            print(f"  python main.py --config {config_filename}")
         except Exception as e:
             print(chalk.red + f"\n✗ Error creating config: {e}" + chalk.RESET)
             sys.exit(1)
