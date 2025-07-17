@@ -1,0 +1,15 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# uv (Python package manager)
+.uv/
+uv.cache/
+uv-report.txt
+
+# VSCode
+.vscode/
+
+# OS
+.DS_Store
