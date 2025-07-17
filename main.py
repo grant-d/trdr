@@ -73,11 +73,11 @@ def main():
     args = parser.parse_args()
 
     # Auto-append .config.json to config argument if not present
-    if not args.config.endswith('.config.json'):
-        args.config = args.config + '.config.json'
-    
+    if not args.config.endswith(".config.json"):
+        args.config = args.config + ".config.json"
+
     # Convert hyphens to underscores in config filename
-    args.config = args.config.replace('-', '_')
+    args.config = args.config.replace("-", "_")
 
     # Handle --init mode
     if args.init:
@@ -168,7 +168,7 @@ def main():
     # Load data
     print(chalk.yellow + "\nLoading data..." + chalk.RESET)
     try:
-        df = loader.load_data()
+        df = loader.load_data(clean_data=True)
         print(chalk.green + f"\n✓ Successfully loaded {len(df)} bars" + chalk.RESET)
 
         # Show summary

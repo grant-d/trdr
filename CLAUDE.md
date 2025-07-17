@@ -5,3 +5,4 @@ Clean separation of concerns. Each function should have a single responsibility.
 Use descriptive variable names. Avoid abbreviations.
 Defensive programming. Validate inputs and handle exceptions gracefully.
 Imports ALWAYS at top of the file.
+Use `x: Optional[T] = None` instead of `x: T = None`

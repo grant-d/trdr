@@ -52,7 +52,7 @@ class Config(BaseModel):
             raise ValueError("Symbol cannot be empty")
         return v.strip().upper()
 
-    def __init__(self, config_path: str, **kwargs):
+    def __init__(self, config_path: str, **kwargs) -> None:
         """
         Initialize configuration manager.
 

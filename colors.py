@@ -33,12 +33,12 @@ neutral = lambda text: bold(yellow(text))
 
 
 # Separator lines
-def separator(char="=", length=80):
+def separator(char: str = "=", length: int = 80) -> str:
     """Create a colored separator line."""
     return white(char * length)
 
 
-def format_number(num, decimals=4, positive_color=True):
+def format_number(num: float, decimals: int = 4, positive_color: bool = True) -> str:
     """Format a number with color based on its value."""
     formatted = f"{num:.{decimals}f}"
     if positive_color:
@@ -52,7 +52,7 @@ def format_number(num, decimals=4, positive_color=True):
         return value(formatted)
 
 
-def format_percentage(num, decimals=2):
+def format_percentage(num: float, decimals: int = 2) -> str:
     """Format a percentage with color."""
     formatted = f"{num:.{decimals}f}%"
     if num > 0:
