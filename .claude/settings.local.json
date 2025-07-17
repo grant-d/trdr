@@ -18,7 +18,14 @@
       "Bash(python -m pytest tests/test_data_cleaning.py --cov=base_data_loader --cov-report=term-missing)",
       "Bash(chmod:*)",
       "Bash(python run_tests.py:*)",
-      "Bash(python -m pytest tests/test_data_cleaning.py::TestOutlierDetection::test_volume_outlier_detection_with_zero_volumes -v)"
+      "Bash(python -m pytest tests/test_data_cleaning.py::TestOutlierDetection::test_volume_outlier_detection_with_zero_volumes -v)",
+      "Bash(python:*)",
+      "Bash(echo:*)",
+      "Bash(./run.sh:*)",
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(mv:*)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }

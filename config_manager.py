@@ -9,7 +9,7 @@ full validation through Pydantic models.
 
 import json
 import os
-from typing import Literal
+from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator
 from filename_utils import generate_filename, get_data_path
 
@@ -100,7 +100,7 @@ class Config(BaseModel):
         return self.pipeline.enabled
 
     @property
-    def config(self) -> dict:
+    def config(self) -> dict[str, Any]:
         """
         Get configuration as a dictionary for backward compatibility.
 

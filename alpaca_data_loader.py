@@ -112,6 +112,7 @@ class AlpacaDataLoader(BaseDataLoader):
         if end is None:
             end = datetime.utcnow()
 
+        request_params: Union[CryptoBarsRequest, StockBarsRequest]
         if self.is_crypto_symbol:
             if not self.crypto_client:
                 raise RuntimeError("Crypto client not initialized")

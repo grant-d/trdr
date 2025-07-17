@@ -2,10 +2,10 @@ import os
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, List, Tuple, Union
 from abc import ABC, abstractmethod
 import warnings
-
+from tsfracdiff import FractionalDifferentiator
 from config_manager import Config
 from filename_utils import generate_filename, get_data_path
 from timeframe import TimeFrame
@@ -110,16 +110,28 @@ class BaseDataLoader(ABC):
         """
         pass
 
-    def get_csv_path(self) -> str:
+    def get_csv_path(self, suffix: str) -> str:
         """
         Generate the full path for the CSV file based on current configuration.
 
+        Args:
+            suffix: Optional suffix to add before .csv (e.g., "clean", "transform")
+                   If None, returns the base CSV path
+
         Returns:
-            Full path to the CSV file (e.g., "data/btc_usd_1m_bars.csv")
+            Full path to the CSV file
+            Examples:
+            - suffix=None: "data/btc_usd_1m_bars.csv"
+            - suffix="clean": "data/btc_usd_1m_bars.clean.csv"
+            - suffix="transform": "data/btc_usd_1m_bars.transform.csv"
         """
-        filename = generate_filename(
-            self.config.symbol, self.config.timeframe, "bars", "csv"
-        )
+        base_name = f"{self.config.symbol}_{self.config.timeframe}"
+        base_name = (
+            base_name.replace("/", "_").replace("-", "_").replace(":", "_").lower()
+        )  # BTC/USD -> btc_usd
+
+        filename = f"{base_name}.{suffix}.csv"
+
         return get_data_path(filename)
 
     def load_existing_data(self) -> Optional[pd.DataFrame]:
@@ -129,7 +141,7 @@ class BaseDataLoader(ABC):
         Returns:
             DataFrame with historical data if file exists, None otherwise
         """
-        csv_path = self.get_csv_path()
+        csv_path = self.get_csv_path("bars")
         if os.path.exists(csv_path):
             # Check if file is empty or has no content
             if os.path.getsize(csv_path) == 0:
@@ -145,7 +157,7 @@ class BaseDataLoader(ABC):
                 return None
         return None
 
-    def load_data(self, clean_data: bool = True) -> pd.DataFrame:
+    def load_data(self, stage_data: bool = True) -> pd.DataFrame:
         """
         Main method to load market data with intelligent caching.
 
@@ -153,13 +165,14 @@ class BaseDataLoader(ABC):
         - If no existing data: Performs bulk load for min_bars periods
         - If data exists: Performs catchup load from last timestamp
 
-        The method also handles data imputation, CSV persistence, and state updates.
+        Args:
+            stage_data: If True, save data to CSV file. Default True
 
         Returns:
-            Complete DataFrame with all historical and current data
+            Complete DataFrame with all historical and current data (raw, not cleaned or transformed).
 
         Side effects:
-            - Saves data to CSV file
+            - Saves data to CSV file (if stage_data is True)
             - Updates config state with total bars and last sync time
         """
         existing_df = self.load_existing_data()
@@ -195,18 +208,105 @@ class BaseDataLoader(ABC):
             else:
                 df = existing_df
 
-        # Clean data
-        if clean_data and not df.empty:
-            df = self.clean_data(df)
-
-        # Save to CSV
-        csv_path = self.get_csv_path()
-        df.to_csv(csv_path, index=False)
-        print(f"Saved {len(df)} bars to {csv_path}")
+        # Save to CSV if requested
+        if stage_data:
+            csv_path = self.get_csv_path("bars")
+            df.to_csv(csv_path, index=False)
+            print(f"Saved {len(df)} bars to {csv_path}")
 
         return df
 
-    def clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
+    def transform(
+        self,
+        df: pd.DataFrame,
+        frac_diff: Union[bool, str, None] = None,
+        log_volume: Union[bool, str, None] = None,
+        stage_data: bool = True,
+    ) -> pd.DataFrame:
+        """
+        Apply transformations to the data (fractional differentiation, log volume).
+
+        Args:
+            df: DataFrame with cleaned market data
+            frac_diff: How to apply fractional differentiation. Options:
+                           - None/False: Don't apply fractional differentiation
+                           - True: Replace original columns with differentiated values
+                           - str: Add new columns with the string as suffix (e.g., '_fd')
+            log_volume: How to apply log transformation to volume columns. Options:
+                           - None/False: Don't apply log transformation
+                           - True: Replace original volume columns with log values
+                           - str: Add new columns with the string as suffix (e.g., '_lr')
+            stage_data: If True, save transformed data to .clean.csv file
+
+        Returns:
+            DataFrame with requested transformations applied
+        """
+        if df.empty:
+            return df
+
+        # Make a copy to avoid modifying the original
+        result_df = df.copy()
+
+        # Apply fractional differentiation if requested
+        if frac_diff:
+            if isinstance(frac_diff, bool):
+                # True means overwrite
+                result_df, orders = self.frac_diff(result_df, overwrite=True)
+            elif isinstance(frac_diff, str):
+                # String means add columns with that suffix
+                df_with_fd, orders = self.frac_diff(result_df, overwrite=False)
+
+                # The frac_diff method always creates columns with '_fd' suffix by default
+                # If user wants a different suffix, we need to rename those columns
+                if frac_diff != "_fd":
+                    for col in ["open", "high", "low", "close", "hlc3", "dv"]:
+                        if f"{col}_fd" in df_with_fd.columns:
+                            df_with_fd = df_with_fd.rename(
+                                columns={f"{col}_fd": f"{col}{frac_diff}"}
+                            )
+                result_df = df_with_fd
+            else:
+                raise ValueError(
+                    f"Invalid frac_diff type: {type(frac_diff)}. "
+                    "Must be bool, str, or None"
+                )
+
+        # Apply log transformation to volume if requested
+        if log_volume:
+            if isinstance(log_volume, bool):
+                # True means overwrite
+                result_df = self.log_transform_volume(result_df, overwrite=True)
+            elif isinstance(log_volume, str):
+                # String means add columns with that suffix
+                df_with_log = self.log_transform_volume(result_df, overwrite=False)
+
+                # The log_transform_volume method always creates columns with '_log' suffix by default
+                # If user wants a different suffix, we need to rename those columns
+                if log_volume != "_log":
+                    if "volume_log" in df_with_log.columns:
+                        df_with_log = df_with_log.rename(
+                            columns={"volume_log": f"volume{log_volume}"}
+                        )
+                    if "dv_log" in df_with_log.columns:
+                        df_with_log = df_with_log.rename(
+                            columns={"dv_log": f"dv{log_volume}"}
+                        )
+                result_df = df_with_log
+            else:
+                raise ValueError(
+                    f"Invalid log_volume type: {type(log_volume)}. "
+                    "Must be bool, str, or None"
+                )
+
+        # Save transformed data to .transform.csv if requested
+        if stage_data and (frac_diff or log_volume):
+            transform_csv_path = self.get_csv_path("transform")
+            result_df.to_csv(transform_csv_path, index=False)
+            print(f"Saved transformed data to {transform_csv_path}")
+
+        return result_df
+
+    def clean_data(self, df: pd.DataFrame, stage_data: bool = True) -> pd.DataFrame:
         """
         Comprehensive data cleaning pipeline for financial market data.
 
@@ -219,6 +319,7 @@ class BaseDataLoader(ABC):
 
         Args:
             df: DataFrame with market data columns
+            stage_data: If True, save cleaned data to .clean.csv file
 
         Returns:
             Cleaned DataFrame with validated and processed data
@@ -247,11 +348,34 @@ class BaseDataLoader(ABC):
         # 6. Final validation and cleanup
         df = self._final_cleanup(df)
 
+        # 7. Final NaN handling - ensure no NaN values remain
+        # Fill any remaining NaN values in price columns with forward fill
+        price_cols = ["open", "high", "low", "close", "hlc3"]
+        for col in price_cols:
+            if col in df.columns and df[col].isna().any():
+                df[col] = df[col].ffill()
+                # If still NaN (e.g., first row), use backward fill
+                if df[col].isna().any():
+                    df[col] = df[col].bfill()
+
+        # Recalculate derived fields after filling
+        if any(
+            col in df.columns and df[col].isna().any()
+            for col in ["high", "low", "close"]
+        ):
+            df = self._recalculate_derived_fields(df)
+
         cleaned_count = len(df)
         if cleaned_count != original_count:
             print(
                 f"Data cleaning: {original_count} → {cleaned_count} bars ({original_count - cleaned_count} removed)"
             )
+
+        # Save cleaned data to .clean.csv if requested
+        if stage_data:
+            clean_csv_path = self.get_csv_path("clean")
+            df.to_csv(clean_csv_path, index=False)
+            print(f"Saved cleaned data to {clean_csv_path}")
 
         return df
 
@@ -353,7 +477,11 @@ class BaseDataLoader(ABC):
             if (
                 col in df.columns and len(df) > 10
             ):  # Need sufficient data for statistics
-                z_scores = np.abs((df[col] - df[col].mean()) / df[col].std())
+                # Calculate z-scores, handling edge cases
+                std_dev = df[col].std()
+                if std_dev == 0 or pd.isna(std_dev):
+                    continue  # Skip if no variation in data
+                z_scores = np.abs((df[col] - df[col].mean()) / std_dev)
                 outliers = z_scores > z_threshold
 
                 if outliers.any():
@@ -369,17 +497,17 @@ class BaseDataLoader(ABC):
         if "volume" in df.columns and len(df) > 10:
             # Filter out zero volumes for statistical calculations
             non_zero_volumes = df[df["volume"] > 0]["volume"]
-            
+
             if len(non_zero_volumes) > 5:  # Need some non-zero volumes for statistics
                 Q1 = non_zero_volumes.quantile(0.25)
                 Q3 = non_zero_volumes.quantile(0.75)
                 IQR = Q3 - Q1
-                
+
                 # Only flag as outliers if IQR is meaningful (not too small)
                 if IQR > 0:
                     # More conservative threshold for volume (3.0 instead of 2.0)
                     volume_outliers = df["volume"] > (Q3 + 3.0 * IQR)
-                    
+
                     if volume_outliers.any():
                         outliers_detected += volume_outliers.sum()
                         # Cap volume outliers at 99.5th percentile of non-zero volumes
@@ -414,7 +542,8 @@ class BaseDataLoader(ABC):
         for col in price_cols:
             if col in df.columns:
                 price_changes = df[col].pct_change().abs()
-                extreme_jumps = price_changes > 0.20  # 20% threshold
+                # Skip first row which will be NaN from pct_change
+                extreme_jumps = (price_changes > 0.20) & price_changes.notna()
 
                 if extreme_jumps.any():
                     # Use previous value for extreme jumps
@@ -432,10 +561,10 @@ class BaseDataLoader(ABC):
                 recent_non_zero_volumes = df[non_zero_mask]["volume"].tail(20)
                 if len(recent_non_zero_volumes) > 0:
                     median_non_zero_volume = recent_non_zero_volumes.median()
-                    
+
                     # Only flag volumes that are extremely high (>50x median non-zero volume)
                     volume_spikes = df["volume"] > (median_non_zero_volume * 50)
-                    
+
                     if volume_spikes.any():
                         # Cap volume spikes at 10x median non-zero volume
                         for idx in df.index[volume_spikes]:
@@ -554,3 +683,249 @@ class BaseDataLoader(ABC):
             df["trade_count"] = df["trade_count"].astype(int)
 
         return df
+
+    def frac_diff(
+        self,
+        df: pd.DataFrame,
+        columns: Optional[List[str]] = None,
+        overwrite: bool = False,
+        drop_na: bool = True,
+    ) -> Tuple[pd.DataFrame, Dict[str, float]]:
+        """
+        Apply fractional differentiation to specified columns.
+
+        Uses tsfracdiff with default settings to automatically determine optimal
+        differentiation orders to achieve stationarity. The transformation typically
+        results in NaN values for the first few rows due to lag requirements.
+
+        Args:
+            df: DataFrame with time series data
+            columns: List of column names to differentiate. If None, applies to
+                    ['open', 'high', 'low', 'close', 'hlc3', 'dv']
+            overwrite: If True, replace original columns with differentiated values.
+                      If False, create new columns with '_fd' suffix. Default False
+            drop_na: If True, drop rows with NaN values in the differentiated columns.
+                    Default True
+
+        Returns:
+            Tuple of (DataFrame, Dict[str, float]):
+            - DataFrame with fractionally differentiated values. If overwrite=False,
+              new columns named as '{original_column}_fd' are added. If overwrite=True,
+              original columns are replaced. Rows with NaN are dropped if drop_na=True.
+            - Dictionary mapping column names to their fractional differentiation orders
+
+        Example:
+            # Apply fractional differentiation
+            df_enhanced, orders = loader.frac_diff(df, columns=['close', 'open'])
+            # orders = {'close': 0.456, 'open': 0.523}
+
+            # Overwrite original columns
+            df_overwrite, orders = loader.frac_diff(df, columns=['close', 'dv'], overwrite=True)
+        """
+        # Default columns if none specified
+        if columns is None:
+            columns = ["open", "high", "low", "close"]
+            # Add hlc3 & dv if exist
+            if "hlc3" in df.columns:
+                columns.append("hlc3")
+            if "dv" in df.columns:
+                columns.append("dv")
+
+        # Filter to only columns that exist in the dataframe
+        columns_to_process = [col for col in columns if col in df.columns]
+
+        if not columns_to_process:
+            warnings.warn("No specified columns found in DataFrame")
+            return df, {}
+
+        # Create a copy to avoid modifying original
+        result_df = df.copy()
+
+        # Dictionary to store fractional orders
+        orders_dict: Dict[str, float] = {}
+
+        # Process each column
+        for col in columns_to_process:
+            try:
+                # Extract series and handle any NaN values
+                series = df[[col]].dropna()
+
+                if len(series) < 100:  # tsfracdiff needs reasonable data length
+                    warnings.warn(
+                        f"Column '{col}' has insufficient data ({len(series)} rows). "
+                        f"Skipping fractional differentiation."
+                    )
+                    continue
+
+                # Initialize fractional differentiator with empty constructor
+                differentiator = FractionalDifferentiator()
+
+                # Auto-fit and transform
+                # Suppress numpy FutureWarning about DataFrame.swapaxes from tsfracdiff
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        "ignore",
+                        category=FutureWarning,
+                        message="'DataFrame.swapaxes' is deprecated",
+                    )
+                    transformed = differentiator.FitTransform(series)
+
+                # Get the estimated order
+                orders = (
+                    list(differentiator.orders)
+                    if differentiator.orders is not None
+                    else []
+                )
+                order = float(orders[0]) if orders and orders[0] is not None else 0.0
+
+                # print(f"Auto-fitted fractional order for '{col}': {order:.4f}")
+
+                # Handle the transformed data
+                if isinstance(transformed, pd.DataFrame):
+                    frac_diff_values = transformed.iloc[:, 0].values
+                else:
+                    frac_diff_values = transformed.flatten()
+
+                # Determine column names based on overwrite setting
+                if overwrite:
+                    target_col_name = col
+                else:
+                    target_col_name = f"{col}_fd"
+
+                # Get the original indices for alignment
+                original_indices = series.index
+
+                # Align the differentiated values with original dataframe
+                # tsfracdiff may return fewer values due to lag requirements
+                if len(frac_diff_values) < len(original_indices):
+                    # Calculate how many values were lost
+                    values_lost = len(original_indices) - len(frac_diff_values)
+                    # Use the last indices (most recent data)
+                    valid_indices = original_indices[values_lost:]
+                    result_df.loc[valid_indices, target_col_name] = frac_diff_values
+                else:
+                    result_df.loc[original_indices, target_col_name] = frac_diff_values
+
+                # Store the order used in the dictionary
+                orders_dict[col] = float(order)
+
+                # print(f"Created fractionally differentiated column: '{target_col_name}'")
+
+            except Exception as e:
+                warnings.warn(
+                    f"Error applying fractional differentiation to column '{col}': {str(e)}"
+                )
+                continue
+
+        # Drop rows with NaN values if requested
+        if drop_na and columns_to_process:
+            # Get all columns that were created/modified
+            columns_to_check = []
+            if overwrite:
+                columns_to_check = columns_to_process
+            else:
+                columns_to_check = [f"{col}_fd" for col in columns_to_process]
+
+            # Filter to columns that exist in the result
+            columns_to_check = [
+                col for col in columns_to_check if col in result_df.columns
+            ]
+
+            if columns_to_check:
+                # rows_before = len(result_df)
+                result_df = result_df.dropna(subset=columns_to_check)
+                # rows_after = len(result_df)
+                # if rows_before != rows_after:
+                #     print(f"Fractional differentiation: dropped {rows_before - rows_after} rows with NaN values")
+
+        return result_df, orders_dict
+
+    def log_transform_volume(
+        self,
+        df: pd.DataFrame,
+        columns: Optional[List[str]] = None,
+        overwrite: bool = False,
+        epsilon: float = 1e-8,
+        drop_first: bool = True,
+    ) -> pd.DataFrame:
+        """
+        Apply log transformation to volume-related columns.
+
+        Log transformation is useful for volume data to:
+        - Handle the wide range of values
+        - Reduce impact of extreme outliers
+        - Make the distribution more normal-like
+        - Transform multiplicative processes to additive
+
+        Note: The first row represents an absolute value rather than a relative
+        change, so it is dropped by default for consistency in time series analysis.
+
+        Args:
+            df: DataFrame with volume data
+            columns: List of column names to transform. If None, applies to
+                    ['volume'] only
+            overwrite: If True, replace original columns with log-transformed values.
+                      If False, create new columns with '_log' suffix. Default False
+            epsilon: Small value added to avoid log(0). Default 1e-8
+            drop_first: If True, drop the first row after transformation. Default True
+
+        Returns:
+            DataFrame with log-transformed volume columns. First row is dropped
+            if drop_first=True.
+
+        Example:
+            # Apply log transformation
+            df = loader.log_transform_volume(df)
+            # Creates 'volume_log' column, drops first row
+
+            # Overwrite original columns
+            df = loader.log_transform_volume(df, overwrite=True)
+        """
+        # Default columns if none specified
+        if columns is None:
+            columns = []
+            if "volume" in df.columns:
+                columns.append("volume")
+
+        # Filter to only columns that exist in the dataframe
+        columns_to_process = [col for col in columns if col in df.columns]
+
+        if not columns_to_process:
+            warnings.warn("No specified volume columns found in DataFrame")
+            return df
+
+        # Create a copy to avoid modifying original
+        result_df = df.copy()
+
+        # Process each column
+        for col in columns_to_process:
+            try:
+                # Add epsilon to avoid log(0)
+                safe_values = result_df[col] + epsilon
+
+                # Apply log transformation
+                log_values = np.log(safe_values)
+
+                # Determine column name based on overwrite setting
+                if overwrite:
+                    target_col_name = col
+                else:
+                    target_col_name = f"{col}_log"
+
+                # Store the log-transformed values
+                result_df[target_col_name] = log_values
+
+                # print(f"Applied log transformation to '{col}' -> '{target_col_name}'")
+
+            except Exception as e:
+                warnings.warn(
+                    f"Error applying log transformation to column '{col}': {str(e)}"
+                )
+                continue
+
+        # Drop first row if requested
+        if drop_first and len(result_df) > 1:
+            result_df = result_df.iloc[1:].reset_index(drop=True)
+            print("Log transformation: dropped first row (absolute value)")
+
+        return result_df

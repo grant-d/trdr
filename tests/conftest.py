@@ -137,14 +137,14 @@ def dirty_ohlcv_data() -> pd.DataFrame:
         df.loc[9, "trade_count"] = np.nan
 
         # 2. Outliers - extreme price jumps
-        def safe_float(val, default=1.0) -> float:
+        def safe_float(val, default: float = 1.0) -> float:
             try:
                 v = pd.to_numeric(val, errors="coerce")
                 if np.isnan(v):
-                    return default
+                    return float(default)
                 return float(v)
             except Exception:
-                return default
+                return float(default)
 
         df.loc[10, "close"] = safe_float(df.loc[10, "close"]) * 5.0  # 5x price jump
         df.loc[11, "open"] = safe_float(df.loc[11, "open"]) * 0.2  # 80% price drop

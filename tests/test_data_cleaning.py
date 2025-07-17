@@ -44,7 +44,9 @@ class TestDataCleaning:
         data_quality_assertions.assert_derived_fields_correct(result)
         data_quality_assertions.assert_chronological_order(result)
 
-    def test_clean_data_empty_dataframe(self, test_data_loader, empty_dataframe):
+    def test_clean_data_empty_dataframe(
+        self, test_data_loader, empty_dataframe
+    ) -> None:
         """Test cleaning empty DataFrame."""
         result = test_data_loader.clean_data(empty_dataframe)
 
@@ -53,7 +55,7 @@ class TestDataCleaning:
 
     def test_clean_data_minimal_dataframe(
         self, test_data_loader, minimal_dataframe, data_quality_assertions
-    ):
+    ) -> None:
         """Test cleaning minimal DataFrame with one row."""
         result = test_data_loader.clean_data(minimal_dataframe)
 
@@ -63,7 +65,7 @@ class TestDataCleaning:
 
     def test_clean_data_missing_required_columns(
         self, test_data_loader, missing_columns_dataframe
-    ):
+    ) -> None:
         """Test that missing required columns raises ValueError."""
         with pytest.raises(ValueError, match="Missing required columns"):
             test_data_loader.clean_data(missing_columns_dataframe)
@@ -74,7 +76,7 @@ class TestDataStructureValidation:
 
     def test_validate_data_structure_valid_data(
         self, test_data_loader, clean_ohlcv_data
-    ):
+    ) -> None:
         """Test validation of valid data structure."""
         result = test_data_loader._validate_data_structure(clean_ohlcv_data)
 
@@ -108,7 +110,9 @@ class TestDataStructureValidation:
 
         assert pd.api.types.is_datetime64_any_dtype(result["timestamp"])
 
-    def test_validate_data_structure_missing_trade_count(self, test_data_loader) -> None:
+    def test_validate_data_structure_missing_trade_count(
+        self, test_data_loader
+    ) -> None:
         """Test handling of missing trade_count column."""
         df = pd.DataFrame(
             {
@@ -163,7 +167,7 @@ class TestMissingValueHandling:
         # Trade count should be filled with 0
         assert result["trade_count"].iloc[1] == 0
 
-    def test_handle_missing_values_remove_all_nan_rows(self, test_data_loader):
+    def test_handle_missing_values_remove_all_nan_rows(self, test_data_loader) -> None:
         """Test removal of rows where all price columns are NaN."""
         df = pd.DataFrame(
             {
@@ -240,7 +244,7 @@ class TestOutlierDetection:
         )  # Allow equal since capping at percentile
         assert result["volume"].max() >= 1000.0  # Should still be above normal
 
-    def test_apply_financial_outlier_rules_price_jumps(self, test_data_loader):
+    def test_apply_financial_outlier_rules_price_jumps(self, test_data_loader) -> None:
         """Test detection of extreme price jumps."""
         df = pd.DataFrame(
             {
@@ -304,7 +308,9 @@ class TestOutlierDetection:
         assert outliers_handled > 0
         assert df["open"].iloc[2] == 101.0  # Should be corrected to previous value
 
-    def test_apply_financial_outlier_rules_volume_spikes(self, test_data_loader) -> None:
+    def test_apply_financial_outlier_rules_volume_spikes(
+        self, test_data_loader
+    ) -> None:
         """Test detection of volume spikes."""
         df = pd.DataFrame(
             {
@@ -335,7 +341,8 @@ class TestOutlierDetection:
                 "high": [165.11] * 100,
                 "low": [165.11] * 100,
                 "close": [165.11] * 100,
-                "volume": [0.0] * 80 + [6.468293108100005] * 20,  # Mostly zeros with some legitimate trades
+                "volume": [0.0] * 80
+                + [6.468293108100005] * 20,  # Mostly zeros with some legitimate trades
                 "trade_count": [0] * 80 + [1] * 20,
             }
         )
@@ -371,7 +378,9 @@ class TestOHLCVIntegrityValidation:
         assert result["high"].iloc[0] == 101.0
         assert result["low"].iloc[0] == 99.0
 
-    def test_validate_ohlcv_integrity_open_outside_range(self, test_data_loader) -> None:
+    def test_validate_ohlcv_integrity_open_outside_range(
+        self, test_data_loader
+    ) -> None:
         """Test fixing Open outside High/Low range."""
         df = pd.DataFrame(
             {
@@ -391,7 +400,9 @@ class TestOHLCVIntegrityValidation:
         assert result["open"].iloc[0] == 101.0  # Clamped to High
         assert result["open"].iloc[1] == 99.0  # Clamped to Low
 
-    def test_validate_ohlcv_integrity_close_outside_range(self, test_data_loader) -> None:
+    def test_validate_ohlcv_integrity_close_outside_range(
+        self, test_data_loader
+    ) -> None:
         """Test fixing Close outside High/Low range."""
         df = pd.DataFrame(
             {
@@ -430,7 +441,9 @@ class TestOHLCVIntegrityValidation:
         # Volume should be set to 0
         assert result["volume"].iloc[0] == 0.0
 
-    def test_validate_ohlcv_integrity_zero_negative_prices(self, test_data_loader) -> None:
+    def test_validate_ohlcv_integrity_zero_negative_prices(
+        self, test_data_loader
+    ) -> None:
         """Test fixing zero/negative prices."""
         df = pd.DataFrame(
             {
@@ -580,7 +593,9 @@ class TestFinalCleanup:
 class TestEdgeCasesAndErrorHandling:
     """Test suite for edge cases and error handling."""
 
-    def test_clean_data_insufficient_data_for_statistics(self, test_data_loader) -> None:
+    def test_clean_data_insufficient_data_for_statistics(
+        self, test_data_loader
+    ) -> None:
         """Test handling of insufficient data for statistical calculations."""
         # Create data with only a few rows (less than 10)
         df = pd.DataFrame(

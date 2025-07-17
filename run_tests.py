@@ -26,7 +26,7 @@ def run_command(cmd: str, description: str) -> bool:
         return False
 
 
-def main() -> Literal:
+def main() -> int:
     """Main test runner."""
     print("🧪 Data Cleaning Test Suite")
     print("=" * 50)
