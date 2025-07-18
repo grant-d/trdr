@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Union
 from alpaca.data import CryptoHistoricalDataClient, StockHistoricalDataClient
 from alpaca.data.requests import CryptoBarsRequest, StockBarsRequest
@@ -110,7 +110,7 @@ class AlpacaDataLoader(BaseDataLoader):
         timeframe = self.convert_to_alpaca_timeframe(self.config.timeframe)
 
         if end is None:
-            end = datetime.utcnow()
+            end = datetime.now(timezone.utc)
 
         request_params: Union[CryptoBarsRequest, StockBarsRequest]
         if self.is_crypto_symbol:
@@ -174,8 +174,8 @@ class AlpacaDataLoader(BaseDataLoader):
         df = pd.DataFrame(df_list)
         df = df.sort_values("timestamp").reset_index(drop=True)
 
-        # Add calculated columns
-        df["hlc3"] = (df["high"] + df["low"] + df["close"]) / 3
+        # Don't add calculated columns here - they should be added after cleaning
+        # df["hlc3"] = (df["high"] + df["low"] + df["close"]) / 3
         # df['dv'] = df['hlc3'] * df['volume']
 
         return df

@@ -1,0 +1,9 @@
+{
+  "symbol": "SOL/USD",
+  "timeframe": "5m",
+  "min_bars": 10000,
+  "paper_mode": true,
+  "pipeline": {
+    "enabled": false
+  }
+}

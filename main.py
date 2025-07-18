@@ -170,7 +170,7 @@ def main() -> None:
     try:
         df = loader.load_data(stage_data=True)
         df = loader.clean_data(df, stage_data=True)
-        df = loader.transform(df, frac_diff="_df", log_volume="_lr", stage_data=True)
+        df = loader.transform(df, frac_diff="_fd", log_volume="_lr", stage_data=True)
         print(chalk.green + f"\n✓ Successfully loaded {len(df)} bars" + chalk.RESET)
 
         # Show summary

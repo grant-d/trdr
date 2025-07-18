@@ -27,7 +27,10 @@
       "Bash(mv:*)",
       "Bash(grep:*)",
       "WebFetch(domain:stumpy.readthedocs.io)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(source:*)",
+      "Bash(.venv/bin/pip install:*)",
+      "Bash(.venv/bin/python:*)"
     ],
     "deny": []
   }

@@ -6,7 +6,7 @@ from typing import Optional
 import pytest
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timezone
 from base_data_loader import BaseDataLoader
 
 
@@ -69,7 +69,7 @@ def mock_loader(mock_config) -> MockDataLoader:
 def test_no_nan_after_cleaning_quiet_exchange(mock_loader):
     """Test that clean_data doesn't produce NaN values for quiet exchange data."""
     # Fetch data simulating quiet exchange
-    df = mock_loader.fetch_bars(datetime.utcnow())
+    df = mock_loader.fetch_bars(datetime.now(timezone.utc))
 
     # Verify we have zero-volume bars
     zero_volume_count = (df["volume"] == 0).sum()
@@ -93,25 +93,16 @@ def test_no_nan_after_cleaning_quiet_exchange(mock_loader):
         "close",
         "volume",
         "trade_count",
-        "hlc3",
-        "dv",
     ]
     for col in expected_columns:
         assert col in cleaned_df.columns, f"Missing column: {col}"
         assert not cleaned_df[col].isna().any(), f"Found NaN in column: {col}"
 
-    # Verify derived columns are calculated correctly
-    expected_hlc3 = (cleaned_df["high"] + cleaned_df["low"] + cleaned_df["close"]) / 3
-    np.testing.assert_allclose(cleaned_df["hlc3"], expected_hlc3, rtol=1e-10)
-
-    expected_dv = cleaned_df["hlc3"] * cleaned_df["volume"]
-    np.testing.assert_allclose(cleaned_df["dv"], expected_dv, rtol=1e-10)
-
 
 def test_no_nan_with_identical_prices(mock_loader):
     """Test handling of identical prices (zero std deviation scenario)."""
     # Create data with identical prices
-    dates = pd.date_range(start=datetime.utcnow(), periods=50, freq="1min")
+    dates = pd.date_range(start=datetime.now(timezone.utc), periods=50, freq="1min")
     df = pd.DataFrame(
         {
             "timestamp": dates,
@@ -131,19 +122,15 @@ def test_no_nan_with_identical_prices(mock_loader):
     nan_count = cleaned_df.isna().sum().sum()
     assert nan_count == 0, f"Found {nan_count} NaN values with identical prices"
 
-    # Verify hlc3 is calculated correctly
-    assert all(cleaned_df["hlc3"] == 107850.0), "HLC3 should equal the constant price"
-
-    # Verify dv is zero (since volume is zero)
-    assert all(cleaned_df["dv"] == 0.0), "DV should be zero when volume is zero"
-
 
 def test_pct_change_nan_handling(mock_loader):
     """Test that pct_change NaN in first row is handled correctly."""
     # Create minimal data
     df = pd.DataFrame(
         {
-            "timestamp": pd.date_range(start=datetime.utcnow(), periods=5, freq="1min"),
+            "timestamp": pd.date_range(
+                start=datetime.now(timezone.utc), periods=5, freq="1min"
+            ),
             "open": [
                 100.0,
                 120.0,

@@ -25,7 +25,6 @@ class TestDataCleaning:
         # Should maintain data quality
         data_quality_assertions.assert_ohlcv_integrity(result)
         data_quality_assertions.assert_no_missing_values(result)
-        data_quality_assertions.assert_derived_fields_correct(result)
         data_quality_assertions.assert_chronological_order(result)
 
     def test_clean_data_with_dirty_input(
@@ -41,7 +40,6 @@ class TestDataCleaning:
         # Should fix all issues
         data_quality_assertions.assert_ohlcv_integrity(result)
         data_quality_assertions.assert_no_missing_values(result)
-        data_quality_assertions.assert_derived_fields_correct(result)
         data_quality_assertions.assert_chronological_order(result)
 
     def test_clean_data_empty_dataframe(
@@ -61,7 +59,6 @@ class TestDataCleaning:
 
         assert len(result) == 1
         data_quality_assertions.assert_ohlcv_integrity(result)
-        data_quality_assertions.assert_derived_fields_correct(result)
 
     def test_clean_data_missing_required_columns(
         self, test_data_loader, missing_columns_dataframe
@@ -466,55 +463,6 @@ class TestOHLCVIntegrityValidation:
         # Zero/negative prices should be forward filled
         assert result["open"].iloc[1] == 100.0  # Forward filled
         assert result["low"].iloc[1] == 99.0  # Forward filled
-
-
-class TestDerivedFieldCalculation:
-    """Test suite for derived field calculation."""
-
-    def test_recalculate_derived_fields_hlc3(self, test_data_loader) -> None:
-        """Test HLC3 calculation."""
-        df = pd.DataFrame(
-            {
-                "timestamp": [datetime(2024, 1, 1)],
-                "open": [100.0],
-                "high": [102.0],
-                "low": [98.0],
-                "close": [101.0],
-                "volume": [1000.0],
-                "trade_count": [50],
-                "hlc3": [999.0],  # Incorrect value
-                "dv": [999.0],  # Incorrect value
-            }
-        )
-
-        result = test_data_loader._recalculate_derived_fields(df)
-
-        # HLC3 should be recalculated correctly
-        expected_hlc3 = (102.0 + 98.0 + 101.0) / 3
-        assert result["hlc3"].iloc[0] == expected_hlc3
-
-    def test_recalculate_derived_fields_dollar_volume(self, test_data_loader) -> None:
-        """Test dollar volume calculation."""
-        df = pd.DataFrame(
-            {
-                "timestamp": [datetime(2024, 1, 1)],
-                "open": [100.0],
-                "high": [102.0],
-                "low": [98.0],
-                "close": [101.0],
-                "volume": [1000.0],
-                "trade_count": [50],
-                "hlc3": [999.0],  # Will be recalculated
-                "dv": [999.0],  # Will be recalculated
-            }
-        )
-
-        result = test_data_loader._recalculate_derived_fields(df)
-
-        # Dollar volume should be recalculated correctly
-        expected_hlc3 = (102.0 + 98.0 + 101.0) / 3
-        expected_dv = expected_hlc3 * 1000.0
-        assert result["dv"].iloc[0] == expected_dv
 
 
 class TestFinalCleanup:

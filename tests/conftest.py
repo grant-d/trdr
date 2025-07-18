@@ -86,8 +86,6 @@ def clean_ohlcv_data() -> pd.DataFrame:
                 "close": close_price,
                 "volume": volume,
                 "trade_count": trade_count,
-                "hlc3": (high_price + low_price + close_price) / 3,
-                "dv": ((high_price + low_price + close_price) / 3) * volume,
             }
         )
 
@@ -122,8 +120,6 @@ def dirty_ohlcv_data() -> pd.DataFrame:
                 "close": close_price,
                 "volume": volume,
                 "trade_count": trade_count,
-                "hlc3": (high_price + low_price + close_price) / 3,
-                "dv": ((high_price + low_price + close_price) / 3) * volume,
             }
         )
 

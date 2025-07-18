@@ -125,8 +125,8 @@ def test_frac_diff_default_columns(mock_loader, sample_data) -> None:
     # Apply without specifying columns
     result, orders = mock_loader.frac_diff(sample_data)
 
-    # Should process open, high, low, close, hlc3 by default
-    expected_cols = ["open", "high", "low", "close", "hlc3"]
+    # Should process open, high, low, close by default
+    expected_cols = ["open", "high", "low", "close"]
     for col in expected_cols:
         assert f"{col}_fd" in result.columns
 
@@ -256,11 +256,7 @@ def test_frac_diff_with_dv(mock_loader) -> None:
     # Apply fractional differentiation without specifying columns
     result, orders = mock_loader.frac_diff(data)
 
-    # Check that dv was included in default columns
-    assert "dv_fd" in result.columns
-    assert "dv" in orders
-
     # Check that all default columns were processed
-    for col in ["open", "high", "low", "close", "hlc3", "dv"]:
+    for col in ["open", "high", "low", "close"]:
         assert f"{col}_fd" in result.columns
         assert col in orders

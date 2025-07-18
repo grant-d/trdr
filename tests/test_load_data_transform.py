@@ -84,8 +84,6 @@ def test_load_data_without_transformations(mock_loader):
         "close",
         "volume",
         "trade_count",
-        "hlc3",
-        "dv",
     ]
     for col in expected_cols:
         assert col in df.columns

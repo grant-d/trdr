@@ -1,13 +1,13 @@
 import os
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, List, Tuple, Union
 from abc import ABC, abstractmethod
 import warnings
 from tsfracdiff import FractionalDifferentiator
 from config_manager import Config
-from filename_utils import generate_filename, get_data_path
+from filename_utils import get_data_path
 from timeframe import TimeFrame
 
 
@@ -106,7 +106,7 @@ class BaseDataLoader(ABC):
 
         Returns:
             DataFrame with columns: timestamp, open, high, low, close, volume,
-            trade_count, hlc3, dv
+            trade_count
         """
         pass
 
@@ -186,7 +186,7 @@ class BaseDataLoader(ABC):
             # Calculate start date based on min_bars
             timeframe = TimeFrame.from_string(self.config.timeframe)
             minutes = timeframe.to_minutes()
-            start = datetime.utcnow() - timedelta(
+            start = datetime.now(timezone.utc) - timedelta(
                 minutes=minutes * self.config.min_bars
             )
 
@@ -315,7 +315,6 @@ class BaseDataLoader(ABC):
         2. Handle missing values with forward fill
         3. Detect and handle outliers using multiple methods
         4. Validate OHLCV data integrity
-        5. Recalculate derived fields (hlc3, dv)
 
         Args:
             df: DataFrame with market data columns
@@ -342,28 +341,18 @@ class BaseDataLoader(ABC):
         # 4. Validate OHLCV integrity
         df = self._validate_ohlcv_integrity(df)
 
-        # 5. Recalculate derived fields
-        df = self._recalculate_derived_fields(df)
-
-        # 6. Final validation and cleanup
+        # 5. Final validation and cleanup
         df = self._final_cleanup(df)
 
-        # 7. Final NaN handling - ensure no NaN values remain
+        # 6. Final NaN handling - ensure no NaN values remain
         # Fill any remaining NaN values in price columns with forward fill
-        price_cols = ["open", "high", "low", "close", "hlc3"]
+        price_cols = ["open", "high", "low", "close"]
         for col in price_cols:
             if col in df.columns and df[col].isna().any():
                 df[col] = df[col].ffill()
                 # If still NaN (e.g., first row), use backward fill
                 if df[col].isna().any():
                     df[col] = df[col].bfill()
-
-        # Recalculate derived fields after filling
-        if any(
-            col in df.columns and df[col].isna().any()
-            for col in ["high", "low", "close"]
-        ):
-            df = self._recalculate_derived_fields(df)
 
         cleaned_count = len(df)
         if cleaned_count != original_count:
@@ -470,6 +459,7 @@ class BaseDataLoader(ABC):
         outliers_detected = 0
 
         # 1. Z-score method for price columns
+        # Note: Only process raw price columns, not calculated fields
         price_cols = ["open", "high", "low", "close"]
         z_threshold = 3.0
 
@@ -643,24 +633,6 @@ class BaseDataLoader(ABC):
 
         return df
 
-    def _recalculate_derived_fields(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Recalculate derived fields after data cleaning.
-
-        Args:
-            df: DataFrame with cleaned OHLCV data
-
-        Returns:
-            DataFrame with recalculated derived fields
-        """
-        # Recalculate hlc3 (High, Low, Close average)
-        df["hlc3"] = (df["high"] + df["low"] + df["close"]) / 3
-
-        # Recalculate dollar volume (dv)
-        df["dv"] = df["hlc3"] * df["volume"]
-
-        return df
-
     def _final_cleanup(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Final cleanup and validation steps.
@@ -701,7 +673,7 @@ class BaseDataLoader(ABC):
         Args:
             df: DataFrame with time series data
             columns: List of column names to differentiate. If None, applies to
-                    ['open', 'high', 'low', 'close', 'hlc3', 'dv']
+                    ['open', 'high', 'low', 'close']
             overwrite: If True, replace original columns with differentiated values.
                       If False, create new columns with '_fd' suffix. Default False
             drop_na: If True, drop rows with NaN values in the differentiated columns.
@@ -725,11 +697,7 @@ class BaseDataLoader(ABC):
         # Default columns if none specified
         if columns is None:
             columns = ["open", "high", "low", "close"]
-            # Add hlc3 & dv if exist
-            if "hlc3" in df.columns:
-                columns.append("hlc3")
-            if "dv" in df.columns:
-                columns.append("dv")
+            # Don't transform calculated fields hlc3 & dv - they will be recalculated
 
         # Filter to only columns that exist in the dataframe
         columns_to_process = [col for col in columns if col in df.columns]
@@ -863,7 +831,8 @@ class BaseDataLoader(ABC):
         Args:
             df: DataFrame with volume data
             columns: List of column names to transform. If None, applies to
-                    ['volume'] only
+                    ['volume'] only. Note: 'dv' is not transformed as it will be
+                    recalculated from the transformed volume
             overwrite: If True, replace original columns with log-transformed values.
                       If False, create new columns with '_log' suffix. Default False
             epsilon: Small value added to avoid log(0). Default 1e-8

@@ -75,7 +75,7 @@ def test_apply_frac_diff_false(mock_loader):
     df_transformed = mock_loader.transform(df, frac_diff=False)
 
     # Check no _fd columns were created
-    fd_columns = [col for col in df_transformed.columns if "_fd" in col or "_df" in col]
+    fd_columns = [col for col in df_transformed.columns if "_fd" in col]
     assert len(fd_columns) == 0
 
     # Data should be unchanged
@@ -88,7 +88,7 @@ def test_apply_frac_diff_none(mock_loader):
     df_transformed = mock_loader.transform(df, frac_diff=None)
 
     # Check no _fd columns were created
-    fd_columns = [col for col in df_transformed.columns if "_fd" in col or "_df" in col]
+    fd_columns = [col for col in df_transformed.columns if "_fd" in col]
     assert len(fd_columns) == 0
 
     # Data should be unchanged
@@ -101,7 +101,7 @@ def test_apply_frac_diff_true(mock_loader, capsys):
     df = mock_loader.transform(df_original.copy(), frac_diff=True)
 
     # Check no _fd columns were created
-    fd_columns = [col for col in df.columns if "_fd" in col or "_df" in col]
+    fd_columns = [col for col in df.columns if "_fd" in col]
     assert len(fd_columns) == 0
 
     # Check that original price columns still exist (but are now differentiated)
@@ -122,7 +122,6 @@ def test_apply_frac_diff_string_default(mock_loader, capsys):
     assert "high_fd" in df.columns
     assert "low_fd" in df.columns
     assert "close_fd" in df.columns
-    assert "hlc3_fd" in df.columns
 
     # Check original columns still exist
     assert "open" in df.columns
@@ -139,7 +138,6 @@ def test_apply_frac_diff_string_custom(mock_loader, capsys):
     assert "high_diff" in df.columns
     assert "low_diff" in df.columns
     assert "close_diff" in df.columns
-    assert "hlc3_diff" in df.columns
 
     # Check no _fd columns exist
     fd_columns = [col for col in df.columns if col.endswith("_fd")]
@@ -228,10 +226,10 @@ def test_combined_transformations(mock_loader, capsys):
 def test_combined_transformations_custom_suffixes(mock_loader, capsys):
     """Test combined transformations with custom suffixes."""
     df_base = mock_loader.load_data()
-    df = mock_loader.transform(df_base, frac_diff="_df", log_volume="_lr")
+    df = mock_loader.transform(df_base, frac_diff="_fd", log_volume="_lr")
 
     # Check custom suffix columns
-    assert "close_df" in df.columns
+    assert "close_fd" in df.columns
     assert "volume_lr" in df.columns
 
     # Original columns should still exist
