@@ -21,7 +21,7 @@ function test() {
 # Run the custom test runner script
 function testcustom() {
   echo "Running custom test suite..."
-  ./run_tests.py
+  ./tests/run_tests.py
 }
 
 # Install requirements (venv must be active)

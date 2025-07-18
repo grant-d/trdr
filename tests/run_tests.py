@@ -35,29 +35,29 @@ def main() -> int:
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
     tests = [
-        ("python -m pytest tests/test_data_cleaning.py -v", "All data cleaning tests"),
+        ("python -m pytest test_data_cleaning.py -v", "All data cleaning tests"),
         (
-            "python -m pytest tests/test_data_cleaning.py::TestDataCleaning -v",
+            "python -m pytest test_data_cleaning.py::TestDataCleaning -v",
             "Core data cleaning tests",
         ),
         (
-            "python -m pytest tests/test_data_cleaning.py::TestMissingValueHandling -v",
+            "python -m pytest test_data_cleaning.py::TestMissingValueHandling -v",
             "Missing value handling tests",
         ),
         (
-            "python -m pytest tests/test_data_cleaning.py::TestOutlierDetection -v",
+            "python -m pytest test_data_cleaning.py::TestOutlierDetection -v",
             "Outlier detection tests",
         ),
         (
-            "python -m pytest tests/test_data_cleaning.py::TestOHLCVIntegrityValidation -v",
+            "python -m pytest test_data_cleaning.py::TestOHLCVIntegrityValidation -v",
             "OHLCV integrity tests",
         ),
         (
-            "python -m pytest tests/test_data_cleaning.py::TestDerivedFieldCalculation -v",
+            "python -m pytest test_data_cleaning.py::TestDerivedFieldCalculation -v",
             "Derived field tests",
         ),
         (
-            "python -m pytest tests/test_data_cleaning.py::TestEdgeCasesAndErrorHandling -v",
+            "python -m pytest test_data_cleaning.py::TestEdgeCasesAndErrorHandling -v",
             "Edge case tests",
         ),
     ]
