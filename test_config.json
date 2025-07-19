@@ -1,0 +1,9 @@
+{
+  "symbol": "SPY",
+  "timeframe": "1d",
+  "min_bars": 100,
+  "paper_mode": true,
+  "pipeline": {
+    "enabled": false
+  }
+}

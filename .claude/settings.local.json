@@ -30,7 +30,8 @@
       "WebFetch(domain:github.com)",
       "Bash(source:*)",
       "Bash(.venv/bin/pip install:*)",
-      "Bash(.venv/bin/python:*)"
+      "Bash(.venv/bin/python:*)",
+      "Bash(.venv/bin/pip3 install:*)"
     ],
     "deny": []
   }
