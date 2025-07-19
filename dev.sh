@@ -27,7 +27,8 @@ function testcustom() {
 # Install requirements (venv must be active)
 function install() {
   echo "Installing requirements..."
-  .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
+  pip install -r requirements.txt -r requirements-dev.txt
+  # .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
 }
 
 # Run mypy for type checking
