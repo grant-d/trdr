@@ -10,6 +10,9 @@ import numpy as np
 from datetime import datetime
 
 from strategy_optimization_framework import Strategy, StrategyParameters, Bar, OrderSide
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -94,8 +97,20 @@ class RSIStrategy(Strategy):
 
         # Convert bars to DataFrame
         data = []
+        use_transformed = False
+        
+        # Check if we have transformed features in hybrid mode
+        if hasattr(bars[0], 'features') and bars[0].features and 'close_fd' in bars[0].features:
+            use_transformed = True
+            logger.info("Using transformed data for RSI calculation")
+            
         for bar in bars:
-            data.append({"timestamp": bar.timestamp, "close": bar.close})
+            if use_transformed and bar.features and bar.features.get('close_fd') is not None:
+                # Use transformed close for RSI calculation
+                data.append({"timestamp": bar.timestamp, "close": bar.features['close_fd']})
+            else:
+                # Use raw close
+                data.append({"timestamp": bar.timestamp, "close": bar.close})
         df = pd.DataFrame(data)
 
         # Calculate RSI

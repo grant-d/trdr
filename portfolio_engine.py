@@ -116,6 +116,7 @@ class Bar:
     close: float
     volume: float
     timestamp: datetime
+    features: Optional[Dict[str, float]] = None  # Additional features like transformed data
 
 
 @dataclass

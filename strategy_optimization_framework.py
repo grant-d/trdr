@@ -32,6 +32,10 @@ from portfolio_engine import (
 from base_data_loader import BaseDataLoader
 from config_manager import Config
 
+# Disable JMetalPy debug logging
+logging.getLogger('jmetal').setLevel(logging.WARNING)
+logging.getLogger('jmetal.core.algorithm').setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
 
@@ -63,15 +67,19 @@ class OptimizationWindow:
 class DataLoaderAdapter:
     """Adapter to use BaseDataLoader implementations with the optimization framework"""
 
-    def __init__(self, base_loader: BaseDataLoader):
+    def __init__(self, base_loader: BaseDataLoader, use_transformed: bool = False, hybrid_mode: bool = False):
         """
         Initialize with a BaseDataLoader instance
 
         Args:
             base_loader: An instance of BaseDataLoader (e.g., AlpacaDataLoader)
+            use_transformed: If True, load .transform.csv files with fd/lr columns
+            hybrid_mode: If True, load both raw and transformed data (raw for prices, transformed as features)
         """
         self.base_loader = base_loader
         self.config = base_loader.config
+        self.use_transformed = use_transformed
+        self.hybrid_mode = hybrid_mode
 
     def load_data(
         self, symbol: str, start_date: datetime, end_date: datetime
@@ -111,14 +119,125 @@ class DataLoaderAdapter:
                     f"Missing required columns. Got: {df.columns.tolist()}"
                 )
 
+            # Handle different data loading modes
+            if self.hybrid_mode:
+                # Load transformed features and merge with raw data
+                transformed_features = self._load_transformed_features(symbol, df)
+                if transformed_features is not None:
+                    df = df.merge(transformed_features, on='timestamp', how='left')
+                    logger.info(f"Loaded hybrid data with raw prices and transformed features")
+                else:
+                    logger.warning(f"No transformed features found, using raw data only")
+            elif self.use_transformed:
+                # Replace raw data with transformed data
+                transformed_df = self._load_transformed_data(symbol, df)
+                if transformed_df is not None:
+                    return transformed_df
+                else:
+                    logger.warning(f"Falling back to raw data for {symbol}")
+
             return df
         finally:
             # Restore original symbol
             self.config.symbol = original_symbol
 
+    def _load_transformed_data(self, symbol: str, original_df: pd.DataFrame) -> Optional[pd.DataFrame]:
+        """Load transformed data from .transform.csv file"""
+        try:
+            import os
+            
+            # Convert symbol format (e.g., "BTC/USD" -> "btc_usd")
+            symbol_formatted = symbol.replace("/", "_").lower()
+            
+            # Look for transformed file in data directory
+            data_dir = "data"
+            transform_file = os.path.join(data_dir, f"{symbol_formatted}_{self.config.timeframe}.transform.csv")
+            
+            if not os.path.exists(transform_file):
+                logger.debug(f"Transform file not found: {transform_file}")
+                return None
+                
+            # Load transformed data
+            logger.info(f"Loading transformed data from: {transform_file}")
+            transformed_df = pd.read_csv(transform_file)
+            
+            # Convert timestamp if it's a string
+            if 'timestamp' in transformed_df.columns:
+                transformed_df['timestamp'] = pd.to_datetime(transformed_df['timestamp'])
+            else:
+                # If no timestamp, assume index matches original
+                transformed_df['timestamp'] = original_df['timestamp'].values
+                
+            # Verify required columns exist
+            required_cols = ['open_fd', 'high_fd', 'low_fd', 'close_fd', 'volume_lr']
+            if not all(col in transformed_df.columns for col in required_cols):
+                logger.warning(f"Missing required transformed columns. Found: {transformed_df.columns.tolist()}")
+                return None
+                
+            # Map transformed columns to standard names
+            result_df = pd.DataFrame({
+                'timestamp': transformed_df['timestamp'],
+                'open': transformed_df['open_fd'],
+                'high': transformed_df['high_fd'],
+                'low': transformed_df['low_fd'],
+                'close': transformed_df['close_fd'],
+                'volume': transformed_df['volume_lr']
+            })
+            
+            # No filtering - use all available transformed data
+            # The date range will be handled by the calling function
+            
+            logger.info(f"Using transformed data: {len(result_df)} bars with fd/lr columns")
+            
+            return result_df
+            
+        except Exception as e:
+            logger.error(f"Error loading transformed data: {e}")
+            return None
+    
+    def _load_transformed_features(self, symbol: str, original_df: pd.DataFrame) -> Optional[pd.DataFrame]:
+        """Load transformed features for hybrid mode"""
+        try:
+            import os
+            
+            # Convert symbol format
+            symbol_formatted = symbol.replace("/", "_").lower()
+            
+            # Look for transformed file
+            data_dir = "data"
+            transform_file = os.path.join(data_dir, f"{symbol_formatted}_{self.config.timeframe}.transform.csv")
+            
+            if not os.path.exists(transform_file):
+                logger.debug(f"Transform file not found: {transform_file}")
+                return None
+                
+            # Load transformed data
+            logger.info(f"Loading transformed features from: {transform_file}")
+            transformed_df = pd.read_csv(transform_file)
+            
+            # Convert timestamp
+            if 'timestamp' in transformed_df.columns:
+                transformed_df['timestamp'] = pd.to_datetime(transformed_df['timestamp'])
+            
+            # Select only the transformed features
+            feature_cols = ['timestamp', 'open_fd', 'high_fd', 'low_fd', 'close_fd', 'volume_lr']
+            if all(col in transformed_df.columns for col in feature_cols):
+                return transformed_df[feature_cols]
+            else:
+                logger.warning(f"Missing required feature columns in transform file")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error loading transformed features: {e}")
+            return None
+
     def create_bars(self, df: pd.DataFrame) -> List[Bar]:
         """Convert DataFrame to list of Bar objects"""
         bars = []
+        
+        # Check if we have transformed features
+        has_features = any(col in df.columns for col in ['open_fd', 'high_fd', 'low_fd', 'close_fd', 'volume_lr'])
+        
         for _, row in df.iterrows():
             bar = Bar(
                 open=row["open"],
@@ -128,6 +247,17 @@ class DataLoaderAdapter:
                 volume=row["volume"],
                 timestamp=row["timestamp"],
             )
+            
+            # Add features if in hybrid mode
+            if has_features:
+                bar.features = {
+                    'open_fd': row.get('open_fd', None),
+                    'high_fd': row.get('high_fd', None),
+                    'low_fd': row.get('low_fd', None),
+                    'close_fd': row.get('close_fd', None),
+                    'volume_lr': row.get('volume_lr', None)
+                }
+                
             bars.append(bar)
         return bars
 

@@ -20,21 +20,35 @@ from alpaca_data_loader import AlpacaDataLoader
 from config_manager import Config
 
 
-def test_rsi_optimization():
+def test_rsi_optimization(hybrid_mode: bool = False):
     """Run RSI strategy optimization test"""
 
     print("=== RSI Strategy Optimization Test ===\n")
+    
+    if hybrid_mode:
+        print("Using HYBRID mode (transformed features with raw prices)\n")
+    else:
+        print("Using RAW OHLCV data\n")
 
     # Use a moderate time period
     end_date = datetime.now()
-    start_date = end_date - timedelta(days=500)
+    if hybrid_mode:
+        start_date = datetime(2024, 9, 11)  # Transform data starts Sept 2024
+    else:
+        start_date = end_date - timedelta(days=500)
 
     # Test parameters
-    symbol = "BTC/USD"
-    timeframe = "1d"
-    train_days = 252  # 1 year training
-    test_days = 63  # 3 months testing
-    step_days = 63  # 3 months step
+    symbol = "SOL/USD" if hybrid_mode else "BTC/USD"
+    timeframe = "1h" if hybrid_mode else "1d"
+    # Adjust for data availability
+    if hybrid_mode:
+        train_days = 90   # 3 months
+        test_days = 30    # 1 month
+        step_days = 30    # 1 month step
+    else:
+        train_days = 252  # 1 year training
+        test_days = 63   # 3 months testing
+        step_days = 63   # 3 months step
     max_evaluations = 100
 
     print(f"Test Configuration:")
@@ -49,14 +63,21 @@ def test_rsi_optimization():
             config_path="test_config.json",
             symbol=symbol,
             timeframe=timeframe,
-            min_bars=train_days + test_days + 100,
+            min_bars=train_days * (24 if timeframe == "1h" else 1) + test_days * (24 if timeframe == "1h" else 1) + 100,
         )
 
         # Create data loader
         print("\n1. Creating data loader...")
         base_loader = AlpacaDataLoader(config)
-        data_loader = DataLoaderAdapter(base_loader)
-        print("   ✓ Data loader created")
+        data_loader = DataLoaderAdapter(
+            base_loader,
+            use_transformed=False,
+            hybrid_mode=hybrid_mode
+        )
+        if hybrid_mode:
+            print("   ✓ Data loader created (hybrid mode: raw prices + transformed features)")
+        else:
+            print("   ✓ Data loader created (using raw data)")
 
         # Create RSI strategy
         print("2. Creating RSI strategy...")
@@ -160,5 +181,10 @@ def test_rsi_optimization():
 
 
 if __name__ == "__main__":
-    success = test_rsi_optimization()
+    import sys
+    
+    # Check for hybrid flag
+    hybrid_mode = "--hybrid" in sys.argv or "-h" in sys.argv
+    
+    success = test_rsi_optimization(hybrid_mode=hybrid_mode)
     exit(0 if success else 1)

@@ -16,6 +16,9 @@ from indicators import (
     calculate_trend_factor, calculate_volatility_factor, 
     calculate_exhaustion_factor, calculate_atr
 )
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -202,15 +205,34 @@ class MSSStrategy(Strategy):
         
         # Convert bars to DataFrame
         data = []
+        use_transformed = False
+        
+        # Check if we have transformed features in hybrid mode
+        if hasattr(bars[0], 'features') and bars[0].features and 'close_fd' in bars[0].features:
+            use_transformed = True
+            logger.info("Using transformed data for MSS calculations")
+            
         for bar in bars:
-            data.append({
-                'timestamp': bar.timestamp,
-                'open': bar.open,
-                'high': bar.high,
-                'low': bar.low,
-                'close': bar.close,
-                'volume': bar.volume
-            })
+            if use_transformed and bar.features:
+                # Use transformed data for MSS calculations
+                data.append({
+                    'timestamp': bar.timestamp,
+                    'open': bar.features.get('open_fd', bar.open),
+                    'high': bar.features.get('high_fd', bar.high),
+                    'low': bar.features.get('low_fd', bar.low),
+                    'close': bar.features.get('close_fd', bar.close),
+                    'volume': bar.features.get('volume_lr', bar.volume)
+                })
+            else:
+                # Use raw data
+                data.append({
+                    'timestamp': bar.timestamp,
+                    'open': bar.open,
+                    'high': bar.high,
+                    'low': bar.low,
+                    'close': bar.close,
+                    'volume': bar.volume
+                })
         df = pd.DataFrame(data)
         
         # Calculate MSS

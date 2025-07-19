@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 # Configure logging
 logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 from strategy_optimization_framework import (
@@ -20,21 +20,36 @@ from alpaca_data_loader import AlpacaDataLoader
 from config_manager import Config
 
 
-def quick_test():
+def quick_test(hybrid_mode: bool = False):
     """Run a minimal test of the optimization framework"""
 
     print("=== Quick MA Strategy Optimization Test ===\n")
+    
+    if hybrid_mode:
+        print("Using HYBRID mode (transformed features with raw prices)\n")
+    else:
+        print("Using RAW OHLCV data\n")
 
     # Use a moderate time period for testing
     end_date = datetime.now()
-    start_date = end_date - timedelta(days=500)  # 500 days
+    # For hybrid mode, start from when transform data is available
+    if hybrid_mode:
+        start_date = datetime(2024, 9, 11)  # Transform data starts Sept 2024
+    else:
+        start_date = end_date - timedelta(days=500)  # 500 days for raw data
 
     # Test parameters for 500 days
-    symbol = "BTC/USD"
-    timeframe = "1d"
-    train_days = 180  # 6 months training
-    test_days = 60  # 2 months testing
-    step_days = 60  # 2 months step
+    symbol = "SOL/USD" if hybrid_mode else "BTC/USD"
+    timeframe = "1h" if hybrid_mode else "1d"
+    # Adjust days based on data availability
+    if hybrid_mode:
+        train_days = 90   # 3 months training
+        test_days = 30    # 1 month testing
+        step_days = 30    # 1 month step
+    else:
+        train_days = 180  # 6 months training
+        test_days = 60    # 2 months testing
+        step_days = 60    # 2 months step
     max_evaluations = 75  # Moderate evaluations
 
     print(f"Test Configuration:")
@@ -50,22 +65,29 @@ def quick_test():
             config_path="test_config.json",
             symbol=symbol,
             timeframe=timeframe,
-            min_bars=100,  # Minimal bars needed
+            min_bars=train_days * 24 + test_days * 24 + 200,  # Convert days to hours + buffer
         )
 
         # Create data loader
         print("1. Creating data loader...")
         base_loader = AlpacaDataLoader(config)
-        data_loader = DataLoaderAdapter(base_loader)
-        print("   ✓ Data loader created")
+        data_loader = DataLoaderAdapter(
+            base_loader, 
+            use_transformed=False,
+            hybrid_mode=hybrid_mode
+        )
+        if hybrid_mode:
+            print("   ✓ Data loader created (hybrid mode: raw prices + transformed features)")
+        else:
+            print("   ✓ Data loader created (using raw data)")
 
         # Create strategy with narrow parameter ranges for testing
         print("2. Creating MA strategy...")
         strategy = MovingAverageStrategy(
-            min_fast=3,
-            max_fast=10,  # Suitable for daily
-            min_slow=10,
-            max_slow=30,  # Suitable for daily
+            min_fast=12,      # 12 hours
+            max_fast=48,      # 2 days
+            min_slow=48,      # 2 days
+            max_slow=168,     # 7 days in hours
         )
         print("   ✓ Strategy created")
 
@@ -157,5 +179,10 @@ def quick_test():
 
 
 if __name__ == "__main__":
-    success = quick_test()
+    import sys
+    
+    # Check for hybrid flag
+    hybrid_mode = "--hybrid" in sys.argv or "-h" in sys.argv
+    
+    success = quick_test(hybrid_mode=hybrid_mode)
     exit(0 if success else 1)
