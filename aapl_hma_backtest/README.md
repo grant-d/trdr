@@ -48,6 +48,28 @@ aapl_hma_backtest/
 pip install -r requirements.txt
 ```
 
+2. **IMPORTANT: Set up Alpaca for REAL data access**
+
+To fetch REAL AAPL historical data, you need Alpaca API credentials with data subscription enabled:
+
+### Getting Alpaca Credentials:
+1. Go to [https://alpaca.markets/](https://alpaca.markets/) and sign up (FREE)
+2. Navigate to your dashboard
+3. Go to **"Market Data" → "Subscriptions"**
+4. **Enable the IEX data feed** (it's FREE - no credit card required)
+5. Wait 2-3 minutes for the subscription to activate
+6. Get your API keys from "Your API Keys" section
+
+### Set Environment Variables:
+```bash
+export ALPACA_API_KEY="your_api_key_here"
+export ALPACA_API_SECRET="your_api_secret_here"
+```
+
+Or create a `.env` file (see `.env.example`)
+
+**NOTE:** Without enabling the IEX data subscription, you'll get "Access denied" errors and the backtest will use synthetic data instead of real AAPL prices.
+
 ## Usage
 
 Run the backtest:
@@ -56,7 +78,7 @@ python run_backtest.py
 ```
 
 This will:
-1. Download historical AAPL data (2020-2024)
+1. Download REAL historical AAPL data from Alpaca (2020-2024)
 2. Calculate HMA 50 and HMA 200
 3. Simulate bull put spread trades
 4. Generate performance statistics
