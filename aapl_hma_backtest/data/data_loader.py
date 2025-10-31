@@ -74,11 +74,52 @@ def fetch_stock_data(ticker: str, start_date: str, end_date: str) -> pd.DataFram
         return df
 
     except ImportError:
-        print("alpaca-py not installed. Using synthetic data for demonstration.")
-        return generate_synthetic_data(start_date, end_date)
+        print("alpaca-py not installed. Trying yfinance fallback...")
+        return fetch_from_yfinance(ticker, start_date, end_date)
     except Exception as e:
         print(f"Error fetching data from Alpaca: {e}")
-        print("Using synthetic data for demonstration.")
+        print("Trying yfinance fallback...")
+        return fetch_from_yfinance(ticker, start_date, end_date)
+
+
+def fetch_from_yfinance(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
+    """
+    Fetch data from Yahoo Finance as fallback
+
+    Args:
+        ticker: Stock ticker
+        start_date: Start date
+        end_date: End date
+
+    Returns:
+        DataFrame with OHLCV data
+    """
+    try:
+        from pandas_datareader import data as pdr
+
+        print(f"Fetching REAL {ticker} data from Yahoo Finance...")
+        df = pdr.get_data_yahoo(ticker, start=start_date, end=end_date)
+
+        # Rename columns to match expected format
+        df = df.rename(columns={
+            'Open': 'Open',
+            'High': 'High',
+            'Low': 'Low',
+            'Close': 'Close',
+            'Adj Close': 'Adj Close',
+            'Volume': 'Volume'
+        })
+
+        # Keep only OHLCV
+        df = df[['Open', 'High', 'Low', 'Close', 'Volume']]
+
+        print(f"✓ Successfully fetched {len(df)} days of REAL {ticker} data from Yahoo Finance!")
+        print(f"  Price range: ${df['Close'].min():.2f} - ${df['Close'].max():.2f}")
+        return df
+
+    except Exception as e:
+        print(f"Error fetching from Yahoo Finance: {e}")
+        print("Using synthetic data as last resort...")
         return generate_synthetic_data(start_date, end_date)
 
 
