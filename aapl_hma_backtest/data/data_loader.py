@@ -27,16 +27,14 @@ def fetch_stock_data(ticker: str, start_date: str, end_date: str) -> pd.DataFram
         from alpaca.data.requests import StockBarsRequest
         from alpaca.data.timeframe import TimeFrame
 
-        # Get API credentials from environment
-        api_key = os.environ.get('ALPACA_PAPER_API_KEY')
-        api_secret = os.environ.get('ALPACA_PAPER_API_SECRET')
+        # Get API credentials from environment - try both live and paper
+        api_key = os.environ.get('ALPACA_API_KEY') or os.environ.get('ALPACA_PAPER_API_KEY')
+        api_secret = os.environ.get('ALPACA_API_SECRET') or os.environ.get('ALPACA_PAPER_API_SECRET')
 
         if not api_key or not api_secret:
-            print("Alpaca API credentials not found in environment.")
-            print("Using synthetic data for demonstration.")
-            return generate_synthetic_data(start_date, end_date)
+            raise ValueError("Alpaca API credentials not found")
 
-        # Create client
+        # Create client for historical data
         client = StockHistoricalDataClient(api_key, api_secret)
 
         # Create request
