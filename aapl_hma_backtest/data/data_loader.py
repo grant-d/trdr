@@ -34,8 +34,12 @@ def fetch_stock_data(ticker: str, start_date: str, end_date: str) -> pd.DataFram
         if not api_key or not api_secret:
             raise ValueError("Alpaca API credentials not found")
 
-        # Create client for historical data
-        client = StockHistoricalDataClient(api_key, api_secret)
+        # Create client for historical data with explicit parameter names
+        client = StockHistoricalDataClient(
+            api_key=api_key,
+            secret_key=api_secret,
+            raw_data=False  # Get typed objects
+        )
 
         # Create request
         request = StockBarsRequest(
