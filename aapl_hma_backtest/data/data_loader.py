@@ -84,7 +84,7 @@ def fetch_stock_data(ticker: str, start_date: str, end_date: str) -> pd.DataFram
 
 def fetch_from_yfinance(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
     """
-    Fetch data from Yahoo Finance as fallback
+    Fetch data from Yahoo Finance using direct HTTP request
 
     Args:
         ticker: Stock ticker
@@ -95,26 +95,42 @@ def fetch_from_yfinance(ticker: str, start_date: str, end_date: str) -> pd.DataF
         DataFrame with OHLCV data
     """
     try:
-        from pandas_datareader import data as pdr
+        import requests
+        from datetime import datetime as dt
+        import time
+
+        # Convert dates to Unix timestamps
+        start_ts = int(dt.strptime(start_date, '%Y-%m-%d').timestamp())
+        end_ts = int(dt.strptime(end_date, '%Y-%m-%d').timestamp())
+
+        # Yahoo Finance API URL
+        url = f"https://query1.finance.yahoo.com/v7/finance/download/{ticker}"
+        params = {
+            'period1': start_ts,
+            'period2': end_ts,
+            'interval': '1d',
+            'events': 'history',
+            'includeAdjustedClose': 'true'
+        }
+
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
 
         print(f"Fetching REAL {ticker} data from Yahoo Finance...")
-        df = pdr.get_data_yahoo(ticker, start=start_date, end=end_date)
+        response = requests.get(url, params=params, headers=headers)
+        response.raise_for_status()
 
-        # Rename columns to match expected format
-        df = df.rename(columns={
-            'Open': 'Open',
-            'High': 'High',
-            'Low': 'Low',
-            'Close': 'Close',
-            'Adj Close': 'Adj Close',
-            'Volume': 'Volume'
-        })
+        # Parse CSV data
+        from io import StringIO
+        df = pd.read_csv(StringIO(response.text), parse_dates=['Date'], index_col='Date')
 
         # Keep only OHLCV
         df = df[['Open', 'High', 'Low', 'Close', 'Volume']]
 
-        print(f"✓ Successfully fetched {len(df)} days of REAL {ticker} data from Yahoo Finance!")
+        print(f"✓✓✓ SUCCESS! Fetched {len(df)} days of REAL {ticker} data! ✓✓✓")
         print(f"  Price range: ${df['Close'].min():.2f} - ${df['Close'].max():.2f}")
+        print(f"  Date range: {df.index.min()} to {df.index.max()}")
         return df
 
     except Exception as e:
