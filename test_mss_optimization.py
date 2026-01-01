@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format='%(levelname)s - %(message)s'
 )
 
 from strategy_optimization_framework import (
@@ -42,8 +42,8 @@ def test_mss_optimization(hybrid_mode: bool = False):
     # Adjust for data availability
     if hybrid_mode:
         train_days = 90   # 3 months
-        test_days = 30    # 1 month
-        step_days = 30    # 1 month step
+        test_days = 15    # 1 month
+        step_days = 15    # 1 month step
     else:
         train_days = 252   # 1 year training
         test_days = 63     # 3 months testing

@@ -6,7 +6,7 @@ from typing import Optional, Dict, List, Tuple, Union
 from abc import ABC, abstractmethod
 import warnings
 from tsfracdiff import FractionalDifferentiator
-from config_manager import Config
+from config_manager import DataLoaderConfig
 from filename_utils import get_data_path
 from timeframe import TimeFrame
 
@@ -24,7 +24,7 @@ class BaseDataLoader(ABC):
         is_crypto_symbol: Boolean indicating if the symbol is a cryptocurrency
     """
 
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: DataLoaderConfig) -> None:
         """
         Initialize the base data loader.
 
@@ -306,7 +306,7 @@ class BaseDataLoader(ABC):
 
         return result_df
 
-    def clean_data(self, df: pd.DataFrame, stage_data: bool = True) -> pd.DataFrame:
+    def clean_data(self, df: pd.DataFrame, outliers: bool = False, stage_data: bool = True) -> pd.DataFrame:
         """
         Comprehensive data cleaning pipeline for financial market data.
 
@@ -333,10 +333,11 @@ class BaseDataLoader(ABC):
         df = self._validate_data_structure(df)
 
         # 2. Handle missing values
-        df = self._handle_missing_values(df)
+        df = self._impute_missing_values(df)
 
         # 3. Detect and handle outliers
-        df = self._detect_and_handle_outliers(df)
+        if outliers:
+            df = self._detect_and_handle_outliers(df)
 
         # 4. Validate OHLCV integrity
         df = self._validate_ohlcv_integrity(df)
@@ -405,7 +406,7 @@ class BaseDataLoader(ABC):
 
         return df
 
-    def _handle_missing_values(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _impute_missing_values(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Handle missing values in financial data using forward fill and validation.
 

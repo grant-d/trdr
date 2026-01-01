@@ -12,14 +12,15 @@ from dataclasses import dataclass
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-from jmetal.core.problem import Problem
-from jmetal.core.solution import FloatSolution
-from jmetal.algorithm.multiobjective import NSGAII
-from jmetal.operator import SBXCrossover, PolynomialMutation
-from jmetal.util.termination_criterion import StoppingByEvaluations
-from jmetal.util.solution import get_non_dominated_solutions
+from pymoo.core.problem import Problem
+from pymoo.algorithms.moo.nsga2 import NSGA2
+from pymoo.operators.crossover.sbx import SBX
+from pymoo.operators.mutation.pm import PM
+from pymoo.termination import get_termination
+from pymoo.optimize import minimize
+from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
+import numpy as np
 import logging
-
 from portfolio_engine import (
     PortfolioEngine,
     OrderType,
@@ -32,9 +33,8 @@ from portfolio_engine import (
 from base_data_loader import BaseDataLoader
 from config_manager import Config
 
-# Disable JMetalPy debug logging
-logging.getLogger('jmetal').setLevel(logging.WARNING)
-logging.getLogger('jmetal.core.algorithm').setLevel(logging.WARNING)
+# Configure logging
+logging.getLogger('pymoo').setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
@@ -367,7 +367,7 @@ class StrategyEvaluator:
 
 
 class StrategyOptimizationProblem(Problem):
-    """JMetal problem for strategy optimization"""
+    """Pymoo problem for strategy optimization"""
 
     def __init__(
         self,
@@ -381,18 +381,18 @@ class StrategyOptimizationProblem(Problem):
         self.train_bars = train_bars
         self.evaluator = evaluator
 
-        # Default objectives: maximize return, minimize drawdown
-        self.objectives = objectives or ["total_return_pct", "max_drawdown_pct"]
+        # Default objectives: maximize return and sharpe, minimize drawdown
+        self.objectives = objectives or ["total_return_pct", "sharpe_ratio", "max_drawdown_pct"]
 
         # Get parameter bounds
         self.param_bounds = strategy.get_parameter_bounds()
         self.param_names = list(self.param_bounds.keys())
 
         # Set bounds
-        self.lower_bound = [self.param_bounds[name][0] for name in self.param_names]
-        self.upper_bound = [self.param_bounds[name][1] for name in self.param_names]
+        xl = np.array([self.param_bounds[name][0] for name in self.param_names])
+        xu = np.array([self.param_bounds[name][1] for name in self.param_names])
 
-        # Objective directions (minimize by default in JMetal)
+        # Objective directions (minimize by default in pymoo)
         # We'll handle maximization by negating values
         self.obj_directions = []
         for obj in self.objectives:
@@ -407,65 +407,41 @@ class StrategyOptimizationProblem(Problem):
             else:
                 self.obj_directions.append(1)  # Minimize
 
-        # Initialize parent after setting up our attributes
-        super().__init__()
-
-    @property
-    def number_of_variables(self) -> int:
-        """Return number of variables"""
-        return len(self.param_names)
-
-    @property
-    def number_of_objectives(self) -> int:
-        """Return number of objectives"""
-        return len(self.objectives)
-
-    @property
-    def number_of_constraints(self) -> int:
-        """Return number of constraints"""
-        return 0
+        # Initialize parent with pymoo Problem signature
+        super().__init__(
+            n_var=len(self.param_names),
+            n_obj=len(self.objectives),
+            n_constr=0,
+            xl=xl,
+            xu=xu
+        )
 
     @property
     def name(self) -> str:
         """Return problem name"""
         return f"Strategy Optimization ({self.strategy.__class__.__name__})"
 
-    def create_solution(self) -> FloatSolution:
-        """Create a new solution"""
-        solution = FloatSolution(
-            lower_bound=self.lower_bound,
-            upper_bound=self.upper_bound,
-            number_of_objectives=self.number_of_objectives,
-            number_of_constraints=self.number_of_constraints,
-        )
-        # Initialize variables with random values within bounds
-        import random
 
-        solution.variables = []
-        for i in range(self.number_of_variables):
-            solution.variables.append(
-                random.uniform(self.lower_bound[i], self.upper_bound[i])
-            )
-        return solution
-
-    def evaluate(self, solution: FloatSolution) -> FloatSolution:
-        """Evaluate a solution"""
-        # Create parameters from solution
-        # Debug: print what we're getting
-        # print(f"DEBUG: solution.variables = {solution.variables}, type = {type(solution.variables)}")
-        params = self.strategy.create_parameters(solution.variables)
-
-        # Evaluate strategy
-        metrics = self.evaluator.evaluate(self.train_bars, params)
-
-        # Set objectives
-        solution.objectives = []
-        for i, obj_name in enumerate(self.objectives):
-            value = metrics.get(obj_name, 0.0)
-            # Apply direction (negate for maximization)
-            solution.objectives.append(value * self.obj_directions[i])
-
-        return solution
+    def _evaluate(self, x: np.ndarray, out: Dict[str, np.ndarray], *args, **kwargs) -> None:
+        """Evaluate solutions in pymoo format"""
+        # x is a 2D array where each row is a solution
+        n_solutions = x.shape[0]
+        objectives = np.zeros((n_solutions, self.n_obj))
+        
+        for i in range(n_solutions):
+            # Create parameters from solution
+            params = self.strategy.create_parameters(x[i].tolist())
+            
+            # Evaluate strategy
+            metrics = self.evaluator.evaluate(self.train_bars, params)
+            
+            # Set objectives
+            for j, obj_name in enumerate(self.objectives):
+                value = metrics.get(obj_name, 0.0)
+                # Apply direction (negate for maximization)
+                objectives[i, j] = value * self.obj_directions[j]
+        
+        out["F"] = objectives
 
 
 class WalkForwardOptimizer:
@@ -547,42 +523,65 @@ class WalkForwardOptimizer:
 
         # Create algorithm
         if algorithm_factory is None:
-            algorithm = NSGAII(
-                problem=problem,
-                population_size=100,
-                offspring_population_size=100,
-                mutation=PolynomialMutation(
-                    probability=1.0 / problem.number_of_variables, distribution_index=20
-                ),
-                crossover=SBXCrossover(probability=0.9, distribution_index=20),
-                termination_criterion=StoppingByEvaluations(
-                    max_evaluations=max_evaluations
-                ),
+            algorithm = NSGA2(
+                pop_size=100,
+                n_offsprings=100,
+                crossover=SBX(prob=0.9, eta=20),
+                mutation=PM(prob=1.0 / problem.n_var, eta=20),
+                eliminate_duplicates=True
             )
         else:
             algorithm = algorithm_factory(problem)
 
+        # Define termination criterion
+        termination = get_termination("n_eval", max_evaluations)
+        
         # Run optimization
-        algorithm.run()
+        res = minimize(
+            problem,
+            algorithm,
+            termination,
+            seed=1,
+            verbose=False
+        )
+        
+        # Get pareto front solutions
+        pareto_front = res.F
+        pareto_set = res.X
 
-        # Get non-dominated solutions
-        solutions = get_non_dominated_solutions(algorithm.result())
-
-        # Select best solution (highest return)
-        best_solution = None
-        best_return = float("-inf")
-
-        for solution in solutions:
-            # Get actual return value (remember we negated for minimization)
-            return_idx = problem.objectives.index("total_return_pct")
-            actual_return = -solution.objectives[return_idx]
-
-            if actual_return > best_return:
-                best_return = actual_return
-                best_solution = solution
-
+        # Select best solution using weighted score
+        best_idx = None
+        best_score = float("-inf")
+        
+        # Get objective indices
+        return_idx = problem.objectives.index("total_return_pct")
+        sharpe_idx = problem.objectives.index("sharpe_ratio") if "sharpe_ratio" in problem.objectives else None
+        dd_idx = problem.objectives.index("max_drawdown_pct") if "max_drawdown_pct" in problem.objectives else None
+        
+        for i in range(len(pareto_front)):
+            # Calculate weighted score (higher is better)
+            score = 0.0
+            
+            # Return component (40% weight)
+            actual_return = -pareto_front[i][return_idx]  # Negate back for actual value
+            score += 0.4 * actual_return / 100.0  # Normalize to roughly 0-1 range
+            
+            # Sharpe ratio component (40% weight)
+            if sharpe_idx is not None:
+                actual_sharpe = -pareto_front[i][sharpe_idx]  # Negate back for actual value
+                score += 0.4 * actual_sharpe  # Already in good range
+            
+            # Drawdown component (20% weight) - lower is better
+            if dd_idx is not None:
+                actual_dd = pareto_front[i][dd_idx]  # Not negated, already minimizing
+                score -= 0.2 * actual_dd / 100.0  # Normalize and subtract
+            
+            if score > best_score:
+                best_score = score
+                best_idx = i
+        
         # Create best parameters
-        best_params = self.strategy.create_parameters(best_solution.variables)
+        best_params = self.strategy.create_parameters(pareto_set[best_idx].tolist())
 
         # Evaluate on test data
         test_df = self.data_loader.load_data(symbol, window.test_start, window.test_end)

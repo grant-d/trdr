@@ -25,7 +25,7 @@ import os
 import argparse
 from dotenv import load_dotenv
 import chalk
-from config_manager import Config
+from config_manager import DataLoaderConfig
 from alpaca_data_loader import AlpacaDataLoader
 
 # Load environment variables
@@ -46,7 +46,7 @@ def main() -> None:
         "-c",
         type=str,
         default="btc_usd_1m.config.json",
-        help="Config file name (default: btc_usd_1m.config.json)",
+        help="DataLoaderConfig file name (default: btc_usd_1m.config.json)",
     )
     parser.add_argument(
         "--init", action="store_true", help="Initialize a new configuration file"
@@ -93,7 +93,7 @@ def main() -> None:
         print(
             chalk.green
             + chalk.bold
-            + "Trading Data Loader - Config Initialization"
+            + "Trading Data Loader - DataLoaderConfig Initialization"
             + chalk.RESET
         )
         print(chalk.blue + f"Symbol: {args.symbol}" + chalk.RESET)
@@ -102,11 +102,11 @@ def main() -> None:
         print(chalk.blue + f"Paper mode: {args.paper}" + chalk.RESET)
 
         try:
-            config_path = Config.create_config_file(
+            config_path = DataLoaderConfig.create_config_file(
                 args.symbol, args.timeframe, args.min_bars, args.paper
             )
             config_filename = os.path.basename(config_path)
-            print(chalk.green + "\n✓ Config file created: {config_path}" + chalk.RESET)
+            print(chalk.green + "\n✓ DataLoaderConfig file created: {config_path}" + chalk.RESET)
             print(chalk.cyan + "\nTo use this config, run:" + chalk.RESET)
             print(f"  python main.py --config {config_filename}")
         except Exception as e:
@@ -116,19 +116,19 @@ def main() -> None:
 
     print(chalk.green + chalk.bold + "Trading Data Loader" + chalk.RESET)
 
-    # Config files are always in the configs/ directory
+    # DataLoaderConfig files are always in the configs/ directory
     config_filename = args.config
     # Remove any path components if user accidentally included them
     config_filename = os.path.basename(config_filename)
     config_path = os.path.join("configs", config_filename)
 
-    print(chalk.blue + f"Config file: {config_filename}" + chalk.RESET)
+    print(chalk.blue + f"DataLoaderConfig file: {config_filename}" + chalk.RESET)
 
     # Check if config file exists
     if not os.path.exists(config_path):
         print(
             chalk.red
-            + f"\n✗ Error: Config file '{config_filename}' not found in configs/ directory"
+            + f"\n✗ Error: DataLoaderConfig file '{config_filename}' not found in configs/ directory"
             + chalk.RESET
         )
         print(chalk.yellow + "\nAvailable config files:" + chalk.RESET)
@@ -149,7 +149,7 @@ def main() -> None:
         sys.exit(1)
 
     # Load configuration
-    config = Config(config_path)
+    config = DataLoaderConfig(config_path)
     print(chalk.cyan + f"Symbol: {config.symbol}" + chalk.RESET)
     print(chalk.cyan + f"Timeframe: {config.timeframe}" + chalk.RESET)
     print(chalk.cyan + f"Min bars: {config.min_bars}" + chalk.RESET)
@@ -169,7 +169,7 @@ def main() -> None:
     print(chalk.yellow + "\nLoading data..." + chalk.RESET)
     try:
         df = loader.load_data(stage_data=True)
-        df = loader.clean_data(df, stage_data=True)
+        df = loader.clean_data(df, outliers=False, stage_data=True)
         df = loader.transform(df, frac_diff="_fd", log_volume="_lr", stage_data=True)
         print(chalk.green + f"\n✓ Successfully loaded {len(df)} bars" + chalk.RESET)
 

@@ -102,7 +102,8 @@ class RSIStrategy(Strategy):
         # Check if we have transformed features in hybrid mode
         if hasattr(bars[0], 'features') and bars[0].features and 'close_fd' in bars[0].features:
             use_transformed = True
-            logger.info("Using transformed data for RSI calculation")
+            trade_date = bars[-1].timestamp.strftime('%Y-%m-%d %H:%M:%S') if bars else "Unknown"
+            logger.info(f"{trade_date} - Using transformed data for RSI calculation")
             
         for bar in bars:
             if use_transformed and bar.features and bar.features.get('close_fd') is not None:

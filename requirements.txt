@@ -11,4 +11,5 @@ statsmodels>=0.14.0
 tsfracdiff>=1.0.4
 # stumpy>=1.13.0
 quantstats>=0.0.64
-jmetalpy>=1.7.0
+# jmetalpy
+pymoo>=0.6.1.5

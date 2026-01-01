@@ -47,7 +47,7 @@ class MSSStrategyParameters(StrategyParameters):
     atr_multiplier_weak: float    # ATR multiplier for stop loss in weak trends
     
     # Position sizing
-    position_size: float = 0.95
+    position_size: float = 0.03
     
     def __post_init__(self):
         # Ensure valid parameters
@@ -137,6 +137,31 @@ class MSSStrategy(Strategy):
         if len(values) < 14:
             raise ValueError(f"Expected 14 values, got {len(values)}")
         
+        # Get threshold values and sort them to ensure valid ordering
+        thresholds = sorted([values[6], values[7], values[8], values[9], values[10], values[11]], reverse=True)
+        
+        # Assign thresholds in proper order (highest to lowest)
+        # strong_bull > weak_bull > neutral_upper > neutral_lower > weak_bear > strong_bear
+        strong_bull = thresholds[0]
+        weak_bull = thresholds[1]
+        neutral_upper = thresholds[2]
+        neutral_lower = thresholds[3]
+        weak_bear = thresholds[4]
+        strong_bear = thresholds[5]
+        
+        # Ensure minimum separation between thresholds
+        min_separation = 5.0
+        if weak_bull > strong_bull - min_separation:
+            weak_bull = strong_bull - min_separation
+        if neutral_upper > weak_bull - min_separation:
+            neutral_upper = weak_bull - min_separation
+        if neutral_lower > neutral_upper - min_separation:
+            neutral_lower = neutral_upper - min_separation
+        if weak_bear > neutral_lower - min_separation:
+            weak_bear = neutral_lower - min_separation
+        if strong_bear > weak_bear - min_separation:
+            strong_bear = weak_bear - min_separation
+        
         return MSSStrategyParameters(
             # Lookback periods
             trend_lookback=int(values[0]),
@@ -148,13 +173,13 @@ class MSSStrategy(Strategy):
             volatility_weight=values[4],
             exhaustion_weight=values[5],
             
-            # MSS thresholds
-            strong_bull_threshold=values[6],
-            weak_bull_threshold=values[7],
-            neutral_upper=values[8],
-            neutral_lower=values[9],
-            weak_bear_threshold=values[10],
-            strong_bear_threshold=values[11],
+            # MSS thresholds - properly ordered
+            strong_bull_threshold=strong_bull,
+            weak_bull_threshold=weak_bull,
+            neutral_upper=neutral_upper,
+            neutral_lower=neutral_lower,
+            weak_bear_threshold=weak_bear,
+            strong_bear_threshold=strong_bear,
             
             # Risk management
             atr_multiplier_strong=values[12],
@@ -210,7 +235,8 @@ class MSSStrategy(Strategy):
         # Check if we have transformed features in hybrid mode
         if hasattr(bars[0], 'features') and bars[0].features and 'close_fd' in bars[0].features:
             use_transformed = True
-            logger.info("Using transformed data for MSS calculations")
+            trade_date = bars[-1].timestamp.strftime('%Y-%m-%d %H:%M:%S') if bars else "Unknown"
+            logger.info(f"{trade_date} - Using transformed data for MSS calculations")
             
         for bar in bars:
             if use_transformed and bar.features:
@@ -318,9 +344,13 @@ class SimpleMSSStrategy(MSSStrategy):
             'volatility_weight': (self.min_weight, self.max_weight),
             'exhaustion_weight': (self.min_weight, self.max_weight),
             
-            # Symmetric thresholds
-            'strong_threshold': (self.min_threshold, self.max_threshold),
-            'weak_threshold': (self.min_threshold / 2, self.max_threshold / 2),
+            # MSS thresholds - all separate
+            'strong_bull_threshold': (self.min_strong_bull, self.max_strong_bull),
+            'weak_bull_threshold': (self.min_weak_bull, self.max_weak_bull),
+            'neutral_upper': (self.min_neutral_upper, self.max_neutral_upper),
+            'neutral_lower': (self.min_neutral_lower, self.max_neutral_lower),
+            'weak_bear_threshold': (self.min_weak_bear, self.max_weak_bear),
+            'strong_bear_threshold': (self.min_strong_bear, self.max_strong_bear),
             
             # ATR multiplier
             'atr_multiplier': (self.min_atr_mult, self.max_atr_mult)
@@ -328,13 +358,36 @@ class SimpleMSSStrategy(MSSStrategy):
     
     def create_parameters(self, values: List[float]) -> MSSStrategyParameters:
         """Create parameter object from optimization values"""
-        if len(values) < 7:
-            raise ValueError(f"Expected 7 values, got {len(values)}")
+        if len(values) < 11:
+            raise ValueError(f"Expected 11 values, got {len(values)}")
         
         lookback = int(values[0])
-        strong_threshold = values[4]
-        weak_threshold = values[5]
         
+        # Get threshold values and sort them to ensure valid ordering
+        thresholds = sorted([values[4], values[5], values[6], values[7], values[8], values[9]], reverse=True)
+        
+        # Assign thresholds in proper order (highest to lowest)
+        # strong_bull > weak_bull > neutral_upper > neutral_lower > weak_bear > strong_bear
+        strong_bull = thresholds[0]
+        weak_bull = thresholds[1]
+        neutral_upper = thresholds[2]
+        neutral_lower = thresholds[3]
+        weak_bear = thresholds[4]
+        strong_bear = thresholds[5]
+        
+        # Ensure minimum separation between thresholds
+        min_separation = 5.0
+        if weak_bull > strong_bull - min_separation:
+            weak_bull = strong_bull - min_separation
+        if neutral_upper > weak_bull - min_separation:
+            neutral_upper = weak_bull - min_separation
+        if neutral_lower > neutral_upper - min_separation:
+            neutral_lower = neutral_upper - min_separation
+        if weak_bear > neutral_lower - min_separation:
+            weak_bear = neutral_lower - min_separation
+        if strong_bear > weak_bear - min_separation:
+            strong_bear = weak_bear - min_separation
+            
         return MSSStrategyParameters(
             # Use same lookback for all
             trend_lookback=lookback,
@@ -346,15 +399,15 @@ class SimpleMSSStrategy(MSSStrategy):
             volatility_weight=values[2],
             exhaustion_weight=values[3],
             
-            # Symmetric thresholds
-            strong_bull_threshold=strong_threshold,
-            weak_bull_threshold=weak_threshold,
-            neutral_upper=weak_threshold / 2,
-            neutral_lower=-weak_threshold / 2,
-            weak_bear_threshold=-weak_threshold,
-            strong_bear_threshold=-strong_threshold,
+            # MSS thresholds - properly ordered
+            strong_bull_threshold=strong_bull,
+            weak_bull_threshold=weak_bull,
+            neutral_upper=neutral_upper,
+            neutral_lower=neutral_lower,
+            weak_bear_threshold=weak_bear,
+            strong_bear_threshold=strong_bear,
             
             # Same ATR multiplier for both
-            atr_multiplier_strong=values[6],
-            atr_multiplier_weak=values[6] * 0.5  # Half for weak trends
+            atr_multiplier_strong=values[10],
+            atr_multiplier_weak=values[10] * 0.5  # Half for weak trends
         )

@@ -1,7 +1,7 @@
 """
 Configuration management for trading data loader using Pydantic.
 
-This module provides a Config class that handles reading, writing, and managing
+This module provides a DataLoaderConfig class that handles reading, writing, and managing
 configuration settings for the trading application. It supports both trading
 parameters (symbol, timeframe, etc.) and persistent state tracking with
 full validation through Pydantic models.
@@ -20,7 +20,7 @@ class PipelineConfig(BaseModel):
     enabled: bool = False
 
 
-class Config(BaseModel):
+class DataLoaderConfig(BaseModel):
     """
     Manages configuration settings for trading data operations.
 
@@ -38,7 +38,7 @@ class Config(BaseModel):
     # Non-model fields
     config_path: str = Field(exclude=True)
 
-    class Config:
+    class DataLoaderConfig:
         """Pydantic config."""
 
         validate_assignment = True
@@ -130,7 +130,7 @@ class Config(BaseModel):
         config_path = get_data_path(config_filename, "configs")
 
         # Create config instance
-        config = Config(
+        config = DataLoaderConfig(
             config_path=config_path,
             symbol=symbol,
             timeframe=timeframe,

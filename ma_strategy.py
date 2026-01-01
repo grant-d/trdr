@@ -21,7 +21,7 @@ class MAStrategyParameters(StrategyParameters):
 
     fast_period: int
     slow_period: int
-    position_size: float = 0.95  # Use 95% of available capital
+    position_size: float = 0.03  # Use 95% of available capital
 
     def __post_init__(self):
         # Ensure fast < slow
@@ -80,7 +80,8 @@ class MovingAverageStrategy(Strategy):
         # Check if we have transformed features in hybrid mode
         if hasattr(bars[0], 'features') and bars[0].features and 'close_fd' in bars[0].features:
             use_transformed = True
-            logger.info("Using transformed data for MA signal generation")
+            trade_date = bars[-1].timestamp.strftime('%Y-%m-%d %H:%M:%S') if bars else "Unknown"
+            logger.info(f"{trade_date} - Using transformed data for MA signal generation")
             
         for bar in bars:
             if use_transformed and bar.features and bar.features.get('close_fd') is not None:

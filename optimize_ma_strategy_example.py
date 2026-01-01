@@ -9,7 +9,7 @@ from typing import Optional
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(levelname)s - %(message)s"
 )
 
 from strategy_optimization_framework import (

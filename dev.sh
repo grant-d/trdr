@@ -1,21 +1,28 @@
 #!/bin/bash
 
+# Activate virtual environment if it exists and not already activated
+if [ -z "$VIRTUAL_ENV" ] && [ -d ".venv" ]; then
+    echo "Activating virtual environment..."
+    source .venv/bin/activate
+    echo "Virtual environment activated: $VIRTUAL_ENV"
+fi
+
 # Lint all Python files
 function lint() {
   echo "Running flake8..."
-  .venv/bin/flake8 .
+  flake8 .
 }
 
 # Format all Python files
 function format() {
   echo "Running black..."
-  .venv/bin/black .
+  black .
 }
 
 # Run all tests
 function test() {
   echo "Running pytest..."
-  .venv/bin/pytest --maxfail=1 --disable-warnings -q
+  pytest --maxfail=1 --disable-warnings -q
 }
 
 # Run the custom test runner script
@@ -24,21 +31,31 @@ function testcustom() {
   ./tests/run_tests.py
 }
 
-# Install requirements (venv must be active)
+# Install requirements (uses venv pip)
 function install() {
   echo "Installing requirements..."
   pip install -r requirements.txt -r requirements-dev.txt
-  # .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
 }
 
 # Run mypy for type checking
 function typecheck() {
   echo "Running mypy..."
-  .venv/bin/mypy .
+  mypy .
+}
+
+# Run a Python script with the venv
+function run() {
+  if [ $# -lt 2 ]; then
+    echo "Usage: $0 run <script.py> [args...]"
+    exit 1
+  fi
+  shift  # Remove 'run' from arguments
+  echo "Running with venv Python: $@"
+  python "$@"
 }
 
 if [ $# -eq 0 ]; then
-  echo "Usage: $0 {lint|format|test|install|uv_install|typecheck|tc|reqs}"
+  echo "Usage: $0 {lint|format|test|install|typecheck|tc|run}"
   exit 1
 fi
 
@@ -64,7 +81,10 @@ case "$1" in
   tc)
     typecheck
     ;;
+  run)
+    run "$@"
+    ;;
   *)
-    echo "Usage: $0 {lint|format|test|install|typecheck|tc|testcustom}"
+    echo "Usage: $0 {lint|format|test|install|typecheck|tc|testcustom|run}"
     ;;
 esac

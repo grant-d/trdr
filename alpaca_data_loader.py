@@ -9,7 +9,7 @@ from alpaca.data.enums import DataFeed
 from dotenv import load_dotenv
 
 from base_data_loader import BaseDataLoader
-from config_manager import Config
+from config_manager import DataLoaderConfig
 from timeframe import TimeFrame as CustomTimeFrame, TimeFrameUnit as CustomTimeFrameUnit
 
 load_dotenv()
@@ -28,7 +28,7 @@ class AlpacaDataLoader(BaseDataLoader):
         stock_client: Client for fetching stock market data
     """
 
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: DataLoaderConfig) -> None:
         """
         Initialize the Alpaca data loader.
 
@@ -120,7 +120,20 @@ class AlpacaDataLoader(BaseDataLoader):
             request_params = CryptoBarsRequest(
                 symbol_or_symbols=symbol, timeframe=timeframe, start=start, end=end
             )
-            bars = self.crypto_client.get_crypto_bars(request_params)
+            try:
+                bars = self.crypto_client.get_crypto_bars(request_params)
+            except Exception as e:
+                self.logger.error(f"Failed to fetch crypto bars: {e}")
+                # Try once more with a smaller date range if the request is too large
+                if (end - start).days > 30:
+                    self.logger.info("Retrying with smaller date range...")
+                    mid_date = start + (end - start) / 2
+                    request_params = CryptoBarsRequest(
+                        symbol_or_symbols=symbol, timeframe=timeframe, start=start, end=mid_date
+                    )
+                    bars = self.crypto_client.get_crypto_bars(request_params)
+                else:
+                    raise
         else:
             if not self.stock_client:
                 raise RuntimeError("Stock client not initialized")
