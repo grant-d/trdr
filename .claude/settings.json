@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+    ]
+  },
+  "enabledPlugins": {
+    "typescript-lsp@claude-plugins-official": true,
+    "commit-commands@claude-plugins-official": true,
+    "feature-dev@claude-plugins-official": true,
+    "code-review@claude-plugins-official": false,
+    "pr-review-toolkit@claude-plugins-official": false
+  },
+  "hooks": {}
+}

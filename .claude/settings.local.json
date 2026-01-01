@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:www.pyquantnews.com)",
+      "WebFetch(domain:stats.stackexchange.com)",
+      "Bash(./dev.sh:*)",
+      "Bash(python test:*)",
+      "Bash(rm:*)",
+      "Bash(mkdir:*)",
+      "Bash(python -m pytest tests/test_data_cleaning.py -v)",
+      "Bash(pip install:*)",
+      "Bash(python -m pytest tests/test_data_cleaning.py::TestDataCleaning::test_clean_data_with_clean_input -v)",
+      "Bash(python -m pytest tests/test_data_cleaning.py::TestDataCleaning -v)",
+      "Bash(python -m pytest tests/test_data_cleaning.py::TestMissingValueHandling -v)",
+      "Bash(python -m pytest tests/test_data_cleaning.py::TestOutlierDetection -v)",
+      "Bash(python -m pytest tests/test_data_cleaning.py::TestOHLCVIntegrityValidation::test_validate_ohlcv_integrity_zero_negative_prices -v)",
+      "Bash(python -m pytest tests/test_data_cleaning.py)",
+      "Bash(python -m pytest tests/test_data_cleaning.py --cov=base_data_loader --cov-report=term-missing)",
+      "Bash(chmod:*)",
+      "Bash(python run_tests.py:*)",
+      "Bash(python -m pytest tests/test_data_cleaning.py::TestOutlierDetection::test_volume_outlier_detection_with_zero_volumes -v)",
+      "Bash(python:*)",
+      "Bash(echo:*)",
+      "Bash(./run.sh:*)",
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(mv:*)",
+      "Bash(grep:*)",
+      "WebFetch(domain:stumpy.readthedocs.io)",
+      "WebFetch(domain:github.com)",
+      "Bash(source:*)",
+      "Bash(.venv/bin/pip install:*)",
+      "Bash(.venv/bin/python:*)",
+      "Bash(.venv/bin/pip3 install:*)",
+      "Bash(git fetch:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(npx markdownlint:*)",
+      "Bash(git cherry-pick:*)"
+    ],
+    "deny": []
+  }
+}
