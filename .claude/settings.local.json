@@ -31,7 +31,10 @@
       "Bash(source:*)",
       "Bash(.venv/bin/pip install:*)",
       "Bash(.venv/bin/python:*)",
-      "Bash(.venv/bin/pip3 install:*)"
+      "Bash(.venv/bin/pip3 install:*)",
+      "Bash(git fetch:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(npx markdownlint:*)"
     ],
     "deny": []
   }
