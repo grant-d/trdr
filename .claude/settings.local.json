@@ -40,7 +40,10 @@
       "Bash(git remote get-url:*)",
       "Bash(git stash pop:*)",
       "WebFetch(domain:claude.ai)",
-      "WebFetch(domain:arxiv.org)"
+      "WebFetch(domain:arxiv.org)",
+      "Bash(ruff check:*)",
+      "Bash(black:*)",
+      "Bash(cat:*)"
     ],
     "deny": []
   }

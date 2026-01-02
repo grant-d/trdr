@@ -1,3 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+.eggs/
+*.egg-info/
+*.egg
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Data directories (keep structure, ignore contents)
+data/cache/*
+data/runs/*
+!data/cache/.gitkeep
+!data/runs/.gitkeep
+
+# uv
+uv.lock
+
 # Logs
 logs
 *.log
