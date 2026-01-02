@@ -35,7 +35,9 @@
       "Bash(git fetch:*)",
       "Bash(git ls-tree:*)",
       "Bash(npx markdownlint:*)",
-      "Bash(git cherry-pick:*)"
+      "Bash(git cherry-pick:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(git remote get-url:*)"
     ],
     "deny": []
   }
