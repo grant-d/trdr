@@ -18,13 +18,13 @@ def main():
         epilog="""
 Examples:
   Setup with pytest:
-    /sica-loop "pytest -v" --max-iterations 20 --target-score 1.0
+    /sica-loop "pytest -v" -n 20 -s 1.0
 
   Setup with specific test file:
-    /sica-loop "pytest tests/test_api.py -v" --max-iterations 10
+    /sica-loop "pytest tests/test_api.py -v" -n 10
 
   Setup with yarn tests:
-    /sica-loop "yarn test" --max-iterations 15 --completion-promise "ALL TESTS PASS"
+    /sica-loop "yarn test" -n 15 -x "ALL TESTS PASS"
         """,
     )
 
@@ -40,19 +40,20 @@ Examples:
         help="Maximum iterations before stopping (default: 20)",
     )
     parser.add_argument(
-        "--target-score", "-t",
+        "--target-score", "-s",
         type=float,
         default=1.0,
         help="Target score to achieve (0.0-1.0, default: 1.0 = all tests pass)",
     )
     parser.add_argument(
-        "--completion-promise", "-p",
+        "--exit-signal", "-x",
         type=str,
         default="TESTS PASSING",
-        help="Promise phrase to signal completion (default: 'TESTS PASSING')",
+        dest="completion_promise",
+        help="Phrase to signal completion (default: 'TESTS PASSING')",
     )
     parser.add_argument(
-        "--timeout", "-T",
+        "--timeout", "-t",
         type=int,
         default=300,
         dest="benchmark_timeout",
@@ -64,7 +65,7 @@ Examples:
         help="Show detailed help",
     )
     parser.add_argument(
-        "--prompt", "-m",
+        "--prompt", "-p",
         type=str,
         default="",
         help="Task description (preserved after compaction)",
@@ -75,6 +76,12 @@ Examples:
         dest="context_files",
         default=[],
         help="File to re-read after compaction (repeatable)",
+    )
+    parser.add_argument(
+        "--journal", "-j",
+        type=str,
+        default="",
+        help="Adopt journal from previous run (path or 'latest')",
     )
 
     args = parser.parse_args()
@@ -153,6 +160,32 @@ Tips:
     run_dir = sica_dir / f"run_{run_id}"
     run_dir.mkdir(parents=True)
 
+    # Import journal if specified
+    if args.journal:
+        src = None
+        if args.journal == "latest":
+            runs = sorted(sica_dir.glob("run_*"), reverse=True)
+            for run in runs:
+                if run == run_dir:
+                    continue  # Skip current run
+                j = run / "journal.md"
+                if j.exists():
+                    src = j
+                    break
+            if not src:
+                print("Warning: No previous journal found", file=sys.stderr)
+        else:
+            src = Path(args.journal)
+            if not src.exists():
+                print(f"Warning: Journal not found: {src}", file=sys.stderr)
+                src = None
+
+        if src:
+            dest = run_dir / "journal.md"
+            content = f"# Imported from {src}\n\n{src.read_text()}"
+            dest.write_text(content)
+            print(f"Imported journal from: {src}")
+
     # Create state
     state = {
         "run_id": run_id,
@@ -191,11 +224,23 @@ After each change you make:
 3. If tests fail, you get a focused improvement prompt
 4. Loop continues until target score ({args.target_score}) or max iterations ({args.max_iterations})
 
-## CRITICAL INSTRUCTION
+## CRITICAL - READ CAREFULLY
 
-After making ANY code change, you MUST attempt to complete the conversation.
-Do NOT wait for user input. Do NOT ask "should I continue?".
-Just make changes, then signal completion. The hook handles the rest.
+### EXIT AFTER EVERY CHANGE
+After EACH code change, you MUST immediately attempt to end/complete the conversation.
+DO NOT make multiple changes. DO NOT keep working. DO NOT ask questions.
+Change → Exit → Hook runs benchmark → You get results → Repeat.
+
+If you don't exit, the benchmark NEVER runs and iteration NEVER advances.
+
+### OTHER RULES
+- MUST use concise TI (telegraph imperative) language. Save tokens.
+- DO NOT run tests manually. Hook runs benchmark on exit.
+- DO NOT modify test files. Only modify source code.
+- MUST maintain journal.md in {run_dir}:
+  - Read FIRST before making changes
+  - Log each approach (1-2 lines): what you tried, result
+  - Avoid repeating failed approaches
 
 When you believe tests will pass, output:
 <promise>{args.completion_promise}</promise>

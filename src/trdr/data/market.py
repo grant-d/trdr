@@ -1,6 +1,6 @@
 """Market data fetching and caching via Alpaca API."""
 
-import json
+import csv
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -249,26 +249,34 @@ class MarketDataClient:
     def _cache_path(self, symbol: Symbol, timeframe: TimeFrame) -> Path:
         """Get cache file path for symbol and timeframe."""
         tf_str = str(timeframe.value).lower()
-        return self.cache_dir / f"{symbol.cache_key}:{tf_str}.jsonl"
+        return self.cache_dir / f"{symbol.cache_key}:{tf_str}.csv"
 
     def _load_cache(self, cache_file: Path) -> list[Bar]:
-        """Load bars from JSONL cache file (one bar per line)."""
+        """Load bars from CSV cache file."""
         if not cache_file.exists():
             return []
 
         bars = []
         try:
             with open(cache_file) as f:
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        bars.append(Bar.from_dict(json.loads(line)))
+                reader = csv.DictReader(f)
+                for row in reader:
+                    bars.append(Bar(
+                        timestamp=row["timestamp"],
+                        open=float(row["open"]),
+                        high=float(row["high"]),
+                        low=float(row["low"]),
+                        close=float(row["close"]),
+                        volume=int(row["volume"]),
+                    ))
             return bars
-        except (json.JSONDecodeError, KeyError):
+        except (KeyError, ValueError):
             return []
 
     def _save_cache(self, cache_file: Path, bars: list[Bar]) -> None:
-        """Save bars to JSONL cache file (one bar per line)."""
-        with open(cache_file, "w") as f:
+        """Save bars to CSV cache file."""
+        with open(cache_file, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["timestamp", "open", "high", "low", "close", "volume"])
             for bar in bars:
-                f.write(json.dumps(bar.to_dict()) + "\n")
+                writer.writerow([bar.timestamp, bar.open, bar.high, bar.low, bar.close, bar.volume])

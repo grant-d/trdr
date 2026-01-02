@@ -6,7 +6,7 @@ from typing import Callable
 
 import numpy as np
 
-from ..data import Bar, Position, Signal, SignalAction, generate_signal
+from ..data import Bar, Position, Signal, SignalAction, calculate_atr, generate_signal
 
 
 @dataclass(frozen=True)
@@ -17,17 +17,21 @@ class BacktestConfig:
         symbol: Asset symbol (e.g., "crypto:BTC/USD", "AAPL")
         warmup_bars: Bars to skip before generating signals (default 65 = 50 VP + 15 ATR)
         transaction_cost_pct: Cost per trade as decimal (0.0025 = 0.25%)
+        slippage_atr: Slippage as fraction of ATR (0.01 = 1% of ATR per fill)
         position_size: Fixed position size per trade
         atr_threshold: ATR threshold for signal generation
         stop_loss_multiplier: Stop loss ATR multiplier
+        initial_capital: Starting capital for equity curve (default 10000)
     """
 
     symbol: str
     warmup_bars: int = 65
     transaction_cost_pct: float = 0.0
+    slippage_atr: float = 0.0
     position_size: float = 1.0
     atr_threshold: float = 2.0
     stop_loss_multiplier: float = 1.75
+    initial_capital: float = 10000.0
 
     @classmethod
     def for_crypto(
@@ -144,12 +148,12 @@ class BacktestResult:
 
     @property
     def profit_factor(self) -> float:
-        """Gross profits / gross losses. >1 is profitable."""
-        gross_profits = sum(t.gross_pnl for t in self.trades if t.gross_pnl > 0)
-        gross_losses = abs(sum(t.gross_pnl for t in self.trades if t.gross_pnl < 0))
-        if gross_losses == 0:
-            return float("inf") if gross_profits > 0 else 0.0
-        return gross_profits / gross_losses
+        """Net profits / net losses. >1 is profitable."""
+        net_profits = sum(t.net_pnl for t in self.trades if t.net_pnl > 0)
+        net_losses = abs(sum(t.net_pnl for t in self.trades if t.net_pnl < 0))
+        if net_losses == 0:
+            return float("inf") if net_profits > 0 else 0.0
+        return net_profits / net_losses
 
     @property
     def avg_trade_duration_hours(self) -> float:
@@ -175,7 +179,11 @@ class BacktestResult:
 
     @property
     def max_drawdown(self) -> float:
-        """Maximum drawdown as decimal."""
+        """Maximum drawdown as decimal, capped at 1.0 (100%).
+
+        Computed relative to running peak equity. If equity goes negative,
+        drawdown caps at 100% (total loss of capital).
+        """
         if not self.equity_curve:
             return 0.0
         peak = self.equity_curve[0]
@@ -183,9 +191,26 @@ class BacktestResult:
         for equity in self.equity_curve:
             if equity > peak:
                 peak = equity
-            dd = (peak - equity) / peak if peak > 0 else 0.0
-            max_dd = max(max_dd, dd)
+            dd = (peak - equity) / peak if peak > 0 else 1.0
+            max_dd = max(max_dd, min(dd, 1.0))  # Cap at 100%
         return max_dd
+
+    @property
+    def max_drawdown_abs(self) -> float:
+        """Maximum drawdown in absolute dollars.
+
+        This metric remains meaningful even when equity goes negative.
+        """
+        if not self.equity_curve:
+            return 0.0
+        peak = self.equity_curve[0]
+        max_dd_abs = 0.0
+        for equity in self.equity_curve:
+            if equity > peak:
+                peak = equity
+            dd_abs = peak - equity
+            max_dd_abs = max(max_dd_abs, dd_abs)
+        return max_dd_abs
 
     @property
     def sharpe_ratio(self) -> float | None:
@@ -222,6 +247,7 @@ class BacktestResult:
                 "position_size": self.config.position_size,
                 "atr_threshold": self.config.atr_threshold,
                 "stop_loss_multiplier": self.config.stop_loss_multiplier,
+                "initial_capital": self.config.initial_capital,
             },
             "period": {
                 "start": self.start_time,
@@ -241,6 +267,7 @@ class BacktestResult:
                 "avg_trade_duration_hours": round(self.avg_trade_duration_hours, 2),
                 "max_consecutive_losses": self.max_consecutive_losses,
                 "max_drawdown": round(self.max_drawdown, 4),
+                "max_drawdown_abs": round(self.max_drawdown_abs, 2),
                 "sharpe_ratio": round(self.sharpe_ratio, 4) if self.sharpe_ratio else None,
                 "sortino_ratio": round(self.sortino_ratio, 4) if self.sortino_ratio else None,
             },
@@ -312,7 +339,7 @@ class BacktestEngine:
         pending_entry_cost: float = 0.0
         pending_buy: Signal | None = None
         pending_close: Signal | None = None
-        equity = 0.0
+        equity = self.config.initial_capital
         equity_curve: list[float] = []
 
         # Start after warmup period.
@@ -322,9 +349,12 @@ class BacktestEngine:
         for i in range(self.config.warmup_bars, len(bars)):
             current_bar = bars[i]
 
+            # Calculate current ATR for slippage (using visible bars only)
+            current_atr = calculate_atr(bars[: i + 1]) if self.config.slippage_atr > 0 else 0.0
+
             # Execute pending orders at current bar open (queued on prior bar close)
             if pending_buy and not position:
-                entry_price = current_bar.open
+                entry_price = self._apply_slippage(current_bar.open, current_atr, is_buy=True)
                 entry_cost = self._calc_cost(entry_price, self.config.position_size)
 
                 position = Position(
@@ -341,7 +371,7 @@ class BacktestEngine:
                 pending_buy = None
 
             elif pending_close and position:
-                exit_price = current_bar.open
+                exit_price = self._apply_slippage(current_bar.open, current_atr, is_buy=False)
                 exit_cost = self._calc_cost(exit_price, position.size)
                 total_cost = pending_entry_cost + exit_cost
 
@@ -398,7 +428,8 @@ class BacktestEngine:
         # Signals are not generated on the final bar, so this does not create same-bar signal fills.
         if position:
             final_bar = bars[-1]
-            exit_price = final_bar.close
+            final_atr = calculate_atr(bars) if self.config.slippage_atr > 0 else 0.0
+            exit_price = self._apply_slippage(final_bar.close, final_atr, is_buy=False)
             exit_cost = self._calc_cost(exit_price, position.size)
             total_cost = pending_entry_cost + exit_cost
 
@@ -441,3 +472,15 @@ class BacktestEngine:
         """Calculate transaction cost for a trade side."""
         notional = price * size
         return notional * self.config.transaction_cost_pct
+
+    def _apply_slippage(self, price: float, atr: float, is_buy: bool) -> float:
+        """Apply slippage to fill price.
+
+        Slippage works against the trader:
+        - Buy: pay more (price + slippage)
+        - Sell: receive less (price - slippage)
+        """
+        slippage = atr * self.config.slippage_atr
+        if is_buy:
+            return price + slippage
+        return price - slippage

@@ -70,7 +70,7 @@ def main():
         parts.append("")
 
     if context_files:
-        parts.append("Re-read these files for context:")
+        parts.append("IMPORTANT: Use the Read tool to re-read these files NOW:")
         for f in context_files:
             parts.append(f"- {f}")
         parts.append("")
@@ -79,8 +79,19 @@ def main():
     parts.append(f"Current state: Iteration {iteration}/{max_iterations}, Score {score_str}/{target_score}")
     parts.append(f"Benchmark: {benchmark_cmd}")
     parts.append("")
-    parts.append("Continue working on the task. After making changes, attempt to complete.")
-    parts.append(f"When tests pass, output: <promise>{completion_promise}</promise>")
+    parts.append("## CRITICAL - EXIT AFTER EVERY CHANGE")
+    parts.append("After your code change, IMMEDIATELY attempt to end/complete the conversation.")
+    parts.append("DO NOT make multiple changes. DO NOT keep working. DO NOT ask questions.")
+    parts.append("Change → Exit → Hook runs benchmark → You get results → Repeat.")
+    parts.append("If you don't exit, the benchmark NEVER runs and iteration NEVER advances.")
+    parts.append("")
+    parts.append("## OTHER RULES")
+    parts.append("- Concise TI (telegraph imperative) language. Save tokens.")
+    parts.append("- DO NOT run tests manually. Hook runs benchmark on exit.")
+    parts.append("- DO NOT modify test files. Only modify source code.")
+    parts.append(f"- MUST read {state.get('run_dir', '.sica')}/journal.md FIRST - contains previous attempts.")
+    parts.append("- MUST update journal.md with your approach before making changes.")
+    parts.append(f"When done: <promise>{completion_promise}</promise>")
 
     additional_context = "\n".join(parts)
 

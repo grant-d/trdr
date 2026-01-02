@@ -41,6 +41,18 @@ def save_state(state: dict) -> None:
     state_file.write_text(json.dumps(state, indent=2))
 
 
+def _archive_state(state: dict) -> None:
+    """Move state file to run archive for post-mortem review."""
+    state_file = Path(".sica/current_run.json")
+    if state_file.exists() and state.get("run_dir"):
+        run_dir = Path(state["run_dir"])
+        run_dir.mkdir(parents=True, exist_ok=True)
+        final_state = run_dir / "final_state.json"
+        state_file.rename(final_state)
+    else:
+        state_file.unlink(missing_ok=True)
+
+
 def run_benchmark(command: str, timeout: int = 300) -> dict:
     """Run the benchmark command and parse results.
 
@@ -283,17 +295,24 @@ Exit code: {benchmark_result['exit_code']}
 {failures}
 
 ## Your Task
-Analyze the failures above and make targeted improvements to fix them.
+Analyze failures. Make ONE targeted fix.
 
-Focus on:
-1. Read the failing test output carefully
-2. Identify the root cause
-3. Make minimal, focused changes to fix the issue
-4. Do NOT make unrelated changes
+## CRITICAL - EXIT AFTER EVERY CHANGE
 
-## CRITICAL: After making changes, IMMEDIATELY attempt to complete.
-Do NOT wait for user input. Do NOT ask questions.
-Just make fixes, then end the conversation. The hook will run the benchmark.
+After your code change, IMMEDIATELY attempt to end/complete the conversation.
+DO NOT make multiple changes. DO NOT keep working. DO NOT ask questions.
+
+Change → Exit → Hook runs benchmark → You get results → Repeat.
+
+If you don't exit, the benchmark NEVER runs and iteration NEVER advances.
+
+## OTHER RULES
+- MUST use concise TI (telegraph imperative) language. Save tokens.
+- DO NOT run tests manually. Hook runs benchmark on exit.
+- DO NOT modify test files. Only modify source code.
+- MUST maintain journal.md in {state['run_dir']}:
+  - Read FIRST before making changes
+  - Log each approach (1-2 lines): what you tried, result
 
 When you believe tests will pass, output:
 <promise>{state['completion_promise']}</promise>
@@ -326,10 +345,10 @@ def main():
     # max_iterations: 0 = benchmark only, 1+ = improvement attempts after initial
     max_iter = max(0, state["max_iterations"])
 
-    # Check max iterations
-    if state["iteration"] > max_iter:
+    # Check max iterations (iteration is 0-indexed, so >= means we've done max_iter attempts)
+    if state["iteration"] >= max_iter:
         log(f"SICA: Max iterations ({max_iter}) reached.")
-        Path(".sica/current_run.json").unlink(missing_ok=True)
+        _archive_state(state)
         sys.exit(0)
 
     # Check transcript for promise or cancel signal
@@ -351,7 +370,7 @@ def main():
     # Handle cancel signal
     if cancel_detected:
         log("SICA: Cancel signal detected. Stopping loop.")
-        Path(".sica/current_run.json").unlink(missing_ok=True)
+        _archive_state(state)
         sys.exit(0)
 
     # ALWAYS run benchmark first (to verify promise and archive results)
@@ -371,7 +390,7 @@ def main():
     # Check if target reached
     if benchmark_result["score"] >= state["target_score"]:
         log(f"SICA: Target score ({state['target_score']}) reached!")
-        Path(".sica/current_run.json").unlink(missing_ok=True)
+        _archive_state(state)
         sys.exit(0)
 
     # Promise detected but tests still failing

@@ -20,18 +20,19 @@ SICA implements an iterative improvement loop:
 ## Usage
 
 ```bash
-/sica-loop "pytest -v" --max-iterations 20 --target-score 1.0
+/sica-loop "pytest -v" -n 20 -s 1.0
 ```
 
 ### Arguments
 
 - `benchmark_cmd`: Command to run for evaluation (required)
-- `--prompt, -m`: Task description (preserved after compaction)
+- `--prompt, -p`: Task description (preserved after compaction)
 - `--file, -f`: File to re-read after compaction (repeatable)
 - `--max-iterations, -n`: Improvement attempts (default: 20, 0 = benchmark only)
-- `--target-score, -t`: Target score 0.0-1.0 (default: 1.0)
-- `--completion-promise, -p`: Promise phrase (default: "TESTS PASSING")
-- `--timeout, -T`: Benchmark timeout in seconds (default: 300)
+- `--target-score, -s`: Target score 0.0-1.0 (default: 1.0)
+- `--exit-signal, -x`: Phrase to signal completion (default: "TESTS PASSING")
+- `--timeout, -t`: Benchmark timeout in seconds (default: 300)
+- `--journal, -j`: Adopt journal from previous run (path or 'latest')
 
 ### Examples
 
@@ -40,13 +41,16 @@ SICA implements an iterative improvement loop:
 /sica-loop "pytest -v"
 
 # With task and context file (preserved after compaction)
-/sica-loop "pytest -v" -m "Fix auth bug" -f docs/auth-spec.md
+/sica-loop "pytest -v" -p "Fix auth bug" -f docs/auth-spec.md
 
 # Target 80% passing with max 10 iterations
-/sica-loop "pytest tests/test_api.py -v" --max-iterations 10 --target-score 0.8
+/sica-loop "pytest tests/test_api.py -v" -n 10 -s 0.8
 
 # Use yarn for JS projects
-/sica-loop "yarn test" --completion-promise "ALL SPECS GREEN"
+/sica-loop "yarn test" -x "ALL SPECS GREEN"
+
+# Import learnings from previous session
+/sica-loop "pytest -v" -j latest
 ```
 
 ### Checking Status
@@ -56,6 +60,14 @@ SICA implements an iterative improvement loop:
 ```
 
 Shows current iteration, score, run ID, and settings.
+
+### Continuing a Completed Run
+
+```bash
+/sica-continue 10    # Add 10 more iterations
+/sica-continue       # Add 10 (default)
+/sica-continue --force  # Override active run
+```
 
 ### Stopping the Loop
 
@@ -75,6 +87,8 @@ Results are saved in `.sica/` (gitignored):
 .sica/
 ├── current_run.json          # Active loop state
 └── run_YYYYMMDD_HHMMSS/
+    ├── journal.md            # Claude's log of approaches tried
+    ├── final_state.json      # State at completion (for /sica-continue)
     └── iteration_N/
         ├── benchmark.json    # Test results, score, timing
         ├── stdout.txt        # Benchmark output
@@ -110,17 +124,19 @@ For other frameworks, SICA falls back to exit code (0 = pass, non-zero = fail).
 ```bash
 plugins/sica/
 ├── .claude-plugin/
-│   └── plugin.json           # Plugin metadata
+│   └── plugin.json             # Plugin metadata
 ├── commands/
-│   ├── sica-loop.md          # /sica-loop command
-│   ├── sica-status.md        # /sica-status command
-│   └── sica-clear.md         # /sica-clear command
+│   ├── sica-loop.md            # /sica-loop command
+│   ├── sica-status.md          # /sica-status command
+│   ├── sica-clear.md           # /sica-clear command
+│   └── sica-continue.md        # /sica-continue command
 ├── hooks/
-│   ├── hooks.json            # Hook configuration
-│   ├── stop-hook.py          # Main loop logic
-│   └── session-start-hook.py # Compaction recovery
+│   ├── hooks.json              # Hook configuration
+│   ├── stop-hook.py            # Main loop logic
+│   └── session-start-hook.py   # Compaction recovery
 ├── scripts/
-│   └── setup-sica-loop.py    # Loop initialization
+│   ├── setup-sica-loop.py      # Loop initialization
+│   └── continue-sica-loop.py   # Continue completed run
 └── README.md
 ```
 

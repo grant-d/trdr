@@ -170,6 +170,7 @@ class WalkForwardResult:
                             round(result.sharpe_ratio, 4) if result.sharpe_ratio else None
                         ),
                         "max_drawdown": round(result.max_drawdown, 4),
+                        "max_drawdown_abs": round(result.max_drawdown_abs, 2),
                     },
                 }
                 for fold_info, result in zip(self.fold_info, self.folds)

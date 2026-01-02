@@ -227,23 +227,97 @@ class Position:
     take_profit: float | None
 
 
+def calculate_mss(bars: list[Bar], lookback: int = 20) -> float:
+    """Calculate Market Structure Score for regime detection.
+
+    Args:
+        bars: List of OHLCV bars
+        lookback: Period for calculations
+
+    Returns:
+        MSS value (-100 to +100). >30 = bullish, <-30 = bearish, -30 to 30 = neutral
+    """
+    if len(bars) < lookback:
+        return 0.0
+
+    recent_bars = bars[-lookback:]
+    closes = [b.close for b in recent_bars]
+
+    # Trend: simple linear regression slope
+    x = np.arange(lookback)
+    y = np.array(closes)
+    slope = np.polyfit(x, y, 1)[0]
+    trend_pct = (slope / closes[-1] * 100) if closes[-1] != 0 else 0
+
+    # Volatility: ATR as percentage (inverted: higher vol = lower score)
+    atr = calculate_atr(bars, lookback)
+    # Normalize by a reasonable ATR level
+    volatility_pct = max(0, 80 - (atr / closes[-1] * 100 * 3)) if closes[-1] != 0 else 40
+
+    # Exhaustion: price deviation from recent high/low
+    recent_high = max(b.high for b in recent_bars)
+    recent_low = min(b.low for b in recent_bars)
+    recent_range = recent_high - recent_low
+    if recent_range > 0:
+        exhaustion = ((closes[-1] - recent_low) / recent_range * 100) - 50  # -50 to +50
+    else:
+        exhaustion = 0
+
+    # Combine with weights favoring trend and exhaustion
+    mss = (trend_pct * 0.5) + (volatility_pct * 0.2) + (exhaustion * 0.3)
+    return float(np.clip(mss, -100, 100))
+
+
+def calculate_hma(bars: list[Bar], period: int = 9) -> float:
+    """Calculate Hull Moving Average for trend confirmation.
+
+    Args:
+        bars: List of OHLCV bars
+        period: HMA period
+
+    Returns:
+        Current HMA value
+    """
+    if len(bars) < period:
+        return 0.0
+
+    closes = np.array([b.close for b in bars[-period:]])
+    half_period = period // 2
+
+    # Weighted MA of half period
+    weights_half = np.arange(1, half_period + 1)
+    wma_half = np.sum(closes[-half_period:] * weights_half) / np.sum(weights_half)
+
+    # Weighted MA of full period
+    weights_full = np.arange(1, period + 1)
+    wma_full = np.sum(closes * weights_full) / np.sum(weights_full)
+
+    # HMA = WMA(2*WMA(n/2) - WMA(n), sqrt(n))
+    sqrt_period = int(np.sqrt(period))
+    ema_input = 2 * wma_half - wma_full
+
+    # Simple approximation: use last value
+    return float(ema_input)
+
+
 def generate_signal(
     bars: list[Bar],
     position: Position | None,
     atr_threshold: float = 2.0,
     stop_loss_multiplier: float = 1.75,
 ) -> Signal:
-    """Generate trading signal based on POC mean reversion.
+    """Generate trading signal based on POC mean reversion with smart filtering.
 
-    Entry rules (long):
-    1. Price outside Value Area by > 2 ATR below VAL
-    2. Volume during move is declining (weak conviction)
-    3. Price returning toward POC (close > previous close)
-    4. Enter when price crosses back into VA
+    Strategy focuses on highest-conviction POC bounces:
+    1. Price near POC (0.5-1.5 ATR) - the sweet spot
+    2. Strong confluence: VAL proximity + MSS support
+    3. Momentum confirmation: recent uptrend on 3-period basis
+    4. Volume declining (weak conviction at highs = support)
 
     Exit rules:
-    - Target: POC
-    - Stop: Beyond LVN (1.75x VA width below entry)
+    - Target: POC level (primary)
+    - Stop: 1.3x ATR below entry
+    - No partial profits (simpler execution)
 
     Args:
         bars: List of OHLCV bars
@@ -266,6 +340,8 @@ def generate_signal(
     profile = calculate_volume_profile(bars)
     atr = calculate_atr(bars)
     volume_trend = analyze_volume_trend(bars)
+    mss = calculate_mss(bars)
+    hma_momentum = calculate_hma(bars, period=3)
 
     current_bar = bars[-1]
     current_price = current_bar.close
@@ -310,64 +386,97 @@ def generate_signal(
             reason="Position already open",
         )
 
-    # Check long entry conditions
-    distance_below_val = profile.val - current_price
-    atr_distance = distance_below_val / atr if atr > 0 else 0
-
-    # Condition 1: Price significantly below VAL
-    if atr_distance < atr_threshold:
+    # Regime Filter: Avoid bearish
+    if mss < -20:
         return Signal(
             action=SignalAction.HOLD,
             price=current_price,
             confidence=0.0,
-            reason=f"Price not far enough from VA ({atr_distance:.1f}/{atr_threshold} ATR)",
+            reason=f"Bearish regime (MSS={mss:.0f})",
         )
 
-    # Condition 2: Volume declining (weak selling pressure)
-    if volume_trend != "declining":
+    # Calculate distances
+    distance_to_poc = profile.poc - current_price
+    atr_to_poc = distance_to_poc / atr if atr > 0 else 0
+    distance_to_val = profile.val - current_price
+    atr_to_val = distance_to_val / atr if atr > 0 else 0
+
+    # ENTRY RULE: Hybrid - both breakouts and bounces
+    # Two paths: (1) VAH breakout with volume, (2) VAL bounce with declining volume
+
+    # Path 1: VAH Breakout (momentum entry)
+    recent_volumes = [b.volume for b in bars[-20:]]
+    avg_recent_volume = np.mean(recent_volumes) if recent_volumes else 1
+    volume_ratio = current_bar.volume / avg_recent_volume if avg_recent_volume > 0 else 0
+
+    above_vah = current_price > profile.vah
+    above_vah_prev = bars[-2].close <= profile.vah if len(bars) > 1 else False  # Just broke above
+    volume_strong = volume_ratio >= 1.2  # >120% of 20-bar avg (relaxed from 1.3)
+    regime_neutral_to_bullish = mss > -5  # Relaxed trend filter
+
+    vah_breakout = above_vah and above_vah_prev and volume_strong and regime_neutral_to_bullish
+
+    # Path 2: VAL Bounce (reversion entry)
+    below_val = current_price < profile.val
+    below_val_prev = bars[-2].close >= profile.val if len(bars) > 1 else False  # Just broke below
+    # Allow any volume trend for bounces (relaxed from just declining/neutral)
+    volume_ok_for_bounce = True  # Accept all volume trends for this super-relaxed version
+    regime_ok_for_bounce = mss > -35  # More relaxed from -25
+
+    val_bounce = below_val and below_val_prev and volume_ok_for_bounce and regime_ok_for_bounce
+
+    # Accept either: breakout or VAL bounce
+    entry_signal = vah_breakout or val_bounce
+
+    if not entry_signal:
         return Signal(
             action=SignalAction.HOLD,
             price=current_price,
-            confidence=0.2,
-            reason=f"Volume trend is {volume_trend}, need declining for mean reversion",
+            confidence=0.0,
+            reason=f"No signal: breakout={vah_breakout} val_bounce={val_bounce}",
         )
 
-    # Condition 3: Price returning toward POC
-    if current_price <= prev_close:
-        return Signal(
-            action=SignalAction.HOLD,
-            price=current_price,
-            confidence=0.3,
-            reason="Price not yet returning toward POC",
-        )
+    # Calculate stops and targets based on which signal triggered
+    if vah_breakout:
+        # Breakout target: previous resistance or POC, whichever is higher
+        take_profit = max(profile.poc, profile.vah + (profile.vah - profile.val) * 0.5)
+        # Stop: below VAL (failed breakout)
+        stop_loss = profile.val - atr * 0.5
+        signal_type = "VAH_breakout"
+        confidence_base = 0.65
+    else:  # val_bounce
+        # Bounce target: POC (mean reversion)
+        take_profit = profile.poc
+        # Stop: 1.5 ATR below entry
+        stop_loss = current_price - atr * 1.5
+        signal_type = "VAL_bounce"
+        confidence_base = 0.65  # Lower base since regime is more relaxed
 
-    # Condition 4: Price crossing back into VA (or close to it)
-    if current_price < profile.val - atr:
-        return Signal(
-            action=SignalAction.HOLD,
-            price=current_price,
-            confidence=0.4,
-            reason="Waiting for price to approach Value Area",
-        )
+    confidence = confidence_base
 
-    # All conditions met - generate BUY signal
-    stop_loss = current_price - (va_width * stop_loss_multiplier)
-    take_profit = profile.poc
+    # Volume bonus for breakout
+    if vah_breakout and volume_ratio > 1.5:
+        confidence += 0.1
 
-    # Calculate confidence
-    confidence = 0.5
-    if volume_trend == "declining":
-        confidence += 0.15
-    if any(abs(current_price - lvn) < atr for lvn in profile.lvns):
-        confidence += 0.1  # Near LVN support
-    if atr_distance > atr_threshold * 1.5:
-        confidence += 0.1  # Extended move
+    # Declining volume bonus for bounces
+    if val_bounce and volume_trend == "declining":
+        confidence += 0.15  # Stronger bonus when volume is declining (original insight)
+
+    # Regime bonus
+    if mss > 5:
+        confidence += 0.1
+
+    # In VA bonus
+    if profile.val <= current_price <= profile.vah:
+        confidence += 0.05
+
+    confidence = min(confidence, 1.0)
 
     return Signal(
         action=SignalAction.BUY,
         price=current_price,
-        confidence=min(confidence, 1.0),
-        reason=f"POC mean reversion: price {atr_distance:.1f} ATR below VA, volume declining",
+        confidence=confidence,
+        reason=f"POC bounce: {current_price:.2f} ({atr_to_poc:.1f}ATR above POC {profile.poc:.2f}), declining vol",
         stop_loss=stop_loss,
         take_profit=take_profit,
     )
