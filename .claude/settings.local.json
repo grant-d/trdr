@@ -37,7 +37,8 @@
       "Bash(npx markdownlint:*)",
       "Bash(git cherry-pick:*)",
       "mcp__ide__getDiagnostics",
-      "Bash(git remote get-url:*)"
+      "Bash(git remote get-url:*)",
+      "Bash(git stash pop:*)"
     ],
     "deny": []
   }
