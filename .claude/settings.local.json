@@ -38,7 +38,9 @@
       "Bash(git cherry-pick:*)",
       "mcp__ide__getDiagnostics",
       "Bash(git remote get-url:*)",
-      "Bash(git stash pop:*)"
+      "Bash(git stash pop:*)",
+      "WebFetch(domain:claude.ai)",
+      "WebFetch(domain:arxiv.org)"
     ],
     "deny": []
   }
