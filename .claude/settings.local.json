@@ -43,7 +43,13 @@
       "WebFetch(domain:arxiv.org)",
       "Bash(ruff check:*)",
       "Bash(black:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(.venv/bin/ruff check:*)",
+      "Bash(./backtest.sh:*)",
+      "Bash(LOOKBACK=2000 ./backtest.sh:*)",
+      "Bash(LOOKBACK=2000 FOLDS=3 ./backtest.sh:*)",
+      "Bash(# Cleaner test - check stderr for actual errors rm /Users/grantdickinson/repos/trdr/data/cache/*.jsonl echo \"\"=== First run ===\"\" LOOKBACK=100 ./backtest.sh 2>&1)",
+      "Bash(LOOKBACK=100 ./backtest.sh:*)"
     ],
     "deny": []
   }

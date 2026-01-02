@@ -107,7 +107,9 @@ class RunArchive:
         Returns:
             Run ID
         """
-        run_id = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{symbol}"
+        # Sanitize symbol for filesystem safety (e.g., "crypto:BTC/USD" -> "crypto:btc_usd")
+        safe_symbol = symbol.replace("/", "_").lower()
+        run_id = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{safe_symbol}"
 
         self._current_run = RunRecord(
             run_id=run_id,

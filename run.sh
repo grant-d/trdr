@@ -3,6 +3,15 @@ set -e
 
 cd "$(dirname "$0")"
 
+# Show help
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+    echo "Usage: ./run.sh"
+    echo ""
+    echo "Runs the trading bot TUI with live/paper trading."
+    echo "Configure via .env file (see .env.example)."
+    exit 0
+fi
+
 # Create venv if missing
 if [ ! -d ".venv" ]; then
     echo "Creating virtual environment..."

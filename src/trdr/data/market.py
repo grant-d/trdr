@@ -2,7 +2,7 @@
 
 import json
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from alpaca.data.historical import CryptoHistoricalDataClient, StockHistoricalDataClient
@@ -81,8 +81,9 @@ class Symbol:
 
     @property
     def cache_key(self) -> str:
-        """Safe string for cache filenames."""
-        return self.raw.replace("/", "_")
+        """Safe string for cache filenames. Format: type:symbol (lowercase)."""
+        safe_raw = self.raw.replace("/", "_").lower()
+        return f"{self.asset_type}:{safe_raw}"
 
     def __str__(self) -> str:
         """Return full symbol string."""
@@ -126,6 +127,9 @@ class MarketDataClient:
     ) -> list[Bar]:
         """Fetch historical bars with caching.
 
+        Appends new bars to existing cache rather than replacing.
+        Only fetches bars newer than the last cached bar.
+
         Args:
             symbol: Symbol (e.g., "AAPL" for stocks, "BTC/USD" for crypto)
             lookback: Number of bars to fetch
@@ -146,49 +150,69 @@ class MarketDataClient:
             if datetime.now(last_bar_time.tzinfo) - last_bar_time < timedelta(hours=1):
                 return cached_bars[-lookback:]
 
-        # Fetch from Alpaca
-        end = datetime.now()
-        start = end - timedelta(days=lookback // 6 + 5)
-
-        if sym.is_crypto:
-            request = CryptoBarsRequest(
-                symbol_or_symbols=sym.raw,
-                timeframe=timeframe,
-                start=start,
-                end=end,
-                limit=lookback,
+        # Determine fetch start: overlap last 10 bars for restatement, or lookback days ago
+        end = datetime.now(timezone.utc)
+        restatement_overlap = 10
+        if cached_bars and len(cached_bars) > restatement_overlap:
+            # Fetch starting from 10 bars back to handle restatements
+            overlap_ts = datetime.fromisoformat(
+                cached_bars[-restatement_overlap].timestamp.replace("Z", "+00:00")
             )
-            bars_data = self._crypto_client.get_crypto_bars(request)
+            start = overlap_ts
+            # Keep only bars before the overlap period
+            cached_bars = cached_bars[:-restatement_overlap]
+        elif cached_bars:
+            # Few cached bars - refetch all
+            start = end - timedelta(days=lookback // 6 + 5)
+            cached_bars = []
         else:
-            request = StockBarsRequest(
-                symbol_or_symbols=sym.raw,
-                timeframe=timeframe,
-                start=start,
-                end=end,
-                limit=lookback,
-            )
-            bars_data = self._stock_client.get_stock_bars(request)
+            # No cache - fetch based on lookback
+            start = end - timedelta(days=lookback // 6 + 5)
 
-        bars = []
-        # Access via .data dict - BarSet's __contains__ doesn't work correctly
-        bars_dict = bars_data.data if hasattr(bars_data, "data") else bars_data
-        if sym.raw in bars_dict:
-            for bar in bars_dict[sym.raw]:
-                bars.append(
-                    Bar(
-                        timestamp=bar.timestamp.isoformat(),
-                        open=float(bar.open),
-                        high=float(bar.high),
-                        low=float(bar.low),
-                        close=float(bar.close),
-                        volume=int(bar.volume),
-                    )
+        # Only fetch if start is before end
+        new_bars = []
+        if start < end:
+            if sym.is_crypto:
+                request = CryptoBarsRequest(
+                    symbol_or_symbols=sym.raw,
+                    timeframe=timeframe,
+                    start=start,
+                    end=end,
                 )
+                bars_data = self._crypto_client.get_crypto_bars(request)
+            else:
+                request = StockBarsRequest(
+                    symbol_or_symbols=sym.raw,
+                    timeframe=timeframe,
+                    start=start,
+                    end=end,
+                )
+                bars_data = self._stock_client.get_stock_bars(request)
 
-        # Save to cache
-        self._save_cache(cache_file, bars)
+            # Access via .data dict - BarSet's __contains__ doesn't work correctly
+            bars_dict = bars_data.data if hasattr(bars_data, "data") else bars_data
+            if sym.raw in bars_dict:
+                for bar in bars_dict[sym.raw]:
+                    new_bars.append(
+                        Bar(
+                            timestamp=bar.timestamp.isoformat(),
+                            open=float(bar.open),
+                            high=float(bar.high),
+                            low=float(bar.low),
+                            close=float(bar.close),
+                            volume=int(bar.volume),
+                        )
+                    )
 
-        return bars[-lookback:] if len(bars) > lookback else bars
+        # Merge: existing cache + new bars
+        # TODO: detect gaps in cache and fill them (currently only last 10 bars are restated)
+        if new_bars:
+            all_bars = cached_bars + new_bars
+            self._save_cache(cache_file, all_bars)
+        else:
+            all_bars = cached_bars
+
+        return all_bars[-lookback:] if len(all_bars) > lookback else all_bars
 
     async def get_current_price(self, symbol: str) -> Quote:
         """Get current price quote.
@@ -208,8 +232,10 @@ class MarketDataClient:
             request = StockLatestQuoteRequest(symbol_or_symbols=sym.raw)
             quotes = self._stock_client.get_stock_latest_quote(request)
 
-        if sym.raw in quotes:
-            quote = quotes[sym.raw]
+        # SDK returns object with .data dict, but may vary by version
+        quotes_data = quotes.data if hasattr(quotes, "data") else quotes
+        if sym.raw in quotes_data:
+            quote = quotes_data[sym.raw]
             return Quote(
                 symbol=str(sym),
                 price=(float(quote.bid_price) + float(quote.ask_price)) / 2,
@@ -222,21 +248,27 @@ class MarketDataClient:
 
     def _cache_path(self, symbol: Symbol, timeframe: TimeFrame) -> Path:
         """Get cache file path for symbol and timeframe."""
-        return self.cache_dir / f"{symbol.cache_key}_{timeframe.value}.json"
+        tf_str = str(timeframe.value).lower()
+        return self.cache_dir / f"{symbol.cache_key}:{tf_str}.jsonl"
 
     def _load_cache(self, cache_file: Path) -> list[Bar]:
-        """Load bars from cache file."""
+        """Load bars from JSONL cache file (one bar per line)."""
         if not cache_file.exists():
             return []
 
+        bars = []
         try:
             with open(cache_file) as f:
-                data = json.load(f)
-            return [Bar.from_dict(b) for b in data]
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        bars.append(Bar.from_dict(json.loads(line)))
+            return bars
         except (json.JSONDecodeError, KeyError):
             return []
 
     def _save_cache(self, cache_file: Path, bars: list[Bar]) -> None:
-        """Save bars to cache file."""
+        """Save bars to JSONL cache file (one bar per line)."""
         with open(cache_file, "w") as f:
-            json.dump([b.to_dict() for b in bars], f)
+            for bar in bars:
+                f.write(json.dumps(bar.to_dict()) + "\n")

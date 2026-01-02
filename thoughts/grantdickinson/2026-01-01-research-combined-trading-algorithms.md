@@ -1359,6 +1359,93 @@ Exploit term structure systematically:
 - If in contango → short spread
 - Overlay with options (sell OTM calls into backwardation spikes)
 
+### 7. Adaptive Trailing Grid Bot
+
+**Source:** grant-d proprietary research
+
+**Problem with Standard Grids:** Traditional grid bots use fixed sell levels, exiting positions early and missing large directional moves. A grid might capture $100 in small oscillations but miss a $1000 trend continuation.
+
+**Solution:** Replace fixed exit levels with trailing stops that follow favorable price movement.
+
+**Core Mechanics:**
+
+```text
+# Sell side (long position exit)
+Instead of: Sell at grid_level + fixed_profit
+Use: Trailing stop below price, follows price up
+
+# Buy side (entry/accumulation)
+Instead of: Buy at grid_level
+Use: Trailing stop above price, follows price down until triggered
+```
+
+**The Gap Calibration Problem:**
+
+Setting the trailing gap is the critical challenge:
+
+- **Too tight:** Noise triggers premature exits, losing the trend capture benefit
+- **Too loose:** Gives back too much profit before exit triggers
+
+**Adaptive Gap Algorithm:**
+
+```text
+gap = base_gap × lifecycle_mult × volatility_mult × regime_mult
+
+Where:
+  base_gap      = ATR(14) × 1.5  # Starting point
+  lifecycle_mult = f(bars_in_trade)  # Tighten as trade matures
+  volatility_mult = realized_vol / avg_vol  # Widen in high vol
+  regime_mult   = 0.8 (trending) | 1.2 (ranging)  # Adapt to market state
+```
+
+**Lifecycle Adjustment:**
+
+```text
+Early trade (0-20%):   gap × 1.3  # Wide, let it breathe
+Mid trade (20-60%):    gap × 1.0  # Normal
+Late trade (60-90%):   gap × 0.8  # Tighten to lock profit
+Extended (90%+):       gap × 0.6  # Aggressive protection
+```
+
+**Volatility Adjustment:**
+
+```text
+vol_ratio = ATR(5) / ATR(50)  # Short vs long-term volatility
+
+If vol_ratio > 1.5:  # Volatility expanding
+  gap × 1.3  # Widen to avoid noise stops
+If vol_ratio < 0.7:  # Volatility contracting
+  gap × 0.8  # Tighten, market is calm
+```
+
+**Regime Adjustment:**
+
+```text
+If MSS indicates strong trend:
+  gap × 0.9  # Tighter - capture the move
+  trail_activation_delay = 3 bars  # Let momentum develop
+
+If ranging/neutral:
+  gap × 1.2  # Wider - expect reversions
+  trail_activation_delay = 1 bar  # Quick activation
+```
+
+**Benefits vs Standard Grid:**
+
+| Metric | Standard Grid | Trailing Grid |
+| --- | --- | --- |
+| Small oscillations | Captures well | Captures similarly |
+| Trending moves | Exits early | Rides the trend |
+| Drawdown | Fixed (predictable) | Variable (adaptive) |
+| Complexity | Low | Medium |
+
+**Implementation Notes:**
+
+- Trail activation can be delayed until minimum profit reached
+- Multiple trailing levels possible (partial exits at different gaps)
+- Combine with volume confirmation for trail trigger
+- Works on any asset class with sufficient liquidity
+
 ---
 
 ## LLM Integration (Non-Sentiment)

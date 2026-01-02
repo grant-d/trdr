@@ -43,15 +43,18 @@ class TradingBot:
         self.symbol = Symbol.parse(config.strategy.symbol)
 
         # Components
-        self.market = MarketDataClient(config.alpaca, Path("data/cache"))
+        self.market = MarketDataClient(config.alpaca, config.cache_dir)
         self.executor = OrderExecutor(config.alpaca)
-        self.archive = RunArchive(Path("data/runs"))
+        self.archive = RunArchive(config.runs_dir)
 
         # State
         self._running = False
         self._paused = False
         self._position: Position | None = None
         self._pending_order_id: str | None = None
+        self._pending_order_side: str | None = None
+        self._pending_exit_reason: str | None = None
+        self._pending_exit_price: float | None = None
         self._total_pnl = 0.0
         self._daily_pnl = 0.0
         self._trades_today = 0
@@ -216,6 +219,7 @@ class TradingBot:
             )
 
             self._pending_order_id = order.id
+            self._pending_order_side = "buy"
             self._log(f"BUY order submitted: {qty} @ ~${signal.price:.2f}", "info")
 
             # Store planned position
@@ -256,30 +260,10 @@ class TradingBot:
             order = await self.executor.close_position(self.symbol.raw)
             if order:
                 self._pending_order_id = order.id
+                self._pending_order_side = "sell"
+                self._pending_exit_reason = signal.reason
+                self._pending_exit_price = signal.price
                 self._log(f"SELL order submitted @ ~${signal.price:.2f}", "info")
-
-                # Calculate P&L
-                pnl = (signal.price - self._position.entry_price) * self._position.size
-
-                # Archive trade
-                self.archive.record_trade(
-                    action="sell",
-                    symbol=self.symbol.raw,
-                    price=signal.price,
-                    qty=self._position.size,
-                    reason=signal.reason,
-                    pnl=pnl,
-                )
-
-                # Update stats
-                self._total_pnl += pnl
-                self._daily_pnl += pnl
-                self._trades_today += 1
-                if pnl > 0:
-                    self._wins_today += 1
-
-                self._position = None
-                self._update_performance_display()
 
         except Exception as e:
             self._log(f"Close failed: {e}", "error")
@@ -293,20 +277,56 @@ class TradingBot:
             order = await self.executor.get_order(self._pending_order_id)
 
             if order.status == OrderStatus.FILLED:
+                filled_price = order.filled_price
                 self._log(
-                    f"Order filled: {order.filled_qty} @ ${order.filled_price:.2f}",
+                    f"Order filled: {order.filled_qty} @ ${filled_price:.2f}"
+                    if filled_price is not None
+                    else f"Order filled: {order.filled_qty}",
                     "success",
                 )
 
                 # Update position with actual fill price
                 if self._position and order.side == "buy":
-                    self._position.entry_price = order.filled_price or self._position.entry_price
+                    if filled_price is not None:
+                        self._position.entry_price = filled_price
+
+                # P&L and position clearing deferred until sell is confirmed filled.
+                # This prevents booking incorrect P&L if the close order is rejected.
+                if self._position and order.side == "sell":
+                    exit_price = filled_price or self._pending_exit_price or self._position.entry_price
+                    pnl = (exit_price - self._position.entry_price) * self._position.size
+
+                    self.archive.record_trade(
+                        action="sell",
+                        symbol=self.symbol.raw,
+                        price=exit_price,
+                        qty=self._position.size,
+                        reason=self._pending_exit_reason or "order_filled",
+                        pnl=pnl,
+                    )
+
+                    self._total_pnl += pnl
+                    self._daily_pnl += pnl
+                    self._trades_today += 1
+                    if pnl > 0:
+                        self._wins_today += 1
+
+                    self._position = None
+                    self._update_performance_display()
 
                 self._pending_order_id = None
+                self._pending_order_side = None
+                self._pending_exit_reason = None
+                self._pending_exit_price = None
 
             elif order.status in (OrderStatus.CANCELLED, OrderStatus.REJECTED):
                 self._log(f"Order {order.status.value}", "warning")
                 self._pending_order_id = None
+                self._pending_order_side = None
+                self._pending_exit_reason = None
+                self._pending_exit_price = None
+                # Only clear position for failed buys. For failed sells, keep position
+                # intact so we can retry the exit - position is still live on exchange.
                 if order.side == "buy":
                     self._position = None
 
