@@ -51,7 +51,10 @@
       "Bash(# Cleaner test - check stderr for actual errors rm /Users/grantdickinson/repos/trdr/data/cache/*.jsonl echo \"\"=== First run ===\"\" LOOKBACK=100 ./backtest.sh 2>&1)",
       "Bash(LOOKBACK=100 ./backtest.sh:*)",
       "Bash(python3:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(fi)",
+      "Bash(done)",
+      "Bash(exit 0)"
     ],
     "deny": []
   }
