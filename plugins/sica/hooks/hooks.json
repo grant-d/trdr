@@ -1,0 +1,13 @@
+{
+  "Stop": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/stop-hook.py",
+          "timeout": 120
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+---
+description: "Start SICA self-improving coding loop"
+argument-hint: "BENCHMARK_CMD [--max-iterations N] [--target-score 0.0-1.0]"
+model: haiku
+---
+
+# SICA Loop Command
+
+Run the setup script to initialize the SICA loop:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/setup-sica-loop.py" $ARGUMENTS
+```
+
+After setup completes, work on your task. When you try to exit, SICA will:
+
+1. Run the benchmark command
+2. Analyze failures
+3. Archive results
+4. Continue with an improvement-focused prompt if tests fail
+
+CRITICAL: Only output the completion promise when the benchmark actually passes.

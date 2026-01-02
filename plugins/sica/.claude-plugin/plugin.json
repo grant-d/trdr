@@ -1,0 +1,12 @@
+{
+  "name": "sica",
+  "version": "1.0.0",
+  "description": "Self-Improving Coding Agent loops. Iteratively improves code by running benchmarks, analyzing failures, and making targeted fixes until tests pass.",
+  "author": {
+    "name": "Grant Dickinson"
+  },
+  "license": "MIT",
+  "keywords": ["testing", "tdd", "iteration", "self-improving", "benchmark"],
+  "commands": "./commands",
+  "hooks": "./hooks/hooks.json"
+}

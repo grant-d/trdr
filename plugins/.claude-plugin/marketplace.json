@@ -1,0 +1,14 @@
+{
+  "name": "jigx-plugins",
+  "description": "A collection of Claude Code plugins",
+  "owner": {
+    "name": "Grant Dickinson"
+  },
+  "plugins": [
+    {
+      "name": "sica",
+      "source": "./sica",
+      "description": "Self-Improving Coding Agent loops. Iteratively improves code by running benchmarks, analyzing failures, and making targeted fixes until tests pass."
+    }
+  ]
+}
