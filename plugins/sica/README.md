@@ -26,16 +26,21 @@ SICA implements an iterative improvement loop:
 ### Arguments
 
 - `benchmark_cmd`: Command to run for evaluation (required)
-- `--max-iterations, -n`: Improvement attempts after initial benchmark (default: 20, 0 = benchmark only)
-- `--target-score, -t`: Target score 0.0-1.0 (default: 1.0 = all tests pass)
-- `--completion-promise, -p`: Promise phrase to signal completion (default: "TESTS PASSING")
-- `--benchmark-timeout`: Timeout for benchmark in seconds (default: 300)
+- `--prompt, -m`: Task description (preserved after compaction)
+- `--file, -f`: File to re-read after compaction (repeatable)
+- `--max-iterations, -n`: Improvement attempts (default: 20, 0 = benchmark only)
+- `--target-score, -t`: Target score 0.0-1.0 (default: 1.0)
+- `--completion-promise, -p`: Promise phrase (default: "TESTS PASSING")
+- `--timeout, -T`: Benchmark timeout in seconds (default: 300)
 
 ### Examples
 
 ```bash
 # Run pytest with verbose output
 /sica-loop "pytest -v"
+
+# With task and context file (preserved after compaction)
+/sica-loop "pytest -v" -m "Fix auth bug" -f docs/auth-spec.md
 
 # Target 80% passing with max 10 iterations
 /sica-loop "pytest tests/test_api.py -v" --max-iterations 10 --target-score 0.8
@@ -112,7 +117,8 @@ plugins/sica/
 │   └── sica-clear.md         # /sica-clear command
 ├── hooks/
 │   ├── hooks.json            # Hook configuration
-│   └── stop-hook.py          # Main loop logic
+│   ├── stop-hook.py          # Main loop logic
+│   └── session-start-hook.py # Compaction recovery
 ├── scripts/
 │   └── setup-sica-loop.py    # Loop initialization
 └── README.md

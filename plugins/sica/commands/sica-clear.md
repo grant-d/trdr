@@ -1,5 +1,6 @@
 ---
 description: "Clear SICA state and stop loop"
+model: haiku
 ---
 
 # Clear SICA State

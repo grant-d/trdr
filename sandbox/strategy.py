@@ -28,9 +28,10 @@ def compute_signal(prices: np.ndarray, idx: int) -> float:
     # Key insight: this data is mean-reverting (negative autocorrelation)
     # Strategy: fade large moves, follow the trend reversal
 
-    # Last two returns - key for sizing
+    # Last three returns - key for confirmation
     last_return = returns[-1]
     prev_return = returns[-2] if len(returns) >= 2 else 0
+    prev2_return = returns[-3] if len(returns) >= 3 else 0
 
     # Recent volatility
     volatility = np.std(returns)
@@ -39,30 +40,46 @@ def compute_signal(prices: np.ndarray, idx: int) -> float:
     # Cumulative recent returns
     cum_recent = returns[-5:].sum()
 
-    # Mean-reversion strategy optimized for all metrics
-    signal = 0.0
+    # Confirmation-based signals for higher profit factor
     abs_ret = abs(last_return)
+    signal = 0.0
 
-    # Fade moves proportionally to size
-    if abs_ret > 0.004:
-        # Non-linear scaling gives bigger positions on bigger moves
+    # Check for directional disagreement (reversal setup)
+    has_reversal_setup = False
+    if abs_ret > 0.0035 and abs(prev_return) > 0.0003:
+        # Reversals happen when consecutive bars oppose direction
+        if np.sign(last_return) != np.sign(prev_return):
+            has_reversal_setup = True
+
+    # Trade only on confirmed reversals with size
+    if abs_ret > 0.004 and has_reversal_setup:
+        # Confirmed reversal with decent move size
         normalized = abs_ret / 0.018
         intensity = min(1.0, normalized ** 1.25)
-        signal = -np.sign(last_return) * max(0.32, intensity)
+        signal = -np.sign(last_return) * max(0.37, intensity)
 
-    # Multi-day momentum fade
-    elif abs(cum_recent) > 0.028:
-        normalized = abs(cum_recent) / 0.045
+    # Also trade extreme accumulation (standalone signal)
+    elif abs(cum_recent) > 0.030:
+        normalized = abs(cum_recent) / 0.048
         intensity = min(0.92, normalized ** 1.2)
-        signal = -np.sign(cum_recent) * max(0.35, intensity)
+        signal = -np.sign(cum_recent) * max(0.37, intensity)
 
-    # Risk management: adjust position size based on volatility
-    if recent_vol > 0.04:
+    # Adaptive position sizing: avoid small losing trades
+    # Only trade aggressively in moderate vol environments
+    if recent_vol < 0.006:
+        # Ultra-low vol = low conviction reversals
+        signal *= 0.15
+    elif recent_vol < 0.010:
+        # Still low vol, reduce exposure
+        signal *= 0.40
+    elif recent_vol < 0.018:
+        # Goldilocks zone - good risk/reward
+        signal *= 1.0
+    elif recent_vol > 0.04:
+        # High vol - preserve capital
         signal *= 0.5
     elif recent_vol > 0.035:
         signal *= 0.7
-    elif recent_vol < 0.005:
-        signal *= 0.35
     elif volatility > 0.04:
         signal *= 0.75
 

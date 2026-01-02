@@ -52,15 +52,29 @@ Examples:
         help="Promise phrase to signal completion (default: 'TESTS PASSING')",
     )
     parser.add_argument(
-        "--benchmark-timeout",
+        "--timeout", "-T",
         type=int,
         default=300,
-        help="Timeout for benchmark command in seconds (default: 300)",
+        dest="benchmark_timeout",
+        help="Timeout for benchmark in seconds (default: 300)",
     )
     parser.add_argument(
         "--help-full", "-H",
         action="store_true",
         help="Show detailed help",
+    )
+    parser.add_argument(
+        "--prompt", "-m",
+        type=str,
+        default="",
+        help="Task description (preserved after compaction)",
+    )
+    parser.add_argument(
+        "--file", "-f",
+        action="append",
+        dest="context_files",
+        default=[],
+        help="File to re-read after compaction (repeatable)",
     )
 
     args = parser.parse_args()
@@ -110,6 +124,21 @@ Tips:
         print("Usage: /sica-loop 'pytest -v' --max-iterations 20", file=sys.stderr)
         sys.exit(1)
 
+    # Prompt for missing optional args (only if interactive)
+    if sys.stdin.isatty():
+        if not args.prompt:
+            resp = input("Task description (enter to skip): ").strip()
+            if resp:
+                args.prompt = resp
+
+        if not args.context_files:
+            print("Context files (enter to skip, blank line to finish):")
+            while True:
+                resp = input("  file: ").strip()
+                if not resp:
+                    break
+                args.context_files.append(resp)
+
     # Create run directory
     sica_dir = Path(".sica")
     sica_dir.mkdir(exist_ok=True)
@@ -124,9 +153,6 @@ Tips:
     run_dir = sica_dir / f"run_{run_id}"
     run_dir.mkdir(parents=True)
 
-    # Collect remaining args as the original prompt (if any come after --)
-    original_prompt = ""
-
     # Create state
     state = {
         "run_id": run_id,
@@ -139,7 +165,8 @@ Tips:
         "iteration": 0,
         "last_score": None,
         "started_at": datetime.now(timezone.utc).isoformat(),
-        "original_prompt": original_prompt,
+        "original_prompt": args.prompt,
+        "context_files": args.context_files,
     }
 
     # Save state
@@ -173,7 +200,7 @@ Just make changes, then signal completion. The hook handles the rest.
 When you believe tests will pass, output:
 <promise>{args.completion_promise}</promise>
 
-To cancel: /cancel-sica
+To cancel: /sica-clear
 
 Now provide your task. After you make changes, immediately attempt to end the conversation.
 """)

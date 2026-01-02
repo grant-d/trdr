@@ -7,6 +7,5 @@
   },
   "license": "MIT",
   "keywords": ["testing", "tdd", "iteration", "self-improving", "benchmark"],
-  "commands": "./commands",
-  "hooks": "./hooks/hooks.json"
+  "commands": "./commands"
 }

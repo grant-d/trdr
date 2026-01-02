@@ -1,6 +1,6 @@
 ---
 description: "Start SICA self-improving coding loop"
-argument-hint: "BENCHMARK_CMD [--max-iterations N] [--target-score 0.0-1.0]"
+argument-hint: "BENCHMARK_CMD [-m \"task\"] [-f FILE] [-n N] [-t SCORE]"
 model: haiku
 ---
 

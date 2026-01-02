@@ -1,13 +1,26 @@
 {
-  "Stop": [
-    {
-      "hooks": [
-        {
-          "type": "command",
-          "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/stop-hook.py",
-          "timeout": 120
-        }
-      ]
-    }
-  ]
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/stop-hook.py",
+            "timeout": 120
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session-start-hook.py",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
 }

@@ -368,18 +368,14 @@ def main():
     # Archive results
     archive_iteration(state, benchmark_result, transcript_path)
 
-    # Check if target reached OR valid promise (promise + passing tests)
+    # Check if target reached
     if benchmark_result["score"] >= state["target_score"]:
         log(f"SICA: Target score ({state['target_score']}) reached!")
         Path(".sica/current_run.json").unlink(missing_ok=True)
         sys.exit(0)
 
-    if promise_detected and benchmark_result["score"] >= state["target_score"]:
-        log(f"SICA: Promise verified - tests pass!")
-        Path(".sica/current_run.json").unlink(missing_ok=True)
-        sys.exit(0)
-
-    if promise_detected and benchmark_result["score"] < state["target_score"]:
+    # Promise detected but tests still failing
+    if promise_detected:
         log(f"SICA: Promise detected but tests still failing! Continuing...")
 
     # Update state for next iteration
