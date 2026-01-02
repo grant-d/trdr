@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from alpaca.data.enums import DataFeed
 from alpaca.data.historical import CryptoHistoricalDataClient, StockHistoricalDataClient
 from alpaca.data.requests import (
     CryptoBarsRequest,
@@ -186,6 +187,7 @@ class MarketDataClient:
                     timeframe=timeframe,
                     start=start,
                     end=end,
+                    feed=DataFeed.IEX,  # Use free IEX feed (no SIP subscription needed)
                 )
                 bars_data = self._stock_client.get_stock_bars(request)
 

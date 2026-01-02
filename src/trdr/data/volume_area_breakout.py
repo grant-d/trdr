@@ -1,4 +1,4 @@
-"""Volume Profile calculation and POC mean reversion strategy."""
+"""Volume Profile calculation and VolumeAreaBreakout strategy."""
 
 from dataclasses import dataclass
 from datetime import datetime
@@ -43,6 +43,7 @@ class Signal:
     stop_loss: float | None = None
     take_profit: float | None = None
     timestamp: str = ""
+    position_size_ratio: float = 1.0  # 0.0-1.0, proportion of max position
 
     def __post_init__(self):
         if not self.timestamp:
@@ -89,7 +90,7 @@ def calculate_volume_profile(
         value_area_pct: Percentage for Value Area (default 70%)
 
     Returns:
-        VolumeProfile with POC, VA, HVNs, LVNs
+        VolumeProfile with PoC, VA, HVNs, LVNs
     """
     if not bars:
         raise ValueError("No bars provided for volume profile calculation")
@@ -123,9 +124,13 @@ def calculate_volume_profile(
         bar_high = bar.high
         bar_volume = bar.volume
 
-        # Find buckets this bar spans
-        start_bucket = max(0, int((bar_low - price_min) / bucket_size))
-        end_bucket = min(num_levels - 1, int((bar_high - price_min) / bucket_size))
+        # Find buckets this bar spans (clamp to valid range)
+        start_bucket = max(0, min(num_levels - 1, int((bar_low - price_min) / bucket_size)))
+        end_bucket = max(0, min(num_levels - 1, int((bar_high - price_min) / bucket_size)))
+
+        # Ensure valid bucket range (handles edge cases like bar_high < bar_low)
+        if end_bucket < start_bucket:
+            start_bucket, end_bucket = end_bucket, start_bucket
 
         # Distribute volume evenly across spanned buckets
         buckets_spanned = end_bucket - start_bucket + 1
@@ -136,11 +141,11 @@ def calculate_volume_profile(
 
     total_volume = sum(volumes)
 
-    # Find POC (bucket with maximum volume)
+    # Find PoC (bucket with maximum volume)
     poc_bucket = int(np.argmax(volumes))
     poc = price_levels[poc_bucket]
 
-    # Calculate Value Area (expand from POC until 70% captured)
+    # Calculate Value Area (expand from PoC until 70% captured)
     va_volume = volumes[poc_bucket]
     va_buckets = {poc_bucket}
     va_target = total_volume * value_area_pct
@@ -479,7 +484,7 @@ def compute_heikin_ashi(bars: list[Bar]) -> list:
 
 
 def calculate_multi_timeframe_poc(bars: list[Bar]) -> tuple[float, float, float]:
-    """Calculate POC at multiple aggregation levels.
+    """Calculate PoC at multiple aggregation levels.
 
     Simulates different timeframes by aggregating bars:
     - TF1: Current bars (native resolution)
@@ -625,22 +630,21 @@ def compute_order_flow_imbalance(bars: list[Bar], lookback: int = 5) -> float:
     return float(ofi)
 
 
-def generate_signal(
+def generate_volume_area_breakout_signal(
     bars: list[Bar],
     position: Position | None,
     atr_threshold: float = 2.0,
     stop_loss_multiplier: float = 1.75,
 ) -> Signal:
-    """Generate trading signal combining VAH breakout and VAL bounce with relaxed filters.
+    """VolumeAreaBreakout strategy signal generator.
 
     Strategy: Two entry paths:
     1. VAH Breakout: Price breaks above VAH with volume (bullish regime)
     2. VAL Bounce: Price bounces from VAL with any regime tolerance
 
     Exit rules:
-    - Target: POC level
-    - Stop: 1.2x ATR for bounce, 0.3x ATR below VAL for breakout
-    - Early market skip: First 1076 bars filtered
+    - Target: PoC level
+    - Stop: 1.2x ATR for bounce, 0.4x ATR below VAL for breakout
 
     Args:
         bars: List of OHLCV bars
@@ -688,13 +692,13 @@ def generate_signal(
                 reason=f"Stop loss hit at {position.stop_loss:.2f}",
             )
 
-        # Check take profit (POC reached)
+        # Check take profit (PoC reached)
         if current_price >= profile.poc:
             return Signal(
                 action=SignalAction.CLOSE,
                 price=current_price,
                 confidence=0.9,
-                reason=f"POC target reached at {profile.poc:.2f}",
+                reason=f"PoC target reached at {profile.poc:.2f}",
             )
 
         # Hold position
@@ -732,7 +736,7 @@ def generate_signal(
     # Calculate historical support strength at VAL level
     hvn_strength = detect_hvn_support_strength(bars, profile.val, lookback=30)
 
-    # Calculate multi-timeframe POC confluence
+    # Calculate multi-timeframe PoC confluence
     poc_tf1, poc_tf2, poc_tf3 = calculate_multi_timeframe_poc(bars)
     # Multi-TF confluence: higher TF POCs cluster together = stronger support
     poc_cluster_width = abs(poc_tf2 - poc_tf3)
@@ -767,14 +771,14 @@ def generate_signal(
 
     # Calculate stops and targets based on which signal triggered
     if vah_breakout:
-        # Breakout target: POC level
+        # Breakout target: PoC level
         take_profit = profile.poc
         # Stop: below VAL with buffer
         stop_loss = profile.val - atr * 0.4
         signal_type = "VAH_breakout"
         confidence_base = 0.65
     else:  # val_bounce
-        # Bounce target: POC (mean reversion)
+        # Bounce target: PoC (mean reversion)
         take_profit = profile.poc
         # Stop: 1.2 ATR below entry
         stop_loss = current_price - atr * 1.2
@@ -805,8 +809,7 @@ def generate_signal(
 
     confidence = min(confidence, 1.0)
 
-    # Filter: Only take trades with minimum confidence to avoid low-probability entries
-    # This helps improve profit factor by being more selective
+    # Standard threshold: balance quality and opportunity
     min_confidence_threshold = 0.75
 
     if confidence < min_confidence_threshold:
@@ -824,4 +827,5 @@ def generate_signal(
         reason=f"Entry: price={current_price:.2f}, target={take_profit:.2f}",
         stop_loss=stop_loss,
         take_profit=take_profit,
+        position_size_ratio=1.0,
     )

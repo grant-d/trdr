@@ -6,7 +6,7 @@ from typing import Callable
 
 import numpy as np
 
-from ..data import Bar, Position, Signal, SignalAction, calculate_atr, generate_signal
+from ..data import Bar, Position, Signal, SignalAction, calculate_atr, generate_volume_area_breakout_signal
 
 
 @dataclass(frozen=True)
@@ -306,10 +306,10 @@ class BacktestEngine:
 
         Args:
             config: Backtest configuration
-            signal_fn: Custom signal function. Defaults to generate_signal from volume_profile.
+            signal_fn: Custom signal function. Defaults to generate_volume_area_breakout_signal.
         """
         self.config = config
-        self.signal_fn = signal_fn or generate_signal
+        self.signal_fn = signal_fn or generate_volume_area_breakout_signal
 
     def run(self, bars: list[Bar]) -> BacktestResult:
         """Run backtest on bar data.

@@ -13,7 +13,7 @@ from .data import (
     SignalAction,
     Symbol,
     calculate_volume_profile,
-    generate_signal,
+    generate_volume_area_breakout_signal,
 )
 from .storage import RunArchive
 from .trading import OrderExecutor, OrderStatus
@@ -193,7 +193,7 @@ class TradingBot:
         if len(bars) < 20:
             return
 
-        signal = generate_signal(
+        signal = generate_volume_area_breakout_signal(
             bars=bars,
             position=self._position,
             atr_threshold=self.config.strategy.atr_threshold,

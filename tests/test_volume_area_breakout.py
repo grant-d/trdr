@@ -1,26 +1,72 @@
-"""Backtest performance tests for Volume Profile strategy.
+"""Backtest tests for VolumeAreaBreakout strategy.
 
-Tests the core generate_signal function from volume_profile.py against
-real market data. SICA iterates on the strategy to improve metrics.
+Strategy: VAH breakout + VAL bounce with POC target.
+Tests generate_volume_area_breakout_signal from volume_area_breakout.py.
 
-Thresholds:
-- Win rate > 45%
-- Profit factor > 1.0
-- Max drawdown < 25%
-- Positive Sortino ratio
-
-Run with: .venv/bin/python -m pytest tests/test_algo_performance.py -v
+Run with:
+  .venv/bin/python -m pytest tests/test_volume_area_breakout.py -v
+  BACKTEST_SYMBOL=stock:AAPL .venv/bin/python -m pytest tests/test_volume_area_breakout.py -v
+  BACKTEST_TIMEFRAME=4h .venv/bin/python -m pytest tests/test_volume_area_breakout.py -v
 """
 
 import asyncio
-from pathlib import Path
 import math
+import os
+import re
+from pathlib import Path
 
 import pytest
+from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
+from dotenv import load_dotenv
 
 from trdr.backtest.engine import BacktestConfig, BacktestEngine, BacktestResult
 from trdr.core import load_config
-from trdr.data import MarketDataClient, generate_signal
+from trdr.data import MarketDataClient, generate_volume_area_breakout_signal
+
+# Load .env for BACKTEST_* vars
+load_dotenv()
+
+
+def get_timeframe() -> TimeFrame:
+    """Get timeframe from env var.
+
+    Supports Alpaca syntax: 1h, 4h, 15m, 1d, etc.
+    Also supports simple names: hour, day, minute (defaults to 1x).
+    Note: Day only supports amount=1 (Alpaca constraint).
+    Default: 1h (hourly).
+    """
+    tf = os.environ.get("BACKTEST_TIMEFRAME", "1h").lower().strip()
+
+    # Map unit suffix to TimeFrameUnit
+    unit_map = {
+        "m": TimeFrameUnit.Minute,
+        "min": TimeFrameUnit.Minute,
+        "minute": TimeFrameUnit.Minute,
+        "h": TimeFrameUnit.Hour,
+        "hour": TimeFrameUnit.Hour,
+        "d": TimeFrameUnit.Day,
+        "day": TimeFrameUnit.Day,
+    }
+
+    # Try parsing "NNx" format (e.g., "4h", "15m", "1d")
+    match = re.match(r"^(\d+)([a-z]+)$", tf)
+    if match:
+        amount = int(match.group(1))
+        unit_str = match.group(2)
+        unit = unit_map.get(unit_str)
+        if unit:
+            # Alpaca constraint: Day only allows amount=1
+            if unit == TimeFrameUnit.Day and amount != 1:
+                amount = 1
+            return TimeFrame(amount, unit)
+
+    # Fallback: simple name (e.g., "hour" -> 1h)
+    unit = unit_map.get(tf)
+    if unit:
+        return TimeFrame(1, unit)
+
+    # Default to 1 hour
+    return TimeFrame.Hour
 
 
 @pytest.fixture(scope="module")
@@ -33,12 +79,14 @@ def event_loop():
 
 @pytest.fixture(scope="module")
 def btc_bars(event_loop):
-    """Fetch BTC/USD bars for backtesting."""
+    """Fetch bars for backtesting."""
+    symbol = os.environ.get("BACKTEST_SYMBOL", "crypto:BTC/USD")
+    timeframe = get_timeframe()
 
     async def fetch():
         config = load_config()
         client = MarketDataClient(config.alpaca, Path("data/cache"))
-        bars = await client.get_bars("crypto:BTC/USD", lookback=3000)
+        bars = await client.get_bars(symbol, lookback=3000, timeframe=timeframe)
         return bars
 
     return event_loop.run_until_complete(fetch())
@@ -46,11 +94,14 @@ def btc_bars(event_loop):
 
 @pytest.fixture(scope="module")
 def backtest_config():
-    """Backtest configuration for crypto."""
+    """Backtest configuration."""
+    symbol = os.environ.get("BACKTEST_SYMBOL", "crypto:BTC/USD")
+    is_crypto = symbol.startswith("crypto:")
     return BacktestConfig(
-        symbol="crypto:BTC/USD",
+        symbol=symbol,
         warmup_bars=65,
         transaction_cost_pct=0.0025,
+        slippage_atr=0.01,  # 1% of ATR per fill
         position_size=0.5,  # 50% per trade with tight stops
         atr_threshold=2.0,
         stop_loss_multiplier=1.75,
@@ -60,7 +111,7 @@ def backtest_config():
 @pytest.fixture(scope="module")
 def backtest_result(btc_bars, backtest_config) -> BacktestResult:
     """Run single backtest with Volume Profile strategy."""
-    engine = BacktestEngine(backtest_config, signal_fn=generate_signal)
+    engine = BacktestEngine(backtest_config, signal_fn=generate_volume_area_breakout_signal)
     result = engine.run(btc_bars)
 
     # Print summary for LLM visibility
@@ -199,7 +250,7 @@ def print_results():
             stop_loss_multiplier=1.75,
         )
 
-        engine = BacktestEngine(bt_config, signal_fn=generate_signal)
+        engine = BacktestEngine(bt_config, signal_fn=generate_volume_area_breakout_signal)
         result = engine.run(bars)
 
         print(f"\n=== Backtest Results ({len(bars)} bars) ===")

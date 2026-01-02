@@ -1,14 +1,14 @@
 """Market data fetching and analysis."""
 
 from .market import Bar, MarketDataClient, Quote, Symbol
-from .volume_profile import (
+from .volume_area_breakout import (
     Position,
     Signal,
     SignalAction,
     VolumeProfile,
     calculate_atr,
     calculate_volume_profile,
-    generate_signal,
+    generate_volume_area_breakout_signal,
 )
 
 __all__ = [
@@ -22,5 +22,5 @@ __all__ = [
     "VolumeProfile",
     "calculate_atr",
     "calculate_volume_profile",
-    "generate_signal",
+    "generate_volume_area_breakout_signal",
 ]
