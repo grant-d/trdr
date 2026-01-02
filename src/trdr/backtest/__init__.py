@@ -1,6 +1,6 @@
 """Backtesting framework for strategy validation."""
 
-from .engine import BacktestConfig, BacktestEngine, BacktestResult, Trade
+from .backtest_engine import BacktestConfig, BacktestEngine, BacktestResult, Trade
 from .walk_forward import (
     Fold,
     WalkForwardConfig,

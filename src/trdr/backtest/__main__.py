@@ -15,7 +15,7 @@ from pathlib import Path
 
 from ..core import load_config
 from ..data import MarketDataClient
-from .engine import BacktestConfig, BacktestEngine
+from .backtest_engine import BacktestConfig, BacktestEngine
 from .walk_forward import WalkForwardConfig, run_walk_forward
 
 

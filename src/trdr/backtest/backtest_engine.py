@@ -2,16 +2,23 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Callable
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-from ..data import Bar, Position, Signal, SignalAction, calculate_atr, generate_volume_area_breakout_signal
+from ..data.market import Bar
+from ..strategy.types import Position, Signal, SignalAction
+from ..strategy.volume_area_breakout.strategy import calculate_atr
+
+if TYPE_CHECKING:
+    from ..strategy import BaseStrategy
 
 
 @dataclass(frozen=True)
 class BacktestConfig:
     """Configuration for backtesting.
+
+    Engine-level config only. Strategy params belong in StrategyConfig.
 
     Args:
         symbol: Asset symbol (e.g., "crypto:BTC/USD", "AAPL")
@@ -19,8 +26,6 @@ class BacktestConfig:
         transaction_cost_pct: Cost per trade as decimal (0.0025 = 0.25%)
         slippage_atr: Slippage as fraction of ATR (0.01 = 1% of ATR per fill)
         position_size: Fixed position size per trade
-        atr_threshold: ATR threshold for signal generation
-        stop_loss_multiplier: Stop loss ATR multiplier
         initial_capital: Starting capital for equity curve (default 10000)
     """
 
@@ -29,8 +34,6 @@ class BacktestConfig:
     transaction_cost_pct: float = 0.0
     slippage_atr: float = 0.0
     position_size: float = 1.0
-    atr_threshold: float = 2.0
-    stop_loss_multiplier: float = 1.75
     initial_capital: float = 10000.0
 
     @classmethod
@@ -245,8 +248,6 @@ class BacktestResult:
                 "warmup_bars": self.config.warmup_bars,
                 "transaction_cost_pct": self.config.transaction_cost_pct,
                 "position_size": self.config.position_size,
-                "atr_threshold": self.config.atr_threshold,
-                "stop_loss_multiplier": self.config.stop_loss_multiplier,
                 "initial_capital": self.config.initial_capital,
             },
             "period": {
@@ -300,16 +301,16 @@ class BacktestEngine:
     def __init__(
         self,
         config: BacktestConfig,
-        signal_fn: Callable[[list[Bar], Position | None, float, float], Signal] | None = None,
+        strategy: "BaseStrategy",
     ):
         """Initialize engine.
 
         Args:
-            config: Backtest configuration
-            signal_fn: Custom signal function. Defaults to generate_volume_area_breakout_signal.
+            config: Backtest configuration (engine params only)
+            strategy: BaseStrategy instance with its own config/params
         """
         self.config = config
-        self.signal_fn = signal_fn or generate_volume_area_breakout_signal
+        self.strategy = strategy
 
     def run(self, bars: list[Bar]) -> BacktestResult:
         """Run backtest on bar data.
@@ -408,12 +409,7 @@ class BacktestEngine:
             # Any open position will be force-closed as mark-to-market below.
             if i < len(bars) - 1:
                 # Get signal from strategy (using current bar close)
-                signal = self.signal_fn(
-                    visible_bars,
-                    position,
-                    self.config.atr_threshold,
-                    self.config.stop_loss_multiplier,
-                )
+                signal = self.strategy.generate_signal(visible_bars, position)
 
                 # Queue signals for next-bar execution
                 if signal.action == SignalAction.BUY and not position and not pending_buy:

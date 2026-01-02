@@ -43,3 +43,8 @@ Enforced by flake8/black. Below require judgment:
 - Group imports: stdlib, third-party, local (separated by blank line)
 - Use pip/poetry for dependencies
 - Run `flake8` and `black` before commit
+
+## Markdown
+
+- Use fenced code blocks with language specified, `text` or `bash` if none
+- Use 'compact' table style: `| H1 | h2 |`, `| --- | --- |`, `| row1 | 123 |`

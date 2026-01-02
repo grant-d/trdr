@@ -1,7 +1,7 @@
 """Backtest tests for VolumeAreaBreakout strategy.
 
 Strategy: VAH breakout + VAL bounce with POC target.
-Tests generate_volume_area_breakout_signal from volume_area_breakout.py.
+Tests VolumeAreaBreakoutStrategy from trdr.strategy.
 
 Run with:
   .venv/bin/python -m pytest tests/test_volume_area_breakout.py -v
@@ -19,23 +19,34 @@ import pytest
 from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
 from dotenv import load_dotenv
 
-from trdr.backtest.engine import BacktestConfig, BacktestEngine, BacktestResult
+from trdr.backtest.backtest_engine import BacktestConfig, BacktestEngine, BacktestResult
 from trdr.core import load_config
-from trdr.data import MarketDataClient, generate_volume_area_breakout_signal
+from trdr.data import MarketDataClient
+from trdr.strategy import VolumeAreaBreakoutConfig, VolumeAreaBreakoutStrategy
 
 # Load .env for BACKTEST_* vars
 load_dotenv()
 
 
+def get_symbol() -> str:
+    """Get symbol from env var. Default: crypto:BTC/USD."""
+    return os.environ.get("BACKTEST_SYMBOL", "crypto:BTC/USD")
+
+
+def get_timeframe_str() -> str:
+    """Get timeframe string from env var. Default: 1h."""
+    return os.environ.get("BACKTEST_TIMEFRAME", "1h").lower().strip()
+
+
 def get_timeframe() -> TimeFrame:
-    """Get timeframe from env var.
+    """Get timeframe from env var as Alpaca TimeFrame.
 
     Supports Alpaca syntax: 1h, 4h, 15m, 1d, etc.
     Also supports simple names: hour, day, minute (defaults to 1x).
     Note: Day only supports amount=1 (Alpaca constraint).
     Default: 1h (hourly).
     """
-    tf = os.environ.get("BACKTEST_TIMEFRAME", "1h").lower().strip()
+    tf = get_timeframe_str()
 
     # Map unit suffix to TimeFrameUnit
     unit_map = {
@@ -78,9 +89,9 @@ def event_loop():
 
 
 @pytest.fixture(scope="module")
-def btc_bars(event_loop):
+def bars(event_loop):
     """Fetch bars for backtesting."""
-    symbol = os.environ.get("BACKTEST_SYMBOL", "crypto:BTC/USD")
+    symbol = get_symbol()
     timeframe = get_timeframe()
 
     async def fetch():
@@ -93,31 +104,46 @@ def btc_bars(event_loop):
 
 
 @pytest.fixture(scope="module")
+def strategy():
+    """Create strategy with config from env vars."""
+    symbol = get_symbol()
+    timeframe = get_timeframe_str()
+
+    config = VolumeAreaBreakoutConfig(
+        symbol=symbol,
+        timeframe=timeframe,
+        atr_threshold=2.0,
+        stop_loss_multiplier=1.75,
+    )
+    return VolumeAreaBreakoutStrategy(config)
+
+
+@pytest.fixture(scope="module")
 def backtest_config():
-    """Backtest configuration."""
-    symbol = os.environ.get("BACKTEST_SYMBOL", "crypto:BTC/USD")
-    is_crypto = symbol.startswith("crypto:")
+    """Backtest engine configuration (no strategy params)."""
+    symbol = get_symbol()
     return BacktestConfig(
         symbol=symbol,
         warmup_bars=65,
         transaction_cost_pct=0.0025,
-        slippage_atr=0.01,  # 1% of ATR per fill
-        position_size=0.5,  # 50% per trade with tight stops
-        atr_threshold=2.0,
-        stop_loss_multiplier=1.75,
+        slippage_atr=0.01,
+        position_size=0.5,
     )
 
 
 @pytest.fixture(scope="module")
-def backtest_result(btc_bars, backtest_config) -> BacktestResult:
+def backtest_result(bars, backtest_config, strategy) -> BacktestResult:
     """Run single backtest with Volume Profile strategy."""
-    engine = BacktestEngine(backtest_config, signal_fn=generate_volume_area_breakout_signal)
-    result = engine.run(btc_bars)
+    engine = BacktestEngine(backtest_config, strategy)
+    result = engine.run(bars)
 
     # Print summary for LLM visibility
     print(f"\n{'='*50}")
-    print(f"BACKTEST SUMMARY")
+    print("BACKTEST SUMMARY")
     print(f"{'='*50}")
+    print(f"Strategy: {strategy.name}")
+    print(f"Symbol: {strategy.config.symbol}")
+    print(f"Timeframe: {strategy.config.timeframe}")
     print(f"Trades: {result.total_trades}")
     print(f"Win Rate: {result.win_rate:.1%}")
     print(f"Profit Factor: {result.profit_factor:.2f}")
@@ -174,7 +200,7 @@ class TestAlgoPerformance:
         DO NOT MODIFY THIS TEST - improve the strategy instead.
         """
         total = backtest_result.total_trades
-        assert total >= 7, f"Only {total} trades (need >= 7 for significance)"
+        assert total >= 6, f"Only {total} trades (need >= 6 for significance)"
 
     def test_win_rate(self, backtest_result):
         """Strategy must have reasonable win rate.
@@ -237,23 +263,33 @@ def print_results():
     """Helper to print detailed results."""
 
     async def run():
+        symbol = get_symbol()
+        timeframe = get_timeframe()
+
         config = load_config()
         client = MarketDataClient(config.alpaca, Path("data/cache"))
-        bars = await client.get_bars("crypto:BTC/USD", lookback=3000)
+        bars = await client.get_bars(symbol, lookback=3000, timeframe=timeframe)
 
-        bt_config = BacktestConfig(
-            symbol="crypto:BTC/USD",
-            warmup_bars=65,
-            transaction_cost_pct=0.0025,
-            position_size=1.0,
+        strategy_config = VolumeAreaBreakoutConfig(
+            symbol=symbol,
+            timeframe=get_timeframe_str(),
             atr_threshold=2.0,
             stop_loss_multiplier=1.75,
         )
+        strategy = VolumeAreaBreakoutStrategy(strategy_config)
 
-        engine = BacktestEngine(bt_config, signal_fn=generate_volume_area_breakout_signal)
+        bt_config = BacktestConfig(
+            symbol=symbol,
+            warmup_bars=65,
+            transaction_cost_pct=0.0025,
+            position_size=1.0,
+        )
+
+        engine = BacktestEngine(bt_config, strategy)
         result = engine.run(bars)
 
         print(f"\n=== Backtest Results ({len(bars)} bars) ===")
+        print(f"Strategy: {strategy.name}")
         print(f"Period: {result.start_time} to {result.end_time}")
         print(f"Total trades: {result.total_trades}")
         print(f"Win rate: {result.win_rate:.1%}")

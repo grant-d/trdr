@@ -1,53 +1,32 @@
-"""Volume Profile calculation and VolumeAreaBreakout strategy."""
+"""VolumeAreaBreakout strategy implementation."""
 
 from dataclasses import dataclass
-from datetime import datetime
-from enum import Enum
 
 import numpy as np
 
-from .market import Bar
-
-
-class SignalAction(Enum):
-    """Trading signal actions."""
-
-    BUY = "buy"
-    SELL = "sell"
-    HOLD = "hold"
-    CLOSE = "close"
+from ...data.market import Bar
+from ..base_strategy import BaseStrategy, StrategyConfig
+from ..types import Position, Signal, SignalAction, VolumeProfile
 
 
 @dataclass
-class VolumeProfile:
-    """Calculated volume profile with key levels."""
+class VolumeAreaBreakoutConfig(StrategyConfig):
+    """Configuration for VolumeAreaBreakout strategy.
 
-    poc: float  # Point of Control (highest volume price)
-    vah: float  # Value Area High
-    val: float  # Value Area Low
-    hvns: list[float]  # High Volume Nodes
-    lvns: list[float]  # Low Volume Nodes
-    price_levels: list[float]  # All price level midpoints
-    volumes: list[float]  # Volume at each level
-    total_volume: float
+    Args:
+        symbol: Trading symbol (e.g., "crypto:BTC/USD", "stock:AAPL")
+        timeframe: Bar timeframe (e.g., "1h", "4h", "1d")
+        atr_threshold: ATR multiplier for entry threshold
+        stop_loss_multiplier: Multiplier for stop loss distance
+    """
+
+    atr_threshold: float = 2.0
+    stop_loss_multiplier: float = 1.75
 
 
-@dataclass
-class Signal:
-    """Trading signal from strategy."""
-
-    action: SignalAction
-    price: float
-    confidence: float  # 0.0 to 1.0
-    reason: str
-    stop_loss: float | None = None
-    take_profit: float | None = None
-    timestamp: str = ""
-    position_size_ratio: float = 1.0  # 0.0-1.0, proportion of max position
-
-    def __post_init__(self):
-        if not self.timestamp:
-            self.timestamp = datetime.now().isoformat()
+# -----------------------------------------------------------------------------
+# Indicator Functions
+# -----------------------------------------------------------------------------
 
 
 def calculate_atr(bars: list[Bar], period: int = 14) -> float:
@@ -218,18 +197,6 @@ def analyze_volume_trend(bars: list[Bar], lookback: int = 5) -> str:
     elif recent_avg < earlier_avg * 0.8:
         return "declining"
     return "neutral"
-
-
-@dataclass
-class Position:
-    """Current position state."""
-
-    symbol: str
-    side: str  # "long" or "short" or "none"
-    size: float
-    entry_price: float
-    stop_loss: float
-    take_profit: float | None
 
 
 def calculate_mss(bars: list[Bar], lookback: int = 20) -> float:
@@ -630,202 +597,221 @@ def compute_order_flow_imbalance(bars: list[Bar], lookback: int = 5) -> float:
     return float(ofi)
 
 
-def generate_volume_area_breakout_signal(
-    bars: list[Bar],
-    position: Position | None,
-    atr_threshold: float = 2.0,
-    stop_loss_multiplier: float = 1.75,
-) -> Signal:
-    """VolumeAreaBreakout strategy signal generator.
+# -----------------------------------------------------------------------------
+# Strategy Class
+# -----------------------------------------------------------------------------
 
-    Strategy: Two entry paths:
+
+class VolumeAreaBreakoutStrategy(BaseStrategy):
+    """VAH breakout + VAL bounce strategy with POC target.
+
+    Entry paths:
     1. VAH Breakout: Price breaks above VAH with volume (bullish regime)
     2. VAL Bounce: Price bounces from VAL with any regime tolerance
 
     Exit rules:
-    - Target: PoC level
+    - Target: POC level
     - Stop: 1.2x ATR for bounce, 0.4x ATR below VAL for breakout
-
-    Args:
-        bars: List of OHLCV bars
-        position: Current position or None
-        atr_threshold: ATR multiplier for entry threshold
-        stop_loss_multiplier: Multiplier for VA width stop
-
-    Returns:
-        Trading signal
     """
-    if len(bars) < 20:
-        return Signal(
-            action=SignalAction.HOLD,
-            price=bars[-1].close if bars else 0,
-            confidence=0.0,
-            reason="Insufficient data for analysis",
-        )
 
-    # Minimal bar requirement - only need basics for volume profile
-    if len(bars) < 50:
-        return Signal(
-            action=SignalAction.HOLD,
-            price=bars[-1].close,
-            confidence=0.0,
-            reason="Insufficient data for analysis",
-        )
+    def __init__(self, config: VolumeAreaBreakoutConfig):
+        """Initialize strategy.
 
-    # Calculate indicators (using original bars for robustness)
-    profile = calculate_volume_profile(bars)
-    atr = calculate_atr(bars)
-    mss = calculate_mss(bars)
+        Args:
+            config: Strategy configuration with symbol and parameters
+        """
+        super().__init__(config)
+        self.config: VolumeAreaBreakoutConfig = config
 
-    current_bar = bars[-1]
-    current_price = current_bar.close
-    prev_close = bars[-2].close if len(bars) > 1 else current_price
+    @property
+    def name(self) -> str:
+        return "VolumeAreaBreakout"
 
-    # Check exit conditions first if we have a position
-    if position and position.side == "long":
-        # Check stop loss
-        if current_price <= position.stop_loss:
+    def generate_signal(
+        self,
+        bars: list[Bar],
+        position: Position | None,
+    ) -> Signal:
+        """Generate trading signal based on Volume Profile analysis.
+
+        Args:
+            bars: Historical bars (oldest first)
+            position: Current position or None
+
+        Returns:
+            Trading signal with action, stops, and targets
+        """
+        if len(bars) < 20:
             return Signal(
-                action=SignalAction.CLOSE,
-                price=current_price,
-                confidence=1.0,
-                reason=f"Stop loss hit at {position.stop_loss:.2f}",
+                action=SignalAction.HOLD,
+                price=bars[-1].close if bars else 0,
+                confidence=0.0,
+                reason="Insufficient data for analysis",
             )
 
-        # Check take profit (PoC reached)
-        if current_price >= profile.poc:
+        # Minimal bar requirement - only need basics for volume profile
+        if len(bars) < 50:
             return Signal(
-                action=SignalAction.CLOSE,
-                price=current_price,
-                confidence=0.9,
-                reason=f"PoC target reached at {profile.poc:.2f}",
+                action=SignalAction.HOLD,
+                price=bars[-1].close,
+                confidence=0.0,
+                reason="Insufficient data for analysis",
             )
 
-        # Hold position
+        # Calculate indicators (using original bars for robustness)
+        profile = calculate_volume_profile(bars)
+        atr = calculate_atr(bars)
+        mss = calculate_mss(bars)
+
+        current_bar = bars[-1]
+        current_price = current_bar.close
+        prev_close = bars[-2].close if len(bars) > 1 else current_price
+
+        # Check exit conditions first if we have a position
+        if position and position.side == "long":
+            # Check stop loss
+            if current_price <= position.stop_loss:
+                return Signal(
+                    action=SignalAction.CLOSE,
+                    price=current_price,
+                    confidence=1.0,
+                    reason=f"Stop loss hit at {position.stop_loss:.2f}",
+                )
+
+            # Check take profit (PoC reached)
+            if current_price >= profile.poc:
+                return Signal(
+                    action=SignalAction.CLOSE,
+                    price=current_price,
+                    confidence=0.9,
+                    reason=f"PoC target reached at {profile.poc:.2f}",
+                )
+
+            # Hold position
+            return Signal(
+                action=SignalAction.HOLD,
+                price=current_price,
+                confidence=0.5,
+                reason="Holding position, awaiting target or stop",
+            )
+
+        # Entry logic (no position)
+        if position and position.side != "none":
+            return Signal(
+                action=SignalAction.HOLD,
+                price=current_price,
+                confidence=0.0,
+                reason="Position already open",
+            )
+
+        # Regime Filter: Allow neutral to bullish
+        if mss < -25:
+            return Signal(
+                action=SignalAction.HOLD,
+                price=current_price,
+                confidence=0.0,
+                reason=f"Bearish regime (MSS={mss:.0f})",
+            )
+
+        # Calculate volume metrics
+        recent_volumes = [b.volume for b in bars[-20:]]
+        avg_recent_volume = np.mean(recent_volumes) if recent_volumes else 1
+        volume_ratio = current_bar.volume / avg_recent_volume if avg_recent_volume > 0 else 0
+        volume_trend = analyze_volume_trend(bars)
+
+        # Calculate historical support strength at VAL level
+        hvn_strength = detect_hvn_support_strength(bars, profile.val, lookback=30)
+
+        # Calculate multi-timeframe PoC confluence
+        poc_tf1, poc_tf2, poc_tf3 = calculate_multi_timeframe_poc(bars)
+        # Multi-TF confluence: higher TF POCs cluster together = stronger support
+        poc_cluster_width = abs(poc_tf2 - poc_tf3)
+        poc_clustered = poc_cluster_width < (atr * 0.5)  # POCs within 0.5 ATR = strong confluence
+
+        # Path 1: VAH Breakout (moderate: requires strong volume AND bullish/neutral regime)
+        above_vah = current_price > profile.vah
+        above_vah_prev = bars[-2].close <= profile.vah if len(bars) > 1 else False
+        volume_strong = volume_ratio >= 1.2  # Relax from 1.3 to 1.2 (120%+ volume)
+        regime_bullish_plus = mss > -5  # Bullish or neutral
+
+        vah_breakout = above_vah and above_vah_prev and volume_strong and regime_bullish_plus
+
+        # Path 2: VAL Bounce (primary entry: price bounces from below VAL)
+        below_val = current_price < profile.val
+        below_val_prev = bars[-2].close >= profile.val if len(bars) > 1 else False
+        # Accept all volume trends for VAL bounce (volume declining is bonus not requirement)
+        regime_ok_val = mss > -35  # Further relaxed to allow weak bearish regime bounces
+
+        val_bounce = below_val and below_val_prev and regime_ok_val
+
+        # Accept VAH breakout OR VAL bounce
+        entry_signal = vah_breakout or val_bounce
+
+        if not entry_signal:
+            return Signal(
+                action=SignalAction.HOLD,
+                price=current_price,
+                confidence=0.0,
+                reason=f"No signal: vah={vah_breakout} val={val_bounce}",
+            )
+
+        # Calculate stops and targets based on which signal triggered
+        if vah_breakout:
+            # Breakout target: PoC level
+            take_profit = profile.poc
+            # Stop: below VAL with buffer
+            stop_loss = profile.val - atr * 0.4
+            signal_type = "VAH_breakout"
+            confidence_base = 0.65
+        else:  # val_bounce
+            # Bounce target: PoC (mean reversion)
+            take_profit = profile.poc
+            # Stop: 1.2 ATR below entry
+            stop_loss = current_price - atr * 1.2
+            signal_type = "VAL_bounce"
+            confidence_base = 0.70
+
+        confidence = confidence_base
+
+        # Volume bonus
+        if vah_breakout and volume_ratio > 1.5:
+            confidence += 0.1
+
+        # Strong declining volume bonus for bounces (critical signal)
+        if val_bounce and volume_trend == "declining":
+            confidence += 0.25  # Very strong bonus - most reliable setup
+
+        # HVN strength bonus for historically validated support on VAL bounces
+        if val_bounce and hvn_strength > 0.70:
+            confidence += 0.12  # Extra confidence on well-tested support levels
+
+        # Regime bonus
+        if mss > 5:
+            confidence += 0.12
+
+        # In VA bonus (better context for entry)
+        if profile.val <= current_price <= profile.vah:
+            confidence += 0.08
+
+        confidence = min(confidence, 1.0)
+
+        # Standard threshold: balance quality and opportunity
+        min_confidence_threshold = 0.75
+
+        if confidence < min_confidence_threshold:
+            return Signal(
+                action=SignalAction.HOLD,
+                price=current_price,
+                confidence=confidence,
+                reason=f"Low confidence {confidence:.2f} < {min_confidence_threshold} threshold",
+            )
+
         return Signal(
-            action=SignalAction.HOLD,
-            price=current_price,
-            confidence=0.5,
-            reason="Holding position, awaiting target or stop",
-        )
-
-    # Entry logic (no position)
-    if position and position.side != "none":
-        return Signal(
-            action=SignalAction.HOLD,
-            price=current_price,
-            confidence=0.0,
-            reason="Position already open",
-        )
-
-    # Regime Filter: Allow neutral to bullish
-    if mss < -25:
-        return Signal(
-            action=SignalAction.HOLD,
-            price=current_price,
-            confidence=0.0,
-            reason=f"Bearish regime (MSS={mss:.0f})",
-        )
-
-    # Calculate volume metrics
-    recent_volumes = [b.volume for b in bars[-20:]]
-    avg_recent_volume = np.mean(recent_volumes) if recent_volumes else 1
-    volume_ratio = current_bar.volume / avg_recent_volume if avg_recent_volume > 0 else 0
-    volume_trend = analyze_volume_trend(bars)
-
-    # Calculate historical support strength at VAL level
-    hvn_strength = detect_hvn_support_strength(bars, profile.val, lookback=30)
-
-    # Calculate multi-timeframe PoC confluence
-    poc_tf1, poc_tf2, poc_tf3 = calculate_multi_timeframe_poc(bars)
-    # Multi-TF confluence: higher TF POCs cluster together = stronger support
-    poc_cluster_width = abs(poc_tf2 - poc_tf3)
-    poc_clustered = poc_cluster_width < (atr * 0.5)  # POCs within 0.5 ATR = strong confluence
-
-    # Path 1: VAH Breakout (moderate: requires strong volume AND bullish/neutral regime)
-    above_vah = current_price > profile.vah
-    above_vah_prev = bars[-2].close <= profile.vah if len(bars) > 1 else False
-    volume_strong = volume_ratio >= 1.2  # Relax from 1.3 to 1.2 (120%+ volume)
-    regime_bullish_plus = mss > -5  # Bullish or neutral
-
-    vah_breakout = above_vah and above_vah_prev and volume_strong and regime_bullish_plus
-
-    # Path 2: VAL Bounce (primary entry: price bounces from below VAL)
-    below_val = current_price < profile.val
-    below_val_prev = bars[-2].close >= profile.val if len(bars) > 1 else False
-    # Accept all volume trends for VAL bounce (volume declining is bonus not requirement)
-    regime_ok_val = mss > -35  # Further relaxed to allow weak bearish regime bounces
-
-    val_bounce = below_val and below_val_prev and regime_ok_val
-
-    # Accept VAH breakout OR VAL bounce
-    entry_signal = vah_breakout or val_bounce
-
-    if not entry_signal:
-        return Signal(
-            action=SignalAction.HOLD,
-            price=current_price,
-            confidence=0.0,
-            reason=f"No signal: vah={vah_breakout} val={val_bounce}",
-        )
-
-    # Calculate stops and targets based on which signal triggered
-    if vah_breakout:
-        # Breakout target: PoC level
-        take_profit = profile.poc
-        # Stop: below VAL with buffer
-        stop_loss = profile.val - atr * 0.4
-        signal_type = "VAH_breakout"
-        confidence_base = 0.65
-    else:  # val_bounce
-        # Bounce target: PoC (mean reversion)
-        take_profit = profile.poc
-        # Stop: 1.2 ATR below entry
-        stop_loss = current_price - atr * 1.2
-        signal_type = "VAL_bounce"
-        confidence_base = 0.70
-
-    confidence = confidence_base
-
-    # Volume bonus
-    if vah_breakout and volume_ratio > 1.5:
-        confidence += 0.1
-
-    # Strong declining volume bonus for bounces (critical signal)
-    if val_bounce and volume_trend == "declining":
-        confidence += 0.25  # Very strong bonus - most reliable setup
-
-    # HVN strength bonus for historically validated support on VAL bounces
-    if val_bounce and hvn_strength > 0.70:
-        confidence += 0.12  # Extra confidence on well-tested support levels
-
-    # Regime bonus
-    if mss > 5:
-        confidence += 0.12
-
-    # In VA bonus (better context for entry)
-    if profile.val <= current_price <= profile.vah:
-        confidence += 0.08
-
-    confidence = min(confidence, 1.0)
-
-    # Standard threshold: balance quality and opportunity
-    min_confidence_threshold = 0.75
-
-    if confidence < min_confidence_threshold:
-        return Signal(
-            action=SignalAction.HOLD,
+            action=SignalAction.BUY,
             price=current_price,
             confidence=confidence,
-            reason=f"Low confidence {confidence:.2f} < {min_confidence_threshold} threshold",
+            reason=f"Entry: price={current_price:.2f}, target={take_profit:.2f}",
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+            position_size_ratio=1.0,
         )
-
-    return Signal(
-        action=SignalAction.BUY,
-        price=current_price,
-        confidence=confidence,
-        reason=f"Entry: price={current_price:.2f}, target={take_profit:.2f}",
-        stop_loss=stop_loss,
-        take_profit=take_profit,
-        position_size_ratio=1.0,
-    )

@@ -2,8 +2,8 @@
 
 from dataclasses import dataclass
 
-from ..data import Bar
-from .engine import BacktestConfig, BacktestEngine, BacktestResult, Trade
+from ..data.market import Bar
+from .backtest_engine import BacktestConfig, BacktestEngine, BacktestResult, Trade
 
 
 @dataclass(frozen=True)

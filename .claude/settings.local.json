@@ -54,7 +54,8 @@
       "WebSearch",
       "Bash(fi)",
       "Bash(done)",
-      "Bash(exit 0)"
+      "Bash(exit 0)",
+      "Skill(feature-dev:feature-dev)"
     ],
     "deny": []
   }

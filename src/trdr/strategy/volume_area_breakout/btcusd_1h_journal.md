@@ -1,6 +1,6 @@
-# Imported from .sica/run_20260102_094119/journal.md
-
 # SICA Loop Journal - Volume Profile Strategy Optimization
+
+Imported from .sica/run_20260102_094119/journal.md
 
 **Test Results**: 6/7 passing
 

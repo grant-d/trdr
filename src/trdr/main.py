@@ -6,16 +6,19 @@ import sys
 from pathlib import Path
 
 from .core import BotConfig, load_config
-from .data import (
-    MarketDataClient,
+from .data import MarketDataClient, Symbol
+from .storage import RunArchive
+from .strategy import (
     Position,
     Signal,
     SignalAction,
-    Symbol,
+    VolumeAreaBreakoutConfig,
+    VolumeAreaBreakoutStrategy,
+)
+from .strategy.volume_area_breakout import (
     calculate_volume_profile,
     generate_volume_area_breakout_signal,
 )
-from .storage import RunArchive
 from .trading import OrderExecutor, OrderStatus
 from .ui import (
     LogMessage,
