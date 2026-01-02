@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 """SICA SessionStart Hook - Re-injects context after compaction.
 
 When session resumes after compaction, this hook:
@@ -12,25 +11,20 @@ import json
 import sys
 from pathlib import Path
 
+# Add lib to path
+sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
+
+from config import SicaState
+from paths import find_active_config, get_state_file
+
 
 def log(msg: str) -> None:
     """Log to stderr (visible to user)."""
     print(msg, file=sys.stderr)
 
 
-def read_state_file() -> dict | None:
-    """Read the SICA state file if it exists."""
-    state_file = Path(".sica/current_run.json")
-    if not state_file.exists():
-        return None
-    try:
-        return json.loads(state_file.read_text())
-    except (json.JSONDecodeError, OSError):
-        return None
-
-
-def main():
-    # Read hook input from stdin
+def main() -> None:
+    # Read hook input
     try:
         hook_input = json.loads(sys.stdin.read())
     except json.JSONDecodeError:
@@ -43,30 +37,27 @@ def main():
     if hook_event != "SessionStart" or source != "compact":
         sys.exit(0)
 
-    # Check if SICA loop is active
-    state = read_state_file()
-    if not state:
+    # Check for active SICA loop
+    config_name = find_active_config()
+    if not config_name:
+        sys.exit(0)
+
+    try:
+        state = SicaState.load(get_state_file(config_name))
+    except (json.JSONDecodeError, OSError, FileNotFoundError, ValueError):
         sys.exit(0)
 
     log("SICA: Resuming after compaction...")
 
     # Build context to re-inject
-    original_prompt = state.get("original_prompt", "")
-    context_files = state.get("context_files") or []
-    if not isinstance(context_files, list):
-        context_files = []
-    iteration = state.get("iteration", 0)
-    max_iterations = state.get("max_iterations", 20)
-    last_score = state.get("last_score")
-    target_score = state.get("target_score", 1.0)
-    benchmark_cmd = state.get("benchmark_cmd", "")
-    completion_promise = state.get("completion_promise", "TESTS PASSING")
+    context_files = state.context_files or []
+    score_str = f"{state.last_score:.2f}" if state.last_score is not None else "N/A"
+    run_dir = state.run_dir
 
-    # Format context
     parts = ["SICA LOOP RESUMED AFTER COMPACTION", ""]
 
-    if original_prompt:
-        parts.append(f"Original task: {original_prompt}")
+    if state.prompt:
+        parts.append(f"Original task: {state.prompt}")
         parts.append("")
 
     if context_files:
@@ -75,21 +66,20 @@ def main():
             parts.append(f"- {f}")
         parts.append("")
 
-    score_str = f"{last_score:.2f}" if last_score is not None else "N/A"
-    run_dir = state.get('run_dir', '.sica')
-    parts.append(f"Iter {iteration}/{max_iterations} | Score {score_str}/{target_score}")
-    parts.append(f"Benchmark: {benchmark_cmd}")
+    parts.append(f"Config: {config_name}")
+    parts.append(f"Iter {state.iteration}/{state.max_iterations} | Score {score_str}/{state.target_score}")
+    parts.append(f"Benchmark: {state.benchmark_cmd}")
     parts.append("")
     parts.append("## CRITICAL - EXIT AFTER EVERY CHANGE")
     parts.append("After your code change, IMMEDIATELY attempt to end/complete.")
-    parts.append("Change → Exit → Hook benchmarks → Repeat.")
+    parts.append("Change -> Exit -> Hook benchmarks -> Repeat.")
     parts.append("")
     parts.append("## RULES")
     parts.append("- ONE fix per iteration, then exit")
     parts.append("- NO manual tests. Hook runs benchmark on exit.")
     parts.append("- NO test file changes. Only modify source code.")
     parts.append(f"- MUST update {run_dir}/journal.md (BEFORE: plan, AFTER: results)")
-    parts.append(f"- Done: <promise>{completion_promise}</promise>")
+    parts.append(f"- Done: <promise>{state.completion_promise}</promise>")
 
     additional_context = "\n".join(parts)
 

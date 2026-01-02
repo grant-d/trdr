@@ -1,253 +1,166 @@
 #!/usr/bin/env python3
 """Setup a new SICA loop.
 
-Creates state file and initial run directory.
+Creates state file and run directory within config folder.
 """
 
 import argparse
-import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Add lib to path
+sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
 
-def main():
+from config import SicaConfig, SicaState
+from paths import (
+    find_active_config,
+    get_config_file,
+    get_run_dir,
+    get_sica_root,
+    get_state_file,
+    list_configs,
+)
+
+
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="SICA Loop - Self-Improving Coding Agent",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  Setup with pytest:
-    /sica-loop "pytest -v" -n 20 -s 1.0
-
-  Setup with specific test file:
-    /sica-loop "pytest tests/test_api.py -v" -n 10
-
-  Setup with yarn tests:
-    /sica-loop "yarn test" -n 15 -x "ALL TESTS PASS"
-        """,
+  /sica:sica-loop btc-1h         # Run with config
+  /sica:sica-loop --list         # List configs
+""",
     )
 
     parser.add_argument(
-        "benchmark_cmd",
+        "config_name",
         nargs="?",
-        help="Command to run for benchmarking (e.g., 'pytest -v')",
+        help="Config name from .sica/configs/<name>/",
     )
     parser.add_argument(
-        "--max-iterations", "-n",
-        type=int,
-        default=20,
-        help="Maximum iterations before stopping (default: 20)",
-    )
-    parser.add_argument(
-        "--target-score", "-s",
-        type=float,
-        default=1.0,
-        help="Target score to achieve (0.0-1.0, default: 1.0 = all tests pass)",
-    )
-    parser.add_argument(
-        "--exit-signal", "-x",
-        type=str,
-        default="TESTS PASSING",
-        dest="completion_promise",
-        help="Phrase to signal completion (default: 'TESTS PASSING')",
-    )
-    parser.add_argument(
-        "--timeout", "-t",
-        type=int,
-        default=300,
-        dest="benchmark_timeout",
-        help="Timeout for benchmark in seconds (default: 300)",
-    )
-    parser.add_argument(
-        "--help-full", "-H",
+        "--list", "-l",
         action="store_true",
-        help="Show detailed help",
+        dest="list_configs",
+        help="List available configs",
     )
     parser.add_argument(
-        "--prompt", "-p",
-        type=str,
-        default="",
-        help="Task description (preserved after compaction)",
-    )
-    parser.add_argument(
-        "--file", "-f",
-        action="append",
-        dest="context_files",
-        default=[],
-        help="File to re-read after compaction (repeatable)",
-    )
-    parser.add_argument(
-        "--journal", "-j",
-        type=str,
-        default="",
-        help="Adopt journal from previous run (path or 'latest')",
+        "--force", "-f",
+        action="store_true",
+        help="Force start even if another config has active state",
     )
 
     args = parser.parse_args()
 
-    if args.help_full:
-        print("""
-SICA Loop - Self-Improving Coding Agent
-========================================
+    # List configs
+    if args.list_configs:
+        configs = list_configs()
+        if configs:
+            print("Available configs:")
+            for name in configs:
+                state_file = get_state_file(name)
+                status = " (active)" if state_file.exists() else ""
+                print(f"  {name}{status}")
+        else:
+            print("No configs found. Create one at .sica/configs/<name>/config.json")
+        return
 
-SICA implements an iterative self-improvement loop:
-
-1. You provide a task and a benchmark command
-2. Claude works on the task
-3. When Claude tries to exit, SICA:
-   - Runs the benchmark command
-   - Archives the results
-   - Analyzes failures
-   - Continues with an improvement-focused prompt
-4. Loop continues until:
-   - Target score is reached
-   - Max iterations reached
-   - Completion promise is output
-
-State is stored in .sica/ directory (gitignored).
-
-Archive Structure:
-  .sica/
-  ├── current_run.json      # Active run state
-  └── run_YYYYMMDD_HHMMSS/
-      └── iteration_N/
-          ├── benchmark.json    # Test results
-          ├── stdout.txt        # Benchmark output
-          ├── stderr.txt        # Benchmark errors
-          ├── changes.diff      # Git diff
-          └── summary.txt       # What Claude did
-
-Tips:
-- Use specific test commands for faster iteration
-- Set realistic max-iterations (20 is usually enough)
-- Target score of 0.8 = 80% tests passing
-- Check .sica/ to see iteration history
-""")
-        sys.exit(0)
-
-    if not args.benchmark_cmd:
-        print("Error: benchmark_cmd is required", file=sys.stderr)
-        print("Usage: /sica-loop 'pytest -v' --max-iterations 20", file=sys.stderr)
+    # Require config name
+    if not args.config_name:
+        print("Error: config_name required", file=sys.stderr)
+        print("Usage: /sica:sica-loop <config_name>", file=sys.stderr)
+        print("       /sica:sica-loop --list", file=sys.stderr)
         sys.exit(1)
 
-    # Prompt for missing optional args (only if interactive)
-    if sys.stdin.isatty():
-        if not args.prompt:
-            resp = input("Task description (enter to skip): ").strip()
-            if resp:
-                args.prompt = resp
+    config_name = args.config_name
 
-        if not args.context_files:
-            print("Context files (enter to skip, blank line to finish):")
-            while True:
-                resp = input("  file: ").strip()
-                if not resp:
-                    break
-                args.context_files.append(resp)
+    # Check for active run in another config
+    active = find_active_config()
+    if active and active != config_name and not args.force:
+        print(f"Error: Active run in '{active}'", file=sys.stderr)
+        print("Use --force to override or /sica:sica-clear to stop it", file=sys.stderr)
+        sys.exit(1)
 
-    # Create run directory
-    sica_dir = Path(".sica")
-    sica_dir.mkdir(exist_ok=True)
+    # Load config
+    config_path = get_config_file(config_name)
+    try:
+        config = SicaConfig.load(config_path)
+    except FileNotFoundError:
+        print(f"Error: Config not found: {config_path}", file=sys.stderr)
+        print(f"Create it or use /sica:sica-loop --list to see available configs", file=sys.stderr)
+        sys.exit(1)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
-    # Add .gitignore if not exists
-    gitignore = sica_dir / ".gitignore"
-    if not gitignore.exists():
-        gitignore.write_text("*\n")
-
-    # Generate run ID
+    # Generate run ID and create run directory
     run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    run_dir = sica_dir / f"run_{run_id}"
-    run_dir.mkdir(parents=True)
+    run_dir = get_run_dir(config_name, run_id)
 
-    # Import journal if specified
-    if args.journal:
-        src = None
-        if args.journal == "latest":
-            runs = sorted(sica_dir.glob("run_*"), reverse=True)
-            for run in runs:
-                if run == run_dir:
-                    continue  # Skip current run
-                j = run / "journal.md"
-                if j.exists():
-                    src = j
-                    break
-            if not src:
-                print("Warning: No previous journal found", file=sys.stderr)
-        else:
-            src = Path(args.journal)
-            if not src.exists():
-                print(f"Warning: Journal not found: {src}", file=sys.stderr)
-                src = None
+    # Ensure .sica/.gitignore exists
+    gitignore = get_sica_root() / ".gitignore"
+    if not gitignore.exists():
+        gitignore.parent.mkdir(parents=True, exist_ok=True)
+        gitignore.write_text("**/runs/\n")
 
-        if src:
-            dest = run_dir / "journal.md"
-            content = f"# Imported from {src}\n\n{src.read_text()}"
-            dest.write_text(content)
-            print(f"Imported journal from: {src}")
+    # Create empty journal
+    journal_path = run_dir / "journal.md"
+    journal_path.parent.mkdir(parents=True, exist_ok=True)
+    journal_path.write_text("# SICA Journal\n\n")
 
     # Create state
-    state = {
-        "run_id": run_id,
-        "run_dir": str(run_dir),
-        "benchmark_cmd": args.benchmark_cmd,
-        "max_iterations": args.max_iterations,
-        "target_score": args.target_score,
-        "completion_promise": args.completion_promise,
-        "benchmark_timeout": args.benchmark_timeout,
-        "iteration": 0,
-        "last_score": None,
-        "started_at": datetime.now(timezone.utc).isoformat(),
-        "original_prompt": args.prompt,
-        "context_files": args.context_files,
-    }
+    state = SicaState.create(config_name, run_id, run_dir, config)
 
     # Save state
-    state_file = sica_dir / "current_run.json"
-    state_file.write_text(json.dumps(state, indent=2))
+    state_path = get_state_file(config_name)
+    state.save(state_path)
 
-    # Output confirmation - includes auto-exit instruction (Ralph pattern)
+    # Show params if any
+    params_info = ""
+    if config.params:
+        params_lines = [f"  {k}: {v}" for k, v in config.params.items()]
+        params_info = "\nParams:\n" + "\n".join(params_lines)
+
+    prompt = config.interpolate_prompt()
+
     print(f"""
 SICA Loop Activated
 ===================
+Config: {config_name}
 Run ID: {run_id}
-Benchmark: {args.benchmark_cmd}
-Max iterations: {args.max_iterations}
-Target score: {args.target_score}
-Completion promise: {args.completion_promise}
+Benchmark: {config.benchmark_cmd}
+Max iterations: {config.max_iterations}
+Target score: {config.target_score}
+Completion promise: {config.completion_promise}{params_info}
 
 ## How SICA Works
 
-After each change you make:
-1. **Attempt to complete** - the Stop hook intercepts and runs the benchmark
+After each change:
+1. **Exit** - hook intercepts and runs benchmark
 2. Results archive to {run_dir}
-3. If tests fail, you get a focused improvement prompt
-4. Loop continues until target score ({args.target_score}) or max iterations ({args.max_iterations})
+3. If tests fail, you get improvement prompt
+4. Loop until target ({config.target_score}) or max ({config.max_iterations})
 
-## CRITICAL - READ CAREFULLY
+## CRITICAL
 
 ### EXIT AFTER EVERY CHANGE
-After EACH code change, you MUST immediately attempt to end/complete the conversation.
-DO NOT make multiple changes. DO NOT keep working. DO NOT ask questions.
-Change → Exit → Hook runs benchmark → You get results → Repeat.
+After EACH code change, immediately attempt to end/complete.
+Change -> Exit -> Hook benchmarks -> Repeat.
 
-If you don't exit, the benchmark NEVER runs and iteration NEVER advances.
-
-### OTHER RULES
-- MUST use concise TI (telegraph imperative) language. Save tokens.
-- DO NOT run tests manually. Hook runs benchmark on exit.
-- DO NOT modify test files. Only modify source code.
+### RULES
+- Concise TI language. Save tokens.
+- NO manual tests. Hook runs benchmark on exit.
+- NO test file changes. Only source code.
 - MUST maintain journal.md in {run_dir}:
-  - Read FIRST before making changes
-  - Log each approach (1-2 lines): what you tried, result
+  - Read FIRST before changes
+  - Log each approach (1-2 lines)
   - Avoid repeating failed approaches
 
-When you believe tests will pass, output:
-<promise>{args.completion_promise}</promise>
+Done: <promise>{config.completion_promise}</promise>
+Stop: Press Esc or run /sica:sica-clear
 
-To cancel: /sica-clear
-
-Now provide your task. After you make changes, immediately attempt to end the conversation.
+{"Task: " + prompt if prompt else "Provide your task."} Then make changes and exit.
 """)
 
 

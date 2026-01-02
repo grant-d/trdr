@@ -1,14 +1,12 @@
 # SICA - Self-Improving Coding Agent
 
-A Claude Code plugin that implements iterative self-improvement loops. Based on the
-[SICA paper](https://arxiv.org/html/2504.15228v2) and inspired by the
-[ralph-wiggum](https://github.com/anthropics/claude-code/tree/HEAD/plugins/ralph-wiggum) plugin.
+A Claude Code plugin that implements iterative self-improvement loops.
 
 ## How It Works
 
 SICA implements an iterative improvement loop:
 
-1. **Setup**: You provide a benchmark command (e.g., `pytest -v`)
+1. **Setup**: Create a config with benchmark command and params
 2. **Work**: Claude works on your task
 3. **Evaluate**: When Claude tries to exit, SICA:
    - Runs the benchmark command
@@ -19,82 +17,93 @@ SICA implements an iterative improvement loop:
 
 ## Usage
 
+### Interactive Setup
+
 ```bash
-/sica-loop "pytest -v" -n 20 -s 1.0
+/sica:sica-init btc-1h    # Prompts for each config property
+```
+
+### Config-Based
+
+Create a config at `.sica/configs/<name>/config.json`:
+
+```json
+{
+  "benchmark_cmd": "SYMBOL={symbol} TIMEFRAME={timeframe} python path/to/sica_bench.py",
+  "max_iterations": 20,
+  "target_score": 1.0,
+  "prompt": "Optimize {symbol} strategy for {timeframe}",
+  "context_files": ["docs/strategy-spec.md", "research/backtest-notes.md"],
+  "params": {
+    "symbol": "BTC/USD",
+    "timeframe": "1h"
+  }
+}
+```
+
+Params use `{key}` syntax. Works as env vars (`VAR={key} cmd`) or args (`--flag={key}`).
+
+**Important**: Use a dedicated `sica_bench.py` script instead of `pytest` for benchmarks.
+The script must force-reload strategy modules to pick up code changes between iterations.
+See `src/trdr/strategy/*/sica_bench.py` for examples.
+
+Then run:
+
+```bash
+/sica:sica-loop btc-1h         # Start loop with config
+/sica:sica-loop --list         # List available configs
 ```
 
 ### Arguments
 
-- `benchmark_cmd`: Command to run for evaluation (required)
-- `--prompt, -p`: Task description (preserved after compaction)
-- `--file, -f`: File to re-read after compaction (repeatable)
-- `--max-iterations, -n`: Improvement attempts (default: 20, 0 = benchmark only)
-- `--target-score, -s`: Target score 0.0-1.0 (default: 1.0)
-- `--exit-signal, -x`: Phrase to signal completion (default: "TESTS PASSING")
-- `--timeout, -t`: Benchmark timeout in seconds (default: 300)
-- `--journal, -j`: Adopt journal from previous run (path or 'latest')
+| Arg | Description |
+| --- | --- |
+| `config_name` | Config folder name (required) |
+| `-f, --force` | Force start if another config is active |
+| `-l, --list` | List available configs |
 
-### Examples
+### Config Fields
+
+| Field | Description | Default |
+| --- | --- | --- |
+| `benchmark_cmd` | Command to run (required) | - |
+| `max_iterations` | Max improvement attempts | 20 |
+| `target_score` | Target score 0.0-1.0 | 1.0 |
+| `completion_promise` | Phrase to signal completion | "TESTS PASSING" |
+| `benchmark_timeout` | Timeout in seconds | 300 |
+| `prompt` | Task description (supports `{param}` interpolation) | "" |
+| `context_files` | Docs to re-read after compaction (specs, research notes) | [] |
+| `params` | Key-value pairs for `{key}` interpolation | {} |
+
+### Commands
 
 ```bash
-# Run pytest with verbose output
-/sica-loop "pytest -v"
-
-# With task and context file (preserved after compaction)
-/sica-loop "pytest -v" -p "Fix auth bug" -f docs/auth-spec.md
-
-# Target 80% passing with max 10 iterations
-/sica-loop "pytest tests/test_api.py -v" -n 10 -s 0.8
-
-# Use yarn for JS projects
-/sica-loop "yarn test" -x "ALL SPECS GREEN"
-
-# Import learnings from previous session
-/sica-loop "pytest -v" -j latest
+/sica:sica-init btc-1h      # Create config interactively
+/sica:sica-loop btc-1h      # Start loop with config
+/sica:sica-status           # Show current iteration, score, settings
+/sica:sica-continue btc-1h  # Add 10 more iterations to completed run
+/sica:sica-clear            # Stop active loop (or press Esc)
 ```
 
-### Checking Status
+## Directory Structure
 
-```bash
-/sica-status
-```
-
-Shows current iteration, score, run ID, and settings.
-
-### Continuing a Completed Run
-
-```bash
-/sica-continue 10    # Add 10 more iterations
-/sica-continue       # Add 10 (default)
-/sica-continue --force  # Override active run
-```
-
-### Stopping the Loop
-
-**From any session:**
-
-```bash
-/sica-clear
-```
-
-**Mid-loop escape:** Output `<sica:cancel>` or `<sica:stop>` anywhere in conversation.
-
-## Archive Structure
-
-Results are saved in `.sica/` (gitignored):
-
-```bash
-.sica/
-├── current_run.json          # Active loop state
-└── run_YYYYMMDD_HHMMSS/
-    ├── journal.md            # Claude's log of approaches tried
-    ├── final_state.json      # State at completion (for /sica-continue)
-    └── iteration_N/
-        ├── benchmark.json    # Test results, score, timing
-        ├── stdout.txt        # Benchmark output
-        ├── stderr.txt        # Benchmark errors
-        ├── changes.diff      # Git diff of changes made
-        └── summary.txt       # What Claude did
+```text
+.sica/                                    # Tracked in git
+├── .gitignore                            # Ignores **/runs/
+└── configs/
+    └── btc-1h/                           # Config folder
+        ├── config.json                   # Config params (tracked)
+        ├── state.json                    # Active state (tracked)
+        └── runs/                         # Archives (ignored)
+            └── run_YYYYMMDD_HHMMSS/
+                ├── journal.md            # Claude's log
+                ├── final_state.json      # State at completion
+                └── iteration_N/
+                    ├── benchmark.json    # Test results, score
+                    ├── stdout.txt
+                    ├── stderr.txt
+                    ├── changes.diff      # Git diff
+                    └── summary.txt
 ```
 
 ## Supported Test Frameworks
@@ -109,36 +118,21 @@ The benchmark parser supports:
 
 For other frameworks, SICA falls back to exit code (0 = pass, non-zero = fail).
 
-## How It Differs from ralph-wiggum
+### Custom Benchmarks
 
-| Feature | ralph-wiggum | SICA |
-| --- | --- | ---- |
-| Loop trigger | Same prompt every time | Dynamic improvement prompt |
-| Evaluation | None (promise-based) | Runs benchmark, parses results |
-| Archive | Single state file | Full iteration history |
-| Focus | General iteration | Test-driven improvement |
-| Score tracking | N/A | Per-iteration scores |
+For custom benchmark scripts (like `sica_bench.py`), MUST output pytest-style summary for proper score tracking:
 
-## Architecture
-
-```bash
-plugins/sica/
-├── .claude-plugin/
-│   └── plugin.json             # Plugin metadata
-├── commands/
-│   ├── sica-loop.md            # /sica-loop command
-│   ├── sica-status.md          # /sica-status command
-│   ├── sica-clear.md           # /sica-clear command
-│   └── sica-continue.md        # /sica-continue command
-├── hooks/
-│   ├── hooks.json              # Hook configuration
-│   ├── stop-hook.py            # Main loop logic
-│   └── session-start-hook.py   # Compaction recovery
-├── scripts/
-│   ├── setup-sica-loop.py      # Loop initialization
-│   └── continue-sica-loop.py   # Continue completed run
-└── README.md
+```python
+# At end of script
+if failures:
+    print(f"{len(failures)} failed, 0 passed")
+    sys.exit(1)
+else:
+    print("1 passed, 0 failed")
+    sys.exit(0)
 ```
+
+This enables SICA to show `0✓ 3✗` instead of just pass/fail.
 
 ## Development
 
@@ -147,6 +141,13 @@ After editing plugin files, sync to cache:
 ```bash
 cp -r plugins/sica/* ~/.claude/plugins/cache/jigx-plugins/sica/1.0.0/
 ```
+
+## Resources
+
+For learning Claude Code plugin development:
+
+- [Official "Create plugins" docs](https://code.claude.com/docs/en/plugins) - Covers plugin structure, manifests, commands, agents, skills, hooks, MCP, local dev, and marketplaces
+- [First plugin walkthrough](https://alexop.dev/posts/building-my-first-claude-code-plugin/) - End-to-end workflow with best practices
 
 ## Credits
 

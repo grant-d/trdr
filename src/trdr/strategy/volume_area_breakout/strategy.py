@@ -667,6 +667,11 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         current_price = current_bar.close
         prev_close = bars[-2].close if len(bars) > 1 else current_price
 
+        # Detect timeframe for threshold adjustments
+        tf = self.config.timeframe.lower() if self.config.timeframe else ""
+        is_daily = tf in ("1d", "d", "day")
+        is_4h = tf in ("4h", "4hour")
+
         # Check exit conditions first if we have a position
         if position and position.side == "long":
             # Check stop loss
@@ -704,8 +709,9 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
                 reason="Position already open",
             )
 
-        # Regime Filter: Allow neutral to bullish
-        if mss < -25:
+        # Regime Filter: relaxed for daily, stricter for intraday
+        regime_threshold = -40 if is_daily else -20
+        if mss < regime_threshold:
             return Signal(
                 action=SignalAction.HOLD,
                 price=current_price,
@@ -728,23 +734,26 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         poc_cluster_width = abs(poc_tf2 - poc_tf3)
         poc_clustered = poc_cluster_width < (atr * 0.5)  # POCs within 0.5 ATR = strong confluence
 
-        # Path 1: VAH Breakout (moderate: requires strong volume AND bullish/neutral regime)
+        # HMA trend filter - price must be above HMA (uptrend)
+        hma = calculate_hma(bars, period=9)
+        hma_bullish = current_price > hma and hma > 0
+
+        # Path 1: VAH Breakout (thresholds vary by timeframe)
         above_vah = current_price > profile.vah
         above_vah_prev = bars[-2].close <= profile.vah if len(bars) > 1 else False
-        volume_strong = volume_ratio >= 1.2  # Relax from 1.3 to 1.2 (120%+ volume)
-        regime_bullish_plus = mss > -5  # Bullish or neutral
+        volume_ok = volume_ratio >= (0.8 if is_daily else 1.0)
+        regime_bullish_plus = mss > (0 if is_daily else 5)
 
-        vah_breakout = above_vah and above_vah_prev and volume_strong and regime_bullish_plus
+        vah_breakout = above_vah and above_vah_prev and volume_ok and regime_bullish_plus and hma_bullish
 
-        # Path 2: VAL Bounce (primary entry: price bounces from below VAL)
-        below_val = current_price < profile.val
-        below_val_prev = bars[-2].close >= profile.val if len(bars) > 1 else False
-        # Accept all volume trends for VAL bounce (volume declining is bonus not requirement)
-        regime_ok_val = mss > -35  # Further relaxed to allow weak bearish regime bounces
+        # Path 2: VAL Bounce - disabled for daily (trend-following only)
+        if is_daily:
+            val_bounce = False
+        else:
+            # Intraday: enable VAL bounce with original logic
+            near_val = abs(current_price - profile.val) < atr * 0.5
+            val_bounce = near_val and volume_ratio >= 1.0 and mss > 0
 
-        val_bounce = below_val and below_val_prev and regime_ok_val
-
-        # Accept VAH breakout OR VAL bounce
         entry_signal = vah_breakout or val_bounce
 
         if not entry_signal:
@@ -757,17 +766,17 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
 
         # Calculate stops and targets based on which signal triggered
         if vah_breakout:
-            # Breakout target: PoC level
-            take_profit = profile.poc
-            # Stop: below VAL with buffer
-            stop_loss = profile.val - atr * 0.4
+            # Breakout target: 3:1 reward:risk for profitability
+            take_profit = profile.vah + atr * 3.0
+            # Stop: very tight to cut losses fast (0.3 ATR)
+            stop_loss = profile.vah - atr * 0.3
             signal_type = "VAH_breakout"
             confidence_base = 0.65
         else:  # val_bounce
             # Bounce target: PoC (mean reversion)
             take_profit = profile.poc
-            # Stop: 1.2 ATR below entry
-            stop_loss = current_price - atr * 1.2
+            # Stop: 2.0 ATR below entry (wider for daily bars)
+            stop_loss = current_price - atr * 2.0
             signal_type = "VAL_bounce"
             confidence_base = 0.70
 
@@ -795,8 +804,8 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
 
         confidence = min(confidence, 1.0)
 
-        # Standard threshold: balance quality and opportunity
-        min_confidence_threshold = 0.75
+        # Confidence threshold: relaxed for daily, stricter for intraday
+        min_confidence_threshold = 0.60 if is_daily else 0.70
 
         if confidence < min_confidence_threshold:
             return Signal(

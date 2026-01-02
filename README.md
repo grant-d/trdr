@@ -59,24 +59,9 @@ Timeframe formats: `1h`, `4h`, `15m`, `1d`, `hour`, `minute`, `day`
 Run SICA loop to optimize the Volume Area Breakout strategy:
 
 ```bash
-/sica:sica-loop ".venv/bin/python -m pytest tests/test_volume_area_breakout.py -v" \
-  -n 5 -t 120 \
-  -p "Optimize strategy for profit factor. Improve src/trdr/data/volume_area_breakout.py::generate_volume_area_breakout_signal" \
-  -f "thoughts/grantdickinson/2026-01-01-research-combined-trading-algorithms.md"
+/sica:sica-loop aapl-1d      # Start loop with config
+/sica:sica-continue aapl-1d  # Add more iterations to completed run
+/sica:sica-status            # Check current progress
 ```
 
-Resume from previous journal (preserves learnings from prior run):
-
-```bash
-/sica:sica-loop ".venv/bin/python -m pytest tests/test_volume_area_breakout.py -v" \
-  -n 5 -t 120 \
-  -p "Optimize strategy for profit factor. Improve src/trdr/data/volume_area_breakout.py::generate_volume_area_breakout_signal" \
-  -f "thoughts/grantdickinson/2026-01-01-research-combined-trading-algorithms.md" \
-  -j latest
-```
-
-Continue current optimization:
-
-```bash
-/sica:sica-continue 20
-```
+See `.sica/configs/` for available configs and `plugins/sica/README.md` for full documentation.

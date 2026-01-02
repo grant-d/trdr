@@ -5,13 +5,16 @@ This test file demonstrates the pattern for testing strategies:
 2. Run backtest once (module-scoped fixtures)
 3. Assert on results
 
+These tests are for normal development/CI. Feel free to modify thresholds
+as needed. SICA uses sica_bench.py instead (which should NOT be modified).
+
 To create tests for a new strategy:
 1. Copy this file to your strategy folder
 2. Update imports and constants
 3. Adjust assertions for your strategy's expected behavior
 
 Run with:
-    .venv/bin/python -m pytest src/trdr/strategy/macd/test_strategy.py -v
+    .venv/bin/python -m pytest src/trdr/strategy/macd_template/test_strategy.py -v
 """
 
 import asyncio
@@ -72,7 +75,10 @@ def bars(event_loop):
     return event_loop.run_until_complete(fetch())
 
 
-@pytest.fixture(scope="module")
+# IMPORTANT: scope="function" NOT "module"!
+# "module" caches results and WON'T pick up strategy code changes.
+# This cost hours of debugging. Do NOT change it back.
+@pytest.fixture(scope="function")
 def strategy():
     """Create strategy instance with config.
 
@@ -111,11 +117,7 @@ def backtest_config():
 
 @pytest.fixture(scope="module")
 def backtest_result(bars, backtest_config, strategy) -> BacktestResult:
-    """Run backtest and return results.
-
-    This runs once per test session.
-    Print summary for visibility during test runs.
-    """
+    """Run backtest and return results."""
     engine = BacktestEngine(backtest_config, strategy)
     result = engine.run(bars)
 

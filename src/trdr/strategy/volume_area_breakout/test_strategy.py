@@ -3,10 +3,12 @@
 Strategy: VAH breakout + VAL bounce with POC target.
 Tests VolumeAreaBreakoutStrategy from trdr.strategy.
 
+These tests are for normal development/CI. Feel free to modify thresholds
+as needed. SICA uses sica_bench.py instead (which should NOT be modified).
+
 Run with:
-  .venv/bin/python -m pytest tests/test_volume_area_breakout.py -v
-  BACKTEST_SYMBOL=stock:AAPL .venv/bin/python -m pytest tests/test_volume_area_breakout.py -v
-  BACKTEST_TIMEFRAME=4h .venv/bin/python -m pytest tests/test_volume_area_breakout.py -v
+  .venv/bin/python -m pytest src/trdr/strategy/volume_area_breakout/test_strategy.py -v
+  BACKTEST_SYMBOL=stock:AAPL BACKTEST_TIMEFRAME=1d .venv/bin/python -m pytest ... -v
 """
 
 import asyncio
@@ -183,8 +185,14 @@ def backtest_result(bars, backtest_config, strategy) -> BacktestResult:
     else:
         calmar_score = 0.0
 
-    composite = (0.20 * wr_score + 0.20 * pf_score + 0.15 * dd_score +
-                 0.15 * sharpe_score + 0.15 * sortino_score + 0.15 * calmar_score)
+    composite = (
+        0.20 * wr_score
+        + 0.20 * pf_score
+        + 0.15 * dd_score
+        + 0.15 * sharpe_score
+        + 0.15 * sortino_score
+        + 0.15 * calmar_score
+    )
     print(f"SICA_SCORE: {composite:.3f}")
     print(f"{'='*50}\n")
 
@@ -197,7 +205,7 @@ class TestAlgoPerformance:
     def test_has_trades(self, backtest_result):
         """Strategy must generate enough trades for statistical significance.
 
-        DO NOT MODIFY THIS TEST - improve the strategy instead.
+        Modify thresholds as needed. SICA uses sica_bench.py.
         """
         total = backtest_result.total_trades
         assert total >= 6, f"Only {total} trades (need >= 6 for significance)"
@@ -205,7 +213,7 @@ class TestAlgoPerformance:
     def test_win_rate(self, backtest_result):
         """Strategy must have reasonable win rate.
 
-        DO NOT MODIFY THIS TEST - improve the strategy instead.
+        Modify thresholds as needed. SICA uses sica_bench.py.
         """
         if backtest_result.total_trades == 0:
             pytest.skip("No trades to evaluate")
@@ -215,7 +223,7 @@ class TestAlgoPerformance:
     def test_profit_factor(self, backtest_result):
         """Strategy must have profit factor > 1.0.
 
-        DO NOT MODIFY THIS TEST - improve the strategy instead.
+        Modify thresholds as needed. SICA uses sica_bench.py.
         """
         if backtest_result.total_trades == 0:
             pytest.skip("No trades to evaluate")
@@ -225,7 +233,7 @@ class TestAlgoPerformance:
     def test_sortino_positive(self, backtest_result):
         """Strategy must have positive Sortino ratio.
 
-        DO NOT MODIFY THIS TEST - improve the strategy instead.
+        Modify thresholds as needed. SICA uses sica_bench.py.
         """
         sortino = backtest_result.sortino_ratio
         if sortino is not None:
@@ -234,7 +242,7 @@ class TestAlgoPerformance:
     def test_max_drawdown(self, backtest_result):
         """Strategy must have controlled drawdown.
 
-        DO NOT MODIFY THIS TEST - improve the strategy instead.
+        Modify thresholds as needed. SICA uses sica_bench.py.
         """
         max_dd = backtest_result.max_drawdown
         assert max_dd < 0.30, f"Max drawdown {max_dd:.1%} > 30%"
@@ -243,7 +251,7 @@ class TestAlgoPerformance:
 class TestAlgoRobustness:
     """Basic robustness checks.
 
-    DO NOT MODIFY THESE TESTS - improve the strategy instead.
+    Modify thresholds as needed. SICA uses sica_bench.py.
     """
 
     def test_no_excessive_losing_streak(self, backtest_result):

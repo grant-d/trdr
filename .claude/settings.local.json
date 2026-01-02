@@ -55,7 +55,13 @@
       "Bash(fi)",
       "Bash(done)",
       "Bash(exit 0)",
-      "Skill(feature-dev:feature-dev)"
+      "Skill(feature-dev:feature-dev)",
+      "WebFetch(domain:alexop.dev)",
+      "Bash(.sica/configs/aapl-1d/config.json <<'EOF'\n{\n  \"benchmark_cmd\": \".venv/bin/python -m pytest tests/test_volume_area_breakout.py -v --symbol={symbol} --timeframe={timeframe}\",\n  \"max_iterations\": 5,\n  \"target_score\": 1.0,\n  \"benchmark_timeout\": 120,\n  \"completion_promise\": \"TESTS PASSING\",\n  \"prompt\": \"Optimize {symbol} strategy for {timeframe}\",\n  \"context_files\": [\n    \"thoughts/grantdickinson/2026-01-01-research-combined-trading-algorithms.md\"\n  ],\n  \"params\": {\n    \"symbol\": \"AAPL\",\n    \"timeframe\": \"1d\"\n  }\n}\nEOF)",
+      "Bash(# Verify state exists cat /Users/grantdickinson/repos/trdr/.sica/configs/aapl-1d/state.json)",
+      "Bash(# Clear all caches rm -rf /Users/grantdickinson/repos/trdr/.pytest_cache find /Users/grantdickinson/repos/trdr/src -name \"\"__pycache__\"\" -type d -exec rm -rf {} + find /Users/grantdickinson/repos/trdr/src -name \"\"*.pyc\"\" -delete # Test with no cache BACKTEST_SYMBOL=stock:AAPL BACKTEST_TIMEFRAME=1d .venv/bin/python -m pytest src/trdr/strategy/volume_area_breakout/test_strategy.py -v -p no:cacheprovider 2>&1)",
+      "Bash(BACKTEST_SYMBOL=stock:AAPL BACKTEST_TIMEFRAME=1d .venv/bin/python:*)",
+      "Bash(BACKTEST_SYMBOL=stock:AAPL BACKTEST_TIMEFRAME=4h .venv/bin/python:*)"
     ],
     "deny": []
   }

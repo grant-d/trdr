@@ -162,13 +162,15 @@ class MarketDataClient:
             start = overlap_ts
             # Keep only bars before the overlap period
             cached_bars = cached_bars[:-restatement_overlap]
-        elif cached_bars:
-            # Few cached bars - refetch all
-            start = end - timedelta(days=lookback // 6 + 5)
-            cached_bars = []
         else:
-            # No cache - fetch based on lookback
-            start = end - timedelta(days=lookback // 6 + 5)
+            # No cache - fetch max available history (7 years)
+            # The IEX feed (free tier) has data starting from ~2020.
+            # - https://docs.alpaca.markets/docs/about-market-data-api
+            # - https://alpaca.markets/data
+            start = end - timedelta(days=365 * 5)  # Alpaca limit is 7y
+
+            if cached_bars:
+                cached_bars = []
 
         # Only fetch if start is before end
         new_bars = []
