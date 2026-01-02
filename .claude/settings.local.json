@@ -34,7 +34,9 @@
       "Bash(.venv/bin/pip3 install:*)",
       "Bash(git fetch:*)",
       "Bash(git ls-tree:*)",
-      "Bash(npx markdownlint:*)"
+      "Bash(npx markdownlint:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(git remote get-url:*)"
     ],
     "deny": []
   }
