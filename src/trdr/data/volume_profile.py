@@ -300,6 +300,331 @@ def calculate_hma(bars: list[Bar], period: int = 9) -> float:
     return float(ema_input)
 
 
+def compute_sax_pattern(bars: list[Bar], window: int = 20, segments: int = 5) -> str:
+    """Convert price series to SAX symbolic pattern.
+
+    Args:
+        bars: List of OHLCV bars
+        window: Lookback window for pattern
+        segments: Number of PAA segments (alphabet size)
+
+    Returns:
+        SAX pattern string (e.g., "aabcd")
+    """
+    if len(bars) < window:
+        return ""
+
+    closes = np.array([b.close for b in bars[-window:]])
+
+    # Z-normalize
+    mean = np.mean(closes)
+    std = np.std(closes)
+    if std == 0:
+        return "ccccc"  # Flat market
+    normalized = (closes - mean) / std
+    normalized = np.clip(normalized, -3, 3)  # Clip outliers
+
+    # PAA: Piecewise Aggregate Approximation
+    segment_size = window // segments
+    paa = []
+    for i in range(segments):
+        start = i * segment_size
+        end = start + segment_size
+        paa.append(np.mean(normalized[start:end]))
+
+    # Discretize to alphabet {a, b, c, d, e} using Gaussian breakpoints
+    # Breakpoints for 5 symbols: -0.84, -0.25, 0.25, 0.84
+    breakpoints = [-0.84, -0.25, 0.25, 0.84]
+    alphabet = "abcde"
+    pattern = ""
+    for val in paa:
+        idx = 0
+        for bp in breakpoints:
+            if val > bp:
+                idx += 1
+        pattern += alphabet[idx]
+
+    return pattern
+
+
+def detect_sax_bullish_reversal(pattern: str) -> bool:
+    """Detect bullish reversal patterns in SAX string.
+
+    Balanced detection: identifies reversal patterns with quality filtering via confidence threshold.
+
+    Args:
+        pattern: SAX pattern string
+
+    Returns:
+        True if bullish reversal pattern detected
+    """
+    if len(pattern) < 4:
+        return False
+
+    first_half = pattern[:len(pattern) // 2]
+    second_half = pattern[len(pattern) // 2:]
+
+    # First half: bearish (mostly a/b)
+    first_bearish = sum(1 for c in first_half if c in "ab") >= len(first_half) // 2
+
+    # Second half: bullish (has d/e) and ends high
+    second_bullish = sum(1 for c in second_half if c in "de") >= 1
+    ends_high = pattern[-1] in "de"
+
+    # Upward momentum in second half
+    momentum = all(pattern[i] >= pattern[i - 1] for i in range(len(pattern) // 2, len(pattern)))
+
+    return first_bearish and second_bullish and ends_high and momentum
+
+
+def classify_volatility_regime(bars: list[Bar], lookback: int = 50) -> str:
+    """Classify volatility regime using rolling realized volatility.
+
+    Uses three-regime classification: low-vol (mean reversion), med-vol (transition),
+    high-vol (momentum).
+
+    Args:
+        bars: List of OHLCV bars
+        lookback: Period for volatility calculation
+
+    Returns:
+        Regime string: "low", "medium", "high"
+    """
+    if len(bars) < lookback + 1:
+        return "medium"
+
+    # Calculate 5-bar rolling returns (simulating 5-minute bars on hourly data)
+    returns = []
+    for i in range(len(bars) - 4, len(bars)):
+        if i >= 1:
+            ret = (bars[i].close - bars[i - 1].close) / bars[i - 1].close
+            returns.append(ret)
+
+    # Calculate realized volatility over lookback period
+    recent_bars = bars[-lookback:]
+    close_prices = [b.close for b in recent_bars]
+
+    rv_values = []
+    for i in range(1, len(close_prices)):
+        ret = (close_prices[i] - close_prices[i - 1]) / close_prices[i - 1]
+        rv_values.append(abs(ret))
+
+    if not rv_values:
+        return "medium"
+
+    current_rv = np.mean(rv_values[-20:]) if len(rv_values) >= 20 else np.mean(rv_values)
+    hist_rv = np.mean(rv_values)
+    hist_std = np.std(rv_values) if len(rv_values) > 1 else 0.01
+
+    # Three-regime classification based on historical percentiles
+    low_threshold = hist_rv - hist_std
+    high_threshold = hist_rv + hist_std
+
+    if current_rv < low_threshold:
+        return "low"
+    elif current_rv > high_threshold:
+        return "high"
+    else:
+        return "medium"
+
+
+def compute_heikin_ashi(bars: list[Bar]) -> list:
+    """Transform bars into Heikin-Ashi representation.
+
+    HA smooths price action by using:
+    - HA Close = (O + H + L + C) / 4 (average of all prices)
+    - HA Open = (prior HA Open + prior HA Close) / 2
+    - HA High = max(H, HA Open, HA Close)
+    - HA Low = min(L, HA Open, HA Close)
+
+    This removes false wicks and reduces noise in breakouts/bounces.
+
+    Args:
+        bars: List of original OHLCV bars
+
+    Returns:
+        List of synthetic bars with Heikin-Ashi values
+    """
+    if len(bars) < 1:
+        return bars
+
+    ha_bars = []
+
+    for i, bar in enumerate(bars):
+        # HA Close is average of all prices
+        ha_close = (bar.open + bar.high + bar.low + bar.close) / 4.0
+
+        # HA Open: average of prior HA bar's open/close
+        if i == 0:
+            ha_open = (bar.open + bar.close) / 2.0
+        else:
+            prev_bar = ha_bars[-1]
+            ha_open = (prev_bar["open"] + prev_bar["close"]) / 2.0
+
+        # HA High/Low: covers all prices
+        ha_high = max(bar.high, ha_open, ha_close)
+        ha_low = min(bar.low, ha_open, ha_close)
+
+        ha_bar = {
+            "open": ha_open,
+            "high": ha_high,
+            "low": ha_low,
+            "close": ha_close,
+            "volume": bar.volume,
+            "timestamp": getattr(bar, "timestamp", None),
+        }
+        ha_bars.append(ha_bar)
+
+    return ha_bars
+
+
+def calculate_multi_timeframe_poc(bars: list[Bar]) -> tuple[float, float, float]:
+    """Calculate POC at multiple aggregation levels.
+
+    Simulates different timeframes by aggregating bars:
+    - TF1: Current bars (native resolution)
+    - TF2: 4-bar aggregation (4x longer timeframe)
+    - TF3: 12-bar aggregation (12x longer timeframe)
+
+    Returns:
+        Tuple of (poc_tf1, poc_tf2, poc_tf3)
+    """
+    if len(bars) < 12:
+        current_poc = calculate_volume_profile(bars[-min(20, len(bars)) :]).poc
+        return current_poc, current_poc, current_poc
+
+    # TF1: Current resolution
+    poc_tf1 = calculate_volume_profile(bars[-20:]).poc
+
+    # TF2: 4-bar aggregation (aggregate last 20 bars into 5 "super bars")
+    agg4_bars = []
+    for i in range(0, min(20, len(bars)), 4):
+        chunk = bars[-20 + i : -20 + i + 4]
+        if chunk:
+            high = max(b.high for b in chunk)
+            low = min(b.low for b in chunk)
+            close = chunk[-1].close
+            volume = sum(b.volume for b in chunk)
+            # Create synthetic bar for profile calculation
+            agg_bar = type("Bar", (), {
+                "high": high,
+                "low": low,
+                "close": close,
+                "volume": volume,
+            })()
+            agg4_bars.append(agg_bar)
+
+    poc_tf2 = calculate_volume_profile(agg4_bars).poc if agg4_bars else poc_tf1
+
+    # TF3: 12-bar aggregation
+    agg12_bars = []
+    for i in range(0, min(20, len(bars)), 12):
+        chunk = bars[-20 + i : -20 + i + 12]
+        if chunk:
+            high = max(b.high for b in chunk)
+            low = min(b.low for b in chunk)
+            close = chunk[-1].close
+            volume = sum(b.volume for b in chunk)
+            agg_bar = type("Bar", (), {
+                "high": high,
+                "low": low,
+                "close": close,
+                "volume": volume,
+            })()
+            agg12_bars.append(agg_bar)
+
+    poc_tf3 = calculate_volume_profile(agg12_bars).poc if agg12_bars else poc_tf1
+
+    return float(poc_tf1), float(poc_tf2), float(poc_tf3)
+
+
+def detect_hvn_support_strength(bars: list[Bar], val_level: float, lookback: int = 30) -> float:
+    """Detect strength of support at HVN levels using historical touches.
+
+    Counts how many times price bounced from or consolidated at VAL level,
+    indicating accumulated liquidity and institutional interest.
+
+    Args:
+        bars: List of OHLCV bars
+        val_level: VAL price level to analyze
+        lookback: Historical bars to check
+
+    Returns:
+        Support strength score (0.0 to 1.0)
+    """
+    if len(bars) < lookback:
+        return 0.0
+
+    recent_bars = bars[-lookback:]
+    touches = 0
+    bounces = 0
+
+    for i in range(1, len(recent_bars)):
+        low = recent_bars[i].low
+        high = recent_bars[i].high
+        prev_close = recent_bars[i - 1].close
+
+        # Bar touched the VAL level
+        if low <= val_level <= high:
+            touches += 1
+            # Bar bounced from VAL (closed above after touching)
+            if recent_bars[i].close > val_level:
+                bounces += 1
+
+    if touches == 0:
+        return 0.0
+
+    # Support strength = historical bounce rate at this level
+    bounce_rate = bounces / touches if touches > 0 else 0
+    # Also factor in frequency of touches (more touches = more tested level)
+    touch_frequency = touches / lookback
+
+    return float(min(bounce_rate * 0.6 + touch_frequency * 0.4, 1.0))
+
+
+def compute_order_flow_imbalance(bars: list[Bar], lookback: int = 5) -> float:
+    """Compute Order Flow Imbalance (OFI) based on volume direction.
+
+    Simplified OFI: tracks buy vs sell volume based on price direction.
+    Positive OFI = more buying pressure, Negative = more selling pressure.
+
+    Args:
+        bars: List of OHLCV bars
+        lookback: Period to analyze
+
+    Returns:
+        OFI score (-1.0 to 1.0)
+    """
+    if len(bars) < lookback + 1:
+        return 0.0
+
+    recent_bars = bars[-lookback:]
+    buy_volume = 0.0
+    sell_volume = 0.0
+
+    for i in range(len(recent_bars)):
+        if i == 0:
+            continue
+        # If price went up, volume on that bar = buy volume
+        # If price went down, volume on that bar = sell volume
+        if recent_bars[i].close > recent_bars[i - 1].close:
+            buy_volume += recent_bars[i].volume
+        elif recent_bars[i].close < recent_bars[i - 1].close:
+            sell_volume += recent_bars[i].volume
+        else:
+            # Split neutral bars
+            buy_volume += recent_bars[i].volume * 0.5
+            sell_volume += recent_bars[i].volume * 0.5
+
+    total_volume = buy_volume + sell_volume
+    if total_volume == 0:
+        return 0.0
+
+    # OFI score: buy_volume / total - 0.5 (0 = balanced, 0.5 = all buys, -0.5 = all sells)
+    ofi = (buy_volume / total_volume) - 0.5
+    return float(ofi)
+
+
 def generate_signal(
     bars: list[Bar],
     position: Position | None,
@@ -334,16 +659,16 @@ def generate_signal(
             reason="Insufficient data for analysis",
         )
 
-    # Skip early market period (first 300 bars) - aggressive early market inclusion
-    if len(bars) < 300:
+    # Minimal bar requirement - only need basics for volume profile
+    if len(bars) < 50:
         return Signal(
             action=SignalAction.HOLD,
             price=bars[-1].close,
             confidence=0.0,
-            reason="Skipping early market regime",
+            reason="Insufficient data for analysis",
         )
 
-    # Calculate indicators
+    # Calculate indicators (using original bars for robustness)
     profile = calculate_volume_profile(bars)
     atr = calculate_atr(bars)
     mss = calculate_mss(bars)
@@ -404,6 +729,15 @@ def generate_signal(
     volume_ratio = current_bar.volume / avg_recent_volume if avg_recent_volume > 0 else 0
     volume_trend = analyze_volume_trend(bars)
 
+    # Calculate historical support strength at VAL level
+    hvn_strength = detect_hvn_support_strength(bars, profile.val, lookback=30)
+
+    # Calculate multi-timeframe POC confluence
+    poc_tf1, poc_tf2, poc_tf3 = calculate_multi_timeframe_poc(bars)
+    # Multi-TF confluence: higher TF POCs cluster together = stronger support
+    poc_cluster_width = abs(poc_tf2 - poc_tf3)
+    poc_clustered = poc_cluster_width < (atr * 0.5)  # POCs within 0.5 ATR = strong confluence
+
     # Path 1: VAH Breakout (moderate: requires strong volume AND bullish/neutral regime)
     above_vah = current_price > profile.vah
     above_vah_prev = bars[-2].close <= profile.vah if len(bars) > 1 else False
@@ -420,7 +754,7 @@ def generate_signal(
 
     val_bounce = below_val and below_val_prev and regime_ok_val
 
-    # Accept either VAH breakout or VAL bounce (no VAH bounce for signal purity)
+    # Accept VAH breakout OR VAL bounce
     entry_signal = vah_breakout or val_bounce
 
     if not entry_signal:
@@ -428,7 +762,7 @@ def generate_signal(
             action=SignalAction.HOLD,
             price=current_price,
             confidence=0.0,
-            reason=f"No signal: breakout={vah_breakout} bounce={val_bounce}",
+            reason=f"No signal: vah={vah_breakout} val={val_bounce}",
         )
 
     # Calculate stops and targets based on which signal triggered
@@ -457,6 +791,10 @@ def generate_signal(
     if val_bounce and volume_trend == "declining":
         confidence += 0.25  # Very strong bonus - most reliable setup
 
+    # HVN strength bonus for historically validated support on VAL bounces
+    if val_bounce and hvn_strength > 0.70:
+        confidence += 0.12  # Extra confidence on well-tested support levels
+
     # Regime bonus
     if mss > 5:
         confidence += 0.12
@@ -470,6 +808,7 @@ def generate_signal(
     # Filter: Only take trades with minimum confidence to avoid low-probability entries
     # This helps improve profit factor by being more selective
     min_confidence_threshold = 0.75
+
     if confidence < min_confidence_threshold:
         return Signal(
             action=SignalAction.HOLD,

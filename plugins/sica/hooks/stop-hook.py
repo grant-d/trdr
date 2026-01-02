@@ -389,6 +389,18 @@ def main():
     # Archive results
     archive_iteration(state, benchmark_result, transcript_path)
 
+    # Track recent scores for convergence detection
+    recent_scores = state.get("recent_scores", [])
+    recent_scores.append(round(benchmark_result["score"], 4))
+    recent_scores = recent_scores[-10:]  # keep last 10
+    state["recent_scores"] = recent_scores
+
+    # Check convergence (10 identical scores = converged, no further improvement possible)
+    if len(recent_scores) == 10 and len(set(recent_scores)) == 1:
+        log(f"SICA: Converged at score {recent_scores[0]:.2f} (10 identical iterations)")
+        _archive_state(state)
+        sys.exit(0)
+
     # Check if target reached
     if benchmark_result["score"] >= state["target_score"]:
         log(f"SICA: Target score ({state['target_score']}) reached!")
