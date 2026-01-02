@@ -272,6 +272,26 @@ def calculate_hma(bars: list[Bar], period: int = 9) -> float:
     return float(ema_input)
 
 
+def calculate_hma_slope(bars: list[Bar], period: int = 9, lookback: int = 3) -> float:
+    """Calculate HMA slope over lookback period.
+
+    Args:
+        bars: List of OHLCV bars
+        period: HMA period
+        lookback: Number of bars to measure slope
+
+    Returns:
+        HMA slope (positive = uptrend, negative = downtrend)
+    """
+    if len(bars) < period + lookback:
+        return 0.0
+
+    hma_current = calculate_hma(bars, period)
+    hma_prev = calculate_hma(bars[:-lookback], period)
+
+    return hma_current - hma_prev
+
+
 def compute_sax_pattern(bars: list[Bar], window: int = 20, segments: int = 5) -> str:
     """Convert price series to SAX symbolic pattern.
 
@@ -683,13 +703,13 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
                     reason=f"Stop loss hit at {position.stop_loss:.2f}",
                 )
 
-            # Check take profit (PoC reached)
-            if current_price >= profile.poc:
+            # Check take profit
+            if position.take_profit and current_price >= position.take_profit:
                 return Signal(
                     action=SignalAction.CLOSE,
                     price=current_price,
                     confidence=0.9,
-                    reason=f"PoC target reached at {profile.poc:.2f}",
+                    reason=f"Take profit hit at {position.take_profit:.2f}",
                 )
 
             # Hold position
@@ -735,16 +755,23 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         poc_clustered = poc_cluster_width < (atr * 0.5)  # POCs within 0.5 ATR = strong confluence
 
         # HMA trend filter - price must be above HMA (uptrend)
-        hma = calculate_hma(bars, period=9)
+        hma_period = 7 if is_daily else 9  # Shorter period for daily = more responsive
+        hma = calculate_hma(bars, period=hma_period)
         hma_bullish = current_price > hma and hma > 0
+        # For daily: require HMA slope positive (1-bar lookback for more signals)
+        hma_slope = calculate_hma_slope(bars, period=hma_period, lookback=1)
+        hma_trending_up = hma_slope > 0
 
         # Path 1: VAH Breakout (thresholds vary by timeframe)
         above_vah = current_price > profile.vah
         above_vah_prev = bars[-2].close <= profile.vah if len(bars) > 1 else False
-        volume_ok = volume_ratio >= (0.8 if is_daily else 1.0)
+        # Daily: HMA slope is key filter, no volume requirement
+        volume_ok = True if is_daily else volume_ratio >= 1.0
         regime_bullish_plus = mss > (0 if is_daily else 5)
 
-        vah_breakout = above_vah and above_vah_prev and volume_ok and regime_bullish_plus and hma_bullish
+        # Daily requires HMA trending up, intraday just needs price > HMA
+        hma_filter = (hma_bullish and hma_trending_up) if is_daily else hma_bullish
+        vah_breakout = above_vah and above_vah_prev and volume_ok and regime_bullish_plus and hma_filter
 
         # Path 2: VAL Bounce - disabled for daily (trend-following only)
         if is_daily:
@@ -764,12 +791,16 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
                 reason=f"No signal: vah={vah_breakout} val={val_bounce}",
             )
 
-        # Calculate stops and targets based on which signal triggered
+        # Calculate stops and targets relative to VAH (breakout level)
         if vah_breakout:
-            # Breakout target: 3:1 reward:risk for profitability
-            take_profit = profile.vah + atr * 3.0
-            # Stop: very tight to cut losses fast (0.3 ATR)
-            stop_loss = profile.vah - atr * 0.3
+            if is_daily:
+                # Daily: 10:1 R:R - optimal balance of P&L and trade count
+                take_profit = profile.vah + atr * 10.0
+                stop_loss = profile.vah - atr * 1.0
+            else:
+                # Intraday: tight stops, aggressive targets
+                take_profit = profile.vah + atr * 3.0
+                stop_loss = profile.vah - atr * 0.3
             signal_type = "VAH_breakout"
             confidence_base = 0.65
         else:  # val_bounce
@@ -822,5 +853,5 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             reason=f"Entry: price={current_price:.2f}, target={take_profit:.2f}",
             stop_loss=stop_loss,
             take_profit=take_profit,
-            position_size_ratio=1.0,
+            position_size_pct=1.0,
         )

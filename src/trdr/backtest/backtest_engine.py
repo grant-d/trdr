@@ -25,7 +25,7 @@ class BacktestConfig:
         warmup_bars: Bars to skip before generating signals (default 65 = 50 VP + 15 ATR)
         transaction_cost_pct: Cost per trade as decimal (0.0025 = 0.25%)
         slippage_atr: Slippage as fraction of ATR (0.01 = 1% of ATR per fill)
-        position_size: Fixed position size per trade
+        position_size_pct: Position size as % of capital (1.0 = 100%, 0.5 = 50%)
         initial_capital: Starting capital for equity curve (default 10000)
     """
 
@@ -33,7 +33,7 @@ class BacktestConfig:
     warmup_bars: int = 65
     transaction_cost_pct: float = 0.0
     slippage_atr: float = 0.0
-    position_size: float = 1.0
+    position_size_pct: float = 1.0  # 1.0 = 100% of capital
     initial_capital: float = 10000.0
 
     @classmethod
@@ -247,7 +247,7 @@ class BacktestResult:
                 "symbol": self.config.symbol,
                 "warmup_bars": self.config.warmup_bars,
                 "transaction_cost_pct": self.config.transaction_cost_pct,
-                "position_size": self.config.position_size,
+                "position_size_pct": self.config.position_size_pct,
                 "initial_capital": self.config.initial_capital,
             },
             "period": {
@@ -356,12 +356,16 @@ class BacktestEngine:
             # Execute pending orders at current bar open (queued on prior bar close)
             if pending_buy and not position:
                 entry_price = self._apply_slippage(current_bar.open, current_atr, is_buy=True)
-                entry_cost = self._calc_cost(entry_price, self.config.position_size)
+
+                # Calculate shares from percentage of capital
+                position_value = equity * self.config.position_size_pct
+                shares = position_value / entry_price
+                entry_cost = self._calc_cost(entry_price, shares)
 
                 position = Position(
                     symbol=self.config.symbol,
                     side="long",
-                    size=self.config.position_size,
+                    size=shares,
                     entry_price=entry_price,
                     stop_loss=pending_buy.stop_loss or 0,
                     take_profit=pending_buy.take_profit,

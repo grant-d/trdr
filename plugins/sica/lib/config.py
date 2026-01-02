@@ -57,7 +57,7 @@ class SicaConfig:
     max_iterations: int = 20
     target_score: float = 1.0
     completion_promise: str = "TESTS PASSING"
-    benchmark_timeout: int = 300
+    benchmark_timeout: int = 120
     prompt: str = ""
     context_files: list[str] = field(default_factory=list)
     params: dict[str, str] = field(default_factory=dict)
@@ -90,7 +90,7 @@ class SicaConfig:
             max_iterations=data.get("max_iterations", 20),
             target_score=data.get("target_score", 1.0),
             completion_promise=data.get("completion_promise", "TESTS PASSING"),
-            benchmark_timeout=data.get("benchmark_timeout", 300),
+            benchmark_timeout=data.get("benchmark_timeout", 120),
             prompt=data.get("prompt", ""),
             context_files=data.get("context_files", []),
             params=data.get("params", {}),
@@ -121,20 +121,21 @@ class SicaConfig:
 
 @dataclass
 class SicaState:
-    """SICA runtime state stored in state.json during active runs.
+    """SICA runtime state stored in state.json.
 
-    Created when a loop starts, updated after each iteration, deleted when
-    loop completes or is cancelled. Contains both runtime data (iteration,
-    scores) and a copy of config values for hook access.
+    Single source of truth for run state. Never deleted - status field
+    indicates whether run is active or complete.
 
     Attributes:
         config_name: Name of the config folder (e.g., 'btc-1h')
         run_id: Unique run identifier (YYYYMMDD_HHMMSS format)
         run_dir: Path to run archive directory
+        status: Run status ("active" | "complete")
         iteration: Current iteration number (0-indexed)
         last_score: Most recent benchmark score (0.0-1.0)
         recent_scores: Last 10 scores for convergence detection
         started_at: ISO timestamp when run started
+        completed_at: ISO timestamp when run completed (if complete)
         benchmark_cmd: Copy from config for hook access
         max_iterations: Copy from config for hook access
         target_score: Copy from config for hook access
@@ -146,26 +147,28 @@ class SicaState:
 
     Example:
         >>> state = SicaState.load(Path(".sica/configs/btc-1h/state.json"))
+        >>> state.status
+        'active'
         >>> state.iteration
         5
-        >>> state.last_score
-        0.85
     """
 
     config_name: str
     run_id: str
     run_dir: str
+    status: str = "active"  # "active" | "complete"
     iteration: int = 0
     last_score: float | None = None
     recent_scores: list[float] = field(default_factory=list)
     started_at: str = ""
+    completed_at: str = ""
 
     # Config values copied for hook access (hooks don't load config.json)
     benchmark_cmd: str = ""
     max_iterations: int = 20
     target_score: float = 1.0
     completion_promise: str = "TESTS PASSING"
-    benchmark_timeout: int = 300
+    benchmark_timeout: int = 120
     prompt: str = ""
     context_files: list[str] = field(default_factory=list)
     params: dict[str, str] = field(default_factory=dict)
@@ -192,10 +195,12 @@ class SicaState:
             config_name=config_name,
             run_id=run_id,
             run_dir=str(run_dir),
+            status="active",
             iteration=0,
             last_score=None,
             recent_scores=[],
             started_at=datetime.now(timezone.utc).isoformat(),
+            completed_at="",
             benchmark_cmd=config.benchmark_cmd,
             max_iterations=config.max_iterations,
             target_score=config.target_score,
@@ -235,15 +240,17 @@ class SicaState:
             config_name=data["config_name"],
             run_id=data["run_id"],
             run_dir=data["run_dir"],
+            status=data.get("status", "active"),
             iteration=data.get("iteration", 0),
             last_score=data.get("last_score"),
             recent_scores=data.get("recent_scores", []),
             started_at=data.get("started_at", ""),
+            completed_at=data.get("completed_at", ""),
             benchmark_cmd=data.get("benchmark_cmd", ""),
             max_iterations=data.get("max_iterations", 20),
             target_score=data.get("target_score", 1.0),
             completion_promise=data.get("completion_promise", "TESTS PASSING"),
-            benchmark_timeout=data.get("benchmark_timeout", 300),
+            benchmark_timeout=data.get("benchmark_timeout", 120),
             prompt=data.get("prompt", ""),
             context_files=data.get("context_files", []),
             params=data.get("params", {}),
@@ -261,10 +268,12 @@ class SicaState:
             "config_name": self.config_name,
             "run_id": self.run_id,
             "run_dir": self.run_dir,
+            "status": self.status,
             "iteration": self.iteration,
             "last_score": self.last_score,
             "recent_scores": self.recent_scores,
             "started_at": self.started_at,
+            "completed_at": self.completed_at,
             "benchmark_cmd": self.benchmark_cmd,
             "max_iterations": self.max_iterations,
             "target_score": self.target_score,
@@ -298,9 +307,6 @@ class SicaState:
     def to_dict(self) -> dict[str, str | int | float | list[str] | list[float] | dict[str, str] | None]:
         """Convert state to dict for JSON serialization.
 
-        Includes 'original_prompt' alias for backward compatibility
-        with hooks that expect that field name.
-
         Returns:
             Dict representation of all state fields
         """
@@ -308,16 +314,18 @@ class SicaState:
             "config_name": self.config_name,
             "run_id": self.run_id,
             "run_dir": self.run_dir,
+            "status": self.status,
             "iteration": self.iteration,
             "last_score": self.last_score,
             "recent_scores": self.recent_scores,
             "started_at": self.started_at,
+            "completed_at": self.completed_at,
             "benchmark_cmd": self.benchmark_cmd,
             "max_iterations": self.max_iterations,
             "target_score": self.target_score,
             "completion_promise": self.completion_promise,
             "benchmark_timeout": self.benchmark_timeout,
-            "original_prompt": self.prompt,  # Alias for hook compat
+            "prompt": self.prompt,
             "context_files": self.context_files,
             "params": self.params,
         }

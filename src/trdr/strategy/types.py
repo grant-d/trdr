@@ -39,7 +39,7 @@ class Signal:
     stop_loss: float | None = None
     take_profit: float | None = None
     timestamp: str = ""
-    position_size_ratio: float = 1.0  # 0.0-1.0, proportion of max position
+    position_size_pct: float = 1.0  # 0.0-1.0, proportion of max position
 
     def __post_init__(self):
         if not self.timestamp:

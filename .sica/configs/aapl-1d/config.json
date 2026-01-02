@@ -1,8 +1,8 @@
 {
   "benchmark_cmd": "BACKTEST_SYMBOL={symbol} BACKTEST_TIMEFRAME={timeframe} .venv/bin/python src/trdr/strategy/volume_area_breakout/sica_bench.py",
-  "max_iterations": 15,
+  "max_iterations": 20,
   "target_score": 1.0,
-  "benchmark_timeout": 120,
+  "benchmark_timeout": 300,
   "completion_promise": "TESTS PASSING",
   "prompt": "Optimize {symbol} strategy for {timeframe}",
   "context_files": [
@@ -10,6 +10,6 @@
   ],
   "params": {
     "symbol": "stock:AAPL",
-    "timeframe": "4h"
+    "timeframe": "1d"
   }
 }

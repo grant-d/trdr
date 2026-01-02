@@ -20,7 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
 
 from config import SicaState
-from paths import find_active_config, get_state_file
+from paths import find_active_config, get_state_file, list_active_configs
 
 
 def log(msg: str) -> None:
@@ -30,9 +30,13 @@ def log(msg: str) -> None:
 
 def read_state() -> SicaState | None:
     """Read active SICA state if exists."""
-    config_name = find_active_config()
-    if not config_name:
+    active = list_active_configs()
+    if not active:
         return None
+    if len(active) > 1:
+        log(f"SICA: Warning - multiple active configs: {', '.join(active)}")
+        log(f"SICA: Using first: {active[0]}")
+    config_name = active[0]
     try:
         return SicaState.load(get_state_file(config_name))
     except (json.JSONDecodeError, OSError, FileNotFoundError, ValueError):
@@ -44,18 +48,16 @@ def save_state(state: SicaState) -> None:
     state.save(get_state_file(state.config_name))
 
 
-def archive_state(state: SicaState) -> None:
-    """Move state to run archive and delete active state."""
-    run_dir = Path(state.run_dir)
-    run_dir.mkdir(parents=True, exist_ok=True)
-    final_state = run_dir / "final_state.json"
-    final_state.write_text(json.dumps(state.to_dict(), indent=2))
-    get_state_file(state.config_name).unlink(missing_ok=True)
+def complete_run(state: SicaState) -> None:
+    """Mark run as complete by setting status and timestamp."""
+    state.status = "complete"
+    state.completed_at = datetime.now(timezone.utc).isoformat()
+    save_state(state)
 
 
 def run_benchmark(
     command: str,
-    timeout: int = 300,
+    timeout: int = 120,
 ) -> dict[str, str | int | float]:
     """Run benchmark command and parse results.
 
@@ -380,7 +382,7 @@ def main() -> None:
     if state.iteration >= max_iter:
         dbg(f"Max iter reached: {state.iteration} >= {max_iter}")
         log(f"SICA: Max iterations ({max_iter}) reached.")
-        archive_state(state)
+        complete_run(state)
         sys.exit(0)
 
     # Check transcript for promise
@@ -422,13 +424,13 @@ def main() -> None:
     # Check convergence
     if len(state.recent_scores) == 10 and len(set(state.recent_scores)) == 1:
         log(f"SICA: Converged at score {state.recent_scores[0]:.2f}")
-        archive_state(state)
+        complete_run(state)
         sys.exit(0)
 
     # Check target reached
     if float(score) >= state.target_score:
         log(f"SICA: Target score ({state.target_score}) reached!")
-        archive_state(state)
+        complete_run(state)
         sys.exit(0)
 
     # Promise detected but tests failing

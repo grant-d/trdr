@@ -193,6 +193,7 @@ class MACDStrategy(BaseStrategy):
                     reason="MACD crossed above signal",
                     stop_loss=stop_loss,
                     # take_profit=current_price * 1.05,  # Optional
+                    position_size_pct=1.0,  # 100% of allowed position size
                 )
 
         # ---------------------------------------------------------------------

@@ -70,7 +70,7 @@ Then run:
 | `max_iterations` | Max improvement attempts | 20 |
 | `target_score` | Target score 0.0-1.0 | 1.0 |
 | `completion_promise` | Phrase to signal completion | "TESTS PASSING" |
-| `benchmark_timeout` | Timeout in seconds | 300 |
+| `benchmark_timeout` | Timeout in seconds | 120 |
 | `prompt` | Task description (supports `{param}` interpolation) | "" |
 | `context_files` | Docs to re-read after compaction (specs, research notes) | [] |
 | `params` | Key-value pairs for `{key}` interpolation | {} |

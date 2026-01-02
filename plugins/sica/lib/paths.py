@@ -9,11 +9,10 @@ Directory Structure:
     └── configs/                    # Config folders
         └── <name>/                 # Individual config
             ├── config.json         # User configuration
-            ├── state.json          # Active run state (optional)
+            ├── state.json          # Run state (single source of truth)
             └── runs/               # Run archives (gitignored)
                 └── run_YYYYMMDD_HHMMSS/
                     ├── journal.md
-                    ├── final_state.json
                     └── iteration_N/
 """
 
@@ -73,8 +72,8 @@ def get_config_file(name: str) -> Path:
 def get_state_file(name: str) -> Path:
     """Get state.json path for a config.
 
-    State file exists only during active runs. Presence indicates
-    the config has an active SICA loop.
+    State file is the single source of truth for run state.
+    Check status field to determine if run is active or complete.
 
     Args:
         name: Config name
@@ -134,14 +133,54 @@ def list_configs() -> list[str]:
 
 
 def find_active_config() -> str | None:
-    """Find config with active state.json.
+    """Find config with active run (status='active').
 
     Used to detect if any SICA loop is currently running.
+    Returns the first active config found. Use list_active_configs() for all.
 
     Returns:
-        Config name with state.json, or None if no active run
+        Config name with active run, or None if no active run
     """
+    active = list_active_configs()
+    return active[0] if active else None
+
+
+def list_active_configs() -> list[str]:
+    """List all configs with active runs (status='active').
+
+    Returns:
+        List of config names with active runs
+    """
+    import json
+
+    active = []
     for name in list_configs():
+        state_file = get_state_file(name)
+        if state_file.exists():
+            try:
+                data = json.loads(state_file.read_text())
+                if data.get("status") == "active":
+                    active.append(name)
+            except (json.JSONDecodeError, OSError):
+                pass
+    return active
+
+
+def find_config_with_state(name: str | None = None) -> str | None:
+    """Find config with any state (active or complete).
+
+    Args:
+        name: Specific config name to check, or None to find any
+
+    Returns:
+        Config name with state.json, or None if not found
+    """
+    if name:
         if get_state_file(name).exists():
             return name
+        return None
+
+    for config_name in list_configs():
+        if get_state_file(config_name).exists():
+            return config_name
     return None

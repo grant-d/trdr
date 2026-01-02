@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""Continue a completed SICA loop with additional iterations."""
+"""Continue a completed SICA loop with additional iterations.
+
+Reads from state.json (single source of truth), adds iterations,
+sets status back to active.
+"""
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -12,10 +15,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
 from config import SicaState
 from paths import (
     find_active_config,
-    get_config_dir,
-    get_runs_dir,
+    find_config_with_state,
     get_state_file,
-    list_configs,
 )
 
 
@@ -36,103 +37,55 @@ def main() -> None:
     parser.add_argument(
         "--force", "-f",
         action="store_true",
-        help="Force continue even if active run exists",
+        help="Force continue even if run is active",
     )
     args = parser.parse_args()
 
     config_name = args.config_name
 
-    # If no config name, try to find one with a completed run
+    # If no config name, try to find one with state
     if not config_name:
         # First check for active config
         active = find_active_config()
         if active:
             config_name = active
         else:
-            # Find config with most recent final_state.json
-            configs = list_configs()
-            latest_config = None
-            latest_time = None
-
-            for name in configs:
-                runs_dir = get_runs_dir(name)
-                runs = sorted(runs_dir.glob("run_*"), reverse=True)
-                for run in runs:
-                    final = run / "final_state.json"
-                    if final.exists():
-                        mtime = final.stat().st_mtime
-                        if latest_time is None or mtime > latest_time:
-                            latest_time = mtime
-                            latest_config = name
-                        break
-
-            if latest_config:
-                config_name = latest_config
+            # Find any config with state.json
+            config_name = find_config_with_state()
 
     if not config_name:
-        print("Error: No config specified and no completed runs found", file=sys.stderr)
+        print("Error: No config specified and no runs found", file=sys.stderr)
         print("Usage: /sica:sica-continue <config_name> [additional_iterations]", file=sys.stderr)
         sys.exit(1)
 
-    # Check for active run
+    # Load state
     state_file = get_state_file(config_name)
-    if state_file.exists() and not args.force:
-        print(f"Active run exists for '{config_name}'.", file=sys.stderr)
-        print("Use --force to override or /sica:sica-clear first.", file=sys.stderr)
+    if not state_file.exists():
+        print(f"Error: No state found for '{config_name}'", file=sys.stderr)
+        print("Run /sica:sica-loop first to start a run.", file=sys.stderr)
         sys.exit(1)
 
-    # Find latest run directory with final_state.json
-    runs_dir = get_runs_dir(config_name)
-    runs = sorted(runs_dir.glob("run_*"), reverse=True)
-
-    latest_run = None
-    for run in runs:
-        if (run / "final_state.json").exists():
-            latest_run = run
-            break
-
-    if not latest_run:
-        print(f"No completed runs found for '{config_name}'", file=sys.stderr)
-        print("Run may still be active or was cancelled.", file=sys.stderr)
-        sys.exit(1)
-
-    final_state_file = latest_run / "final_state.json"
-
-    # Load final state
     try:
-        data = json.loads(final_state_file.read_text())
-        # Handle both old format (original_prompt) and new format (prompt)
-        if "original_prompt" in data and "prompt" not in data:
-            data["prompt"] = data.pop("original_prompt")
-        state = SicaState(
-            config_name=data.get("config_name", config_name),
-            run_id=data["run_id"],
-            run_dir=data["run_dir"],
-            iteration=data.get("iteration", 0),
-            last_score=data.get("last_score"),
-            recent_scores=data.get("recent_scores", []),
-            started_at=data.get("started_at", ""),
-            benchmark_cmd=data.get("benchmark_cmd", ""),
-            max_iterations=data.get("max_iterations", 20),
-            target_score=data.get("target_score", 1.0),
-            completion_promise=data.get("completion_promise", "TESTS PASSING"),
-            benchmark_timeout=data.get("benchmark_timeout", 300),
-            prompt=data.get("prompt", ""),
-            context_files=data.get("context_files", []),
-            params=data.get("params", {}),
-        )
-    except (json.JSONDecodeError, KeyError, ValueError) as e:
+        state = SicaState.load(state_file)
+    except Exception as e:
         print(f"Error loading state: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Update max iterations
+    # Check if already active
+    if state.status == "active" and not args.force:
+        print(f"Run is already active for '{config_name}'.", file=sys.stderr)
+        print("Use --force to add iterations anyway.", file=sys.stderr)
+        sys.exit(1)
+
+    # Update max iterations and set active
     old_max = state.max_iterations
     state.max_iterations = old_max + args.additional
+    state.status = "active"
 
-    # Save as active state
+    # Save state
     state.save(state_file)
 
-    # Build re-read instructions
+    # Build output
     run_dir = state.run_dir
     context_files = state.context_files or []
 
@@ -140,7 +93,7 @@ def main() -> None:
         "SICA Loop Continued",
         "===================",
         f"Config: {config_name}",
-        f"Resumed from: {latest_run.name}",
+        f"Run: {state.run_id}",
         f"Iteration: {state.iteration}/{state.max_iterations} (was /{old_max})",
         f"Last score: {state.last_score if state.last_score is not None else 'N/A'}",
         f"Benchmark: {state.benchmark_cmd}",
