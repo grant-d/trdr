@@ -53,16 +53,35 @@ def main():
     # Write to current_run.json
     current_run.write_text(json.dumps(state, indent=2))
 
-    print(f"""
-SICA Loop Continued
-===================
-Resumed from: {latest.name}
-Iteration: {state['iteration']}/{state['max_iterations']} (was /{old_max})
-Last score: {state.get('last_score', 'N/A')}
-Benchmark: {state.get('benchmark_cmd', 'N/A')}
+    # Build re-read instructions
+    run_dir = state.get('run_dir', str(latest))
+    original_prompt = state.get('original_prompt', '')
+    context_files = state.get('context_files') or []
 
-Continue working. The stop hook will run on next exit attempt.
-""")
+    parts = [
+        "SICA Loop Continued",
+        "===================",
+        f"Resumed from: {latest.name}",
+        f"Iteration: {state['iteration']}/{state['max_iterations']} (was /{old_max})",
+        f"Last score: {state.get('last_score', 'N/A')}",
+        f"Benchmark: {state.get('benchmark_cmd', 'N/A')}",
+        "",
+        "## RE-READ NOW",
+        f"1. Read {run_dir}/journal.md",
+    ]
+
+    for i, f in enumerate(context_files, 2):
+        parts.append(f"{i}. Read {f}")
+
+    if original_prompt:
+        parts.extend(["", "## Task", original_prompt])
+
+    parts.extend([
+        "",
+        "Then continue improving. Stop hook runs benchmark on exit.",
+    ])
+
+    print("\n".join(parts))
 
 
 if __name__ == "__main__":

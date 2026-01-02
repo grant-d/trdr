@@ -140,6 +140,14 @@ plugins/sica/
 └── README.md
 ```
 
+## Development
+
+After editing plugin files, sync to cache:
+
+```bash
+cp -r plugins/sica/* ~/.claude/plugins/cache/jigx-plugins/sica/1.0.0/
+```
+
 ## Credits
 
 - Based on [SICA paper](https://arxiv.org/html/2504.15228v2) by Maxime Robeyns et al.

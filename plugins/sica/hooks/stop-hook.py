@@ -214,10 +214,15 @@ def archive_iteration(state: dict, benchmark_result: dict, transcript_path: str)
     return iter_dir
 
 
-def get_archive_summary(state: dict) -> str:
-    """Generate a summary of past iterations for context."""
+def get_archive_summary(state: dict, top_n: int = 10) -> str:
+    """Generate compact CSV summary of top N iterations by score.
+
+    Args:
+        state: SICA state dict
+        top_n: Number of best iterations to show
+    """
     run_dir = Path(state["run_dir"])
-    summaries = []
+    entries = []
 
     for i in range(state["iteration"]):
         iter_dir = run_dir / f"iteration_{i}"
@@ -225,16 +230,23 @@ def get_archive_summary(state: dict) -> str:
 
         if benchmark_file.exists():
             try:
-                data = json.loads(benchmark_file.read_text())
-                summaries.append(
-                    f"Iteration {i}: score={data.get('score', 0):.2f}, "
-                    f"passed={data.get('passed', 0)}, failed={data.get('failed', 0)}, "
-                    f"errors={data.get('errors', 0)}"
-                )
+                d = json.loads(benchmark_file.read_text())
+                score = d.get('score', 0)
+                entries.append((score, i, d.get('passed', 0), d.get('failed', 0), d.get('errors', 0)))
             except Exception:
                 pass
 
-    return "\n".join(summaries) if summaries else "No previous iterations."
+    if not entries:
+        return "No previous iterations."
+
+    # Sort by score descending, take top N
+    entries.sort(reverse=True)
+    entries = entries[:top_n]
+    rows = ["#,score,pass,fail,err"]
+    for score, i, p, f, e in entries:
+        rows.append(f"{i},{score:.2f},{p},{f},{e}")
+
+    return "\n".join(rows)
 
 
 def extract_failures(benchmark_result: dict) -> str:
@@ -276,49 +288,39 @@ def extract_failures(benchmark_result: dict) -> str:
 
 
 def generate_improvement_prompt(state: dict, benchmark_result: dict) -> str:
-    """Generate the improvement prompt based on failures."""
-    archive_summary = get_archive_summary(state)
+    """Generate compact improvement prompt with archive analysis.
+
+    Persistent rules are in systemMessage to avoid repetition.
+    """
     failures = extract_failures(benchmark_result)
+    top_n = 10
+    archive_summary = get_archive_summary(state, top_n=top_n)
+    original = state.get('original_prompt', '')
+    run_dir = state.get('run_dir', '.sica')
 
-    return f"""SICA Iteration {state['iteration'] + 1}
+    # Include archive analysis (core SICA feature)
+    parts = [
+        f"## Results: {benchmark_result['passed']}✓ {benchmark_result['failed']}✗",
+        "",
+        f"## Top {top_n} Iterations",
+        archive_summary,
+        "",
+        "## Failures",
+        failures,
+        "",
+        "## Journal",
+        f"MUST update {run_dir}/journal.md:",
+        "- BEFORE: what you'll try and why",
+        "- AFTER: what happened, what you learned",
+        "",
+        "## Archive",
+        f"If stuck, read {run_dir}/iteration_N/changes.diff to restore a better approach.",
+    ]
 
-## Benchmark Results
-Command: {state['benchmark_cmd']}
-Score: {benchmark_result['score']:.2f} (target: {state['target_score']})
-Passed: {benchmark_result['passed']}, Failed: {benchmark_result['failed']}, Errors: {benchmark_result['errors']}
-Exit code: {benchmark_result['exit_code']}
+    if original:
+        parts.extend(["", "## Task", original])
 
-## Previous Iterations
-{archive_summary}
-
-## Failures to Fix
-{failures}
-
-## Your Task
-Analyze failures. Make ONE targeted fix.
-
-## CRITICAL - EXIT AFTER EVERY CHANGE
-
-After your code change, IMMEDIATELY attempt to end/complete the conversation.
-DO NOT make multiple changes. DO NOT keep working. DO NOT ask questions.
-
-Change → Exit → Hook runs benchmark → You get results → Repeat.
-
-If you don't exit, the benchmark NEVER runs and iteration NEVER advances.
-
-## OTHER RULES
-- MUST use concise TI (telegraph imperative) language. Save tokens.
-- DO NOT run tests manually. Hook runs benchmark on exit.
-- DO NOT modify test files. Only modify source code.
-- MUST maintain journal.md in {state['run_dir']}:
-  - Read FIRST before making changes
-  - Log each approach (1-2 lines): what you tried, result
-
-When you believe tests will pass, output:
-<promise>{state['completion_promise']}</promise>
-
-{state['original_prompt']}
-"""
+    return "\n".join(parts)
 
 
 def main():
@@ -405,11 +407,14 @@ def main():
     # Generate improvement prompt
     improvement_prompt = generate_improvement_prompt(state, benchmark_result)
 
-    # Build system message
+    # Build system message with persistent rules (avoids repeating in reason)
+    run_dir = state.get('run_dir', '.sica')
+    promise = state['completion_promise']
     system_msg = (
-        f"SICA iteration {state['iteration']} | "
+        f"SICA iter {state['iteration']} | "
         f"Score: {benchmark_result['score']:.2f}/{state['target_score']} | "
-        f"To complete: <promise>{state['completion_promise']}</promise>"
+        f"RULES: ONE fix→exit immediately. NO manual tests. NO test changes. "
+        f"Read/update {run_dir}/journal.md. Done: <promise>{promise}</promise>"
     )
 
     # Output JSON to block exit and continue

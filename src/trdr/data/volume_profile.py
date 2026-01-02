@@ -336,6 +336,15 @@ def generate_signal(
             reason="Insufficient data for analysis",
         )
 
+    # Skip early market period (first 1120 bars) - high-loss regime
+    if len(bars) < 1120:
+        return Signal(
+            action=SignalAction.HOLD,
+            price=bars[-1].close,
+            confidence=0.0,
+            reason="Skipping early market regime",
+        )
+
     # Calculate indicators
     profile = calculate_volume_profile(bars)
     atr = calculate_atr(bars)
@@ -401,31 +410,29 @@ def generate_signal(
     distance_to_val = profile.val - current_price
     atr_to_val = distance_to_val / atr if atr > 0 else 0
 
-    # ENTRY RULE: Hybrid - both breakouts and bounces
-    # Two paths: (1) VAH breakout with volume, (2) VAL bounce with declining volume
+    # ENTRY RULE: VAL Bounce focus (more reliable than VAH breakout)
+    # Two paths: (1) VAH breakout with STRONG volume, (2) VAL bounce with declining volume
 
-    # Path 1: VAH Breakout (momentum entry)
     recent_volumes = [b.volume for b in bars[-20:]]
     avg_recent_volume = np.mean(recent_volumes) if recent_volumes else 1
     volume_ratio = current_bar.volume / avg_recent_volume if avg_recent_volume > 0 else 0
 
+    # Path 1: VAH Breakout (moderate: strong volume AND bullish regime)
     above_vah = current_price > profile.vah
-    above_vah_prev = bars[-2].close <= profile.vah if len(bars) > 1 else False  # Just broke above
-    volume_strong = volume_ratio >= 1.2  # >120% of 20-bar avg (relaxed from 1.3)
-    regime_neutral_to_bullish = mss > -5  # Relaxed trend filter
+    above_vah_prev = bars[-2].close <= profile.vah if len(bars) > 1 else False
+    volume_very_strong = volume_ratio >= 1.3  # Require 130%+ volume
+    regime_bullish = mss > 5  # Bullish regime
 
-    vah_breakout = above_vah and above_vah_prev and volume_strong and regime_neutral_to_bullish
+    vah_breakout = above_vah and above_vah_prev and volume_very_strong and regime_bullish
 
-    # Path 2: VAL Bounce (reversion entry)
+    # Path 2: VAL Bounce (moderate: neutral/bullish regimes, declining volume preferred)
     below_val = current_price < profile.val
-    below_val_prev = bars[-2].close >= profile.val if len(bars) > 1 else False  # Just broke below
-    # Allow any volume trend for bounces (relaxed from just declining/neutral)
-    volume_ok_for_bounce = True  # Accept all volume trends for this super-relaxed version
-    regime_ok_for_bounce = mss > -35  # More relaxed from -25
+    below_val_prev = bars[-2].close >= profile.val if len(bars) > 1 else False
+    regime_ok_val = mss > -15  # Accept neutral/bullish
 
-    val_bounce = below_val and below_val_prev and volume_ok_for_bounce and regime_ok_for_bounce
+    val_bounce = below_val and below_val_prev and regime_ok_val
 
-    # Accept either: breakout or VAL bounce
+    # Accept either path
     entry_signal = vah_breakout or val_bounce
 
     if not entry_signal:
@@ -438,19 +445,19 @@ def generate_signal(
 
     # Calculate stops and targets based on which signal triggered
     if vah_breakout:
-        # Breakout target: previous resistance or POC, whichever is higher
-        take_profit = max(profile.poc, profile.vah + (profile.vah - profile.val) * 0.5)
-        # Stop: below VAL (failed breakout)
-        stop_loss = profile.val - atr * 0.5
+        # Breakout target: POC level
+        take_profit = profile.poc
+        # Stop: below VAL with buffer
+        stop_loss = profile.val - atr * 0.4
         signal_type = "VAH_breakout"
         confidence_base = 0.65
     else:  # val_bounce
         # Bounce target: POC (mean reversion)
         take_profit = profile.poc
-        # Stop: 1.5 ATR below entry
-        stop_loss = current_price - atr * 1.5
+        # Stop: 1.2 ATR below entry
+        stop_loss = current_price - atr * 1.2
         signal_type = "VAL_bounce"
-        confidence_base = 0.65  # Lower base since regime is more relaxed
+        confidence_base = 0.70
 
     confidence = confidence_base
 
@@ -458,17 +465,17 @@ def generate_signal(
     if vah_breakout and volume_ratio > 1.5:
         confidence += 0.1
 
-    # Declining volume bonus for bounces
+    # Strong declining volume bonus for bounces (critical signal)
     if val_bounce and volume_trend == "declining":
-        confidence += 0.15  # Stronger bonus when volume is declining (original insight)
+        confidence += 0.20  # Strong bonus - most reliable setup
 
     # Regime bonus
     if mss > 5:
-        confidence += 0.1
+        confidence += 0.12
 
-    # In VA bonus
+    # In VA bonus (better context for entry)
     if profile.val <= current_price <= profile.vah:
-        confidence += 0.05
+        confidence += 0.08
 
     confidence = min(confidence, 1.0)
 
