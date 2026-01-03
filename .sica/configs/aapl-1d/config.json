@@ -1,5 +1,5 @@
 {
-  "benchmark_cmd": "BACKTEST_SYMBOL={symbol} BACKTEST_TIMEFRAME={timeframe} .venv/bin/python src/trdr/strategy/volume_area_breakout/sica_bench.py",
+  "benchmark_cmd": "BACKTEST_SYMBOL={symbol} BACKTEST_TIMEFRAME={timeframe} python src/trdr/strategy/volume_area_breakout/sica_bench.py",
   "max_iterations": 20,
   "target_score": 1.0,
   "benchmark_timeout": 300,

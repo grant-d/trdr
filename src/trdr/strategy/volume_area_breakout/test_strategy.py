@@ -208,7 +208,7 @@ class TestAlgoPerformance:
         Modify thresholds as needed. SICA uses sica_bench.py.
         """
         total = backtest_result.total_trades
-        assert total >= 6, f"Only {total} trades (need >= 6 for significance)"
+        assert total >= 20, f"Only {total} trades (need >= 20 for significance)"
 
     def test_win_rate(self, backtest_result):
         """Strategy must have reasonable win rate.

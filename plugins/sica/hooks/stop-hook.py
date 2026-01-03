@@ -326,12 +326,15 @@ def generate_improvement_prompt(
         try:
             diff_content = changes_file.read_text()
             # Exclude meta files: only count changes to strategy code
-            lines = diff_content.split('\n')
+            lines = diff_content.split("\n")
             for line in lines:
-                if line.startswith('diff --git'):
+                if line.startswith("diff --git"):
                     # Extract filename
-                    if ('state.json' not in line and '.sica' not in line and
-                        'plugins/sica' not in line):
+                    if (
+                        "state.json" not in line
+                        and ".sica" not in line
+                        and "plugins/sica" not in line
+                    ):
                         has_strategy_changes = True
                         break
         except Exception:
@@ -341,16 +344,18 @@ def generate_improvement_prompt(
         parts.append(f"**JOURNAL:** Update {journal_path} NOW (plan → result)")
         parts.append("")
 
-    parts.extend([
-        f"## Top {top_n} Iterations",
-        archive_summary,
-        "",
-        "## Failures",
-        failures,
-        "",
-        "## Archive",
-        f"If stuck, read {run_dir}/iteration_N/changes.diff to restore a better approach.",
-    ])
+    parts.extend(
+        [
+            f"## Top {top_n} Iterations",
+            archive_summary,
+            "",
+            "## Failures",
+            failures,
+            "",
+            "## Archive",
+            f"If stuck, read {run_dir}/iteration_N/changes.diff to restore a better approach.",
+        ]
+    )
 
     if original:
         parts.extend(["", "## Task", original])
@@ -364,13 +369,25 @@ def main() -> None:
     if not state:
         sys.exit(0)
 
-    # Read hook input for transcript path
+    # Read hook input
+    # https://code.claude.com/docs/en/hooks#stop
+    # https://code.claude.com/docs/en/hooks#stop-and-subagentstop-input
     try:
         hook_input = json.loads(sys.stdin.read())
     except json.JSONDecodeError:
         hook_input = {}
 
+    hook_event_name = hook_input.get("hook_event_name", "")
+    session_id = hook_input.get("session_id", "")
+    permission_mode = hook_input.get("permission_mode", "")
+    stop_hook_active = hook_input.get("stop_hook_active", "")
+    cwd = hook_input.get("cwd", "")
     transcript_path = hook_input.get("transcript_path", "")
+    dbg(f"hook event: {hook_event_name}, session_id: {session_id}, permission_mode: {permission_mode}, stop_hook_active: {stop_hook_active}, cwd: {cwd}, transcript: {transcript_path}")
+
+    # Also constrained via "matcher" in hooks.json
+    if hook_event_name != "Stop":
+        sys.exit(0)
 
     # Fast exit: wrong session (user running CC for other work)
     if not is_sica_session(transcript_path, state.config_name, state.run_id):

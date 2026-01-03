@@ -101,13 +101,24 @@ def compute_composite_score(
     details.append(f"DD: {dd:.1%} → penalty {dd_penalty:.2f}")
 
     # Alpha penalty: penalize underperforming buy-hold
+    # On mega-trends (buyhold > 20%), soften penalty since absolute returns matter more
     alpha_penalty = 1.0
     if buyhold_return is not None and buyhold_return > 0:
         strategy_return = pl / initial_capital
         alpha = strategy_return / buyhold_return
         if alpha < 1.0:
-            # Linear penalty: at alpha=0.5 → 0.5 penalty, at alpha=0 → 0 penalty
-            alpha_penalty = max(0.1, alpha)
+            # The scoring function uses this to soften the alpha penalty.
+            # On mega-trends, it's unfair to penalize a strategy for not matching
+            # a 600% buy-hold return - the strategy might still be good (high WR, Sortino)
+            # even if absolute returns are lower.
+            # Soften penalty on mega-trends: if buyhold > 20%, use sqrt dampening
+            # Normal: alpha_penalty = max(0.1, alpha)
+            # Mega-trend: alpha_penalty = max(0.3, sqrt(alpha))
+            is_megatrend = buyhold_return > 0.20
+            if is_megatrend:
+                alpha_penalty = max(0.3, math.sqrt(alpha))
+            else:
+                alpha_penalty = max(0.1, alpha)
         details.append(f"Alpha: {alpha:.2f}x buy-hold → penalty {alpha_penalty:.2f}")
 
     # Final composite

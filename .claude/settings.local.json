@@ -57,12 +57,10 @@
       "Bash(exit 0)",
       "Skill(feature-dev:feature-dev)",
       "WebFetch(domain:alexop.dev)",
-      "Bash(BACKTEST_SYMBOL=stock:AAPL BACKTEST_TIMEFRAME=1d .venv/bin/python:*)",
-      "Bash(BACKTEST_SYMBOL=stock:AAPL BACKTEST_TIMEFRAME=4h .venv/bin/python:*)",
       "Bash(exit)",
       "Bash(test:*)",
-      "Bash(SYMBOL=crypto:SOL/USD TIMEFRAME=4h python:*)",
-      "Bash(BACKTEST_SYMBOL=crypto:SOL/USD BACKTEST_TIMEFRAME=4h python:*)"
+      "Bash(/sica:*)",
+      "Bash(BACKTEST_SYMBOL=*)"
     ],
     "deny": []
   }

@@ -31,16 +31,24 @@ def main() -> None:
         sys.exit(0)
 
     # Read hook input
+    # https://code.claude.com/docs/en/hooks#sessionstart
+    # https://code.claude.com/docs/en/hooks#sessionstart-input
     try:
         hook_input = json.loads(sys.stdin.read())
     except json.JSONDecodeError:
         hook_input = {}
+    dbg(f"Hook input: {hook_input}")
 
-    hook_event = hook_input.get("hook_event_name", "")
+    hook_event_name = hook_input.get("hook_event_name", "")
     source = hook_input.get("source", "")
+    session_id = hook_input.get("session_id", "")
+    permission_mode = hook_input.get("permission_mode", "")
+    cwd = hook_input.get("cwd", "")
+    transcript_path = hook_input.get("transcript_path", "")
+    dbg(f"hook event: {hook_event_name}, source: {source}, session_id: {session_id}, permission_mode: {permission_mode}, cwd: {cwd}, transcript_path: {transcript_path}")
 
-    # Only act on compaction
-    if hook_event != "SessionStart" or source != "compact":
+    # Also constrained via "matcher" in hooks.json. Only act on `compact`
+    if hook_event_name != "SessionStart" or source != "compact":
         sys.exit(0)
 
     # Now we know it's a SICA compaction - start logging
