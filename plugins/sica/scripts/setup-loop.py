@@ -52,8 +52,8 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  /sica:sica-loop btc-1h         # Run with config
-  /sica:sica-loop --list         # List configs
+  /sica:loop btc-1h         # Run with config
+  /sica:loop --list         # List configs
 """,
     )
 
@@ -99,8 +99,8 @@ Examples:
     # Require config name
     if not args.config_name:
         print("Error: config_name required", file=sys.stderr)
-        print("Usage: /sica:sica-loop <config_name>", file=sys.stderr)
-        print("       /sica:sica-loop --list", file=sys.stderr)
+        print("Usage: /sica:loop <config_name>", file=sys.stderr)
+        print("       /sica:loop --list", file=sys.stderr)
         sys.exit(1)
 
     config_name = args.config_name
@@ -109,7 +109,7 @@ Examples:
     active = find_active_config()
     if active and active != config_name and not args.force:
         print(f"Error: Active run in '{active}'", file=sys.stderr)
-        print("Use --force to override or /sica:sica-clear to stop it", file=sys.stderr)
+        print("Use --force to override or /sica:reset to stop it", file=sys.stderr)
         sys.exit(1)
 
     # Load config
@@ -118,7 +118,7 @@ Examples:
         config = SicaConfig.load(config_path)
     except FileNotFoundError:
         print(f"Error: Config not found: {config_path}", file=sys.stderr)
-        print(f"Create it or use /sica:sica-loop --list to see available configs", file=sys.stderr)
+        print(f"Create it or use /sica:loop --list to see available configs", file=sys.stderr)
         sys.exit(1)
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
@@ -145,7 +145,7 @@ Examples:
     # Save state
     state_path = get_state_file(config_name)
     state.save(state_path)
-    dbg(f"setup-sica-loop: created run {run_id} for {config_name}")
+    dbg(f"Created run {run_id} for {config_name}")
 
     # Show params if any
     params_info = ""
@@ -192,7 +192,7 @@ Change -> Exit -> Hook benchmarks -> Repeat.
   - Avoid repeating failed approaches
 
 Done: <promise>{config.completion_promise}</promise>
-Stop: Press Esc or run /sica:sica-clear
+Stop: Press Esc or run /sica:reset
 
 {"Task: " + prompt if prompt else "Provide your task."} Then make changes and exit.
 

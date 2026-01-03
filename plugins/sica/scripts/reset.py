@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Clear SICA state and stop loop.
+"""Reset SICA state and stop loop.
 
 Deletes state.json. Run archives in runs/ are preserved.
 """
@@ -16,53 +16,53 @@ from paths import find_active_config, find_config_with_state, get_state_file, li
 
 def main() -> None:
     dbg()
-    dbg("=== CLEAR SICA ===")
+    dbg("=== RESET SICA ===")
 
-    parser = argparse.ArgumentParser(description="Clear SICA state")
+    parser = argparse.ArgumentParser(description="Reset SICA state")
     parser.add_argument(
         "config_name",
         nargs="?",
-        help="Config name to clear (default: find active)",
+        help="Config name to reset (default: find active)",
     )
     parser.add_argument(
         "--all", "-a",
         action="store_true",
-        help="Clear all configs with state",
+        help="Reset all configs with state",
     )
     args = parser.parse_args()
 
     if args.all:
-        # Clear all configs with state
-        cleared = []
+        # Reset all configs with state
+        reset_configs = []
         for name in list_configs():
             state_file = get_state_file(name)
             if state_file.exists():
                 state_file.unlink()
-                cleared.append(name)
-        if cleared:
-            print(f"SICA state cleared for: {', '.join(cleared)}")
+                reset_configs.append(name)
+        if reset_configs:
+            print(f"SICA state reset for: {', '.join(reset_configs)}")
         else:
-            print("No SICA states to clear")
+            print("No SICA states to reset")
         return
 
     config_name = args.config_name
 
-    # Find config to clear
+    # Find config to reset
     if not config_name:
         # First try active, then any with state
         config_name = find_active_config() or find_config_with_state()
 
     if not config_name:
-        print("No active SICA loop to clear")
+        print("No active SICA loop to reset")
         return
 
     state_file = get_state_file(config_name)
     if state_file.exists():
         state_file.unlink()
-        dbg(f"clear: cleared {config_name}")
-        print(f"SICA state cleared for config: {config_name}")
+        dbg(f"reset: reset {config_name}")
+        print(f"SICA state reset for config: {config_name}")
     else:
-        dbg(f"clear: no state for {config_name}")
+        dbg(f"reset: no state for {config_name}")
         print(f"No state found for config: {config_name}")
 
 

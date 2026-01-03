@@ -20,7 +20,7 @@ SICA implements an iterative improvement loop:
 ### Interactive Setup
 
 ```bash
-/sica:sica-init btc-1h    # Prompts for each config property
+/sica:init btc-1h    # Prompts for each config property
 ```
 
 ### Config-Based
@@ -50,8 +50,8 @@ See `src/trdr/strategy/*/sica_bench.py` for examples.
 Then run:
 
 ```bash
-/sica:sica-loop btc-1h         # Start loop with config
-/sica:sica-loop --list         # List available configs
+/sica:loop btc-1h         # Start loop with config
+/sica:loop --list         # List available configs
 ```
 
 ### Arguments
@@ -78,11 +78,11 @@ Then run:
 ### Commands
 
 ```bash
-/sica:sica-init btc-1h      # Create config interactively
-/sica:sica-loop btc-1h      # Start loop with config
-/sica:sica-status           # Show current iteration, score, settings
-/sica:sica-continue btc-1h  # Add 10 more iterations to completed run
-/sica:sica-clear            # Stop active loop (or press Esc)
+/sica:init btc-1h      # Create config interactively
+/sica:loop btc-1h      # Start loop with config
+/sica:status           # Show current iteration, score, settings
+/sica:continue btc-1h  # Add 10 more iterations to completed run
+/sica:reset            # Stop active loop (or press Esc)
 ```
 
 ## Directory Structure

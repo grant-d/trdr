@@ -313,19 +313,17 @@ def generate_improvement_prompt(
     passed = benchmark_result.get("passed", 0)
     failed = benchmark_result.get("failed", 0)
 
+    journal_path = f"{run_dir}/journal.md"
     parts = [
         f"## Results: {passed}✓ {failed}✗",
+        "",
+        f"**JOURNAL:** Update {journal_path} NOW (plan → result)",
         "",
         f"## Top {top_n} Iterations",
         archive_summary,
         "",
         "## Failures",
         failures,
-        "",
-        "## Journal",
-        f"MUST update {run_dir}/journal.md:",
-        "- BEFORE: what you'll try and why",
-        "- AFTER: what happened, what you learned",
         "",
         "## Archive",
         f"If stuck, read {run_dir}/iteration_N/changes.diff to restore a better approach.",
@@ -338,33 +336,28 @@ def generate_improvement_prompt(
 
 
 def main() -> None:
+    # Fast exit: no active config = not a SICA session
+    state = read_state()
+    if not state:
+        sys.exit(0)
+
+    # Read hook input for transcript path
+    try:
+        hook_input = json.loads(sys.stdin.read())
+    except json.JSONDecodeError:
+        hook_input = {}
+
+    transcript_path = hook_input.get("transcript_path", "")
+
+    # Fast exit: wrong session (user running CC for other work)
+    if not is_sica_session(transcript_path, state.config_name, state.run_id):
+        sys.exit(0)
+
+    # Now we know it's a SICA session - start logging
     dbg()
     dbg("=== STOP HOOK ===")
     dbg(f"CWD: {os.getcwd()}")
-
-    # Read hook input
-    try:
-        hook_input = json.loads(sys.stdin.read())
-        dbg(f"Hook input keys: {list(hook_input.keys())}")
-    except json.JSONDecodeError:
-        hook_input = {}
-        dbg("No hook input")
-
-    transcript_path = hook_input.get("transcript_path", "")
-    dbg(f"Transcript: {transcript_path}")
-
-    # Check for active SICA loop
-    state = read_state()
-    if not state:
-        dbg("No state - exiting")
-        sys.exit(0)
-
-    dbg(f"State loaded: iter={state.iteration}, max={state.max_iterations}")
-
-    # Skip non-SICA sessions or wrong config/run (user running CC for other work)
-    if not is_sica_session(transcript_path, state.config_name, state.run_id):
-        dbg("No matching SICA_RT_MARKER, exiting")
-        sys.exit(0)
+    dbg(f"State: iter={state.iteration}, max={state.max_iterations}")
 
     # Validate state
     if not isinstance(state.iteration, int):

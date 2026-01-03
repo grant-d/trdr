@@ -48,4 +48,4 @@ After gathering answers, create the config.json file with ALL fields (use defaul
 
 Also ensure `.sica/.gitignore` exists with content `**/runs/`.
 
-Finally, tell the user: `Config created. Start with: /sica:sica-loop <config_name>`
+Finally, tell the user: `Config created. Start with: /sica:loop <config_name>`

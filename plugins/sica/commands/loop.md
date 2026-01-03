@@ -11,7 +11,7 @@ If `$1` is empty, ask the user which config to use (use AskUserQuestion with ava
 Then run the setup script:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/setup-sica-loop.py" $ARGUMENTS
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/setup-loop.py" $ARGUMENTS
 ```
 
 After setup completes, work on your task. When you try to exit, SICA will:

@@ -60,14 +60,14 @@ def main() -> None:
 
     if not config_name:
         print("Error: No config specified and no runs found", file=sys.stderr)
-        print("Usage: /sica:sica-continue <config_name> [additional_iterations]", file=sys.stderr)
+        print("Usage: /sica:continue <config_name> [additional_iterations]", file=sys.stderr)
         sys.exit(1)
 
     # Load state
     state_file = get_state_file(config_name)
     if not state_file.exists():
         print(f"Error: No state found for '{config_name}'", file=sys.stderr)
-        print("Run /sica:sica-loop first to start a run.", file=sys.stderr)
+        print("Run /sica:loop first to start a run.", file=sys.stderr)
         sys.exit(1)
 
     try:
@@ -91,7 +91,7 @@ def main() -> None:
 
     # Save state
     state.save(state_file)
-    dbg(f"continue-sica-loop: {config_name} now {state.max_iterations} max iterations")
+    dbg(f"Continued {config_name}: now {state.max_iterations} max iterations")
 
     # Build output
     run_dir = state.run_dir
