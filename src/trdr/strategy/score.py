@@ -22,6 +22,12 @@ def asymptotic(value: float, target: float) -> float:
     return value / (value + target)
 
 
+# TODO: Add CAGR calculation that handles arbitrary timeframes
+# - Accept bar timestamps or duration
+# - Compute annualized returns for strategy vs buy-hold
+# - Display in scoring breakdown
+
+
 def compute_composite_score(
     profit_factor: float,
     sortino: float | None,
@@ -29,8 +35,10 @@ def compute_composite_score(
     win_rate: float,
     max_drawdown: float,
     total_trades: int,
+    initial_capital: float = 10_000,
+    buyhold_return: float | None = None,
 ) -> tuple[float, list[str]]:
-    """Compute composite score with geometric mean and DD penalty.
+    """Compute composite score with geometric mean, DD penalty, and alpha check.
 
     Targets (score = 0.5 at these values):
     - Profit Factor: 1.5
@@ -38,6 +46,20 @@ def compute_composite_score(
     - P&L: $1000
     - Win Rate: 40%
     - Min Trades: 10
+
+    Penalties:
+    - Max Drawdown > 20%: exponential decay
+    - Alpha < 1.0 (underperforming buy-hold): linear penalty
+
+    Args:
+        profit_factor: Strategy profit factor
+        sortino: Sortino ratio (can be None or inf)
+        pnl: Total P&L in dollars
+        win_rate: Win rate as decimal (0-1)
+        max_drawdown: Max drawdown as decimal (0-1)
+        total_trades: Number of trades
+        initial_capital: Starting capital for return calculation
+        buyhold_return: Buy-hold return as decimal (e.g., 1.09 for 109%). None to skip.
 
     Returns:
         Tuple of (score 0-1, list of metric descriptions)
@@ -78,8 +100,21 @@ def compute_composite_score(
         dd_penalty = math.exp(-10 * (dd - 0.20))
     details.append(f"DD: {dd:.1%} → penalty {dd_penalty:.2f}")
 
+    # Alpha penalty: penalize underperforming buy-hold
+    alpha_penalty = 1.0
+    if buyhold_return is not None and buyhold_return > 0:
+        strategy_return = pl / initial_capital
+        alpha = strategy_return / buyhold_return
+        if alpha < 1.0:
+            # Linear penalty: at alpha=0.5 → 0.5 penalty, at alpha=0 → 0 penalty
+            alpha_penalty = max(0.1, alpha)
+        details.append(f"Alpha: {alpha:.2f}x buy-hold → penalty {alpha_penalty:.2f}")
+
     # Final composite
-    composite = geomean * dd_penalty
-    details.append(f"Composite: {geomean:.3f} × {dd_penalty:.2f} = {composite:.3f}")
+    composite = geomean * dd_penalty * alpha_penalty
+    if buyhold_return is not None:
+        details.append(f"Composite: {geomean:.3f} × {dd_penalty:.2f} × {alpha_penalty:.2f} = {composite:.3f}")
+    else:
+        details.append(f"Composite: {geomean:.3f} × {dd_penalty:.2f} = {composite:.3f}")
 
     return composite, details

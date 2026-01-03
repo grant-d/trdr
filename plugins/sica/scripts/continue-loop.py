@@ -40,7 +40,8 @@ def main() -> None:
         help="Additional iterations (default: 10)",
     )
     parser.add_argument(
-        "--force", "-f",
+        "--force",
+        "-f",
         action="store_true",
         help="Force continue even if run is active",
     )
@@ -86,8 +87,8 @@ def main() -> None:
     old_max = state.max_iterations
     state.max_iterations = old_max + args.additional
     state.status = "active"
-    # Clear recent_scores to avoid immediate convergence detection
-    state.recent_scores = []
+    # Preserve recent_scores for convergence detection
+    # state.recent_scores = []
 
     # Save state
     state.save(state_file)
@@ -119,12 +120,14 @@ def main() -> None:
     if state.prompt:
         parts.extend(["", "## Task", state.prompt])
 
-    parts.extend([
-        "",
-        "Then continue improving. Stop hook runs benchmark on exit.",
-        "",
-        marker,
-    ])
+    parts.extend(
+        [
+            "",
+            "Then continue improving. Stop hook runs benchmark on exit.",
+            "",
+            marker,
+        ]
+    )
 
     print("\n".join(parts))
 

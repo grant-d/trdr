@@ -80,7 +80,7 @@ Then run:
 ```bash
 /sica:init btc-1h      # Create config interactively
 /sica:loop btc-1h      # Start loop with config
-/sica:status           # Show current iteration, score, settings
+/sica:info             # Show current iteration, score, settings
 /sica:continue btc-1h  # Add 10 more iterations to completed run
 /sica:reset            # Stop active loop (or press Esc)
 ```

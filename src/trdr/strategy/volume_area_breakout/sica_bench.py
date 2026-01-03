@@ -59,7 +59,7 @@ async def get_bars(symbol: str, timeframe: str, lookback: int = 10000):
 
 
 def run_backtest(symbol: str, timeframe: str):
-    """Run backtest and return results."""
+    """Run backtest and return results plus buy-hold info."""
     # Force reimport to pick up code changes
     Config, Strategy = reload_strategy()
 
@@ -68,6 +68,13 @@ def run_backtest(symbol: str, timeframe: str):
     # Get bars
     bars = asyncio.run(get_bars(symbol, timeframe))
 
+    # Calculate buy-hold return
+    initial_capital = 10000
+    if bars and len(bars) >= 2:
+        buyhold_return = (bars[-1].close / bars[0].close) - 1
+    else:
+        buyhold_return = 0.0
+
     # Create strategy
     config = Config(symbol=symbol, timeframe=timeframe)
     strategy = Strategy(config)
@@ -75,23 +82,25 @@ def run_backtest(symbol: str, timeframe: str):
     # Run backtest
     bt_config = BacktestConfig(
         symbol=symbol,
-        initial_capital=10000,
+        initial_capital=initial_capital,
         position_size_pct=1.0,  # 100% of capital per trade
     )
     engine = BacktestEngine(bt_config, strategy)
-    return engine.run(bars)
+    result = engine.run(bars)
+
+    return result, initial_capital, buyhold_return
 
 
 def main():
     symbol = os.environ.get("BACKTEST_SYMBOL", "stock:AAPL")
     timeframe = os.environ.get("BACKTEST_TIMEFRAME", "1d")
 
-    result = run_backtest(symbol, timeframe)
+    result, initial_capital, buyhold_return = run_backtest(symbol, timeframe)
 
     # Get metrics
     sortino = result.sortino_ratio
 
-    # Compute composite score
+    # Compute composite score with buy-hold comparison
     score, details = compute_composite_score(
         profit_factor=result.profit_factor,
         sortino=sortino,
@@ -99,6 +108,8 @@ def main():
         win_rate=result.win_rate,
         max_drawdown=result.max_drawdown,
         total_trades=result.total_trades,
+        initial_capital=initial_capital,
+        buyhold_return=buyhold_return,
     )
 
     # Print summary
@@ -111,6 +122,7 @@ def main():
     print(f"Win Rate: {result.win_rate:.1%}")
     print(f"Profit Factor: {result.profit_factor:.2f}")
     print(f"Total P&L: ${result.total_pnl:.2f}")
+    print(f"Buy-Hold P&L: ${initial_capital * buyhold_return:,.2f}")
     sortino_str = f"{sortino:.2f}" if sortino and sortino != float("inf") else str(sortino)
     print(f"Sortino: {sortino_str}")
     print(f"Max Drawdown: {result.max_drawdown:.1%}")

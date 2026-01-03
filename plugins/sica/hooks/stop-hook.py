@@ -22,7 +22,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
 from config import SicaState
 from debug import dbg
 from paths import (
-    find_active_config,
     get_state_file,
     is_sica_session,
     list_active_configs,
@@ -302,6 +301,7 @@ def extract_failures(benchmark_result: dict[str, str | int | float]) -> str:
 def generate_improvement_prompt(
     state: SicaState,
     benchmark_result: dict[str, str | int | float],
+    iter_dir: Path,
 ) -> str:
     """Generate compact improvement prompt with archive analysis."""
     failures = extract_failures(benchmark_result)
@@ -317,8 +317,31 @@ def generate_improvement_prompt(
     parts = [
         f"## Results: {passed}✓ {failed}✗",
         "",
-        f"**JOURNAL:** Update {journal_path} NOW (plan → result)",
-        "",
+    ]
+
+    # Only show journal reminder if this iteration had strategy code changes (not meta files)
+    changes_file = iter_dir / "changes.diff"
+    has_strategy_changes = False
+    if changes_file.exists():
+        try:
+            diff_content = changes_file.read_text()
+            # Exclude meta files: only count changes to strategy code
+            lines = diff_content.split('\n')
+            for line in lines:
+                if line.startswith('diff --git'):
+                    # Extract filename
+                    if ('state.json' not in line and '.sica' not in line and
+                        'plugins/sica' not in line):
+                        has_strategy_changes = True
+                        break
+        except Exception:
+            pass
+
+    if has_strategy_changes:
+        parts.append(f"**JOURNAL:** Update {journal_path} NOW (plan → result)")
+        parts.append("")
+
+    parts.extend([
         f"## Top {top_n} Iterations",
         archive_summary,
         "",
@@ -327,7 +350,7 @@ def generate_improvement_prompt(
         "",
         "## Archive",
         f"If stuck, read {run_dir}/iteration_N/changes.diff to restore a better approach.",
-    ]
+    ])
 
     if original:
         parts.extend(["", "## Task", original])
@@ -408,14 +431,14 @@ def main() -> None:
     log(f"SICA: Score={score:.2f} (passed={passed}, failed={failed}, errors={errors})")
 
     # Archive results
-    archive_iteration(state, benchmark_result, transcript_path)
+    iter_dir = archive_iteration(state, benchmark_result, transcript_path)
 
     # Track recent scores for convergence
     state.recent_scores.append(round(float(score), 4))
     state.recent_scores = state.recent_scores[-10:]
 
-    # Check convergence
-    if len(state.recent_scores) == 10 and len(set(state.recent_scores)) == 1:
+    # Check convergence (5 consecutive identical scores)
+    if len(state.recent_scores) >= 5 and len(set(state.recent_scores[-5:])) == 1:
         log(f"SICA COMPLETE: Converged at score {state.recent_scores[0]:.2f}")
         log(f"  Config: {state.config_name} | Run: {state.run_id}")
         log(f"  Iterations: {state.iteration} | Target: {state.target_score}")
@@ -442,7 +465,7 @@ def main() -> None:
     save_state(state)
 
     # Generate improvement prompt
-    improvement_prompt = generate_improvement_prompt(state, benchmark_result)
+    improvement_prompt = generate_improvement_prompt(state, benchmark_result, iter_dir)
 
     # Build system message with marker at end (persists across iterations)
     run_dir = state.run_dir

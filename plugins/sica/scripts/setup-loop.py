@@ -118,7 +118,7 @@ Examples:
         config = SicaConfig.load(config_path)
     except FileNotFoundError:
         print(f"Error: Config not found: {config_path}", file=sys.stderr)
-        print(f"Create it or use /sica:loop --list to see available configs", file=sys.stderr)
+        print("Create it or use /sica:loop --list to see available configs", file=sys.stderr)
         sys.exit(1)
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)

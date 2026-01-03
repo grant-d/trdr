@@ -1,70 +1,97 @@
 # VolumeAreaBreakout Strategy
 
-**BTC/USD 1-hour**
-2-path Volume Profile system optimized via SICA loop (91+ iterations).
+Timeframe-aware Volume Profile strategy with VAH breakout entries.
+Optimized via SICA across multiple symbol/timeframe combinations.
 
 ## Entry Paths
 
-### Path 1: VAH Breakout
+### Daily Timeframe (1d)
 
+**VAH Breakout:**
 - Price breaks above Value Area High (VAH)
-- Volume >= 1.2x average
-- MSS regime > -5 (bullish/neutral)
+- HMA slope positive (trend confirmation)
+- MSS regime > 0 (bullish)
 - Base confidence: 0.65
 
-### Path 2: VAL Bounce
+**VAH Pullback:**
+- Price near VAH after prior breakout
+- HMA bullish and trending up
+- MSS > 5
+- Base confidence: 0.60
 
+### Intraday Timeframes (1h, 4h)
+
+**VAH Breakout:**
+- Price breaks above VAH
+- Volume >= 1.0x average
+- MSS > 5, price > HMA
+- Base confidence: 0.65
+
+**VAL Bounce:**
 - Price bounces from Value Area Low (VAL)
-- Any volume (declining volume gets +0.25 bonus)
-- MSS regime > -35
+- Volume >= 1.0x average
+- MSS > 0
 - Base confidence: 0.70
+- Declining volume bonus: +0.25
 
 ## Exit Rules
 
-- **Target**: POC (Point of Control)
-- **Stop VAH**: 0.4x ATR below VAL
-- **Stop VAL**: 1.2x ATR below entry
+**Daily:**
+- Target: VAH + 10x ATR (trend-following)
+- Stop: VAH - 1x ATR
+
+**Intraday:**
+- Target: VAH + 3x ATR (breakout) or POC (bounce)
+- Stop: VAH - 0.3x ATR (breakout) or entry - 2x ATR (bounce)
+
+## Indicators
+
+- **Volume Profile**: VAH, VAL, POC from 40-bucket distribution
+- **HMA**: Hull Moving Average (period 9) with slope detection
+- **MSS**: Market Structure Score (-100 to +100) for regime
+- **ATR**: 14-period Average True Range
+- **Multi-TF POC**: Confluence across 1x, 4x, 12x aggregations
+- **HVN Strength**: Historical support validation at VAL
 
 ## Configuration
 
 ```python
 VolumeAreaBreakoutConfig(
-    symbol="crypto:BTC/USD",
-    timeframe="1h",
+    symbol="stock:AAPL",  # or "crypto:BTC/USD"
+    timeframe="1d",       # 1d, 4h, 1h
     atr_threshold=2.0,
     stop_loss_multiplier=1.75,
 )
 ```
 
-## Performance (SICA Optimized)
+## Performance (AAPL 1d, SICA Run 4)
 
 | Metric | Value |
 | --- | --- |
-| SICA Score | 0.856 |
-| Trades | 6 |
-| Win Rate | 66.7% |
-| Profit Factor | 5.32 |
-| Max Drawdown | 12.0% |
-| Sharpe Ratio | 65.00 |
-| Sortino Ratio | 202.75 |
-| P&L | +$6,439 |
+| SICA Score | 0.73 |
+| Trades | 20 |
+| Win Rate | 50% |
+| Profit Factor | 7.86 |
+| Max Drawdown | 6.4% |
+| Sortino | 1498 |
+| P&L | +$15,280 |
+| Alpha | 1.40x buy-hold |
 
 ## SICA Optimization
 
-The `sica_journal.md` documents 91+ iterations of systematic exploration:
+100+ iterations across 4 runs. Structural ceiling at 73% due to:
+- 10 VAH breakouts in AAPL daily data (limited opportunities)
+- Strategy already captures all high-quality setups
 
+Tested variations (all regressed or neutral):
+- Volume spike entries
 - Volatility regime filters
 - Order flow imbalance
 - SAX pattern trading
 - Multi-timeframe POC confluence
 - Heikin-Ashi smoothing
-- Confidence-based position sizing
-
-All alternatives either failed or degraded the baseline 0.856 score. The 6-trade constraint reflects data reality (BTC hourly contains ~6 high-quality VA crossovers), not model limitation.
 
 ## Files
 
 - `strategy.py` - Strategy implementation
-- `test_strategy.py` - Backtest validation tests
-- `sica_journal.md` - SICA optimization history
-- `sica_final_state.json` - Final SICA loop state
+- `sica_bench.py` - SICA benchmark runner
