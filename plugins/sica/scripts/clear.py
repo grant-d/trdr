@@ -10,10 +10,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
 
+from debug import dbg
 from paths import find_active_config, find_config_with_state, get_state_file, list_configs
 
 
 def main() -> None:
+    dbg()
+    dbg("=== CLEAR SICA ===")
+
     parser = argparse.ArgumentParser(description="Clear SICA state")
     parser.add_argument(
         "config_name",
@@ -55,8 +59,10 @@ def main() -> None:
     state_file = get_state_file(config_name)
     if state_file.exists():
         state_file.unlink()
+        dbg(f"clear: cleared {config_name}")
         print(f"SICA state cleared for config: {config_name}")
     else:
+        dbg(f"clear: no state for {config_name}")
         print(f"No state found for config: {config_name}")
 
 

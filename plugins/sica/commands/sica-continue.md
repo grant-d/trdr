@@ -1,6 +1,7 @@
 ---
 description: "Continue SICA loop with more iterations"
 argument-hint: "[CONFIG_NAME] [ADDITIONAL_ITERATIONS] [--force]"
+model: haiku
 ---
 
 # Continue SICA Loop

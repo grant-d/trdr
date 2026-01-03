@@ -15,6 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
 
 from config import SicaState
+from debug import dbg
 from paths import find_active_config, get_state_file
 
 
@@ -24,23 +25,32 @@ def log(msg: str) -> None:
 
 
 def main() -> None:
+    dbg()
+    dbg("=== SESSION START HOOK ===")
+
     # Read hook input
     try:
         hook_input = json.loads(sys.stdin.read())
+        dbg(f"SessionStart hook: {hook_input.get('hook_event_name')} source={hook_input.get('source')}")
     except json.JSONDecodeError:
         hook_input = {}
+        dbg("SessionStart hook: no input")
 
     hook_event = hook_input.get("hook_event_name", "")
     source = hook_input.get("source", "")
 
     # Only act on compaction
     if hook_event != "SessionStart" or source != "compact":
+        dbg("SessionStart hook: not compaction, exiting")
         sys.exit(0)
 
     # Check for active SICA loop
     config_name = find_active_config()
     if not config_name:
+        dbg("SessionStart hook: no active config")
         sys.exit(0)
+
+    dbg(f"SessionStart hook: resuming {config_name}")
 
     try:
         state = SicaState.load(get_state_file(config_name))

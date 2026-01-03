@@ -729,8 +729,8 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
                 reason="Position already open",
             )
 
-        # Regime Filter: relaxed for daily, stricter for intraday
-        regime_threshold = -40 if is_daily else -20
+        # Regime Filter: stricter for daily to improve WR
+        regime_threshold = 0 if is_daily else -20
         if mss < regime_threshold:
             return Signal(
                 action=SignalAction.HOLD,
@@ -755,11 +755,10 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         poc_clustered = poc_cluster_width < (atr * 0.5)  # POCs within 0.5 ATR = strong confluence
 
         # HMA trend filter - price must be above HMA (uptrend)
-        hma_period = 7 if is_daily else 9  # Shorter period for daily = more responsive
-        hma = calculate_hma(bars, period=hma_period)
+        hma = calculate_hma(bars, period=9)
         hma_bullish = current_price > hma and hma > 0
         # For daily: require HMA slope positive (1-bar lookback for more signals)
-        hma_slope = calculate_hma_slope(bars, period=hma_period, lookback=1)
+        hma_slope = calculate_hma_slope(bars, period=9, lookback=1)
         hma_trending_up = hma_slope > 0
 
         # Path 1: VAH Breakout (thresholds vary by timeframe)
@@ -776,12 +775,16 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         # Path 2: VAL Bounce - disabled for daily (trend-following only)
         if is_daily:
             val_bounce = False
+            # Path 3: Daily continuation - price pulled back near VAH after breakout
+            near_vah = abs(current_price - profile.vah) < atr * 0.5
+            poc_pullback = near_vah and hma_bullish and hma_trending_up and mss > 5
         else:
             # Intraday: enable VAL bounce with original logic
             near_val = abs(current_price - profile.val) < atr * 0.5
             val_bounce = near_val and volume_ratio >= 1.0 and mss > 0
+            poc_pullback = False
 
-        entry_signal = vah_breakout or val_bounce
+        entry_signal = vah_breakout or val_bounce or poc_pullback
 
         if not entry_signal:
             return Signal(
@@ -792,7 +795,7 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             )
 
         # Calculate stops and targets relative to VAH (breakout level)
-        if vah_breakout:
+        if vah_breakout or poc_pullback:
             if is_daily:
                 # Daily: 10:1 R:R - optimal balance of P&L and trade count
                 take_profit = profile.vah + atr * 10.0
@@ -801,8 +804,8 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
                 # Intraday: tight stops, aggressive targets
                 take_profit = profile.vah + atr * 3.0
                 stop_loss = profile.vah - atr * 0.3
-            signal_type = "VAH_breakout"
-            confidence_base = 0.65
+            signal_type = "VAH_breakout" if vah_breakout else "VAH_pullback"
+            confidence_base = 0.65 if vah_breakout else 0.60
         else:  # val_bounce
             # Bounce target: PoC (mean reversion)
             take_profit = profile.poc

@@ -7,11 +7,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
 
 from config import SicaState
+from debug import dbg
 from paths import find_active_config, get_state_file, list_configs
 
 
 def main() -> None:
+    dbg()
+    dbg("=== SICA STATUS ===")
     active = find_active_config()
+    dbg(f"status: active={active}")
     if active:
         state = SicaState.load(get_state_file(active))
         score = f"{state.last_score:.2f}" if state.last_score is not None else "N/A"

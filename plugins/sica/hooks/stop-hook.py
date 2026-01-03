@@ -20,7 +20,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
 
 from config import SicaState
-from paths import find_active_config, get_state_file, list_active_configs
+from debug import dbg
+from paths import (
+    find_active_config,
+    get_state_file,
+    is_sica_session,
+    list_active_configs,
+    make_runtime_marker,
+)
 
 
 def log(msg: str) -> None:
@@ -135,8 +142,7 @@ def parse_test_output(output: str) -> tuple[int, int, int]:
 
     # Jest: "Tests: X passed, Y failed"
     jest_match = re.search(
-        r"Tests:\s*(?:(\d+)\s+passed)?(?:,\s*(\d+)\s+failed)?",
-        output, re.IGNORECASE
+        r"Tests:\s*(?:(\d+)\s+passed)?(?:,\s*(\d+)\s+failed)?", output, re.IGNORECASE
     )
     if jest_match:
         passed = int(jest_match.group(1) or 0)
@@ -170,11 +176,16 @@ def archive_iteration(
 
     # Save benchmark results
     benchmark_file = iter_dir / "benchmark.json"
-    benchmark_file.write_text(json.dumps({
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "command": state.benchmark_cmd,
-        **benchmark_result,
-    }, indent=2))
+    benchmark_file.write_text(
+        json.dumps(
+            {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "command": state.benchmark_cmd,
+                **benchmark_result,
+            },
+            indent=2,
+        )
+    )
 
     # Save stdout/stderr
     stdout = benchmark_result.get("stdout", "")
@@ -186,10 +197,7 @@ def archive_iteration(
 
     # Save git diff
     try:
-        diff = subprocess.run(
-            ["git", "diff", "HEAD"],
-            capture_output=True, text=True, timeout=10
-        )
+        diff = subprocess.run(["git", "diff", "HEAD"], capture_output=True, text=True, timeout=10)
         if diff.stdout:
             (iter_dir / "changes.diff").write_text(diff.stdout)
     except Exception as e:
@@ -230,13 +238,15 @@ def get_archive_summary(state: SicaState, top_n: int = 10) -> str:
             try:
                 d = json.loads(benchmark_file.read_text())
                 score = d.get("score", 0)
-                entries.append((
-                    score,
-                    i,
-                    d.get("passed", 0),
-                    d.get("failed", 0),
-                    d.get("errors", 0),
-                ))
+                entries.append(
+                    (
+                        score,
+                        i,
+                        d.get("passed", 0),
+                        d.get("failed", 0),
+                        d.get("errors", 0),
+                    )
+                )
             except Exception:
                 pass
 
@@ -265,10 +275,7 @@ def extract_failures(benchmark_result: dict[str, str | int | float]) -> str:
         failures.append(f"- {match.group(1)}")
 
     # pytest short test summary
-    summary_match = re.search(
-        r"=+ short test summary info =+\n(.*?)(?:=+|$)",
-        output, re.DOTALL
-    )
+    summary_match = re.search(r"=+ short test summary info =+\n(.*?)(?:=+|$)", output, re.DOTALL)
     if summary_match:
         failures.append(summary_match.group(1).strip())
 
@@ -331,24 +338,9 @@ def generate_improvement_prompt(
 
 
 def main() -> None:
-    # DEBUG: Write to temp file to trace full execution
-    debug_file = Path("/tmp/sica-stop-hook-debug.txt")
-    debug_lines = [f"Time: {datetime.now(timezone.utc).isoformat()}"]
-
-    def dbg(msg: str) -> None:
-        debug_lines.append(msg)
-        debug_file.write_text("\n".join(debug_lines))
-
-    try:
-        dbg(f"CWD: {os.getcwd()}")
-        active = find_active_config()
-        dbg(f"Active config: {active}")
-        state_path = get_state_file(active) if active else None
-        dbg(f"State path: {state_path}")
-        state_exists = state_path.exists() if state_path else False
-        dbg(f"State exists: {state_exists}")
-    except Exception as e:
-        dbg(f"Init error: {e}")
+    dbg()
+    dbg("=== STOP HOOK ===")
+    dbg(f"CWD: {os.getcwd()}")
 
     # Read hook input
     try:
@@ -369,6 +361,11 @@ def main() -> None:
 
     dbg(f"State loaded: iter={state.iteration}, max={state.max_iterations}")
 
+    # Skip non-SICA sessions or wrong config/run (user running CC for other work)
+    if not is_sica_session(transcript_path, state.config_name, state.run_id):
+        dbg("No matching SICA_RT_MARKER, exiting")
+        sys.exit(0)
+
     # Validate state
     if not isinstance(state.iteration, int):
         dbg("State corrupted - exiting")
@@ -381,7 +378,10 @@ def main() -> None:
     # Check max iterations
     if state.iteration >= max_iter:
         dbg(f"Max iter reached: {state.iteration} >= {max_iter}")
-        log(f"SICA: Max iterations ({max_iter}) reached.")
+        log(f"SICA COMPLETE: Max iterations ({max_iter}) reached")
+        log(f"  Config: {state.config_name} | Run: {state.run_id}")
+        log(f"  Last score: {state.last_score} | Target: {state.target_score}")
+        log(f"  Run dir: {state.run_dir}")
         complete_run(state)
         sys.exit(0)
 
@@ -423,13 +423,19 @@ def main() -> None:
 
     # Check convergence
     if len(state.recent_scores) == 10 and len(set(state.recent_scores)) == 1:
-        log(f"SICA: Converged at score {state.recent_scores[0]:.2f}")
+        log(f"SICA COMPLETE: Converged at score {state.recent_scores[0]:.2f}")
+        log(f"  Config: {state.config_name} | Run: {state.run_id}")
+        log(f"  Iterations: {state.iteration} | Target: {state.target_score}")
+        log(f"  Run dir: {state.run_dir}")
         complete_run(state)
         sys.exit(0)
 
     # Check target reached
     if float(score) >= state.target_score:
-        log(f"SICA: Target score ({state.target_score}) reached!")
+        log(f"SICA COMPLETE: Target score reached! ({score:.2f} >= {state.target_score})")
+        log(f"  Config: {state.config_name} | Run: {state.run_id}")
+        log(f"  Iterations: {state.iteration}")
+        log(f"  Run dir: {state.run_dir}")
         complete_run(state)
         sys.exit(0)
 
@@ -445,22 +451,28 @@ def main() -> None:
     # Generate improvement prompt
     improvement_prompt = generate_improvement_prompt(state, benchmark_result)
 
-    # Build system message
+    # Build system message with marker at end (persists across iterations)
     run_dir = state.run_dir
     promise = state.completion_promise
+    marker = make_runtime_marker(state.config_name, state.run_id)
     system_msg = (
         f"SICA iter {state.iteration} | "
         f"Score: {score:.2f}/{state.target_score} | "
         f"RULES: ONE fix→exit immediately. NO manual tests. NO test changes. "
-        f"Read/update {run_dir}/journal.md. Done: <promise>{promise}</promise>"
+        f"Read/update {run_dir}/journal.md. Done: <promise>{promise}</promise> "
+        f"{marker}"
     )
 
     # Block exit and continue
-    print(json.dumps({
-        "decision": "block",
-        "reason": improvement_prompt,
-        "systemMessage": system_msg,
-    }))
+    print(
+        json.dumps(
+            {
+                "decision": "block",
+                "reason": improvement_prompt,
+                "systemMessage": system_msg,
+            }
+        )
+    )
 
 
 if __name__ == "__main__":

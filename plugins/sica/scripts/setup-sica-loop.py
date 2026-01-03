@@ -7,12 +7,14 @@ Creates state file and run directory within config folder.
 import argparse
 import sys
 from datetime import datetime, timezone
+import json
 from pathlib import Path
 
 # Add lib to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
 
 from config import SicaConfig, SicaState
+from debug import dbg
 from paths import (
     find_active_config,
     get_config_file,
@@ -20,10 +22,31 @@ from paths import (
     get_sica_root,
     get_state_file,
     list_configs,
+    make_runtime_marker,
 )
+
+# Plugin paths for dev sync
+# PLUGIN_SRC = Path(__file__).parent.parent  # plugins/sica/
+# PLUGIN_CACHE = Path.home() / ".claude/plugins/cache/jigx-plugins/sica/1.0.0"
+
+
+# def sync_plugin_to_cache() -> None:
+#     """Sync plugin source to cache for development."""
+#     if not PLUGIN_SRC.exists():
+#         return
+#     try:
+#         if PLUGIN_CACHE.exists():
+#             shutil.rmtree(PLUGIN_CACHE)
+#         shutil.copytree(PLUGIN_SRC, PLUGIN_CACHE)
+#         dbg(f"Synced plugin to cache: {PLUGIN_CACHE}")
+#     except Exception as e:
+#         dbg(f"Plugin sync failed: {e}")
 
 
 def main() -> None:
+    # sync_plugin_to_cache()
+    dbg("=== SETUP SICA LOOP ===", reset=True)
+
     parser = argparse.ArgumentParser(
         description="SICA Loop - Self-Improving Coding Agent",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -60,7 +83,14 @@ Examples:
             print("Available configs:")
             for name in configs:
                 state_file = get_state_file(name)
-                status = " (active)" if state_file.exists() else ""
+                if state_file.exists():
+                    try:
+                        data = json.loads(state_file.read_text())
+                        status = f" ({data.get('status', 'unknown')})"
+                    except (json.JSONDecodeError, OSError):
+                        status = " (state error)"
+                else:
+                    status = ""
                 print(f"  {name}{status}")
         else:
             print("No configs found. Create one at .sica/configs/<name>/config.json")
@@ -102,7 +132,7 @@ Examples:
     gitignore = get_sica_root() / ".gitignore"
     if not gitignore.exists():
         gitignore.parent.mkdir(parents=True, exist_ok=True)
-        gitignore.write_text("**/runs/\n")
+        gitignore.write_text("**/runs/\ndebug.log\n")
 
     # Create empty journal
     journal_path = run_dir / "journal.md"
@@ -115,6 +145,7 @@ Examples:
     # Save state
     state_path = get_state_file(config_name)
     state.save(state_path)
+    dbg(f"setup-sica-loop: created run {run_id} for {config_name}")
 
     # Show params if any
     params_info = ""
@@ -123,6 +154,9 @@ Examples:
         params_info = "\nParams:\n" + "\n".join(params_lines)
 
     prompt = config.interpolate_prompt()
+
+    # Runtime marker for session detection (checked by stop hook)
+    marker = make_runtime_marker(config_name, run_id)
 
     print(f"""
 SICA Loop Activated
@@ -161,6 +195,8 @@ Done: <promise>{config.completion_promise}</promise>
 Stop: Press Esc or run /sica:sica-clear
 
 {"Task: " + prompt if prompt else "Provide your task."} Then make changes and exit.
+
+{marker}
 """)
 
 

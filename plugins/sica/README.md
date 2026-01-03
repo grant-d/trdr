@@ -93,11 +93,10 @@ Then run:
 └── configs/
     └── btc-1h/                           # Config folder
         ├── config.json                   # Config params (tracked)
-        ├── state.json                    # Active state (tracked)
+        ├── state.json                    # Run state (tracked, single source of truth)
         └── runs/                         # Archives (ignored)
             └── run_YYYYMMDD_HHMMSS/
                 ├── journal.md            # Claude's log
-                ├── final_state.json      # State at completion
                 └── iteration_N/
                     ├── benchmark.json    # Test results, score
                     ├── stdout.txt
@@ -140,6 +139,14 @@ After editing plugin files, sync to cache:
 
 ```bash
 cp -r plugins/sica/* ~/.claude/plugins/cache/jigx-plugins/sica/1.0.0/
+```
+
+### Debug Mode
+
+Enable verbose logging to `.sica/debug.log`:
+
+```bash
+export SICA_DEBUG=1
 ```
 
 ## Resources

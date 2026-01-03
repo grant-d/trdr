@@ -13,14 +13,19 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
 
 from config import SicaState
+from debug import dbg
 from paths import (
     find_active_config,
     find_config_with_state,
     get_state_file,
+    make_runtime_marker,
 )
 
 
 def main() -> None:
+    dbg()
+    dbg("=== CONTINUE SICA LOOP ===")
+
     parser = argparse.ArgumentParser(description="Continue SICA loop")
     parser.add_argument(
         "config_name",
@@ -81,13 +86,19 @@ def main() -> None:
     old_max = state.max_iterations
     state.max_iterations = old_max + args.additional
     state.status = "active"
+    # Clear recent_scores to avoid immediate convergence detection
+    state.recent_scores = []
 
     # Save state
     state.save(state_file)
+    dbg(f"continue-sica-loop: {config_name} now {state.max_iterations} max iterations")
 
     # Build output
     run_dir = state.run_dir
     context_files = state.context_files or []
+
+    # Runtime marker for session detection (checked by stop hook)
+    marker = make_runtime_marker(config_name, state.run_id)
 
     parts = [
         "SICA Loop Continued",
@@ -111,6 +122,8 @@ def main() -> None:
     parts.extend([
         "",
         "Then continue improving. Stop hook runs benchmark on exit.",
+        "",
+        marker,
     ])
 
     print("\n".join(parts))

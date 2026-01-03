@@ -16,7 +16,50 @@ Directory Structure:
                     └── iteration_N/
 """
 
+import json
 from pathlib import Path
+
+
+def make_runtime_marker(config_name: str, run_id: str) -> str:
+    """Create SICA runtime marker for session detection.
+
+    Embed at END of prompts (less likely to be culled by context length).
+    Stop hook checks for this marker to distinguish SICA sessions.
+
+    Args:
+        config_name: Config name
+        run_id: Run ID
+
+    Returns:
+        Marker string like <SICA_RT_MARKER config="name" run="id"/>
+    """
+    return f'<SICA_RT_MARKER config="{config_name}" run="{run_id}"/>'
+
+
+def is_sica_session(transcript_path: str, config_name: str, run_id: str) -> bool:
+    """Check if transcript contains matching SICA runtime marker.
+
+    Args:
+        transcript_path: Path to transcript file
+        config_name: Expected config name
+        run_id: Expected run ID
+
+    Returns:
+        True if marker matches
+    """
+    if not transcript_path or not config_name or not run_id:
+        return False
+    path = Path(transcript_path)
+    if not path.exists():
+        return False
+    try:
+        content = path.read_text()
+        marker = make_runtime_marker(config_name, run_id)
+        # Transcript is JSONL so quotes are escaped
+        escaped = marker.replace('"', '\\"')
+        return escaped in content
+    except Exception:
+        return False
 
 
 def get_sica_root() -> Path:
@@ -151,8 +194,6 @@ def list_active_configs() -> list[str]:
     Returns:
         List of config names with active runs
     """
-    import json
-
     active = []
     for name in list_configs():
         state_file = get_state_file(name)
