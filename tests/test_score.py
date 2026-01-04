@@ -22,6 +22,16 @@ class TestAsymptotic:
     def test_negative_returns_zero(self):
         assert asymptotic(-5, 1.0) == 0.0
 
+    def test_large_negative_returns_zero(self):
+        """Regression: negative / negative = positive, must still return 0.
+
+        Bug: max(0, value/(value+target)) fails when |value| > target
+        because -2.32 / (-2.32 + 2.0) = -2.32 / -0.32 = 7.25 (positive!)
+        """
+        assert asymptotic(-2.32, 2.0) == 0.0  # The actual bug case
+        assert asymptotic(-100, 2.0) == 0.0   # Large negative
+        assert asymptotic(-1.5, 1.0) == 0.0   # |value| > target
+
     def test_at_target_returns_half(self):
         assert asymptotic(1.0, 1.0) == 0.5
         assert asymptotic(1.5, 1.5) == 0.5

@@ -327,7 +327,7 @@ def generate_improvement_prompt(
     state = config.state
     failures = extract_failures(benchmark_result)
     top_n = 10
-    archive_summary = get_archive_summary(config, top_n=top_n)
+    # archive_summary = get_archive_summary(config, top_n=top_n)
     original = state.interpolated_prompt
     run_dir = state.run_dir
 
@@ -367,9 +367,9 @@ def generate_improvement_prompt(
 
     parts.extend(
         [
-            f"## Top {top_n} Iterations",
-            archive_summary,
-            "",
+            # f"## Top {top_n} Iterations",
+            # archive_summary,
+            # "",
             "## Failures",
             failures,
             "",
@@ -473,9 +473,8 @@ def main() -> None:
     # Archive results
     iter_dir = archive_iteration(config, benchmark_result, transcript_path)
 
-    # Track recent scores for convergence
+    # Track scores (convergence + LLM journal)
     state.recent_scores.append(round(float(score), 3))
-    state.recent_scores = state.recent_scores[-10:]
 
     # Check convergence (5 consecutive identical scores, but not 0s which are failures)
     if len(state.recent_scores) >= 5 and len(set(state.recent_scores[-5:])) == 1:
@@ -510,9 +509,11 @@ def main() -> None:
     run_dir = state.run_dir
     promise = config.completion_promise
     marker = make_runtime_marker(config.name, state.run_id)
+    scores_str = "→".join(f"{s:.2f}" for s in state.recent_scores) if state.recent_scores else ""
     system_msg = (
         f"SICA iter {state.iteration} | "
         f"Score: {score:.3f}/{config.target_score} | "
+        f"History: {scores_str} | "
         f"NEXT: ONE fix then EXIT (benchmark auto-runs). NO test changes. "
         f"Update {run_dir}/journal.md. Done: <promise>{promise}</promise> "
         f"{marker}"

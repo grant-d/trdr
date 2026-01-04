@@ -86,6 +86,9 @@ def main() -> None:
 
     parts.append(f"Config: {config_name}")
     parts.append(f"Iter {state.iteration}/{effective_max} | Score {score_str}/{config.target_score}")
+    # if state.recent_scores:
+    #     scores_str = "→".join(f"{s:.2f}" for s in state.recent_scores)
+    #     parts.append(f"Score history: {scores_str}")
     parts.append(f"Benchmark: {config.benchmark_cmd}")
     parts.append("")
     parts.append("## CRITICAL - NEVER RUN BENCHMARK/TEST YOURSELF")

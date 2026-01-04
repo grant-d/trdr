@@ -796,12 +796,12 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             near_vah = abs(current_price - profile.vah) < atr * 0.5
             poc_pullback = near_vah and hma_bullish and hma_trending_up and mss > 5
         elif is_15m:
-            # 15m: Permissive entries, extreme R:R via stops/targets
+            # 15m: Permissive entries with minimal regime filter (iter 33 optimal)
             # VAH breakout: simple cross above VAH
             vah_breakout = above_vah and above_vah_prev
-            # VAL bounce: permissive proximity
+            # VAL bounce: permissive proximity + regime filter
             near_val = abs(current_price - profile.val) < atr * 1.0
-            val_bounce = near_val
+            val_bounce = near_val and mss > -70
             poc_pullback = False
         elif is_4h:
             # 4h: Mean reversion on VAL - tighter to improve WR without losing P&L
@@ -834,9 +834,9 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
                 take_profit = profile.vah + atr * 10.0
                 stop_loss = profile.vah - atr * 0.8
             elif is_15m:
-                # 15m: Optimal config from iter 10 (0.88 score)
-                take_profit = current_price + atr * 4.0
-                stop_loss = current_price - atr * 0.8
+                # 15m: Push for 0.90x alpha
+                take_profit = current_price + atr * 5.0
+                stop_loss = current_price - atr * 0.35  # Ultra-tight
             elif is_4h:
                 # 4h: Aggressive targets to maximize alpha (1.09x)
                 # 26 ATR target captures full 4h swing, 0.6 ATR stop is optimal
@@ -856,9 +856,9 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             signal_type = "VAL_bounce"
 
             if is_15m:
-                # 15m: Optimal config from iter 10 (0.88 score)
-                take_profit = current_price + atr * 4.0
-                stop_loss = current_price - atr * 0.8
+                # 15m: Push for 0.90x alpha
+                take_profit = current_price + atr * 5.0
+                stop_loss = current_price - atr * 0.35  # Ultra-tight
                 confidence_base = 0.55  # Higher base for 15m
             else:
                 confidence_base = 0.52  # Slightly higher base from 0.50
@@ -917,11 +917,11 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         confidence = min(confidence, 1.0)
 
         # Confidence threshold: balance signal volume with quality
-        # Daily: 0.55, 4h: 0.45, 15m: 0.35 (even lower to maximize volume), 1h: 0.65
+        # Daily: 0.55, 4h: 0.45, 15m: 0.35 (low to maximize volume), 1h: 0.65
         if is_daily:
             min_confidence_threshold = 0.55
         elif is_15m:
-            # Even lower threshold to maximize trade volume
+            # Low threshold to maximize trade volume
             min_confidence_threshold = 0.35
         elif is_4h:
             min_confidence_threshold = 0.45  # Tighter from 0.40 to improve WR without killing volume

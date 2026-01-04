@@ -77,7 +77,9 @@ def asymptotic(value: float, target: float) -> float:
     Returns:
         Score between 0 and 1 (approaches 1 asymptotically)
     """
-    return max(0.0, value / (value + target))
+    if value <= 0:
+        return 0.0
+    return value / (value + target)
 
 
 def quadratic(value: float, target: float, delta: float) -> float:

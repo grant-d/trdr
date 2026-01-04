@@ -54,7 +54,7 @@ class SicaState:
         status: Run status ("active" | "complete")
         iteration: Current iteration number (0-indexed)
         last_score: Most recent benchmark score (0.0-1.0)
-        recent_scores: Last 10 scores for convergence detection
+        recent_scores: All scores (convergence + LLM journal)
         started_at: ISO timestamp when run started
         completed_at: ISO timestamp when run completed (if complete)
         iterations_added: Additional iterations from /sica:continue

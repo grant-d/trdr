@@ -138,7 +138,7 @@ This enables SICA to show `0✓ 3✗` instead of just pass/fail.
 After editing plugin files, sync to cache:
 
 ```bash
-mkdir -p ~/.claude/plugins/cache/jigx-plugins/sica && rm -rf ~/.claude/plugins/cache/jigx-plugins/sica/1.0.0 && cp -r plugins/sica ~/.claude/plugins/cache/jigx-plugins/sica/1.0.0
+! mkdir -p ~/.claude/plugins/cache/jigx-plugins/sica && rm -rf ~/.claude/plugins/cache/jigx-plugins/sica/1.0.0 && cp -r plugins/sica ~/.claude/plugins/cache/jigx-plugins/sica/1.0.0
 ```
 
 ### Debug Mode
