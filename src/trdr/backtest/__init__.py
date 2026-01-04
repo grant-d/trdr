@@ -10,7 +10,14 @@ from .paper_exchange import (
     Trade,
 )
 from .portfolio import Portfolio, Position, PositionEntry
-from .timeframe import align_feeds, get_interval_seconds, parse_timeframe
+from .timeframe import (
+    AggregationConfig,  # Deprecated
+    Timeframe,
+    align_feeds,
+    get_aggregation_config,  # Deprecated
+    get_interval_seconds,
+    parse_timeframe,
+)
 from .walk_forward import (
     Fold,
     WalkForwardConfig,
@@ -46,7 +53,10 @@ __all__ = [
     "filter_trading_bars",
     "get_trading_days_in_year",
     # Utils
+    "AggregationConfig",  # Deprecated
+    "Timeframe",
     "align_feeds",
+    "get_aggregation_config",  # Deprecated
     "get_interval_seconds",
     "parse_timeframe",
 ]

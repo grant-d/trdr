@@ -14,34 +14,99 @@ result = engine.run(bars)
 
 ## Strategy Interface
 
-Implement `generate_signal(bars, position) -> Signal`. Access live portfolio state via `self.context`:
+Implement `get_data_requirements()` and `generate_signal(bars, position) -> Signal`. Access live portfolio state via `self.context`:
 
 ```python
 class MyStrategy(BaseStrategy):
-    def generate_signal(self, bars: list[Bar], position: Position | None) -> Signal:
+    def get_data_requirements(self) -> list[DataRequirement]:
+        """Declare data feeds. Exactly one must have role='primary'."""
+        return [
+            DataRequirement(self.config.symbol, self.config.timeframe, 3000, role="primary"),
+        ]
+
+    def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
+        # Get primary feed bars
+        primary_bars = bars[f"{self.config.symbol}:{self.config.timeframe}"]
+
         # Access live portfolio metrics
         if self.context.drawdown > 0.15:
             return Signal(action=SignalAction.HOLD, ...)  # pause during drawdown
 
-        if should_buy(bars):
+        if should_buy(primary_bars):
             # Scale position based on performance
             size = 0.5 if self.context.win_rate < 0.4 else 1.0
             return Signal(
                 action=SignalAction.BUY,
-                price=bars[-1].close,
+                price=primary_bars[-1].close,
                 confidence=0.8,
                 reason="Buy signal",
-                stop_loss=bars[-1].close * 0.98,
-                take_profit=bars[-1].close * 1.05,
+                stop_loss=primary_bars[-1].close * 0.98,
+                take_profit=primary_bars[-1].close * 1.05,
                 position_size_pct=size,
             )
-        return Signal(action=SignalAction.HOLD, price=bars[-1].close, ...)
+        return Signal(action=SignalAction.HOLD, price=primary_bars[-1].close, ...)
 
     def on_trade_complete(self, pnl: float, reason: str) -> None:
         # Called after each trade closes - use for adaptive behavior
         if pnl < 0:
             self.consecutive_losses += 1
 ```
+
+### Multi-Timeframe Strategy
+
+Request multiple timeframes for the same symbol:
+
+```python
+class MTFStrategy(BaseStrategy):
+    def get_data_requirements(self) -> list[DataRequirement]:
+        return [
+            DataRequirement("crypto:ETH/USD", "15m", 3000, role="primary"),
+            DataRequirement("crypto:ETH/USD", "1h", 500),   # Trend context
+            DataRequirement("crypto:ETH/USD", "4h", 125),   # Regime detection
+        ]
+
+    def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
+        eth_15m = bars["crypto:ETH/USD:15m"]
+        eth_1h = bars.get("crypto:ETH/USD:1h", [])
+        eth_4h = bars.get("crypto:ETH/USD:4h", [])
+        # Use higher TFs for trend/regime, primary for entries
+```
+
+### Multi-Symbol Strategy
+
+Reference other symbols for correlation/regime signals:
+
+```python
+class BTCCorrelationStrategy(BaseStrategy):
+    def get_data_requirements(self) -> list[DataRequirement]:
+        return [
+            DataRequirement("crypto:ETH/USD", "15m", 3000, role="primary"),
+            DataRequirement("crypto:BTC/USD", "1h", 500),  # BTC regime
+        ]
+
+    def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
+        eth_15m = bars["crypto:ETH/USD:15m"]
+        btc_1h = bars.get("crypto:BTC/USD:1h", [])
+        # Use BTC trend as regime filter
+```
+
+### Arbitrary Timeframes
+
+Any timeframe is supported. Non-native Alpaca timeframes are aggregated automatically:
+
+```python
+# Native Alpaca (no aggregation)
+DataRequirement(symbol, "15m", 3000, role="primary")  # 1-59m native
+DataRequirement(symbol, "4h", 500)                     # 1-23h native
+DataRequirement(symbol, "1d", 200)                     # 1d native
+
+# Aggregated from base bars (handled transparently)
+DataRequirement(symbol, "60m", 500)   # 60m -> aggregated from 1m (or use "1h")
+DataRequirement(symbol, "3d", 100)    # 3d -> aggregated from 1d
+DataRequirement(symbol, "2w", 50)     # 2w -> aggregated from 1d (10 trading days)
+```
+
+Canonical normalization optimizes fetching: `60m` -> `1h`, `24h` -> `1d`, `48h` -> `2d`.
 
 ### OCO Behavior
 

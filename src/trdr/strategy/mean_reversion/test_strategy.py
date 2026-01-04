@@ -42,7 +42,8 @@ def bars(event_loop):
     async def fetch():
         config = load_config()
         client = MarketDataClient(config.alpaca, Path("data/cache"))
-        bars = await client.get_bars(SYMBOL, lookback=3000, timeframe=TIMEFRAME)
+        # Use TIMEFRAME_STR - get_bars handles aggregation for arbitrary timeframes
+        bars = await client.get_bars(SYMBOL, lookback=3000, timeframe=TIMEFRAME_STR)
         return bars
 
     return event_loop.run_until_complete(fetch())
@@ -158,7 +159,7 @@ def print_results():
     async def run():
         config = load_config()
         client = MarketDataClient(config.alpaca, Path("data/cache"))
-        bars = await client.get_bars(SYMBOL, lookback=3000, timeframe=TIMEFRAME)
+        bars = await client.get_bars(SYMBOL, lookback=3000, timeframe=TIMEFRAME_STR)
 
         strategy_config = MeanReversionConfig(
             symbol=SYMBOL,

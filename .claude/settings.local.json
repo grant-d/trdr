@@ -83,7 +83,8 @@
       "Bash(BACKTEST_SYMBOL=\"crypto:ETH/USD\" BACKTEST_TIMEFRAME=\"15m\" BACKTEST_LOOKBACK=3000 python:*)",
       "WebFetch(domain:docs.alpaca.markets)",
       "WebFetch(domain:alpaca.markets)",
-      "WebFetch(domain:forum.alpaca.markets)"
+      "WebFetch(domain:forum.alpaca.markets)",
+      "Bash(git -C /Users/grantdickinson/repos/trdr status --short)"
     ],
     "deny": []
   }

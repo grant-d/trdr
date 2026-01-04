@@ -131,17 +131,54 @@ class MarketDataClient:
         self,
         symbol: str,
         lookback: int = 50,
-        timeframe: TimeFrame = TimeFrame.Hour,
+        timeframe: TimeFrame | str = TimeFrame.Hour,
     ) -> list[Bar]:
         """Fetch historical bars with caching.
 
-        Appends new bars to existing cache rather than replacing.
-        Only fetches bars newer than the last cached bar.
+        Supports arbitrary timeframes (60m, 3d, 2w) via automatic aggregation.
+        When timeframe exceeds Alpaca limits, fetches base bars and aggregates.
 
         Args:
             symbol: Symbol (e.g., "AAPL" for stocks, "BTC/USD" for crypto)
             lookback: Number of bars to fetch
-            timeframe: Bar timeframe (default 1 hour)
+            timeframe: Bar timeframe (Alpaca TimeFrame or string like "15m", "3d")
+
+        Returns:
+            List of Bar objects, oldest first
+        """
+        from ..backtest import parse_timeframe
+        from .aggregator import BarAggregator
+
+        # Handle string timeframe
+        if isinstance(timeframe, str):
+            tf = parse_timeframe(timeframe)
+
+            if tf.needs_aggregation:
+                # Fetch base bars and aggregate
+                bars_needed = lookback * tf.aggregation_factor + tf.aggregation_factor
+                raw_bars = await self._fetch_bars(symbol, tf.alpaca_timeframe, bars_needed)
+
+                aggregator = BarAggregator()
+                aggregated = aggregator.aggregate(raw_bars, tf.aggregation_factor)
+                return aggregated[-lookback:]
+            else:
+                timeframe = tf.alpaca_timeframe
+
+        # Delegate to internal fetch method
+        return await self._fetch_bars(symbol, timeframe, lookback)
+
+    async def _fetch_bars(
+        self,
+        symbol: str,
+        timeframe: TimeFrame,
+        lookback: int,
+    ) -> list[Bar]:
+        """Internal method to fetch bars with caching.
+
+        Args:
+            symbol: Symbol string
+            timeframe: Alpaca TimeFrame object
+            lookback: Number of bars to fetch
 
         Returns:
             List of Bar objects, oldest first
@@ -232,17 +269,18 @@ class MarketDataClient:
     ) -> dict[str, list[Bar]]:
         """Fetch bars for multiple symbol/timeframe combinations.
 
+        Supports arbitrary timeframes via automatic aggregation.
+
         Args:
             requirements: List of DataRequirement specifying each feed
 
         Returns:
             Dict mapping "symbol:timeframe" to list of bars
         """
-        from ..backtest import parse_timeframe
-
         result = {}
         for req in requirements:
-            bars = await self.get_bars(req.symbol, req.lookback, parse_timeframe(req.timeframe))
+            # Pass string timeframe directly - get_bars handles aggregation
+            bars = await self.get_bars(req.symbol, req.lookback, req.timeframe)
             result[req.key] = bars
         return result
 

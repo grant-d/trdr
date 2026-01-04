@@ -166,11 +166,12 @@
       0.93,
       0.93,
       0.93,
+      0.93,
       0.93
     ],
     "started_at": "2026-01-04T06:46:08.505541+00:00",
-    "completed_at": "2026-01-04T19:52:17.596533+00:00",
-    "iterations_added": 180,
+    "completed_at": "2026-01-04T20:21:16.944650+00:00",
+    "iterations_added": 182,
     "interpolated_prompt": "Optimize ETH/USD 15m strategy\nThink"
   }
 }

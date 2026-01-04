@@ -19,6 +19,7 @@ Allow strategies to specify **any** timeframe (e.g., "60m", "2h", "3d", "2w") wh
 | Month | 1, 2, 3, 6, 12 | 4M, 5M, 7M |
 
 **Current trdr Limitation**:
+
 - `parse_timeframe()` in `timeframe.py:117-123` enforces these constraints
 - Strategies wanting 60m, 2h, 3d, etc. cannot be expressed
 
@@ -33,27 +34,42 @@ Allow strategies to specify **any** timeframe (e.g., "60m", "2h", "3d", "2w") wh
 
 ## Proposed Solution
 
+### Aggregation Mapping
+
+| Requested | Base Unit | Aggregation Factor |
+| --- | --- | --- |
+| 60m | 1m | 60 |
+| 90m | 1m | 90 |
+| 2h | 1h | 2 |
+| 24h | 1h | 24 |
+| 3d | 1d | 3 |
+| 2w | 1d | 10 (trading days) |
+| 4M | 1M | 4 |
+
 ### High-Level Approach
 
 ```text
-Strategy requests "3d" bars
+Strategy requests "60m" bars
          │
          ▼
 ┌─────────────────────────────────┐
+│ get_aggregation_config("60m")   │
+│ - Returns: base="1m", factor=60 │
+└─────────────┬───────────────────┘
+              ▼
+┌─────────────────────────────────┐
 │ MarketDataClient.get_bars()     │
-│ - Detect "3d" > Alpaca limit    │
-│ - Calculate: need 3x 1d bars    │
-│ - Fetch 1d bars from Alpaca     │
+│ - Fetch 60x lookback 1m bars    │
 └─────────────┬───────────────────┘
               ▼
 ┌─────────────────────────────────┐
 │ BarAggregator.aggregate()       │
-│ - Group 1d bars into 3-day      │
+│ - Group 1m bars into 60-bar     │
 │ - Apply OHLCV aggregation rules │
 │ - Handle incomplete periods     │
 └─────────────┬───────────────────┘
               ▼
-     Strategy receives "3d" bars
+     Strategy receives "60m" bars
 ```
 
 ### OHLCV Aggregation Rules
@@ -171,28 +187,48 @@ class BarAggregator:
 ```python
 # src/trdr/backtest/timeframe.py additions
 
-def get_aggregation_factor(tf: str) -> int | None:
-    """Return aggregation factor for multi-day timeframes.
+@dataclass
+class AggregationConfig:
+    """Configuration for bar aggregation."""
+    base_timeframe: str  # e.g., "1m", "1h", "1d"
+    factor: int          # Number of base bars to aggregate
+
+def get_aggregation_config(tf: str) -> AggregationConfig | None:
+    """Return aggregation config if timeframe exceeds Alpaca limits.
 
     Args:
-        tf: Timeframe string (e.g., "3d", "5d", "1w")
+        tf: Timeframe string (e.g., "60m", "2h", "3d")
 
     Returns:
-        Number of 1d bars to aggregate, or None if no aggregation needed
+        AggregationConfig if aggregation needed, None if native Alpaca works
     """
     tf_lower = tf.lower()
-    match = re.match(r'^(\d+)([dw])$', tf_lower)
+    match = re.match(r'^(\d+)([mhd]|min|hour|day)$', tf_lower)
     if not match:
         return None
 
     amount = int(match.group(1))
-    unit = match.group(2)
+    unit = match.group(2)[0]  # First char: m, h, or d
 
+    # Check if exceeds Alpaca limits
+    if unit == 'm' and amount > 59:
+        # Aggregate from 1m bars
+        return AggregationConfig("1m", amount)
+    if unit == 'h' and amount > 23:
+        # Aggregate from 1h bars
+        return AggregationConfig("1h", amount)
     if unit == 'd' and amount > 1:
-        return amount
-    if unit == 'w':
-        return amount * 5  # 5 trading days per week
-    return None
+        # Aggregate from 1d bars
+        return AggregationConfig("1d", amount)
+
+    # Week handling
+    if tf_lower in ('1w', '1week'):
+        return None  # Use Alpaca native Week
+    if re.match(r'^(\d+)w', tf_lower):
+        weeks = int(re.match(r'^(\d+)', tf_lower).group(1))
+        return AggregationConfig("1d", weeks * 5)  # 5 trading days per week
+
+    return None  # Native Alpaca supports this timeframe
 ```
 
 #### Phase 2: MarketDataClient Integration
@@ -210,26 +246,34 @@ async def get_bars(
     lookback: int,
     timeframe: TimeFrame | str,  # Accept string for convenience
 ) -> list[Bar]:
-    """Fetch bars, aggregating multi-day if needed."""
+    """Fetch bars, aggregating if needed for unsupported timeframes."""
 
     # Handle string timeframe
     if isinstance(timeframe, str):
         tf_str = timeframe
-        agg_factor = get_aggregation_factor(timeframe)
+        agg_config = get_aggregation_config(timeframe)
 
-        if agg_factor:
-            # Multi-day: fetch 1d bars and aggregate
-            bars_needed = lookback * agg_factor + agg_factor  # Extra for first period
-            raw_bars = await self._fetch_bars(symbol, TimeFrame.Day, bars_needed)
+        if agg_config:
+            # Needs aggregation: fetch base bars and aggregate
+            # Extra bars for first period + buffer
+            bars_needed = lookback * agg_config.factor + agg_config.factor
+            base_tf = parse_timeframe(agg_config.base_timeframe)
+            raw_bars = await self._fetch_bars(symbol, base_tf, bars_needed)
 
             aggregator = BarAggregator()
-            return aggregator.aggregate(raw_bars, agg_factor)[-lookback:]
+            return aggregator.aggregate(raw_bars, agg_config.factor)[-lookback:]
         else:
             timeframe = parse_timeframe(tf_str)
 
-    # Standard fetch for non-multi-day
+    # Standard fetch for native Alpaca timeframes
     return await self._fetch_bars(symbol, timeframe, lookback)
 ```
+
+**Examples**:
+
+- `get_bars("AAPL", 100, "60m")` → Fetches 6000+ 1m bars, aggregates to 100 x 60m bars
+- `get_bars("AAPL", 100, "3d")` → Fetches 300+ 1d bars, aggregates to 100 x 3d bars
+- `get_bars("AAPL", 100, "15m")` → Native Alpaca fetch, no aggregation
 
 #### Phase 3: Week/Month Handling
 
@@ -277,27 +321,48 @@ def get_aggregation_factor(tf: str) -> int | None:
 
 ### Functional Requirements
 
-- [x] "3d" timeframe returns 3-trading-day aggregated bars
-- [ ] "5d" timeframe returns 5-trading-day aggregated bars
-- [ ] "2w" timeframe returns 10-trading-day aggregated bars
-- [ ] "1w" uses Alpaca native Week (no aggregation overhead)
-- [ ] BACKTEST_TIMEFRAME="3d" works as override
-- [ ] Multi-feed alignment works: 15m primary + 3d informative
-- [ ] Incomplete first period is dropped (no partial bars)
-- [ ] Strategies receive bars transparently (no API change)
+**Minute aggregation**:
+
+- [x] "60m" returns 60-minute bars (aggregated from 1m)
+- [x] "90m" returns 90-minute bars (aggregated from 1m)
+- [x] "120m" returns 2-hour bars (aggregated from 1m)
+
+**Hour aggregation**:
+
+- [x] "24h" returns 24-hour bars (aggregated from 1h)
+- [x] "48h" returns 2-day bars (aggregated from 1h)
+
+**Day aggregation**:
+
+- [x] "3d" returns 3-trading-day bars (aggregated from 1d)
+- [x] "5d" returns 5-trading-day bars (aggregated from 1d)
+- [x] "2w" returns 10-trading-day bars (aggregated from 1d)
+
+**Native passthrough**:
+
+- [x] "15m" uses native Alpaca (no aggregation)
+- [x] "4h" uses native Alpaca (no aggregation)
+- [x] "1w" uses native Alpaca Week
+
+**Integration**:
+
+- [x] BACKTEST_TIMEFRAME="3d" works as override
+- [x] Multi-feed alignment works: 15m primary + 3d informative
+- [x] Incomplete first period is dropped (no partial bars)
+- [x] Strategies receive bars transparently (no API change)
 
 ### Non-Functional Requirements
 
-- [ ] Aggregation adds < 100ms latency for 1000 bars
-- [ ] Memory usage < 2x baseline for aggregated data
-- [ ] Existing "1d" strategies produce identical results (regression)
+- [x] Aggregation adds < 100ms latency for 1000 bars
+- [x] Memory usage < 2x baseline for aggregated data
+- [x] Existing "1d" strategies produce identical results (regression)
 
 ### Quality Gates
 
-- [ ] Unit tests for `BarAggregator` with edge cases
-- [ ] Integration test: 15m primary + 3d informative alignment
-- [ ] Regression test: existing "1d" strategy unchanged
-- [ ] Validation: compare aggregated "1w" to Alpaca native Week
+- [x] Unit tests for `BarAggregator` with edge cases
+- [x] Integration test: 15m primary + 3d informative alignment
+- [x] Regression test: existing "1d" strategy unchanged
+- [ ] Validation: compare aggregated "1w" to Alpaca native Week (requires live data)
 
 ## Dependencies & Prerequisites
 

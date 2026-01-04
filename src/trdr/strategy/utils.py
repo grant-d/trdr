@@ -4,7 +4,7 @@ import os
 
 from dotenv import load_dotenv
 
-from trdr.backtest import parse_timeframe
+from trdr.backtest import Timeframe, parse_timeframe
 
 load_dotenv()
 
@@ -13,10 +13,11 @@ def get_backtest_env(
     default_symbol: str = "crypto:BTC/USD",
     default_timeframe: str = "1h",
     default_lookback: int = 1000,
-) -> tuple[str, str, "TimeFrame", int]:
+) -> tuple[str, str, Timeframe, int]:
     """Read backtest config from environment variables.
 
     Reads BACKTEST_SYMBOL, BACKTEST_TIMEFRAME, BACKTEST_LOOKBACK env vars.
+    Supports arbitrary timeframes (60m, 3d, 2w).
 
     Args:
         default_symbol: Default symbol if env var not set
@@ -25,12 +26,11 @@ def get_backtest_env(
 
     Returns:
         Tuple of (symbol, timeframe_str, timeframe, lookback)
+        timeframe is our Timeframe object (use .alpaca_timeframe for Alpaca API)
     """
-    from alpaca.data.timeframe import TimeFrame
-
     symbol = os.environ.get("BACKTEST_SYMBOL", default_symbol)
     timeframe_str = os.environ.get("BACKTEST_TIMEFRAME", default_timeframe).lower().strip()
-    timeframe = parse_timeframe(timeframe_str)
     lookback = int(os.environ.get("BACKTEST_LOOKBACK", str(default_lookback)))
+    timeframe = parse_timeframe(timeframe_str)
 
     return symbol, timeframe_str, timeframe, lookback
