@@ -732,9 +732,9 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
 
         # Regime Filter: stricter for daily to improve WR
         # 4h: Permissive regime filter but reject extreme bearish (MSS < -50)
-        # 15m: Moderate filter to improve win rate without killing frequency
+        # 15m: Test stricter filter (MSS > -40) to favor bullish setups
         if is_15m:
-            regime_threshold = -55  # Tighter from -70 to filter worst regimes
+            regime_threshold = -40  # Much tighter - favor bullish/neutral regimes
         elif is_4h:
             regime_threshold = -50  # Relaxed from -40, still very permissive
         else:
@@ -869,7 +869,8 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             # VAL bounce: mean reversion to POC (research: 55-65% win rate)
             # Take profit at POC (defined by volume, not arbitrary)
             if is_15m:
-                # 15m: Standard stops, back to fixed approach
+                # 15m: Test tighter TP at POC - current_price for faster exits, improve WR
+                # Theory: quicker TP = higher WR (catch moves faster before reversals)
                 take_profit = profile.poc
                 stop_loss = current_price - atr * 0.045  # Slightly wider from 0.035 to reduce noise stops
             else:
@@ -930,11 +931,11 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         confidence = min(confidence, 1.0)
 
         # Confidence threshold: balance signal volume with quality
-        # Daily: 0.55, 4h: 0.45, 15m: 0.42 (test lower), 1h: 0.65
+        # Daily: 0.55, 4h: 0.45, 15m: 0.40 (test much lower), 1h: 0.65
         if is_daily:
             min_confidence_threshold = 0.55
         elif is_15m:
-            min_confidence_threshold = 0.42  # Lower from 0.44 - bonus structure already validates
+            min_confidence_threshold = 0.40  # Much lower - let bonuses drive signals
         elif is_4h:
             min_confidence_threshold = 0.45  # Tighter from 0.40 to improve WR without killing volume
         else:

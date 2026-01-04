@@ -90,14 +90,14 @@ def run_backtest(symbol: str, timeframe: str):
     engine = BacktestEngine(bt_config, strategy)
     result = engine.run(bars)
 
-    return result, initial_capital, buyhold_return
+    return result, initial_capital, buyhold_return, bars
 
 
 def main():
     symbol = os.environ.get("BACKTEST_SYMBOL", "stock:AAPL")
     timeframe = os.environ.get("BACKTEST_TIMEFRAME", "1d")
 
-    result, initial_capital, buyhold_return = run_backtest(symbol, timeframe)
+    result, initial_capital, buyhold_return, bars = run_backtest(symbol, timeframe)
 
     # Get metrics
     sortino = result.sortino_ratio
@@ -112,6 +112,8 @@ def main():
         total_trades=result.total_trades,
         initial_capital=initial_capital,
         buyhold_return=buyhold_return,
+        timeframe=timeframe,
+        bars=bars,
     )
 
     # Print summary
@@ -119,7 +121,6 @@ def main():
     print("BACKTEST SUMMARY")
     print("=" * 50)
     print(f"Symbol: {symbol}")
-    print(f"Timeframe: {timeframe}")
     print(f"Trades: {result.total_trades}")
     print(f"Win Rate: {result.win_rate:.1%}")
     print(f"Profit Factor: {result.profit_factor:.2f}")

@@ -5,6 +5,11 @@ all metrics must improve together.
 """
 
 import math
+from datetime import datetime
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from trdr.data.market import Bar
 
 
 def asymptotic(value: float, target: float) -> float:
@@ -37,6 +42,8 @@ def compute_composite_score(
     total_trades: int,
     initial_capital: float = 10_000,
     buyhold_return: float | None = None,
+    timeframe: str | None = None,
+    bars: "list[Bar] | None" = None,
 ) -> tuple[float, list[str]]:
     """Compute composite score with geometric mean, DD penalty, and alpha check.
 
@@ -60,11 +67,21 @@ def compute_composite_score(
         total_trades: Number of trades
         initial_capital: Starting capital for return calculation
         buyhold_return: Buy-hold return as decimal (e.g., 1.09 for 109%). None to skip.
+        timeframe: Timeframe string (e.g., "15m", "4h", "1d")
+        bars: List of Bar objects for period calculation
 
     Returns:
         Tuple of (score 0-1, list of metric descriptions)
     """
     details = []
+
+    # Period info (for context, not scored)
+    if bars and len(bars) >= 2 and timeframe:
+        num_bars = len(bars)
+        start_ts = datetime.fromisoformat(bars[0].timestamp.replace("Z", "+00:00"))
+        end_ts = datetime.fromisoformat(bars[-1].timestamp.replace("Z", "+00:00"))
+        days_span = (end_ts - start_ts).days
+        details.append(f"Period: {timeframe} x {num_bars} bars ({days_span} days)")
 
     # Handle edge cases
     pf = max(0, profit_factor) if profit_factor != float("inf") else 10.0
