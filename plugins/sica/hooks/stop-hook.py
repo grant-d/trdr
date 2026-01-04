@@ -19,11 +19,9 @@ from pathlib import Path
 # Add lib to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
 
-from config import SicaConfig, SicaState, get_loop_context
+from config import SicaConfig
 from debug import dbg
 from paths import (
-    get_config_file,
-    get_state_file,
     is_sica_session,
     list_active_configs,
     make_runtime_marker,
@@ -35,8 +33,8 @@ def log(msg: str) -> None:
     print(msg, file=sys.stderr)
 
 
-def read_context() -> tuple[SicaConfig, SicaState] | None:
-    """Read active SICA config and state if exists."""
+def read_config() -> SicaConfig | None:
+    """Read active SICA config if exists."""
     active = list_active_configs()
     if not active:
         return None
@@ -45,21 +43,16 @@ def read_context() -> tuple[SicaConfig, SicaState] | None:
         log(f"SICA: Using first: {active[0]}")
     config_name = active[0]
     try:
-        return get_loop_context(config_name)
+        return SicaConfig.load(config_name)
     except (json.JSONDecodeError, OSError, FileNotFoundError, ValueError):
         return None
 
 
-def save_state(state: SicaState) -> None:
-    """Save SICA state."""
-    state.save(get_state_file(state.config_name))
-
-
-def complete_run(state: SicaState) -> None:
+def complete_run(config: SicaConfig) -> None:
     """Mark run as complete by setting status and timestamp."""
-    state.status = "complete"
-    state.completed_at = datetime.now(timezone.utc).isoformat()
-    save_state(state)
+    config.state.status = "complete"
+    config.state.completed_at = datetime.now(timezone.utc).isoformat()
+    config.save()
 
 
 def run_benchmark(
@@ -165,11 +158,11 @@ def parse_test_output(output: str) -> tuple[int, int, int]:
 
 def archive_iteration(
     config: SicaConfig,
-    state: SicaState,
     benchmark_result: dict[str, str | int | float],
     transcript_path: str,
 ) -> Path:
     """Save iteration results to archive."""
+    state = config.state
     run_dir = Path(state.run_dir)
     iteration = state.iteration
     iter_dir = run_dir / f"iteration_{iteration}"
@@ -226,8 +219,9 @@ def archive_iteration(
     return iter_dir
 
 
-def get_archive_summary(state: SicaState, top_n: int = 10) -> str:
+def get_archive_summary(config: SicaConfig, top_n: int = 10) -> str:
     """Generate compact CSV summary of top N iterations by score."""
+    state = config.state
     run_dir = Path(state.run_dir)
     entries: list[tuple[float, int, int, int, int]] = []
 
@@ -302,14 +296,14 @@ def extract_failures(benchmark_result: dict[str, str | int | float]) -> str:
 
 def generate_improvement_prompt(
     config: SicaConfig,
-    state: SicaState,
     benchmark_result: dict[str, str | int | float],
     iter_dir: Path,
 ) -> str:
     """Generate compact improvement prompt with archive analysis."""
+    state = config.state
     failures = extract_failures(benchmark_result)
     top_n = 10
-    archive_summary = get_archive_summary(state, top_n=top_n)
+    archive_summary = get_archive_summary(config, top_n=top_n)
     original = state.interpolated_prompt
     run_dir = state.run_dir
 
@@ -368,10 +362,12 @@ def generate_improvement_prompt(
 
 def main() -> None:
     # Fast exit: no active config = not a SICA session
-    context = read_context()
-    if not context:
+    config = read_config()
+    if not config:
         sys.exit(0)
-    config, state = context
+    state = config.state
+    if not state:
+        sys.exit(0)
 
     # Read hook input
     # https://code.claude.com/docs/en/hooks#stop
@@ -394,7 +390,7 @@ def main() -> None:
         sys.exit(0)
 
     # Fast exit: wrong session (user running CC for other work)
-    if not is_sica_session(transcript_path, state.config_name, state.run_id):
+    if not is_sica_session(transcript_path, config.name, state.run_id):
         sys.exit(0)
 
     # Now we know it's a SICA session - start logging
@@ -408,17 +404,18 @@ def main() -> None:
     if not isinstance(state.iteration, int):
         dbg("State corrupted - exiting")
         log("SICA: State corrupted")
-        get_state_file(state.config_name).unlink(missing_ok=True)
+        config.state = None
+        config.save()
         sys.exit(0)
 
     # Check max iterations
     if state.iteration >= effective_max:
         dbg(f"Max iter reached: {state.iteration} >= {effective_max}")
         log(f"SICA COMPLETE: Max iterations ({effective_max}) reached")
-        log(f"  Config: {state.config_name} | Run: {state.run_id}")
+        log(f"  Config: {config.name} | Run: {state.run_id}")
         log(f"  Last score: {state.last_score} | Target: {config.target_score}")
         log(f"  Run dir: {state.run_dir}")
-        complete_run(state)
+        complete_run(config)
         sys.exit(0)
 
     # Check transcript for promise
@@ -451,7 +448,7 @@ def main() -> None:
     log(f"SICA: Score={score:.2f} (passed={passed}, failed={failed}, errors={errors})")
 
     # Archive results
-    iter_dir = archive_iteration(config, state, benchmark_result, transcript_path)
+    iter_dir = archive_iteration(config, benchmark_result, transcript_path)
 
     # Track recent scores for convergence
     state.recent_scores.append(round(float(score), 4))
@@ -460,19 +457,19 @@ def main() -> None:
     # Check convergence (5 consecutive identical scores)
     if len(state.recent_scores) >= 5 and len(set(state.recent_scores[-5:])) == 1:
         log(f"SICA COMPLETE: Converged at score {state.recent_scores[0]:.2f}")
-        log(f"  Config: {state.config_name} | Run: {state.run_id}")
+        log(f"  Config: {config.name} | Run: {state.run_id}")
         log(f"  Iterations: {state.iteration} | Target: {config.target_score}")
         log(f"  Run dir: {state.run_dir}")
-        complete_run(state)
+        complete_run(config)
         sys.exit(0)
 
     # Check target reached
     if float(score) >= config.target_score:
         log(f"SICA COMPLETE: Target score reached! ({score:.2f} >= {config.target_score})")
-        log(f"  Config: {state.config_name} | Run: {state.run_id}")
+        log(f"  Config: {config.name} | Run: {state.run_id}")
         log(f"  Iterations: {state.iteration}")
         log(f"  Run dir: {state.run_dir}")
-        complete_run(state)
+        complete_run(config)
         sys.exit(0)
 
     # Promise detected but tests failing
@@ -482,24 +479,26 @@ def main() -> None:
     # Update state
     state.iteration += 1
     state.last_score = float(score)
-    save_state(state)
+    config.save()
 
     # Generate improvement prompt
-    improvement_prompt = generate_improvement_prompt(config, state, benchmark_result, iter_dir)
+    improvement_prompt = generate_improvement_prompt(config, benchmark_result, iter_dir)
 
-    # Build system message with marker at end (persists across iterations)
+    # Build system message for NEXT iteration (forward-looking, not describing what just happened)
     run_dir = state.run_dir
     promise = config.completion_promise
-    marker = make_runtime_marker(state.config_name, state.run_id)
+    marker = make_runtime_marker(config.name, state.run_id)
     system_msg = (
         f"SICA iter {state.iteration} | "
         f"Score: {score:.2f}/{config.target_score} | "
-        f"RULES: ONE fix→exit immediately. NO manual tests. NO test changes. "
-        f"Read/update {run_dir}/journal.md. Done: <promise>{promise}</promise> "
+        f"NEXT: ONE fix then EXIT (benchmark auto-runs). NO test changes. "
+        f"Update {run_dir}/journal.md. Done: <promise>{promise}</promise> "
         f"{marker}"
     )
 
     # Block exit and continue
+    # https://code.claude.com/docs/en/hooks#stop%2Fsubagentstop-decision-control
+    # https://code.claude.com/docs/en/hooks#common-json-fields
     print(
         json.dumps(
             {

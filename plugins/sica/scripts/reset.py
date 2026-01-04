@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Reset SICA state and stop loop.
 
-Deletes state.json. Run archives in runs/ are preserved.
+Clears config.state. Run archives in runs/ are preserved.
 """
 
 import argparse
@@ -10,8 +10,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
 
+from config import SicaConfig
 from debug import dbg
-from paths import find_active_config, find_config_with_state, get_state_file, list_configs
+from paths import find_active_config, find_config_with_state, list_configs
 
 
 def main() -> None:
@@ -35,10 +36,14 @@ def main() -> None:
         # Reset all configs with state
         reset_configs = []
         for name in list_configs():
-            state_file = get_state_file(name)
-            if state_file.exists():
-                state_file.unlink()
-                reset_configs.append(name)
+            try:
+                config = SicaConfig.load(name)
+                if config.state:
+                    config.state = None
+                    config.save()
+                    reset_configs.append(name)
+            except Exception:
+                pass
         if reset_configs:
             print(f"SICA state reset for: {', '.join(reset_configs)}")
         else:
@@ -56,14 +61,18 @@ def main() -> None:
         print("No active SICA loop to reset")
         return
 
-    state_file = get_state_file(config_name)
-    if state_file.exists():
-        state_file.unlink()
-        dbg(f"reset: reset {config_name}")
-        print(f"SICA state reset for config: {config_name}")
-    else:
-        dbg(f"reset: no state for {config_name}")
-        print(f"No state found for config: {config_name}")
+    try:
+        config = SicaConfig.load(config_name)
+        if config.state:
+            config.state = None
+            config.save()
+            dbg(f"reset: reset {config_name}")
+            print(f"SICA state reset for config: {config_name}")
+        else:
+            dbg(f"reset: no state for {config_name}")
+            print(f"No state found for config: {config_name}")
+    except FileNotFoundError:
+        print(f"Config not found: {config_name}")
 
 
 if __name__ == "__main__":

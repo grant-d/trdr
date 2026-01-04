@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Continue a completed SICA loop with additional iterations.
 
-Reads from state.json (single source of truth), adds iterations,
-sets status back to active.
+Adds iterations to config.state, sets status back to active.
 """
 
 import argparse
@@ -12,13 +11,11 @@ from pathlib import Path
 # Add lib to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
 
-from config import SicaConfig, SicaState, get_loop_context
+from config import SicaConfig
 from debug import dbg
 from paths import (
     find_active_config,
     find_config_with_state,
-    get_config_file,
-    get_state_file,
     make_runtime_marker,
 )
 
@@ -65,16 +62,22 @@ def main() -> None:
         print("Usage: /sica:continue <config_name> [additional_iterations]", file=sys.stderr)
         sys.exit(1)
 
-    # Load config and state
+    # Load config
     try:
-        config, state = get_loop_context(config_name)
+        config = SicaConfig.load(config_name)
     except FileNotFoundError:
+        print(f"Error: Config not found for '{config_name}'", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error loading config: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if not config.state:
         print(f"Error: No state found for '{config_name}'", file=sys.stderr)
         print("Run /sica:loop first to start a run.", file=sys.stderr)
         sys.exit(1)
-    except Exception as e:
-        print(f"Error loading state: {e}", file=sys.stderr)
-        sys.exit(1)
+
+    state = config.state
 
     # Check if already active
     if state.status == "active" and not args.force:
@@ -88,9 +91,8 @@ def main() -> None:
     new_effective_max = config.max_iterations + state.iterations_added
     state.status = "active"
 
-    # Save state
-    state_file = get_state_file(config_name)
-    state.save(state_file)
+    # Save config (with updated state)
+    config.save()
     dbg(f"Continued {config_name}: now {new_effective_max} max iterations")
 
     # Build output

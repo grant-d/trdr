@@ -67,7 +67,10 @@
       "Bash(BACKTEST_SYMBOL=crypto:ETH/USD BACKTEST_TIMEFRAME=15m timeout 150 python:*)",
       "mcp__plugin_compound-engineering:*",
       "WebFetch(domain:pypi.org)",
-      "Bash(flake8:*)"
+      "Bash(flake8:*)",
+      "Bash(BACKTEST_SYMBOL=\"crypto:ETH/USD\" BACKTEST_TIMEFRAME=\"15m\" timeout 120 python:*)",
+      "Skill(sica:info)",
+      "Bash(BACKTEST_SYMBOL=crypto:ETH/USD BACKTEST_TIMEFRAME=15m timeout 120 python:*)"
     ],
     "deny": []
   }

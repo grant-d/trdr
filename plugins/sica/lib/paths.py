@@ -8,8 +8,7 @@ Directory Structure:
     ├── .gitignore                  # Contains: **/runs/
     └── configs/                    # Config folders
         └── <name>/                 # Individual config
-            ├── config.json         # User configuration
-            ├── state.json          # Run state (single source of truth)
+            ├── config.json         # Config + nested state
             └── runs/               # Run archives (gitignored)
                 └── run_YYYYMMDD_HHMMSS/
                     ├── journal.md
@@ -112,21 +111,6 @@ def get_config_file(name: str) -> Path:
     return get_config_dir(name) / "config.json"
 
 
-def get_state_file(name: str) -> Path:
-    """Get state.json path for a config.
-
-    State file is the single source of truth for run state.
-    Check status field to determine if run is active or complete.
-
-    Args:
-        name: Config name
-
-    Returns:
-        Path to .sica/configs/<name>/state.json
-    """
-    return get_config_dir(name) / "state.json"
-
-
 def get_runs_dir(name: str) -> Path:
     """Get runs directory for a config, create if needed.
 
@@ -189,21 +173,21 @@ def find_active_config() -> str | None:
 
 
 def list_active_configs() -> list[str]:
-    """List all configs with active runs (status='active').
+    """List all configs with active runs (state.status='active').
 
     Returns:
         List of config names with active runs
     """
     active = []
     for name in list_configs():
-        state_file = get_state_file(name)
-        if state_file.exists():
-            try:
-                data = json.loads(state_file.read_text())
-                if data.get("status") == "active":
-                    active.append(name)
-            except (json.JSONDecodeError, OSError):
-                pass
+        config_file = get_config_file(name)
+        try:
+            data = json.loads(config_file.read_text())
+            state = data.get("state")
+            if state and state.get("status") == "active":
+                active.append(name)
+        except (json.JSONDecodeError, OSError):
+            pass
     return active
 
 
@@ -214,14 +198,25 @@ def find_config_with_state(name: str | None = None) -> str | None:
         name: Specific config name to check, or None to find any
 
     Returns:
-        Config name with state.json, or None if not found
+        Config name with state, or None if not found
     """
     if name:
-        if get_state_file(name).exists():
-            return name
+        config_file = get_config_file(name)
+        if config_file.exists():
+            try:
+                data = json.loads(config_file.read_text())
+                if data.get("state"):
+                    return name
+            except (json.JSONDecodeError, OSError):
+                pass
         return None
 
     for config_name in list_configs():
-        if get_state_file(config_name).exists():
-            return config_name
+        config_file = get_config_file(config_name)
+        try:
+            data = json.loads(config_file.read_text())
+            if data.get("state"):
+                return config_name
+        except (json.JSONDecodeError, OSError):
+            pass
     return None

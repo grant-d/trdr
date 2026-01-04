@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Setup a new SICA loop.
 
-Creates state file and run directory within config folder.
+Creates run directory and sets state within config.
 """
 
 import argparse
@@ -17,10 +17,8 @@ from config import SicaConfig, SicaState
 from debug import dbg
 from paths import (
     find_active_config,
-    get_config_file,
     get_run_dir,
     get_sica_root,
-    get_state_file,
     list_configs,
     make_runtime_marker,
 )
@@ -82,15 +80,14 @@ Examples:
         if configs:
             print("Available configs:")
             for name in configs:
-                state_file = get_state_file(name)
-                if state_file.exists():
-                    try:
-                        data = json.loads(state_file.read_text())
-                        status = f" ({data.get('status', 'unknown')})"
-                    except (json.JSONDecodeError, OSError):
-                        status = " (state error)"
-                else:
-                    status = ""
+                try:
+                    cfg = SicaConfig.load(name)
+                    if cfg.state:
+                        status = f" ({cfg.state.status})"
+                    else:
+                        status = ""
+                except (json.JSONDecodeError, OSError, FileNotFoundError, ValueError):
+                    status = " (config error)"
                 print(f"  {name}{status}")
         else:
             print("No configs found. Create one at .sica/configs/<name>/config.json")
@@ -113,11 +110,10 @@ Examples:
         sys.exit(1)
 
     # Load config
-    config_path = get_config_file(config_name)
     try:
-        config = SicaConfig.load(config_path)
+        config = SicaConfig.load(config_name)
     except FileNotFoundError:
-        print(f"Error: Config not found: {config_path}", file=sys.stderr)
+        print(f"Error: Config not found: {config_name}", file=sys.stderr)
         print("Create it or use /sica:loop --list to see available configs", file=sys.stderr)
         sys.exit(1)
     except ValueError as e:
@@ -139,12 +135,9 @@ Examples:
     journal_path.parent.mkdir(parents=True, exist_ok=True)
     journal_path.write_text("# SICA Journal\n\n")
 
-    # Create state
-    state = SicaState.create(config_name, run_id, run_dir, config)
-
-    # Save state
-    state_path = get_state_file(config_name)
-    state.save(state_path)
+    # Create state and attach to config
+    config.state = SicaState.create(run_id, run_dir, config.interpolate_prompt())
+    config.save()
     dbg(f"Created run {run_id} for {config_name}")
 
     # Show params if any
@@ -178,13 +171,14 @@ After each change:
 
 ## CRITICAL
 
-### EXIT AFTER EVERY CHANGE
-After EACH code change, immediately attempt to end/complete.
-Change -> Exit -> Hook benchmarks -> Repeat.
+### NEVER RUN BENCHMARK - JUST EXIT
+After EACH code change, MUST immediately end your turn.
+NEVER run benchmark/tests yourself - hook runs it automatically on exit.
+Change -> Exit -> Hook auto-benchmarks -> Repeat.
 
 ### RULES
-- Concise TI language. Save tokens.
-- NO manual tests. Hook runs benchmark on exit.
+- NEVER run benchmark yourself. Hook does it.
+- NO manual tests. Exit triggers auto-benchmark.
 - NO test file changes. Only source code.
 - MUST maintain journal.md in {run_dir}:
   - Read FIRST before changes

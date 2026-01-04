@@ -14,9 +14,9 @@ from pathlib import Path
 # Add lib to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
 
-from config import SicaConfig, SicaState, get_loop_context
+from config import SicaConfig
 from debug import dbg
-from paths import find_active_config, get_state_file
+from paths import find_active_config
 
 
 def log(msg: str) -> None:
@@ -56,8 +56,12 @@ def main() -> None:
     dbg(f"Resuming {config_name}")
 
     try:
-        config, state = get_loop_context(config_name)
+        config = SicaConfig.load(config_name)
     except (json.JSONDecodeError, OSError, FileNotFoundError, ValueError):
+        sys.exit(0)
+
+    state = config.state
+    if not state:
         sys.exit(0)
 
     log("SICA: Resuming after compaction...")
@@ -84,13 +88,14 @@ def main() -> None:
     parts.append(f"Iter {state.iteration}/{effective_max} | Score {score_str}/{config.target_score}")
     parts.append(f"Benchmark: {config.benchmark_cmd}")
     parts.append("")
-    parts.append("## CRITICAL - EXIT AFTER EVERY CHANGE")
-    parts.append("After your code change, IMMEDIATELY attempt to end/complete.")
-    parts.append("Change -> Exit -> Hook benchmarks -> Repeat.")
+    parts.append("## CRITICAL - NEVER RUN BENCHMARK/TEST YOURSELF")
+    parts.append("After code change, you MUST IMMEDIATELY end your turn.")
+    parts.append("NEVER run benchmark/tests - hook auto-runs on exit.")
+    parts.append("Change -> Exit -> Hook auto-benchmarks -> Repeat.")
     parts.append("")
     parts.append("## RULES")
-    parts.append("- ONE fix per iteration, then exit")
-    parts.append("- NO manual tests. Hook runs benchmark on exit.")
+    parts.append("- ONE fix per iteration, then EXIT")
+    parts.append("- NEVER run benchmark yourself. Hook does it.")
     parts.append("- NO test file changes. Only modify source code.")
     parts.append(f"- MUST update {run_dir}/journal.md (BEFORE: plan, AFTER: results)")
     parts.append(f"- Done: <promise>{config.completion_promise}</promise>")
@@ -98,6 +103,8 @@ def main() -> None:
     additional_context = "\n".join(parts)
 
     # Output JSON for Claude Code
+    # https://code.claude.com/docs/en/hooks#sessionstart-decision-control
+    # https://code.claude.com/docs/en/hooks#common-json-fields
     print(json.dumps({
         "hookSpecificOutput": {
             "hookEventName": "SessionStart",

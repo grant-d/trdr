@@ -6,9 +6,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
 
-from config import SicaConfig, SicaState, get_loop_context
+from config import SicaConfig
 from debug import dbg
-from paths import find_active_config, get_state_file, list_configs
+from paths import find_active_config, list_configs
 
 
 def main() -> None:
@@ -17,7 +17,8 @@ def main() -> None:
     active = find_active_config()
     dbg(f"status: active={active}")
     if active:
-        config, state = get_loop_context(active)
+        config = SicaConfig.load(active)
+        state = config.state
         score = f"{state.last_score:.2f}" if state.last_score is not None else "N/A"
         effective_max = config.max_iterations + state.iterations_added
 
