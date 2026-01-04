@@ -60,7 +60,8 @@
       "Bash(exit)",
       "Bash(test:*)",
       "Bash(/sica:*)",
-      "Bash(BACKTEST_SYMBOL=*)"
+      "Bash(BACKTEST_SYMBOL=:*)",
+      "Bash(BACKTEST_SYMBOL=crypto:BTC/USD BACKTEST_TIMEFRAME=15m python:*)"
     ],
     "deny": []
   }

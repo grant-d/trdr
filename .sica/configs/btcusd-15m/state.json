@@ -1,0 +1,24 @@
+{
+  "config_name": "btcusd-15m",
+  "run_id": "20260103_213414",
+  "run_dir": ".sica/configs/btcusd-15m/runs/run_20260103_213414",
+  "status": "active",
+  "iteration": 0,
+  "last_score": null,
+  "recent_scores": [],
+  "started_at": "2026-01-03T21:34:14.424464+00:00",
+  "completed_at": "",
+  "benchmark_cmd": "BACKTEST_SYMBOL=crypto:BTC/USD BACKTEST_TIMEFRAME=15m python src/trdr/strategy/volume_area_breakout/sica_bench.py",
+  "max_iterations": 50,
+  "target_score": 0.85,
+  "completion_promise": "TESTS PASSING",
+  "benchmark_timeout": 120,
+  "prompt": "Optimize BTC/USD 15m strategy",
+  "context_files": [
+    "thoughts/grantdickinson/2026-01-01-research-combined-trading-algorithms.md"
+  ],
+  "params": {
+    "symbol": "crypto:BTC/USD",
+    "timeframe": "15m"
+  }
+}

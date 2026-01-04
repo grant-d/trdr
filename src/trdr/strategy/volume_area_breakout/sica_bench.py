@@ -52,6 +52,8 @@ async def get_bars(symbol: str, timeframe: str, lookback: int = 10000):
         "day": TimeFrame(1, TimeFrameUnit.Day),
         "1h": TimeFrame(1, TimeFrameUnit.Hour),
         "4h": TimeFrame(4, TimeFrameUnit.Hour),
+        "15m": TimeFrame(15, TimeFrameUnit.Minute),
+        "15min": TimeFrame(15, TimeFrameUnit.Minute),
     }
     tf = tf_map.get(timeframe.lower(), TimeFrame(1, TimeFrameUnit.Day))
 
