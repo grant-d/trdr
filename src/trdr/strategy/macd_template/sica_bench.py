@@ -117,11 +117,11 @@ def main():
     for d in details:
         print(f"  {d}")
 
-    # COMPOSITE SCORING: "N passed, M failed" represents score percentage, NOT test counts
-    # Example: score=0.034 (3.4%) → "3 passed, 97 failed"
+    # COMPOSITE SCORING: "N passed, M failed" represents score (3 decimal precision)
+    # Example: score=0.849 → "849 passed, 151 failed" → hook calculates 849/1000 = 0.849
     # This format satisfies SICA parser which expects pytest-style output
-    passed = int(score * 100)
-    failed = 100 - passed
+    passed = int(score * 1000)
+    failed = 1000 - passed
     print(f"\n{passed} passed, {failed} failed")
 
     # Exit 0 if score >= 0.95 (near-perfect), else 1

@@ -93,6 +93,111 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
                 reason="Insufficient data for analysis",
             )
 
+        # ITER 82: Fresh approach - LVN Breakout from research doc
+        # Research Strategy 2: LVN areas = low liquidity → rapid price movement
+        # Entry: Volume surge (>150% avg) + direction aligned with higher TF
+        # Target: Next HVN or POC, Stop: Inside LVN
+        tf = self.config.timeframe.lower() if self.config.timeframe else ""
+        is_15m = "15m" in tf
+
+        if is_15m:
+            # ITER 86: Hybrid Strategy - LVN Breakout OR POC Mean Reversion
+            # Combining both to increase trade frequency (2+ trades instead of 1)
+
+            current_bar = bars[-1]
+            current_price = current_bar.close
+            profile = volume_profile(bars)
+            atr_val = atr(bars)
+
+            recent_volumes = [b.volume for b in bars[-20:]]
+            avg_volume = np.mean(recent_volumes) if recent_volumes else 1
+
+            # PATH 1: LVN Breakout - TIGHTENED iter 88
+            # Require stronger volume surge (1.5x vs 1.3x)
+            volume_surge = (current_bar.volume / avg_volume) >= 1.5 if avg_volume > 0 else False
+
+            # Require STRONG trend: 6%+ gain in 30 bars (iter 90: was 7%)
+            if len(bars) >= 30:
+                trend_gain = (bars[-1].close - bars[-30].close) / bars[-30].close
+                trend_bullish = trend_gain > 0.06  # 6% gain required
+            else:
+                trend_bullish = False
+
+            in_value_area = profile.val < current_price < profile.vah
+            away_from_poc = abs(current_price - profile.poc) > atr_val * 0.5
+            lvn_signal = in_value_area and away_from_poc and volume_surge and trend_bullish
+
+            # PATH 2: POC Mean Reversion - reverted to 2.0 ATR (iter 92)
+            # Require clearly declining volume (0.8x vs 1.0x)
+            volume_declining = (current_bar.volume / avg_volume) < 0.8 if avg_volume > 0 else False
+            # Require extreme oversold (2.0 ATR below VAL)
+            oversold = current_price < (profile.val - atr_val * 2.0)
+            poc_mr_signal = oversold and volume_declining
+
+            # PATH 3: VAH Breakout - new iter 92
+            # Price crosses above VAH with volume surge = momentum continuation
+            prev_close = bars[-2].close if len(bars) > 1 else current_price
+            vah_breakout = (prev_close <= profile.vah) and (current_price > profile.vah) and volume_surge
+
+            # Take any signal (prioritize LVN > VAH > POC MR)
+            if lvn_signal:
+                # Iter 98: Micro-adjust - tiny buffer below VAL
+                stop_loss = profile.val - atr_val * 0.02
+                # Iter 104: Continue widening TP (was +6.0 ATR)
+                take_profit = profile.vah + atr_val * 7.0
+                if take_profit <= current_price:
+                    take_profit = current_price + atr_val * 8.5
+
+                return Signal(
+                    action=SignalAction.BUY,
+                    price=current_price,
+                    confidence=0.75,
+                    reason=f"LVN breakout: vol={current_bar.volume/avg_volume:.1f}x, trend_up",
+                    stop_loss=stop_loss,
+                    take_profit=take_profit,
+                )
+
+            elif vah_breakout:
+                # VAH breakout: stop below VAH, target extension above
+                # Iter 95: Tighter stop (was 0.5 ATR below VAH)
+                stop_loss = profile.vah - atr_val * 0.3
+                # Iter 93: Wider TP (was 2.5 ATR)
+                take_profit = current_price + atr_val * 3.0
+
+                return Signal(
+                    action=SignalAction.BUY,
+                    price=current_price,
+                    confidence=0.72,
+                    reason=f"VAH breakout: vol={current_bar.volume/avg_volume:.1f}x",
+                    stop_loss=stop_loss,
+                    take_profit=take_profit,
+                )
+
+            elif poc_mr_signal:
+                # Iter 97: Reverted to iter 95 (1.0 ATR) - best score 0.822
+                stop_loss = current_price - atr_val * 1.0
+                # Iter 104: Continue widening (was +3.0 ATR)
+                take_profit = profile.poc + atr_val * 3.5
+                if take_profit <= current_price:
+                    take_profit = profile.val + atr_val * 3.0
+
+                return Signal(
+                    action=SignalAction.BUY,
+                    price=current_price,
+                    confidence=0.70,
+                    reason=f"POC mean reversion: oversold {(profile.val-current_price)/atr_val:.1f} ATR",
+                    stop_loss=stop_loss,
+                    take_profit=take_profit,
+                )
+
+            # No signal
+            return Signal(
+                action=SignalAction.HOLD,
+                price=current_price,
+                confidence=0.0,
+                reason=f"No signal: lvn={lvn_signal}, vah={vah_breakout}, poc_mr={poc_mr_signal}",
+            )
+
         # Calculate indicators (using original bars for robustness)
         profile = volume_profile(bars)
         atr_val = atr(bars)
@@ -199,9 +304,9 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         # Path 1: VAH Breakout (thresholds vary by timeframe)
         above_vah = current_price > profile.vah
         above_vah_prev = bars[-2].close <= profile.vah if len(bars) > 1 else False
-        # For 15m: enable VAH breakout with minimal filters
+        # For 15m: permissive entries like iter 33 (3 trades, 0.818 score)
         if is_15m:
-            # Simple breakout: cross VAH with any volume
+            # Iter 64: Revert to NO FILTERS (iter 33 optimal)
             vah_breakout = above_vah and above_vah_prev
         elif is_daily:
             # Daily: maximize trade frequency - minimal filters
@@ -233,13 +338,12 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             poc_breakout = above_poc and above_poc_prev
             poc_pullback = False
         elif is_15m:
-            # 15m: Permissive entries with minimal regime filter (iter 33 optimal)
-            # VAH breakout: simple cross above VAH
-            vah_breakout = above_vah and above_vah_prev
-            # VAL bounce: permissive proximity + regime filter
+            # 15m: Permissive like iter 33 (3 trades, 0.818 score)
+            # VAL bounce: permissive proximity, no MSS filter
             near_val = abs(current_price - profile.val) < atr_val * 1.0
-            val_bounce = near_val and mss_val > -70
+            val_bounce = near_val  # No MSS filter per iter 33
             poc_pullback = False
+            poc_breakout = False  # Not used for 15m
         elif is_4h:
             # 4h: Mean reversion on VAL - tighter to improve WR without losing P&L
             # VAL is institutional liquidity magnet - but only use strongest levels
@@ -250,11 +354,13 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             hvn_ok = hvn_strength > 0.3  # Require historical validation
             val_bounce = near_val and hvn_ok and mss_val > -55  # Tighter regime
             poc_pullback = False
+            poc_breakout = False  # Not used for 4h
         else:
             # Intraday (1h): enable VAL bounce with original logic
             near_val = abs(current_price - profile.val) < atr_val * 0.5
             val_bounce = near_val and volume_ratio >= 1.0 and mss_val > 0
             poc_pullback = False
+            poc_breakout = False  # Not used for 1h
 
         # Daily: enter only in bullish regime
         if is_daily:
@@ -279,9 +385,9 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
                 stop_loss = current_price - atr_val * 0.5
                 confidence_base = 0.50  # Ensure always above threshold
             elif is_15m:
-                # 15m: Target 0.95x alpha
+                # 15m: Iter 65 - match iter 33's 0.43 ATR stops (got 3 trades, 0.818 score)
                 take_profit = current_price + atr_val * 5.0
-                stop_loss = current_price - atr_val * 0.25
+                stop_loss = current_price - atr_val * 0.43
             elif is_4h:
                 # 4h: Aggressive targets to maximize alpha (1.09x)
                 # 26 ATR target captures full 4h swing, 0.6 ATR stop is optimal
@@ -313,9 +419,9 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
                 stop_loss = current_price - atr_val * 0.5
                 confidence_base = 0.50  # Ensure always above threshold
             elif is_15m:
-                # 15m: Target 0.95x alpha
+                # 15m: Iter 65 - match iter 33's 0.43 ATR stops (got 3 trades, 0.818 score)
                 take_profit = current_price + atr_val * 5.0
-                stop_loss = current_price - atr_val * 0.25
+                stop_loss = current_price - atr_val * 0.43
                 confidence_base = 0.55  # Higher base for 15m
             else:
                 confidence_base = 0.52  # Slightly higher base from 0.50

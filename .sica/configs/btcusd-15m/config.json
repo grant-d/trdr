@@ -13,7 +13,7 @@
   "params": {
     "symbol": "crypto:BTC/USD",
     "timeframe": "15m",
-    "lookback": "1000"
+    "lookback": "3000"
   },
   "state": null
 }

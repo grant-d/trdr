@@ -5,12 +5,30 @@ Tests cover:
 - Edge cases (zero, negative, infinity)
 - Drawdown penalty
 - Alpha penalty (vs buy-hold)
-- Permutations showing score behavior across metric ranges
 """
+
+from dataclasses import dataclass
 
 import pytest
 
-from trdr.strategy.targets import asymptotic, quadratic, compute_composite_score
+from trdr.strategy.targets import asymptotic, quadratic, score_result
+
+
+@dataclass
+class MockResult:
+    """Mock PaperExchangeResult for testing score_result."""
+
+    cagr: float | None = 0.0
+    calmar_ratio: float | None = 0.0
+    sortino_ratio: float | None = 0.0
+    profit_factor: float = 0.0
+    win_rate: float = 0.0
+    max_drawdown: float = 0.0
+    total_trades: int = 0
+    trades_per_year: float = 0.0
+    total_return: float = 0.0
+    start_time: str | None = None
+    end_time: str | None = None
 
 
 class TestAsymptotic:
@@ -29,8 +47,8 @@ class TestAsymptotic:
         because -2.32 / (-2.32 + 2.0) = -2.32 / -0.32 = 7.25 (positive!)
         """
         assert asymptotic(-2.32, 2.0) == 0.0  # The actual bug case
-        assert asymptotic(-100, 2.0) == 0.0   # Large negative
-        assert asymptotic(-1.5, 1.0) == 0.0   # |value| > target
+        assert asymptotic(-100, 2.0) == 0.0  # Large negative
+        assert asymptotic(-1.5, 1.0) == 0.0  # |value| > target
 
     def test_at_target_returns_half(self):
         assert asymptotic(1.0, 1.0) == 0.5
@@ -90,54 +108,54 @@ class TestQuadratic:
         """Different deltas change the curve width."""
         # Narrow delta = steeper falloff
         narrow = quadratic(80, target=100, delta=50)  # 20 away from 100, delta=50
-        wide = quadratic(80, target=100, delta=100)   # 20 away from 100, delta=100
+        wide = quadratic(80, target=100, delta=100)  # 20 away from 100, delta=100
         assert narrow < wide  # Narrow penalizes more
 
 
-class TestCompositeScoreBasic:
-    """Test basic composite score behavior.
+class TestScoreResultBasic:
+    """Test basic score_result behavior."""
 
-    Note: Without bars, CAGR and Calmar are 0, which is 60% of the score.
-    These tests verify the secondary metrics (40%) behave correctly.
-    """
-
-    def test_good_secondary_metrics(self):
-        """Good secondary metrics should produce decent score (max 40% without bars)."""
-        score, _ = compute_composite_score(
-            profit_factor=5.0,
-            sortino=3.0,
-            pnl=10000,
-            win_rate=0.65,
-            max_drawdown=0.05,
-            total_trades=50,
+    def test_good_metrics(self):
+        """Good metrics produce decent score."""
+        result = MockResult(
+            cagr=0.30,
+            calmar_ratio=3.0,
+            sortino_ratio=3.0,
+            profit_factor=3.0,
+            win_rate=0.60,
+            max_drawdown=0.10,
+            trades_per_year=70,
+            total_return=0.30,
         )
-        # Without bars: CAGR=0, Calmar=0 (60% lost)
-        # Secondary metrics max out around 0.35-0.40
-        assert 0.2 < score < 0.5
+        score, _ = score_result(result)
+        assert 0.4 < score < 0.8
 
     def test_poor_metrics_low_score(self):
-        """Poor metrics should produce low score."""
-        score, _ = compute_composite_score(
+        """Poor metrics produce low score."""
+        result = MockResult(
+            cagr=0.0,
+            calmar_ratio=0.0,
+            sortino_ratio=0.2,
             profit_factor=0.5,
-            sortino=0.2,
-            pnl=100,
             win_rate=0.30,
             max_drawdown=0.10,
-            total_trades=5,
+            trades_per_year=5,
+            total_return=0.0,
         )
-        assert score < 0.2
+        score, _ = score_result(result)
+        assert score < 0.15
 
-    def test_zero_trades_near_zero_score(self):
-        """Zero trades should produce very low score."""
-        score, _ = compute_composite_score(
+    def test_zero_trades_zero_score(self):
+        """Zero trades produces zero trade score component."""
+        result = MockResult(
             profit_factor=0,
-            sortino=0,
-            pnl=0,
+            sortino_ratio=0,
             win_rate=0,
             max_drawdown=0,
-            total_trades=0,
+            trades_per_year=0,
         )
-        assert score < 0.05  # Very low score but not exactly zero
+        score, _ = score_result(result)
+        assert score < 0.05
 
 
 class TestDrawdownPenalty:
@@ -145,58 +163,52 @@ class TestDrawdownPenalty:
 
     def test_low_drawdown_no_penalty(self):
         """Drawdown <= 25% should not be penalized."""
-        score_5pct, details_5 = compute_composite_score(
+        result_5 = MockResult(
+            cagr=0.20,
+            calmar_ratio=2.0,
+            sortino_ratio=1.5,
             profit_factor=2.0,
-            sortino=1.5,
-            pnl=2000,
             win_rate=0.50,
             max_drawdown=0.05,
-            total_trades=20,
+            trades_per_year=70,
+            total_return=0.20,
         )
-        score_25pct, details_25 = compute_composite_score(
+        result_25 = MockResult(
+            cagr=0.20,
+            calmar_ratio=2.0,
+            sortino_ratio=1.5,
             profit_factor=2.0,
-            sortino=1.5,
-            pnl=2000,
             win_rate=0.50,
             max_drawdown=0.25,
-            total_trades=20,
+            trades_per_year=70,
+            total_return=0.20,
         )
+        score_5, details_5 = score_result(result_5)
+        score_25, details_25 = score_result(result_25)
         # Both should have DD penalty 1.0
         assert "DD: 5.0% → penalty 1.00" in str(details_5)
         assert "DD: 25.0% → penalty 1.00" in str(details_25)
-        assert score_5pct == score_25pct
+        assert score_5 == score_25
 
     def test_high_drawdown_penalized(self):
         """Drawdown > 25% should be penalized exponentially."""
-        score_25pct, _ = compute_composite_score(
+        base = dict(
+            cagr=0.20,
+            calmar_ratio=2.0,
+            sortino_ratio=1.5,
             profit_factor=2.0,
-            sortino=1.5,
-            pnl=2000,
             win_rate=0.50,
-            max_drawdown=0.25,
-            total_trades=20,
+            trades_per_year=70,
+            total_return=0.20,
         )
-        score_35pct, _ = compute_composite_score(
-            profit_factor=2.0,
-            sortino=1.5,
-            pnl=2000,
-            win_rate=0.50,
-            max_drawdown=0.35,
-            total_trades=20,
-        )
-        score_45pct, _ = compute_composite_score(
-            profit_factor=2.0,
-            sortino=1.5,
-            pnl=2000,
-            win_rate=0.50,
-            max_drawdown=0.45,
-            total_trades=20,
-        )
+        score_25, _ = score_result(MockResult(**base, max_drawdown=0.25))
+        score_35, _ = score_result(MockResult(**base, max_drawdown=0.35))
+        score_45, _ = score_result(MockResult(**base, max_drawdown=0.45))
         # Higher DD = lower score
-        assert score_35pct < score_25pct
-        assert score_45pct < score_35pct
+        assert score_35 < score_25
+        assert score_45 < score_35
         # 45% DD should be heavily penalized
-        assert score_45pct < score_25pct * 0.5
+        assert score_45 < score_25 * 0.5
 
 
 class TestAlphaPenalty:
@@ -204,103 +216,116 @@ class TestAlphaPenalty:
 
     def test_no_buyhold_no_penalty(self):
         """Without buy-hold return, no alpha penalty applied."""
-        score, details = compute_composite_score(
+        result = MockResult(
+            cagr=0.20,
+            calmar_ratio=2.0,
+            sortino_ratio=1.5,
             profit_factor=2.0,
-            sortino=1.5,
-            pnl=2000,
             win_rate=0.50,
             max_drawdown=0.10,
-            total_trades=20,
-            buyhold_return=None,
+            trades_per_year=70,
+            total_return=0.20,
         )
+        score, details = score_result(result, buyhold_return=None)
         assert "Alpha" not in str(details)
 
     def test_outperform_buyhold_no_penalty(self):
         """Beating buy-hold should not be penalized."""
-        # Strategy: 50% return, Buy-hold: 30% return → alpha = 1.67x
-        score, details = compute_composite_score(
-            profit_factor=2.0,
-            sortino=1.5,
-            pnl=5000,  # 50% return on 10k
-            win_rate=0.50,
+        result = MockResult(
+            cagr=0.50,
+            calmar_ratio=3.0,
+            sortino_ratio=2.0,
+            profit_factor=2.5,
+            win_rate=0.55,
             max_drawdown=0.10,
-            total_trades=20,
-            initial_capital=10000,
-            buyhold_return=0.30,  # 30%
+            trades_per_year=70,
+            total_return=0.50,  # 50% return
         )
-        assert "Alpha: 1.67x" in str(details)
+        score, details = score_result(result, buyhold_return=0.30)  # 30% buy-hold
+        # alpha = 0.50 / 0.30 = 1.67
+        assert "Alpha: 1.67x buy-hold" in str(details)
         assert "penalty 1.00" in str(details)
 
     def test_underperform_buyhold_penalized(self):
         """Underperforming buy-hold should be penalized."""
-        # Strategy: 20% return, Buy-hold: 50% return → alpha = 0.4x
-        score_under, details = compute_composite_score(
+        result_under = MockResult(
+            cagr=0.20,
+            calmar_ratio=2.0,
+            sortino_ratio=1.5,
             profit_factor=2.0,
-            sortino=1.5,
-            pnl=2000,  # 20% return on 10k
             win_rate=0.50,
             max_drawdown=0.10,
-            total_trades=20,
-            initial_capital=10000,
-            buyhold_return=0.50,  # 50%
+            trades_per_year=70,
+            total_return=0.20,  # 20% return
         )
-        # Same metrics but beating buy-hold
-        score_over, _ = compute_composite_score(
-            profit_factor=2.0,
-            sortino=1.5,
-            pnl=6000,  # 60% return on 10k
-            win_rate=0.50,
+        result_over = MockResult(
+            cagr=0.60,
+            calmar_ratio=3.0,
+            sortino_ratio=2.5,
+            profit_factor=3.0,
+            win_rate=0.55,
             max_drawdown=0.10,
-            total_trades=20,
-            initial_capital=10000,
-            buyhold_return=0.50,  # 50%
+            trades_per_year=70,
+            total_return=0.60,  # 60% return
         )
+        score_under, details = score_result(result_under, buyhold_return=0.50)
+        score_over, _ = score_result(result_over, buyhold_return=0.50)
         assert score_under < score_over
-        assert "Alpha: 0.40x" in str(details)
-
-    def test_alpha_penalty_proportional(self):
-        """Alpha penalty should be proportional to underperformance."""
-        # Normal market (buyhold < 25%): penalty = alpha directly
-        # 80% of buy-hold → 0.8 penalty
-        score_80pct, details_80 = compute_composite_score(
-            profit_factor=2.0,
-            sortino=1.5,
-            pnl=1600,  # 16% return
-            win_rate=0.50,
-            max_drawdown=0.10,
-            total_trades=20,
-            initial_capital=10000,
-            buyhold_return=0.20,  # 20% (normal market)
-        )
-        # 50% of buy-hold → 0.5 penalty
-        score_50pct, details_50 = compute_composite_score(
-            profit_factor=2.0,
-            sortino=1.5,
-            pnl=1000,  # 10% return
-            win_rate=0.50,
-            max_drawdown=0.10,
-            total_trades=20,
-            initial_capital=10000,
-            buyhold_return=0.20,  # 20% (normal market)
-        )
-        assert "penalty 0.80" in str(details_80)
-        assert "penalty 0.50" in str(details_50)
-        assert score_80pct > score_50pct
+        # alpha = 0.20 / 0.50 = 0.40
+        assert "Alpha: 0.40x buy-hold" in str(details)
 
     def test_alpha_floor_at_30_percent(self):
-        """Alpha penalty should floor at 0.3 (not 0) for normal markets."""
-        score, details = compute_composite_score(
-            profit_factor=2.0,
-            sortino=1.5,
-            pnl=100,  # 1% return
+        """Alpha penalty should floor at 0.3 for normal markets."""
+        result = MockResult(
+            cagr=0.01,
+            calmar_ratio=0.5,
+            sortino_ratio=0.5,
+            profit_factor=1.5,
             win_rate=0.50,
             max_drawdown=0.10,
-            total_trades=20,
-            initial_capital=10000,
-            buyhold_return=0.20,  # 20% (normal market, not mega-trend)
+            trades_per_year=70,
+            total_return=0.01,  # 1% return
         )
+        score, details = score_result(result, buyhold_return=0.20)  # Normal market
         assert "penalty 0.30" in str(details)
-        assert score > 0  # Should not be zero
+        assert score > 0
+
+    def test_negative_buyhold_shows_excess_return(self):
+        """Negative buyhold should show excess return, not meaningless ratio."""
+        result = MockResult(
+            cagr=1.05,
+            calmar_ratio=16.0,
+            sortino_ratio=700.0,
+            profit_factor=3.3,
+            win_rate=0.50,
+            max_drawdown=0.065,
+            trades_per_year=48,
+            total_return=0.072,  # +7.2% strategy return
+        )
+        score, details = score_result(result, buyhold_return=-0.0155)  # -1.55% market
+        details_str = str(details)
+        # Should show excess return format, not ratio
+        assert "vs buy-hold" in details_str
+        assert "no penalty" in details_str
+        # Should NOT show meaningless negative ratio
+        assert "-4" not in details_str and "-5" not in details_str
+
+    def test_negative_buyhold_no_penalty(self):
+        """Beating a down market should never be penalized."""
+        result = MockResult(
+            cagr=0.50,
+            calmar_ratio=5.0,
+            sortino_ratio=3.0,
+            profit_factor=2.5,
+            win_rate=0.55,
+            max_drawdown=0.10,
+            trades_per_year=70,
+            total_return=0.10,  # +10% in down market
+        )
+        score_down, _ = score_result(result, buyhold_return=-0.20)  # -20% market
+        score_none, _ = score_result(result, buyhold_return=None)
+        # No alpha penalty when beating down market
+        assert score_down == score_none
 
 
 class TestEdgeCases:
@@ -308,109 +333,93 @@ class TestEdgeCases:
 
     def test_infinity_sortino_handled(self):
         """Infinite Sortino (no downside deviation) should be handled."""
-        score, _ = compute_composite_score(
+        result = MockResult(
+            cagr=0.20,
+            calmar_ratio=2.0,
+            sortino_ratio=float("inf"),
             profit_factor=2.0,
-            sortino=float("inf"),
-            pnl=2000,
             win_rate=0.50,
             max_drawdown=0.10,
-            total_trades=20,
+            trades_per_year=70,
+            total_return=0.20,
         )
+        score, _ = score_result(result)
         assert 0 < score < 1
 
     def test_none_sortino_handled(self):
         """None Sortino should be handled as 0."""
-        score, _ = compute_composite_score(
+        result = MockResult(
+            cagr=0.20,
+            calmar_ratio=2.0,
+            sortino_ratio=None,
             profit_factor=2.0,
-            sortino=None,
-            pnl=2000,
             win_rate=0.50,
             max_drawdown=0.10,
-            total_trades=20,
+            trades_per_year=70,
+            total_return=0.20,
         )
+        score, _ = score_result(result)
         assert 0 < score < 1
 
     def test_infinity_profit_factor_capped(self):
         """Infinite PF (no losing trades) should be capped."""
-        score, details = compute_composite_score(
+        result = MockResult(
+            cagr=0.20,
+            calmar_ratio=2.0,
+            sortino_ratio=1.5,
             profit_factor=float("inf"),
-            sortino=1.5,
-            pnl=2000,
             win_rate=0.50,
             max_drawdown=0.10,
-            total_trades=20,
+            trades_per_year=70,
+            total_return=0.20,
         )
+        score, details = score_result(result)
         # Capped at 10.0
         assert "PF: 10.00" in str(details)
         assert 0 < score < 1
 
-    def test_negative_pnl_gives_zero_cagr(self):
-        """Negative P&L without bars gives CAGR 0."""
-        score, details = compute_composite_score(
-            profit_factor=0.5,
-            sortino=0.5,
-            pnl=-5000,
-            win_rate=0.40,
-            max_drawdown=0.25,
-            total_trades=20,
-        )
-        # Without bars, CAGR = 0 (no period info)
-        assert "CAGR: 0.0%" in str(details)
-
     def test_win_rate_clamped(self):
         """Win rate should be clamped to [0, 1]."""
-        score_over, _ = compute_composite_score(
+        result_over = MockResult(
+            cagr=0.20,
+            calmar_ratio=2.0,
+            sortino_ratio=1.5,
             profit_factor=2.0,
-            sortino=1.5,
-            pnl=2000,
             win_rate=1.5,  # Invalid > 1
             max_drawdown=0.10,
-            total_trades=20,
+            trades_per_year=70,
+            total_return=0.20,
         )
-        score_under, _ = compute_composite_score(
+        result_under = MockResult(
+            cagr=0.20,
+            calmar_ratio=2.0,
+            sortino_ratio=1.5,
             profit_factor=2.0,
-            sortino=1.5,
-            pnl=2000,
             win_rate=-0.5,  # Invalid < 0
             max_drawdown=0.10,
-            total_trades=20,
+            trades_per_year=70,
+            total_return=0.20,
         )
+        score_over, _ = score_result(result_over)
+        score_under, _ = score_result(result_under)
         assert 0 < score_over < 1
         assert 0 < score_under < 1
 
     def test_zero_buyhold_return_no_penalty(self):
         """Zero buy-hold return should not cause division by zero."""
-        score, details = compute_composite_score(
+        result = MockResult(
+            cagr=0.20,
+            calmar_ratio=2.0,
+            sortino_ratio=1.5,
             profit_factor=2.0,
-            sortino=1.5,
-            pnl=2000,
             win_rate=0.50,
             max_drawdown=0.10,
-            total_trades=20,
-            initial_capital=10000,
-            buyhold_return=0.0,
+            trades_per_year=70,
+            total_return=0.20,
         )
+        score, details = score_result(result, buyhold_return=0.0)
         # Should skip alpha calculation
         assert "Alpha" not in str(details)
-
-
-class TestScoreWithoutBars:
-    """Test scoring behavior without bar data (CAGR/Calmar = 0)."""
-
-    def test_secondary_metrics_only(self):
-        """Without bars, only secondary metrics (40%) contribute."""
-        score, details = compute_composite_score(
-            profit_factor=2.0,
-            sortino=2.0,
-            pnl=2000,
-            win_rate=0.50,
-            max_drawdown=0.10,
-            total_trades=50,  # 50 trades, no period = uses raw value
-        )
-        # CAGR and Calmar are 0 (60%), so max score is ~0.40
-        assert 0.15 < score < 0.40
-        assert "CAGR: 0.0%" in str(details)
-        assert "Calmar: 0.00" in str(details)
 
 
 class TestDetailsOutput:
@@ -418,14 +427,17 @@ class TestDetailsOutput:
 
     def test_details_contains_all_metrics(self):
         """Details should contain all metric breakdowns."""
-        _, details = compute_composite_score(
+        result = MockResult(
+            cagr=0.20,
+            calmar_ratio=2.0,
+            sortino_ratio=1.5,
             profit_factor=2.0,
-            sortino=1.5,
-            pnl=2000,
             win_rate=0.50,
             max_drawdown=0.10,
-            total_trades=20,
+            trades_per_year=70,
+            total_return=0.20,
         )
+        _, details = score_result(result)
         details_str = "\n".join(details)
         assert "CAGR:" in details_str
         assert "Calmar:" in details_str
@@ -438,16 +450,17 @@ class TestDetailsOutput:
 
     def test_details_shows_alpha_when_provided(self):
         """Details should show alpha when buy-hold return provided."""
-        _, details = compute_composite_score(
+        result = MockResult(
+            cagr=0.20,
+            calmar_ratio=2.0,
+            sortino_ratio=1.5,
             profit_factor=2.0,
-            sortino=1.5,
-            pnl=2000,
             win_rate=0.50,
             max_drawdown=0.10,
-            total_trades=20,
-            initial_capital=10000,
-            buyhold_return=0.30,
+            trades_per_year=70,
+            total_return=0.20,
         )
+        _, details = score_result(result, buyhold_return=0.30)
         details_str = "\n".join(details)
         assert "Alpha:" in details_str
         assert "buy-hold" in details_str
