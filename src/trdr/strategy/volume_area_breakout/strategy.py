@@ -812,19 +812,21 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         elif is_15m:
             # 15m: Mean reversion for high frequency
             # Volatility regime filter: mean reversion works best in low/medium vol
-            near_val = abs(current_price - profile.val) < atr * 0.65
+            near_val = abs(current_price - profile.val) < atr * 0.6  # Tighter proximity
             hma_filter_15m = current_price > hma
             vol_regime = classify_volatility_regime(bars, lookback=50)
             vol_ok = vol_regime in ("low", "medium")  # Skip high-vol regimes
-            val_bounce = near_val and hma_filter_15m and vol_ok and mss > -50
+            # Require HVN strength to improve win rate (avoid weak bounce levels)
+            hvn_ok = hvn_strength > 0.2  # Minimum historical support
+            val_bounce = near_val and hma_filter_15m and vol_ok and mss > -50 and hvn_ok
             poc_pullback = False
         elif is_4h:
-            # 4h: Mean reversion on VAL - maximum relaxation for trade volume
-            # VAL is institutional liquidity magnet - bounces work frequently
-            near_val = abs(current_price - profile.val) < atr * 0.6  # Relaxed proximity
-            # Remove HVN/volume requirement entirely - just need proximity to VAL
-            # Any reason to believe in mean reversion suffices
-            val_bounce = near_val and mss > -60  # Very permissive regime
+            # 4h: Mean reversion on VAL - tighter to improve WR without losing P&L
+            # VAL is institutional liquidity magnet - but only use strongest levels
+            near_val = abs(current_price - profile.val) < atr * 0.55  # Tighter proximity (was 0.6)
+            # Require minimum HVN strength to filter weak bounces
+            hvn_ok = hvn_strength > 0.3  # Require historical validation
+            val_bounce = near_val and hvn_ok and mss > -55  # Tighter regime
             poc_pullback = False
         else:
             # Intraday (1h): enable VAL bounce with original logic
@@ -873,7 +875,7 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             else:
                 take_profit = profile.poc
                 if is_4h:
-                    stop_loss = current_price - atr * 1.6  # Moderate tightening (was 1.8)
+                    stop_loss = current_price - atr * 1.5  # Tighter from 1.6 to improve WR
                 else:
                     stop_loss = current_price - atr * 2.0
             signal_type = "VAL_bounce"
@@ -888,22 +890,24 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         # Strong declining volume bonus for bounces (critical signal)
         # This filter is crucial for filtering out momentum trades that look like bounces
         if val_bounce and volume_trend == "declining":
-            confidence += 0.45  # Maximum bonus for volume-declining bounces
+            confidence += 0.35  # Reduced bonus to be less aggressive on declining volume
 
         # Order Flow Imbalance bonus for bounces (positive OFI = buying pressure = bounce support)
         # Positive OFI near VAL indicates institutional buyers catching the dip
-        if val_bounce and ofi > 0.25:  # Strong buying pressure only
-            confidence += 0.18  # Meaningful bonus for strong OFI signal
+        if val_bounce and ofi > 0.2:  # Slightly lower threshold for more signals
+            confidence += 0.20  # Slightly increased bonus for OFI signal
 
         # HVN strength bonus for historically validated support on VAL bounces
         # If VAL is a historically tested support, confidence boost is justified
         if val_bounce:
-            if hvn_strength > 0.7:
-                confidence += 0.35  # Very strong historical support (increased)
-            elif hvn_strength > 0.5:
-                confidence += 0.30  # Moderate historical support (increased)
-            elif hvn_strength > 0.3:
-                confidence += 0.20  # Weak support (increased from 0.15)
+            if hvn_strength > 0.75:
+                confidence += 0.40  # Very strong historical support
+            elif hvn_strength > 0.6:
+                confidence += 0.35  # Moderate-strong historical support
+            elif hvn_strength > 0.4:
+                confidence += 0.25  # Moderate support
+            elif hvn_strength > 0.25:
+                confidence += 0.10  # Weak support (minimal bonus)
 
         # Regime bonus (only for strong trends to avoid noise)
         if mss > 20:
@@ -916,14 +920,14 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
 
         confidence = min(confidence, 1.0)
 
-        # Confidence threshold: relax to capture more trades while maintaining quality
-        # Daily: 0.55, 4h: 0.40, 15m: 0.45 (very permissive for volume), 1h: 0.65
+        # Confidence threshold: balance signal volume with quality
+        # Daily: 0.55, 4h: 0.45 (was 0.40, tighter for WR), 15m: 0.48 (was 0.45), 1h: 0.65
         if is_daily:
             min_confidence_threshold = 0.55
         elif is_15m:
-            min_confidence_threshold = 0.45  # Very permissive - entry filters do quality control
+            min_confidence_threshold = 0.48  # Slightly tighter to filter weaker signals
         elif is_4h:
-            min_confidence_threshold = 0.40  # Maximum permissive on 4h for maximum signal generation
+            min_confidence_threshold = 0.45  # Tighter from 0.40 to improve WR without killing volume
         else:
             min_confidence_threshold = 0.65
 
