@@ -14,11 +14,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-import numpy as np
-
 from ..data.market import Bar, Symbol
-from ..strategy.types import Position as StrategyPosition, Signal, SignalAction
-from .calendar import filter_trading_bars, get_trading_days_in_year
+from ..strategy.types import Position as StrategyPosition
+from ..strategy.types import Signal, SignalAction
+from .calendar import filter_trading_bars
+from .metrics import TradeMetrics
 from .orders import Order, OrderManager, OrderType
 from .portfolio import Portfolio
 
@@ -112,204 +112,318 @@ class PaperExchangeResult:
     start_time: str
     end_time: str
     equity_curve: list[float] = field(default_factory=list)
+    _metrics: TradeMetrics = field(init=False, repr=False)
 
+    def __post_init__(self) -> None:
+        """Create metrics calculator."""
+        object.__setattr__(self, "_metrics", TradeMetrics(
+            trades=self.trades,
+            equity_curve=self.equity_curve,
+            initial_capital=self.config.initial_capital,
+            asset_type=self.config.asset_type,
+            start_time=self.start_time,
+            end_time=self.end_time,
+        ))
+
+    # Delegate all metrics to TradeMetrics
     @property
     def total_trades(self) -> int:
-        """Number of completed trades."""
-        return len(self.trades)
+        return self._metrics.total_trades
 
     @property
     def winning_trades(self) -> int:
-        """Number of winning trades."""
-        return sum(1 for t in self.trades if t.is_winner)
+        return self._metrics.winning_trades
 
     @property
     def losing_trades(self) -> int:
-        """Number of losing trades."""
-        return self.total_trades - self.winning_trades
+        return self._metrics.losing_trades
 
     @property
     def win_rate(self) -> float:
-        """Win rate as decimal."""
-        if not self.trades:
-            return 0.0
-        return self.winning_trades / self.total_trades
+        return self._metrics.win_rate
 
     @property
     def total_pnl(self) -> float:
-        """Total net P&L."""
-        return sum(t.net_pnl for t in self.trades)
+        return self._metrics.total_pnl
 
     @property
     def profit_factor(self) -> float:
-        """Net profits / net losses. >1 is profitable."""
-        profits = sum(t.net_pnl for t in self.trades if t.net_pnl > 0)
-        losses = abs(sum(t.net_pnl for t in self.trades if t.net_pnl < 0))
-        if losses == 0:
-            return float("inf") if profits > 0 else 0.0
-        return profits / losses
+        return self._metrics.profit_factor
 
     @property
     def max_drawdown(self) -> float:
-        """Maximum drawdown as decimal."""
-        if not self.equity_curve:
-            return 0.0
-        peak = self.equity_curve[0]
-        max_dd = 0.0
-        for equity in self.equity_curve:
-            peak = max(peak, equity)
-            if peak > 0:
-                max_dd = max(max_dd, min((peak - equity) / peak, 1.0))
-        return max_dd
+        return self._metrics.max_drawdown
 
     @property
     def sortino_ratio(self) -> float | None:
-        """Annualized Sortino ratio."""
-        if len(self.trades) < 2:
-            return None
-        returns = [t.net_pnl / (t.entry_price * t.quantity) for t in self.trades]
-        downside = [r for r in returns if r < 0]
-        if not downside:
-            return float("inf") if np.mean(returns) > 0 else None
-        downside_std = np.std(downside)
-        if downside_std == 0:
-            return None
-        days = get_trading_days_in_year(self.config.asset_type)
-        return float(np.mean(returns) / downside_std * np.sqrt(days))
+        return self._metrics.sortino_ratio
 
     @property
     def sharpe_ratio(self) -> float | None:
-        """Annualized Sharpe ratio (assumes 0 risk-free rate)."""
-        if len(self.trades) < 2:
-            return None
-        returns = [t.net_pnl / (t.entry_price * t.quantity) for t in self.trades]
-        std = np.std(returns)
-        if std == 0:
-            return float("inf") if np.mean(returns) > 0 else None
-        days = get_trading_days_in_year(self.config.asset_type)
-        return float(np.mean(returns) / std * np.sqrt(days))
+        return self._metrics.sharpe_ratio
 
     @property
     def calmar_ratio(self) -> float | None:
-        """Calmar ratio: CAGR / max drawdown."""
-        cagr = self.cagr
-        max_dd = self.max_drawdown
-        if cagr is None or max_dd == 0:
-            return float("inf") if cagr and cagr > 0 else None
-        return cagr / max_dd
+        return self._metrics.calmar_ratio
 
     @property
     def total_return(self) -> float:
-        """Total return as decimal (0.10 = 10%)."""
-        if not self.equity_curve:
-            return 0.0
-        initial = self.config.initial_capital
-        final = self.equity_curve[-1]
-        return (final - initial) / initial if initial > 0 else 0.0
+        return self._metrics.total_return
 
     @property
     def cagr(self) -> float | None:
-        """Compound Annual Growth Rate."""
-        if not self.equity_curve or not self.start_time or not self.end_time:
-            return None
-        initial = self.config.initial_capital
-        final = self.equity_curve[-1]
-        if initial <= 0 or final <= 0:
-            return None
-
-        # Calculate years between start and end
-        start = datetime.fromisoformat(self.start_time.replace("Z", "+00:00"))
-        end = datetime.fromisoformat(self.end_time.replace("Z", "+00:00"))
-        years = (end - start).total_seconds() / (365.25 * 24 * 3600)
-        if years <= 0:
-            return None
-
-        return float((final / initial) ** (1 / years) - 1)
+        return self._metrics.cagr
 
     @property
     def avg_trade_pnl(self) -> float:
-        """Average P&L per trade."""
-        if not self.trades:
-            return 0.0
-        return self.total_pnl / self.total_trades
+        return self._metrics.avg_trade_pnl
 
     @property
     def avg_win(self) -> float:
-        """Average winning trade P&L."""
-        winners = [t.net_pnl for t in self.trades if t.net_pnl > 0]
-        return float(np.mean(winners)) if winners else 0.0
+        return self._metrics.avg_win
 
     @property
     def avg_loss(self) -> float:
-        """Average losing trade P&L (negative value)."""
-        losers = [t.net_pnl for t in self.trades if t.net_pnl < 0]
-        return float(np.mean(losers)) if losers else 0.0
+        return self._metrics.avg_loss
 
     @property
     def largest_win(self) -> float:
-        """Largest single winning trade."""
-        winners = [t.net_pnl for t in self.trades if t.net_pnl > 0]
-        return max(winners) if winners else 0.0
+        return self._metrics.largest_win
 
     @property
     def largest_loss(self) -> float:
-        """Largest single losing trade (negative value)."""
-        losers = [t.net_pnl for t in self.trades if t.net_pnl < 0]
-        return min(losers) if losers else 0.0
+        return self._metrics.largest_loss
 
     @property
     def avg_trade_duration_hours(self) -> float:
-        """Average trade duration in hours."""
-        if not self.trades:
-            return 0.0
-        return float(np.mean([t.duration_hours for t in self.trades]))
+        return self._metrics.avg_trade_duration_hours
 
     @property
     def max_consecutive_wins(self) -> int:
-        """Maximum consecutive winning trades."""
-        if not self.trades:
-            return 0
-        max_streak, current = 0, 0
-        for t in self.trades:
-            current = (current + 1) if t.is_winner else 0
-            max_streak = max(max_streak, current)
-        return max_streak
+        return self._metrics.max_consecutive_wins
 
     @property
     def max_consecutive_losses(self) -> int:
-        """Maximum consecutive losing trades."""
-        if not self.trades:
-            return 0
-        max_streak, current = 0, 0
-        for t in self.trades:
-            current = (current + 1) if not t.is_winner else 0
-            max_streak = max(max_streak, current)
-        return max_streak
+        return self._metrics.max_consecutive_losses
 
     @property
     def expectancy(self) -> float:
-        """Expected value per trade: (WR * avg_win) + ((1-WR) * avg_loss)."""
-        if not self.trades:
-            return 0.0
-        wr = self.win_rate
-        return (wr * self.avg_win) + ((1 - wr) * self.avg_loss)
+        return self._metrics.expectancy
 
     @property
     def trades_per_year(self) -> float:
-        """Annualized trade frequency."""
-        if not self.trades or not self.start_time or not self.end_time:
-            return 0.0
-        start = datetime.fromisoformat(self.start_time.replace("Z", "+00:00"))
-        end = datetime.fromisoformat(self.end_time.replace("Z", "+00:00"))
-        years = (end - start).total_seconds() / (365.25 * 24 * 3600)
-        if years <= 0:
-            return 0.0
-        return self.total_trades / years
+        return self._metrics.trades_per_year
 
     @property
     def total_costs(self) -> float:
-        """Total transaction costs across all trades."""
-        return sum(t.costs for t in self.trades)
+        return self._metrics.total_costs
+
+
+class RuntimeContext:
+    """Live portfolio state available to strategy during generate_signal().
+
+    Provides access to portfolio, orders, trades, and computed metrics.
+    All stats are computed on-demand from current state via TradeMetrics.
+
+    Example:
+        def generate_signal(self, bars, position):
+            if self.context.drawdown > 0.1:
+                return Signal(action=SignalAction.HOLD, ...)  # pause during drawdown
+            if self.context.win_rate < 0.4 and self.context.total_trades > 10:
+                # reduce size after poor performance
+                return Signal(..., position_size_pct=0.5)
+    """
+
+    def __init__(
+        self,
+        portfolio: Portfolio,
+        order_manager: OrderManager,
+        trades: list[Trade],
+        equity_curve: list[float],
+        config: PaperExchangeConfig,
+        current_bar: Bar,
+        bar_index: int,
+        total_bars: int,
+        start_time: str,
+        strategy_name: str = "",
+    ):
+        self._portfolio = portfolio
+        self._orders = order_manager
+        self._trades = trades
+        self._equity_curve = equity_curve
+        self._config = config
+        self._current_bar = current_bar
+        self._bar_index = bar_index
+        self._total_bars = total_bars
+        self._start_time = start_time
+        self._strategy_name = strategy_name
+        self._metrics = TradeMetrics(
+            trades=trades,
+            equity_curve=equity_curve,
+            initial_capital=config.initial_capital,
+            asset_type=config.asset_type,
+            start_time=start_time,
+            end_time=current_bar.timestamp,
+        )
+
+    # Run params
+    @property
+    def strategy_name(self) -> str:
+        """Strategy name."""
+        return self._strategy_name
+
+    @property
+    def symbol(self) -> str:
+        """Trading symbol."""
+        return self._config.symbol
+
+    @property
+    def current_bar(self) -> Bar:
+        """Current bar being processed."""
+        return self._current_bar
+
+    @property
+    def bar_index(self) -> int:
+        """Current bar index (0-based)."""
+        return self._bar_index
+
+    @property
+    def total_bars(self) -> int:
+        """Total bars in run."""
+        return self._total_bars
+
+    @property
+    def bars_remaining(self) -> int:
+        """Bars remaining in run."""
+        return self._total_bars - self._bar_index - 1
+
+    # Portfolio state
+    @property
+    def positions(self) -> dict:
+        """Open positions by symbol."""
+        return self._portfolio.positions.copy()
+
+    @property
+    def pending_orders(self) -> list[Order]:
+        """Pending stop/limit orders."""
+        return self._orders.pending_orders
+
+    @property
+    def trades(self) -> list[Trade]:
+        """Completed trades."""
+        return self._trades
+
+    @property
+    def equity(self) -> float:
+        """Current portfolio equity."""
+        return self._portfolio.equity({self._config.symbol: self._current_bar.close})
+
+    @property
+    def cash(self) -> float:
+        """Available cash."""
+        return self._portfolio.cash
+
+    @property
+    def initial_capital(self) -> float:
+        """Starting capital."""
+        return self._config.initial_capital
+
+    # Delegate computed stats to TradeMetrics
+    @property
+    def total_trades(self) -> int:
+        return self._metrics.total_trades
+
+    @property
+    def winning_trades(self) -> int:
+        return self._metrics.winning_trades
+
+    @property
+    def losing_trades(self) -> int:
+        return self._metrics.losing_trades
+
+    @property
+    def win_rate(self) -> float:
+        return self._metrics.win_rate
+
+    @property
+    def total_pnl(self) -> float:
+        return self._metrics.total_pnl
+
+    @property
+    def profit_factor(self) -> float:
+        return self._metrics.profit_factor
+
+    @property
+    def drawdown(self) -> float:
+        """Current drawdown from peak as decimal."""
+        return self._metrics.current_drawdown(self.equity)
+
+    @property
+    def max_drawdown(self) -> float:
+        return self._metrics.max_drawdown
+
+    @property
+    def total_return(self) -> float:
+        """Total return based on current equity."""
+        return self._metrics.total_return_from_equity(self.equity)
+
+    @property
+    def avg_trade_pnl(self) -> float:
+        return self._metrics.avg_trade_pnl
+
+    @property
+    def avg_win(self) -> float:
+        return self._metrics.avg_win
+
+    @property
+    def avg_loss(self) -> float:
+        return self._metrics.avg_loss
+
+    @property
+    def largest_win(self) -> float:
+        return self._metrics.largest_win
+
+    @property
+    def largest_loss(self) -> float:
+        return self._metrics.largest_loss
+
+    @property
+    def expectancy(self) -> float:
+        return self._metrics.expectancy
+
+    @property
+    def max_consecutive_wins(self) -> int:
+        return self._metrics.max_consecutive_wins
+
+    @property
+    def max_consecutive_losses(self) -> int:
+        return self._metrics.max_consecutive_losses
+
+    @property
+    def total_costs(self) -> float:
+        return self._metrics.total_costs
+
+    @property
+    def sharpe_ratio(self) -> float | None:
+        return self._metrics.sharpe_ratio
+
+    @property
+    def sortino_ratio(self) -> float | None:
+        return self._metrics.sortino_ratio
+
+    @property
+    def cagr(self) -> float | None:
+        """CAGR from start to current bar."""
+        return self._metrics.cagr_live(self.equity, self._current_bar.timestamp)
+
+    @property
+    def calmar_ratio(self) -> float | None:
+        """Calmar ratio using live CAGR."""
+        cagr_val = self.cagr
+        max_dd = self.max_drawdown
+        if cagr_val is None or max_dd == 0:
+            return float("inf") if cagr_val and cagr_val > 0 else None
+        return cagr_val / max_dd
 
 
 class PaperExchange:
@@ -436,6 +550,21 @@ class PaperExchange:
             # 4. Generate signal (skip on last bar)
             if i < len(filtered_bars) - 1:
                 visible_bars = filtered_bars[: i + 1]
+
+                # Set runtime context for strategy
+                self.strategy.context = RuntimeContext(
+                    portfolio=portfolio,
+                    order_manager=order_manager,
+                    trades=trades,
+                    equity_curve=equity_curve,
+                    config=self.config,
+                    current_bar=bar,
+                    bar_index=i - self.config.warmup_bars,
+                    total_bars=len(filtered_bars) - self.config.warmup_bars,
+                    start_time=filtered_bars[self.config.warmup_bars].timestamp,
+                    strategy_name=self.strategy.name,
+                )
+
                 signal = self.strategy.generate_signal(visible_bars, strategy_position)
 
                 # 5. Convert signal to orders

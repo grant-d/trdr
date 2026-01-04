@@ -2,9 +2,13 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from ..data.market import Bar
 from .types import Position, Signal
+
+if TYPE_CHECKING:
+    from ..backtest.paper_exchange import RuntimeContext
 
 
 @dataclass
@@ -24,34 +28,38 @@ class BaseStrategy(ABC):
     Strategies encapsulate signal generation logic. The engine calls
     generate_signal() on each bar and executes the returned signal.
 
+    Attributes:
+        config: Strategy configuration
+        context: Live portfolio state (set by engine before generate_signal)
+        name: Strategy name (custom or class name)
+
     Example:
-        @dataclass
-        class MyConfig(StrategyConfig):
-            fast_period: int = 10
-            slow_period: int = 50
-
         class MyStrategy(BaseStrategy):
-            def __init__(self, config: MyConfig):
-                super().__init__(config)
-                self.config = config
-
             def generate_signal(self, bars, position):
-                # Use self.config.fast_period, etc.
+                # Access live portfolio state
+                if self.context.drawdown > 0.1:
+                    return Signal(action=SignalAction.HOLD, ...)
+                if self.context.total_trades > 10 and self.context.win_rate < 0.4:
+                    return Signal(..., position_size_pct=0.5)
                 ...
     """
 
-    def __init__(self, config: StrategyConfig):
+    context: "RuntimeContext"
+
+    def __init__(self, config: StrategyConfig, name: str | None = None):
         """Initialize strategy with configuration.
 
         Args:
             config: Strategy configuration with symbol, timeframe, and params
+            name: Optional friendly name (defaults to class name)
         """
         self.config = config
+        self._name = name
 
     @property
     def name(self) -> str:
-        """Strategy name. Override for custom name."""
-        return self.__class__.__name__
+        """Strategy name. Returns custom name if set, else class name."""
+        return self._name if self._name else self.__class__.__name__
 
     @abstractmethod
     def generate_signal(

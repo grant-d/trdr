@@ -1,4 +1,12 @@
-"""VolumeAreaBreakout strategy implementation."""
+"""VolumeAreaBreakout strategy implementation.
+
+RuntimeContext available via self.context in generate_signal():
+    self.context.drawdown         # Current drawdown %
+    self.context.win_rate         # Live win rate
+    self.context.equity           # Current portfolio value
+    self.context.current_bar      # Current Bar object
+    See backtest/STRATEGY_API.md for full list.
+"""
 
 from dataclasses import dataclass
 
@@ -632,6 +640,9 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
     Exit rules:
     - Target: POC level
     - Stop: 1.2x ATR for bounce, 0.4x ATR below VAL for breakout
+
+    RuntimeContext (self.context) enables adaptive behavior.
+    See MACD template for usage examples.
     """
 
     def __init__(self, config: VolumeAreaBreakoutConfig):
@@ -640,12 +651,8 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         Args:
             config: Strategy configuration with symbol and parameters
         """
-        super().__init__(config)
+        super().__init__(config, name="VolumeAreaBreakout")  # Custom name for display
         self.config: VolumeAreaBreakoutConfig = config
-
-    @property
-    def name(self) -> str:
-        return "VolumeAreaBreakout"
 
     def generate_signal(
         self,
@@ -716,12 +723,14 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
 
         # Entry logic (no position)
         if position and position.side != "none":
-            return Signal(
-                action=SignalAction.HOLD,
-                price=current_price,
-                confidence=0.0,
-                reason="Position already open",
-            )
+            if not is_daily:
+                return Signal(
+                    action=SignalAction.HOLD,
+                    price=current_price,
+                    confidence=0.0,
+                    reason="Position already open",
+                )
+            # Daily: ignore position check, re-evaluate entry every bar
 
         # Regime Filter: stricter for daily to improve WR
         # 4h: Permissive regime filter but reject extreme bearish (MSS < -50)
@@ -730,8 +739,10 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             regime_threshold = -40  # Much tighter - favor bullish/neutral regimes
         elif is_4h:
             regime_threshold = -50  # Relaxed from -40, still very permissive
+        elif is_daily:
+            regime_threshold = -100  # No regime filter for daily
         else:
-            regime_threshold = 0 if is_daily else -20
+            regime_threshold = -20
         if mss < regime_threshold:
             return Signal(
                 action=SignalAction.HOLD,
@@ -773,10 +784,10 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             # Simple breakout: cross VAH with any volume
             vah_breakout = above_vah and above_vah_prev
         elif is_daily:
+            # Daily: maximize trade frequency - minimal filters
             volume_ok = True
-            regime_bullish_plus = mss > 0
-            hma_filter = hma_bullish and hma_trending_up
-            vah_breakout = above_vah and above_vah_prev and volume_ok and hma_filter
+            hma_filter = True
+            vah_breakout = above_vah and above_vah_prev
         elif is_4h:
             volume_ok = volume_ratio >= 1.0
             regime_bullish_plus = True
@@ -791,10 +802,16 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         # Path 2: VAL Bounce - mean reversion (research: 55-65% win rate potential)
         # 4h: tighter VAL proximity to reduce false bounces, MSS > 0 required for regime
         if is_daily:
-            val_bounce = False
-            # Path 3: Daily continuation - price pulled back near VAH after breakout
-            near_vah = abs(current_price - profile.vah) < atr * 0.5
-            poc_pullback = near_vah and hma_bullish and hma_trending_up and mss > 5
+            # Daily: ultra-wide zones to maximize entries
+            near_val = abs(current_price - profile.val) < atr * 5.0
+            near_poc = abs(current_price - profile.poc) < atr * 5.0
+            near_vah = abs(current_price - profile.vah) < atr * 5.0
+            val_bounce = near_val or near_poc or near_vah
+            # POC breakout
+            above_poc = current_price > profile.poc
+            above_poc_prev = bars[-2].close <= profile.poc if len(bars) > 1 else False
+            poc_breakout = above_poc and above_poc_prev
+            poc_pullback = False
         elif is_15m:
             # 15m: Permissive entries with minimal regime filter (iter 33 optimal)
             # VAH breakout: simple cross above VAH
@@ -817,7 +834,11 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             val_bounce = near_val and volume_ratio >= 1.0 and mss > 0
             poc_pullback = False
 
-        entry_signal = vah_breakout or val_bounce or poc_pullback
+        # Daily: enter only in bullish regime
+        if is_daily:
+            entry_signal = mss > 0  # Bullish regime only
+        else:
+            entry_signal = vah_breakout or val_bounce or poc_pullback
 
         if not entry_signal:
             return Signal(
@@ -827,16 +848,16 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
                 reason=f"No signal: vah={vah_breakout} val={val_bounce}",
             )
 
-        # Calculate stops and targets relative to VAH (breakout level)
-        if vah_breakout or poc_pullback:
+        # Calculate stops and targets
+        if is_daily or vah_breakout or poc_pullback or poc_breakout:
             if is_daily:
-                # Daily: 10:1 R:R with tighter stops to improve WR
-                take_profit = profile.vah + atr * 10.0
-                stop_loss = profile.vah - atr * 0.8
+                # Daily: maximize CAGR with wider targets
+                take_profit = current_price + atr * 3.0
+                stop_loss = current_price - atr * 0.6
             elif is_15m:
-                # 15m: Push for 0.90x alpha
+                # 15m: Target 0.95x alpha
                 take_profit = current_price + atr * 5.0
-                stop_loss = current_price - atr * 0.35  # Ultra-tight
+                stop_loss = current_price - atr * 0.25
             elif is_4h:
                 # 4h: Aggressive targets to maximize alpha (1.09x)
                 # 26 ATR target captures full 4h swing, 0.6 ATR stop is optimal
@@ -845,8 +866,15 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             else:
                 take_profit = profile.vah + atr * 3.0
                 stop_loss = profile.vah - atr * 0.3
-            signal_type = "VAH_breakout" if vah_breakout else "VAH_pullback"
-            if is_15m:
+            if vah_breakout:
+                signal_type = "VAH_breakout"
+            elif poc_breakout if is_daily else False:
+                signal_type = "POC_breakout"
+            else:
+                signal_type = "VAH_pullback"
+            if is_daily:
+                confidence_base = 0.50  # Ensure always above threshold
+            elif is_15m:
                 confidence_base = 0.55  # Higher base for 15m breakouts
             else:
                 confidence_base = 0.65 if vah_breakout else 0.60
@@ -855,10 +883,15 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             # Take profit at POC (defined by volume, not arbitrary)
             signal_type = "VAL_bounce"
 
-            if is_15m:
-                # 15m: Push for 0.90x alpha
+            if is_daily:
+                # Daily: maximize CAGR with wider targets
+                take_profit = current_price + atr * 2.5
+                stop_loss = current_price - atr * 0.6
+                confidence_base = 0.50  # Ensure always above threshold
+            elif is_15m:
+                # 15m: Target 0.95x alpha
                 take_profit = current_price + atr * 5.0
-                stop_loss = current_price - atr * 0.35  # Ultra-tight
+                stop_loss = current_price - atr * 0.25
                 confidence_base = 0.55  # Higher base for 15m
             else:
                 confidence_base = 0.52  # Slightly higher base from 0.50
@@ -917,9 +950,9 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         confidence = min(confidence, 1.0)
 
         # Confidence threshold: balance signal volume with quality
-        # Daily: 0.55, 4h: 0.45, 15m: 0.35 (low to maximize volume), 1h: 0.65
+        # Daily: ultra-low threshold to maximize trade volume
         if is_daily:
-            min_confidence_threshold = 0.55
+            min_confidence_threshold = 0.25
         elif is_15m:
             # Low threshold to maximize trade volume
             min_confidence_threshold = 0.35
@@ -937,8 +970,10 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             )
 
         # Position sizing: Scale with confidence and profit/loss ratio
-        # For 15m, use higher position sizes on high-confidence setups
-        if is_15m:
+        # For daily, use standard sizing (iter 12 best result)
+        if is_daily:
+            position_size_pct = 1.0
+        elif is_15m:
             # Test: Even more aggressive confidence scaling to maximize CAGR
             # Threshold 0.40 → 0.1x, confidence 0.65+ → 1.0x
             risk = abs(current_price - stop_loss)

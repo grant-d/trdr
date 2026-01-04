@@ -7,6 +7,14 @@ To create a new strategy:
 4. Implement your signal logic in generate_signal()
 5. Add tests in test_strategy.py
 6. Register in strategy/__init__.py
+
+RuntimeContext available via self.context in generate_signal():
+    self.context.drawdown         # Current drawdown %
+    self.context.win_rate         # Live win rate
+    self.context.equity           # Current portfolio value
+    self.context.total_trades     # Completed trade count
+    self.context.current_bar      # Current Bar object
+    See STRATEGY_API.md for full list.
 """
 
 from dataclasses import dataclass
@@ -84,21 +92,21 @@ class MACDStrategy(BaseStrategy):
     - More sophisticated entry/exit logic
     - Multiple confirmation signals
     - Dynamic position sizing based on confidence
+
+    RuntimeContext (self.context) enables adaptive behavior:
+    - Pause trading during high drawdown
+    - Scale position size based on win rate
+    - Access live portfolio metrics (equity, P&L, ratios)
     """
 
     def __init__(self, config: MACDConfig):
         """Initialize with config.
 
-        Always call super().__init__(config) first.
+        Always call super().__init__(config, name) first.
         Store typed config for IDE autocomplete.
         """
-        super().__init__(config)
+        super().__init__(config, name="MACD")  # Custom name, or omit for class name
         self.config: MACDConfig = config  # Type hint for autocomplete
-
-    @property
-    def name(self) -> str:
-        """Strategy name for logging/display."""
-        return "MACD"
 
     def generate_signal(
         self,
@@ -130,6 +138,18 @@ class MACDStrategy(BaseStrategy):
                 price=bars[-1].close if bars else 0,
                 confidence=0.0,
                 reason="Insufficient data",
+            )
+
+        # ---------------------------------------------------------------------
+        # 1b. RuntimeContext: Adaptive behavior based on portfolio state
+        # ---------------------------------------------------------------------
+        # Pause trading during high drawdown (optional)
+        if self.context.drawdown > 0.15:
+            return Signal(
+                action=SignalAction.HOLD,
+                price=bars[-1].close,
+                confidence=0.0,
+                reason=f"Paused: drawdown {self.context.drawdown:.1%} > 15%",
             )
 
         # ---------------------------------------------------------------------
@@ -186,6 +206,14 @@ class MACDStrategy(BaseStrategy):
             # Entry signal: MACD crosses above signal line
             if macd_current > signal_current and macd_prev <= signal_prev:
                 stop_loss = current_price * (1 - self.config.stop_loss_pct)
+
+                # RuntimeContext: Scale position based on live win rate
+                # Reduce size after losing streak, increase after winning
+                if self.context.total_trades >= 5:
+                    size = 0.5 if self.context.win_rate < 0.4 else 1.0
+                else:
+                    size = 1.0  # Full size until enough trades for stats
+
                 return Signal(
                     action=SignalAction.BUY,
                     price=current_price,
@@ -193,7 +221,7 @@ class MACDStrategy(BaseStrategy):
                     reason="MACD crossed above signal",
                     stop_loss=stop_loss,
                     # take_profit=current_price * 1.05,  # Optional
-                    position_size_pct=1.0,  # 100% of allowed position size
+                    position_size_pct=size,
                 )
 
         # ---------------------------------------------------------------------

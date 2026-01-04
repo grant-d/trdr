@@ -2,7 +2,13 @@
 
 from .calendar import filter_trading_bars, get_trading_days_in_year, is_trading_day
 from .orders import Fill, Order, OrderManager, OrderType
-from .paper_exchange import PaperExchange, PaperExchangeConfig, PaperExchangeResult, Trade
+from .paper_exchange import (
+    PaperExchange,
+    PaperExchangeConfig,
+    PaperExchangeResult,
+    RuntimeContext,
+    Trade,
+)
 from .portfolio import Portfolio, Position, PositionEntry
 from .utils import parse_timeframe
 from .walk_forward import (
@@ -18,6 +24,7 @@ __all__ = [
     "PaperExchange",
     "PaperExchangeConfig",
     "PaperExchangeResult",
+    "RuntimeContext",
     "Trade",
     # Walk forward
     "Fold",

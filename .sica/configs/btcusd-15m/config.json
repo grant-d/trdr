@@ -6,7 +6,7 @@
   "completion_promise": "TESTS PASSING",
   "prompt": "Optimize BTC/USD 15m strategy",
   "context_files": [
-    "src/trdr/backtest/README.md",
+    "src/trdr/backtest/STRATEGY_API.md",
     "thoughts/grantdickinson/2026-01-01-research-combined-trading-algorithms.md"
   ],
   "params": {
