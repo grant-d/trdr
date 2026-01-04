@@ -19,9 +19,10 @@ from pathlib import Path
 # Add lib to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
 
-from config import SicaState
+from config import SicaConfig, SicaState, get_loop_context
 from debug import dbg
 from paths import (
+    get_config_file,
     get_state_file,
     is_sica_session,
     list_active_configs,
@@ -34,8 +35,8 @@ def log(msg: str) -> None:
     print(msg, file=sys.stderr)
 
 
-def read_state() -> SicaState | None:
-    """Read active SICA state if exists."""
+def read_context() -> tuple[SicaConfig, SicaState] | None:
+    """Read active SICA config and state if exists."""
     active = list_active_configs()
     if not active:
         return None
@@ -44,7 +45,7 @@ def read_state() -> SicaState | None:
         log(f"SICA: Using first: {active[0]}")
     config_name = active[0]
     try:
-        return SicaState.load(get_state_file(config_name))
+        return get_loop_context(config_name)
     except (json.JSONDecodeError, OSError, FileNotFoundError, ValueError):
         return None
 
@@ -163,6 +164,7 @@ def parse_test_output(output: str) -> tuple[int, int, int]:
 
 
 def archive_iteration(
+    config: SicaConfig,
     state: SicaState,
     benchmark_result: dict[str, str | int | float],
     transcript_path: str,
@@ -179,7 +181,7 @@ def archive_iteration(
         json.dumps(
             {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-                "command": state.benchmark_cmd,
+                "command": config.benchmark_cmd,
                 **benchmark_result,
             },
             indent=2,
@@ -299,6 +301,7 @@ def extract_failures(benchmark_result: dict[str, str | int | float]) -> str:
 
 
 def generate_improvement_prompt(
+    config: SicaConfig,
     state: SicaState,
     benchmark_result: dict[str, str | int | float],
     iter_dir: Path,
@@ -307,7 +310,7 @@ def generate_improvement_prompt(
     failures = extract_failures(benchmark_result)
     top_n = 10
     archive_summary = get_archive_summary(state, top_n=top_n)
-    original = state.prompt
+    original = state.interpolated_prompt
     run_dir = state.run_dir
 
     passed = benchmark_result.get("passed", 0)
@@ -365,9 +368,10 @@ def generate_improvement_prompt(
 
 def main() -> None:
     # Fast exit: no active config = not a SICA session
-    state = read_state()
-    if not state:
+    context = read_context()
+    if not context:
         sys.exit(0)
+    config, state = context
 
     # Read hook input
     # https://code.claude.com/docs/en/hooks#stop
@@ -397,7 +401,8 @@ def main() -> None:
     dbg()
     dbg("=== STOP HOOK ===")
     dbg(f"CWD: {os.getcwd()}")
-    dbg(f"State: iter={state.iteration}, max={state.max_iterations}")
+    effective_max = config.max_iterations + state.iterations_added
+    dbg(f"State: iter={state.iteration}, max={effective_max}")
 
     # Validate state
     if not isinstance(state.iteration, int):
@@ -406,14 +411,12 @@ def main() -> None:
         get_state_file(state.config_name).unlink(missing_ok=True)
         sys.exit(0)
 
-    max_iter = max(0, state.max_iterations)
-
     # Check max iterations
-    if state.iteration >= max_iter:
-        dbg(f"Max iter reached: {state.iteration} >= {max_iter}")
-        log(f"SICA COMPLETE: Max iterations ({max_iter}) reached")
+    if state.iteration >= effective_max:
+        dbg(f"Max iter reached: {state.iteration} >= {effective_max}")
+        log(f"SICA COMPLETE: Max iterations ({effective_max}) reached")
         log(f"  Config: {state.config_name} | Run: {state.run_id}")
-        log(f"  Last score: {state.last_score} | Target: {state.target_score}")
+        log(f"  Last score: {state.last_score} | Target: {config.target_score}")
         log(f"  Run dir: {state.run_dir}")
         complete_run(state)
         sys.exit(0)
@@ -423,7 +426,7 @@ def main() -> None:
     if transcript_path and Path(transcript_path).exists():
         try:
             content = Path(transcript_path).read_text()
-            promise = state.completion_promise
+            promise = config.completion_promise
             if promise and f"<promise>{promise}</promise>" in content:
                 promise_detected = True
                 dbg("Promise detected in transcript")
@@ -433,11 +436,11 @@ def main() -> None:
     dbg("Running benchmark...")
 
     # Interpolate params into benchmark command (shell-escaped)
-    benchmark_cmd = state.interpolate(state.benchmark_cmd, shell_escape=True)
+    benchmark_cmd = config.interpolate(config.benchmark_cmd, shell_escape=True)
     dbg(f"Cmd: {benchmark_cmd[:80]}...")
 
     log(f"SICA: Running benchmark (iteration {state.iteration})...")
-    benchmark_result = run_benchmark(benchmark_cmd, timeout=state.benchmark_timeout)
+    benchmark_result = run_benchmark(benchmark_cmd, timeout=config.benchmark_timeout)
 
     score = benchmark_result.get("score", 0.0)
     passed = benchmark_result.get("passed", 0)
@@ -448,7 +451,7 @@ def main() -> None:
     log(f"SICA: Score={score:.2f} (passed={passed}, failed={failed}, errors={errors})")
 
     # Archive results
-    iter_dir = archive_iteration(state, benchmark_result, transcript_path)
+    iter_dir = archive_iteration(config, state, benchmark_result, transcript_path)
 
     # Track recent scores for convergence
     state.recent_scores.append(round(float(score), 4))
@@ -458,14 +461,14 @@ def main() -> None:
     if len(state.recent_scores) >= 5 and len(set(state.recent_scores[-5:])) == 1:
         log(f"SICA COMPLETE: Converged at score {state.recent_scores[0]:.2f}")
         log(f"  Config: {state.config_name} | Run: {state.run_id}")
-        log(f"  Iterations: {state.iteration} | Target: {state.target_score}")
+        log(f"  Iterations: {state.iteration} | Target: {config.target_score}")
         log(f"  Run dir: {state.run_dir}")
         complete_run(state)
         sys.exit(0)
 
     # Check target reached
-    if float(score) >= state.target_score:
-        log(f"SICA COMPLETE: Target score reached! ({score:.2f} >= {state.target_score})")
+    if float(score) >= config.target_score:
+        log(f"SICA COMPLETE: Target score reached! ({score:.2f} >= {config.target_score})")
         log(f"  Config: {state.config_name} | Run: {state.run_id}")
         log(f"  Iterations: {state.iteration}")
         log(f"  Run dir: {state.run_dir}")
@@ -482,15 +485,15 @@ def main() -> None:
     save_state(state)
 
     # Generate improvement prompt
-    improvement_prompt = generate_improvement_prompt(state, benchmark_result, iter_dir)
+    improvement_prompt = generate_improvement_prompt(config, state, benchmark_result, iter_dir)
 
     # Build system message with marker at end (persists across iterations)
     run_dir = state.run_dir
-    promise = state.completion_promise
+    promise = config.completion_promise
     marker = make_runtime_marker(state.config_name, state.run_id)
     system_msg = (
         f"SICA iter {state.iteration} | "
-        f"Score: {score:.2f}/{state.target_score} | "
+        f"Score: {score:.2f}/{config.target_score} | "
         f"RULES: ONE fix→exit immediately. NO manual tests. NO test changes. "
         f"Read/update {run_dir}/journal.md. Done: <promise>{promise}</promise> "
         f"{marker}"

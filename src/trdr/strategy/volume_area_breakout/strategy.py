@@ -811,10 +811,12 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             poc_pullback = near_vah and hma_bullish and hma_trending_up and mss > 5
         elif is_15m:
             # 15m: Mean reversion for high frequency
-            # Tight proximity + HMA uptrend + modest regime for best P&L
+            # Volatility regime filter: mean reversion works best in low/medium vol
             near_val = abs(current_price - profile.val) < atr * 0.65
             hma_filter_15m = current_price > hma
-            val_bounce = near_val and hma_filter_15m and mss > -50
+            vol_regime = classify_volatility_regime(bars, lookback=50)
+            vol_ok = vol_regime in ("low", "medium")  # Skip high-vol regimes
+            val_bounce = near_val and hma_filter_15m and vol_ok and mss > -50
             poc_pullback = False
         elif is_4h:
             # 4h: Mean reversion on VAL - maximum relaxation for trade volume

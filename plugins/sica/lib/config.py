@@ -24,11 +24,17 @@ Example config.json:
 Note: Use sica_bench.py (not pytest) to pick up code changes between iterations.
 """
 
+from __future__ import annotations
+
 import json
 import shlex
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    pass
 
 
 @dataclass
@@ -119,6 +125,26 @@ class SicaConfig:
         return self.interpolate(self.prompt)
 
 
+def get_loop_context(config_name: str) -> tuple[SicaConfig, SicaState]:
+    """Load both config and state for a SICA loop.
+
+    Args:
+        config_name: Name of the config folder (e.g., 'btc-1h')
+
+    Returns:
+        Tuple of (SicaConfig, SicaState)
+
+    Raises:
+        FileNotFoundError: Config or state file doesn't exist
+    """
+    # Import here to avoid circular import
+    from paths import get_config_file, get_state_file
+
+    config = SicaConfig.load(get_config_file(config_name))
+    state = SicaState.load(get_state_file(config_name))
+    return config, state
+
+
 @dataclass
 class SicaState:
     """SICA runtime state stored in state.json.
@@ -126,7 +152,7 @@ class SicaState:
     Single source of truth for run state. Never deleted - status field
     indicates whether run is active or complete.
 
-    Attributes:
+    Runtime-only Attributes:
         config_name: Name of the config folder (e.g., 'btc-1h')
         run_id: Unique run identifier (YYYYMMDD_HHMMSS format)
         run_dir: Path to run archive directory
@@ -136,21 +162,14 @@ class SicaState:
         recent_scores: Last 10 scores for convergence detection
         started_at: ISO timestamp when run started
         completed_at: ISO timestamp when run completed (if complete)
-        benchmark_cmd: Copy from config for hook access
-        max_iterations: Copy from config for hook access
-        target_score: Copy from config for hook access
-        completion_promise: Copy from config for hook access
-        benchmark_timeout: Copy from config for hook access
-        prompt: Interpolated prompt (params already substituted)
-        context_files: Copy from config for hook access
-        params: Copy from config for {key} interpolation
+        iterations_added: Additional iterations from /sica:continue (runtime override)
+        interpolated_prompt: Prompt with params substituted, frozen at loop start
 
     Example:
-        >>> state = SicaState.load(Path(".sica/configs/btc-1h/state.json"))
+        >>> config, state = get_loop_context("btc-1h")
         >>> state.status
         'active'
-        >>> state.iteration
-        5
+        >>> effective_max = config.max_iterations + state.iterations_added
     """
 
     config_name: str
@@ -163,15 +182,9 @@ class SicaState:
     started_at: str = ""
     completed_at: str = ""
 
-    # Config values copied for hook access (hooks don't load config.json)
-    benchmark_cmd: str = ""
-    max_iterations: int = 20
-    target_score: float = 1.0
-    completion_promise: str = "TESTS PASSING"
-    benchmark_timeout: int = 120
-    prompt: str = ""
-    context_files: list[str] = field(default_factory=list)
-    params: dict[str, str] = field(default_factory=dict)
+    # Runtime overrides (not duplicates)
+    iterations_added: int = 0  # From /sica:continue
+    interpolated_prompt: str = ""  # Frozen at loop start
 
     @classmethod
     def create(
@@ -179,14 +192,11 @@ class SicaState:
     ) -> "SicaState":
         """Create new state from config at start of loop.
 
-        Copies all config values into state so hooks can access them
-        without needing to load config.json separately.
-
         Args:
             config_name: Name of config folder (e.g., 'btc-1h')
             run_id: Unique run ID (typically YYYYMMDD_HHMMSS)
             run_dir: Path to run archive directory
-            config: Loaded SicaConfig to copy values from
+            config: Loaded SicaConfig for prompt interpolation
 
         Returns:
             New SicaState ready for first iteration
@@ -201,19 +211,16 @@ class SicaState:
             recent_scores=[],
             started_at=datetime.now(timezone.utc).isoformat(),
             completed_at="",
-            benchmark_cmd=config.benchmark_cmd,
-            max_iterations=config.max_iterations,
-            target_score=config.target_score,
-            completion_promise=config.completion_promise,
-            benchmark_timeout=config.benchmark_timeout,
-            prompt=config.interpolate_prompt(),
-            context_files=list(config.context_files),
-            params=dict(config.params),
+            iterations_added=0,
+            interpolated_prompt=config.interpolate_prompt(),
         )
 
     @classmethod
     def load(cls, state_path: Path) -> "SicaState":
         """Load state from JSON file.
+
+        Gracefully handles old state files by ignoring deprecated fields
+        and using sensible defaults for new fields.
 
         Args:
             state_path: Path to state.json file
@@ -236,6 +243,11 @@ class SicaState:
             if required not in data:
                 raise ValueError(f"State missing required field: {required}")
 
+        # Migration: old state files have 'prompt', new have 'interpolated_prompt'
+        interpolated_prompt = data.get("interpolated_prompt", "")
+        if not interpolated_prompt:
+            interpolated_prompt = data.get("prompt", "")  # Fallback to old field
+
         return cls(
             config_name=data["config_name"],
             run_id=data["run_id"],
@@ -246,14 +258,8 @@ class SicaState:
             recent_scores=data.get("recent_scores", []),
             started_at=data.get("started_at", ""),
             completed_at=data.get("completed_at", ""),
-            benchmark_cmd=data.get("benchmark_cmd", ""),
-            max_iterations=data.get("max_iterations", 20),
-            target_score=data.get("target_score", 1.0),
-            completion_promise=data.get("completion_promise", "TESTS PASSING"),
-            benchmark_timeout=data.get("benchmark_timeout", 120),
-            prompt=data.get("prompt", ""),
-            context_files=data.get("context_files", []),
-            params=data.get("params", {}),
+            iterations_added=data.get("iterations_added", 0),
+            interpolated_prompt=interpolated_prompt,
         )
 
     def save(self, state_path: Path) -> None:
@@ -274,37 +280,13 @@ class SicaState:
             "recent_scores": self.recent_scores,
             "started_at": self.started_at,
             "completed_at": self.completed_at,
-            "benchmark_cmd": self.benchmark_cmd,
-            "max_iterations": self.max_iterations,
-            "target_score": self.target_score,
-            "completion_promise": self.completion_promise,
-            "benchmark_timeout": self.benchmark_timeout,
-            "prompt": self.prompt,
-            "context_files": self.context_files,
-            "params": self.params,
+            "iterations_added": self.iterations_added,
+            "interpolated_prompt": self.interpolated_prompt,
         }
         state_path.parent.mkdir(parents=True, exist_ok=True)
         state_path.write_text(json.dumps(data, indent=2))
 
-    def interpolate(self, template: str, shell_escape: bool = False) -> str:
-        """Replace {key} placeholders with param values.
-
-        Args:
-            template: String with {key} placeholders
-            shell_escape: If True, escape values for shell safety
-
-        Returns:
-            String with placeholders replaced by param values
-        """
-        if not template or not self.params:
-            return template
-        result = template
-        for key, value in self.params.items():
-            val = shlex.quote(str(value)) if shell_escape else str(value)
-            result = result.replace(f"{{{key}}}", val)
-        return result
-
-    def to_dict(self) -> dict[str, str | int | float | list[str] | list[float] | dict[str, str] | None]:
+    def to_dict(self) -> dict[str, str | int | float | list[float] | None]:
         """Convert state to dict for JSON serialization.
 
         Returns:
@@ -320,12 +302,6 @@ class SicaState:
             "recent_scores": self.recent_scores,
             "started_at": self.started_at,
             "completed_at": self.completed_at,
-            "benchmark_cmd": self.benchmark_cmd,
-            "max_iterations": self.max_iterations,
-            "target_score": self.target_score,
-            "completion_promise": self.completion_promise,
-            "benchmark_timeout": self.benchmark_timeout,
-            "prompt": self.prompt,
-            "context_files": self.context_files,
-            "params": self.params,
+            "iterations_added": self.iterations_added,
+            "interpolated_prompt": self.interpolated_prompt,
         }

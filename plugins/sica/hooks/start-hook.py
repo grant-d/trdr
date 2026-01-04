@@ -14,7 +14,7 @@ from pathlib import Path
 # Add lib to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
 
-from config import SicaState
+from config import SicaConfig, SicaState, get_loop_context
 from debug import dbg
 from paths import find_active_config, get_state_file
 
@@ -56,21 +56,22 @@ def main() -> None:
     dbg(f"Resuming {config_name}")
 
     try:
-        state = SicaState.load(get_state_file(config_name))
+        config, state = get_loop_context(config_name)
     except (json.JSONDecodeError, OSError, FileNotFoundError, ValueError):
         sys.exit(0)
 
     log("SICA: Resuming after compaction...")
 
     # Build context to re-inject
-    context_files = state.context_files or []
+    context_files = config.context_files or []
     score_str = f"{state.last_score:.2f}" if state.last_score is not None else "N/A"
     run_dir = state.run_dir
+    effective_max = config.max_iterations + state.iterations_added
 
     parts = ["SICA LOOP RESUMED AFTER COMPACTION", ""]
 
-    if state.prompt:
-        parts.append(f"Original task: {state.prompt}")
+    if state.interpolated_prompt:
+        parts.append(f"Original task: {state.interpolated_prompt}")
         parts.append("")
 
     if context_files:
@@ -80,8 +81,8 @@ def main() -> None:
         parts.append("")
 
     parts.append(f"Config: {config_name}")
-    parts.append(f"Iter {state.iteration}/{state.max_iterations} | Score {score_str}/{state.target_score}")
-    parts.append(f"Benchmark: {state.benchmark_cmd}")
+    parts.append(f"Iter {state.iteration}/{effective_max} | Score {score_str}/{config.target_score}")
+    parts.append(f"Benchmark: {config.benchmark_cmd}")
     parts.append("")
     parts.append("## CRITICAL - EXIT AFTER EVERY CHANGE")
     parts.append("After your code change, IMMEDIATELY attempt to end/complete.")
@@ -92,7 +93,7 @@ def main() -> None:
     parts.append("- NO manual tests. Hook runs benchmark on exit.")
     parts.append("- NO test file changes. Only modify source code.")
     parts.append(f"- MUST update {run_dir}/journal.md (BEFORE: plan, AFTER: results)")
-    parts.append(f"- Done: <promise>{state.completion_promise}</promise>")
+    parts.append(f"- Done: <promise>{config.completion_promise}</promise>")
 
     additional_context = "\n".join(parts)
 

@@ -12,11 +12,12 @@ from pathlib import Path
 # Add lib to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
 
-from config import SicaState
+from config import SicaConfig, SicaState, get_loop_context
 from debug import dbg
 from paths import (
     find_active_config,
     find_config_with_state,
+    get_config_file,
     get_state_file,
     make_runtime_marker,
 )
@@ -64,15 +65,13 @@ def main() -> None:
         print("Usage: /sica:continue <config_name> [additional_iterations]", file=sys.stderr)
         sys.exit(1)
 
-    # Load state
-    state_file = get_state_file(config_name)
-    if not state_file.exists():
+    # Load config and state
+    try:
+        config, state = get_loop_context(config_name)
+    except FileNotFoundError:
         print(f"Error: No state found for '{config_name}'", file=sys.stderr)
         print("Run /sica:loop first to start a run.", file=sys.stderr)
         sys.exit(1)
-
-    try:
-        state = SicaState.load(state_file)
     except Exception as e:
         print(f"Error loading state: {e}", file=sys.stderr)
         sys.exit(1)
@@ -83,20 +82,20 @@ def main() -> None:
         print("Use --force to add iterations anyway.", file=sys.stderr)
         sys.exit(1)
 
-    # Update max iterations and set active
-    old_max = state.max_iterations
-    state.max_iterations = old_max + args.additional
+    # Calculate effective max before and after
+    old_effective_max = config.max_iterations + state.iterations_added
+    state.iterations_added += args.additional
+    new_effective_max = config.max_iterations + state.iterations_added
     state.status = "active"
-    # Preserve recent_scores for convergence detection
-    # state.recent_scores = []
 
     # Save state
+    state_file = get_state_file(config_name)
     state.save(state_file)
-    dbg(f"Continued {config_name}: now {state.max_iterations} max iterations")
+    dbg(f"Continued {config_name}: now {new_effective_max} max iterations")
 
     # Build output
     run_dir = state.run_dir
-    context_files = state.context_files or []
+    context_files = config.context_files or []
 
     # Runtime marker for session detection (checked by stop hook)
     marker = make_runtime_marker(config_name, state.run_id)
@@ -106,9 +105,9 @@ def main() -> None:
         "===================",
         f"Config: {config_name}",
         f"Run: {state.run_id}",
-        f"Iteration: {state.iteration}/{state.max_iterations} (was /{old_max})",
+        f"Iteration: {state.iteration}/{new_effective_max} (was /{old_effective_max})",
         f"Last score: {state.last_score if state.last_score is not None else 'N/A'}",
-        f"Benchmark: {state.benchmark_cmd}",
+        f"Benchmark: {config.benchmark_cmd}",
         "",
         "## RE-READ NOW",
         f"1. Read {run_dir}/journal.md",
@@ -117,8 +116,8 @@ def main() -> None:
     for i, f in enumerate(context_files, 2):
         parts.append(f"{i}. Read {f}")
 
-    if state.prompt:
-        parts.extend(["", "## Task", state.prompt])
+    if state.interpolated_prompt:
+        parts.extend(["", "## Task", state.interpolated_prompt])
 
     parts.extend(
         [

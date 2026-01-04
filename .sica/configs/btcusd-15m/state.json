@@ -14,17 +14,6 @@
   ],
   "started_at": "2026-01-03T21:34:14.424464+00:00",
   "completed_at": "2026-01-04T00:42:50.135463+00:00",
-  "benchmark_cmd": "BACKTEST_SYMBOL={symbol} BACKTEST_TIMEFRAME={timeframe} python src/trdr/strategy/volume_area_breakout/sica_bench.py",
-  "max_iterations": 60,
-  "target_score": 0.85,
-  "completion_promise": "TESTS PASSING",
-  "benchmark_timeout": 120,
-  "prompt": "Optimize BTC/USD 15m strategy",
-  "context_files": [
-    "thoughts/grantdickinson/2026-01-01-research-combined-trading-algorithms.md"
-  ],
-  "params": {
-    "symbol": "crypto:BTC/USD",
-    "timeframe": "15m"
-  }
+  "iterations_added": 10,
+  "interpolated_prompt": "Optimize BTC/USD 15m strategy"
 }

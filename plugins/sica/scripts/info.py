@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
 
-from config import SicaState
+from config import SicaConfig, SicaState, get_loop_context
 from debug import dbg
 from paths import find_active_config, get_state_file, list_configs
 
@@ -17,19 +17,17 @@ def main() -> None:
     active = find_active_config()
     dbg(f"status: active={active}")
     if active:
-        state = SicaState.load(get_state_file(active))
+        config, state = get_loop_context(active)
         score = f"{state.last_score:.2f}" if state.last_score is not None else "N/A"
+        effective_max = config.max_iterations + state.iterations_added
 
         # Substitute params in benchmark command
-        bench_cmd = state.benchmark_cmd
-        if state.params:
-            for key, val in state.params.items():
-                bench_cmd = bench_cmd.replace(f"{{{key}}}", str(val))
+        bench_cmd = config.interpolate(config.benchmark_cmd)
 
         print(f"Config: {active} ({state.status})")
         print(f"Run: {state.run_id}")
-        print(f"Iteration: {state.iteration}/{state.max_iterations}")
-        print(f"Score: {score}/{state.target_score}")
+        print(f"Iteration: {state.iteration}/{effective_max}")
+        print(f"Score: {score}/{config.target_score}")
 
         # Recent scores trend
         if state.recent_scores:
@@ -37,12 +35,12 @@ def main() -> None:
             print(f"Trend: {trend}")
 
         print(f"Benchmark: {bench_cmd}")
-        if state.prompt:
-            print(f"Task: {state.prompt[:80]}")
+        if state.interpolated_prompt:
+            print(f"Task: {state.interpolated_prompt[:80]}")
 
         # Format params nicely
-        if state.params:
-            params_str = ", ".join(f"{k}={v}" for k, v in state.params.items())
+        if config.params:
+            params_str = ", ".join(f"{k}={v}" for k, v in config.params.items())
             print(f"Params: {params_str}")
 
         print(f"Journal: {state.run_dir}/journal.md")
