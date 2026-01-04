@@ -46,10 +46,10 @@ async def _get_bars(strategy) -> tuple[dict[str, list], DataRequirement]:
     """
     from trdr.backtest import align_feeds
     from trdr.core import load_config
-    from trdr.data import MarketDataClient
+    from trdr.data import AlpacaDataClient
 
     config = load_config()
-    client = MarketDataClient(config.alpaca, Path(project_root / "data/cache"))
+    client = AlpacaDataClient(config.alpaca, Path(project_root / "data/cache"))
 
     # Get requirements from strategy
     requirements = strategy.get_data_requirements()
@@ -60,9 +60,11 @@ async def _get_bars(strategy) -> tuple[dict[str, list], DataRequirement]:
     if timeframe_override:
         # Replace primary's timeframe
         requirements = [
-            DataRequirement(r.symbol, timeframe_override, r.lookback, r.role)
-            if r.role == "primary"
-            else r
+            (
+                DataRequirement(r.symbol, timeframe_override, r.lookback, r.role)
+                if r.role == "primary"
+                else r
+            )
             for r in requirements
         ]
         primary = get_primary_requirement(requirements)

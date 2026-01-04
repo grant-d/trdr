@@ -1,7 +1,6 @@
-"""Market data fetching and caching via Alpaca API."""
+"""Alpaca market data client with caching."""
 
 import csv
-from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -19,6 +18,8 @@ from alpaca.trading.client import TradingClient
 from ..core.config import AlpacaConfig
 from ..core.symbol import Symbol
 from ..core.timeframe import Timeframe
+from .bar import Bar
+from .quote import Quote
 
 # Max historical data available from Alpaca IEX feed (free tier).
 # IEX data starts from ~2020, Alpaca limit is ~7 years.
@@ -27,39 +28,7 @@ from ..core.timeframe import Timeframe
 MAX_HISTORY_DAYS = 365 * 7  # 7 years
 
 
-@dataclass
-class Bar:
-    """Single OHLCV bar."""
-
-    timestamp: str  # ISO format
-    open: float
-    high: float
-    low: float
-    close: float
-    volume: int
-
-    def to_dict(self) -> dict:
-        """Convert to dictionary for JSON serialization."""
-        return asdict(self)
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "Bar":
-        """Create Bar from dictionary."""
-        return cls(**data)
-
-
-@dataclass
-class Quote:
-    """Current price quote."""
-
-    symbol: str
-    price: float
-    bid: float
-    ask: float
-    timestamp: str
-
-
-class MarketDataClient:
+class AlpacaDataClient:
     """Fetches market data from Alpaca with disk caching."""
 
     def __init__(self, config: AlpacaConfig, cache_dir: Path):
@@ -145,9 +114,7 @@ class MarketDataClient:
 
         # Check if cache is fresh (less than 1 hour old)
         if cached_bars and len(cached_bars) >= lookback:
-            last_bar_time = datetime.fromisoformat(
-                cached_bars[-1].timestamp.replace("Z", "+00:00")
-            )
+            last_bar_time = datetime.fromisoformat(cached_bars[-1].timestamp.replace("Z", "+00:00"))
             if datetime.now(last_bar_time.tzinfo) - last_bar_time < timedelta(hours=1):
                 return cached_bars[-lookback:]
 
@@ -235,7 +202,6 @@ class MarketDataClient:
         """
         result = {}
         for req in requirements:
-            # Pass string timeframe directly - get_bars handles aggregation
             bars = await self.get_bars(req.symbol, req.lookback_bars, req.timeframe)
             result[req.key] = bars
         return result
@@ -287,14 +253,16 @@ class MarketDataClient:
             with open(cache_file) as f:
                 reader = csv.DictReader(f)
                 for row in reader:
-                    bars.append(Bar(
-                        timestamp=row["timestamp"],
-                        open=float(row["open"]),
-                        high=float(row["high"]),
-                        low=float(row["low"]),
-                        close=float(row["close"]),
-                        volume=int(row["volume"]),
-                    ))
+                    bars.append(
+                        Bar(
+                            timestamp=row["timestamp"],
+                            open=float(row["open"]),
+                            high=float(row["high"]),
+                            low=float(row["low"]),
+                            close=float(row["close"]),
+                            volume=int(row["volume"]),
+                        )
+                    )
             return bars
         except (KeyError, ValueError):
             return []

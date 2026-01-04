@@ -2,7 +2,7 @@
 
 import pytest
 
-from trdr.data.market import Bar
+from trdr.data import Bar
 from trdr.indicators import (
     VolumeProfile,
     atr,

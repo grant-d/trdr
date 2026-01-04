@@ -58,7 +58,7 @@ Strategy requests "60m" bars
 └─────────────┬───────────────────┘
               ▼
 ┌─────────────────────────────────┐
-│ MarketDataClient.get_bars()     │
+│ AlpacaDataClient.get_bars()     │
 │ - Fetch 60x lookback 1m bars    │
 └─────────────┬───────────────────┘
               ▼
@@ -104,7 +104,7 @@ Strategy requests "60m" bars
 ┌─────────────────────────────────────────────────────────────┐
 │ src/trdr/data/market.py (MODIFIED)                          │
 │                                                             │
-│ MarketDataClient.get_bars():                                │
+│ AlpacaDataClient.get_bars():                                │
 │   - Detect multi-day request ("3d", "5d", etc.)             │
 │   - Calculate 1d bars needed: n * lookback * 1.1            │
 │   - Fetch 1d bars from Alpaca                               │
@@ -231,7 +231,7 @@ def get_aggregation_config(tf: str) -> AggregationConfig | None:
     return None  # Native Alpaca supports this timeframe
 ```
 
-#### Phase 2: MarketDataClient Integration
+#### Phase 2: AlpacaDataClient Integration
 
 | File | Changes |
 | --- | --- |
@@ -367,7 +367,7 @@ def get_aggregation_factor(tf: str) -> int | None:
 ## Dependencies & Prerequisites
 
 1. **None blocking** - All dependencies are internal
-2. **Existing infrastructure**: `MarketDataClient`, `align_feeds()`, `DataRequirement`
+2. **Existing infrastructure**: `AlpacaDataClient`, `align_feeds()`, `DataRequirement`
 3. **pandas not required** - Pure Python aggregation is sufficient
 
 ## Risk Analysis & Mitigation
@@ -385,7 +385,7 @@ def get_aggregation_factor(tf: str) -> int | None:
 
 - `parse_timeframe()`: `src/trdr/backtest/timeframe.py:85-131`
 - Multi-day rejection: `src/trdr/backtest/timeframe.py:117-123`
-- `MarketDataClient.get_bars()`: `src/trdr/data/market.py:130-227`
+- `AlpacaDataClient.get_bars()`: `src/trdr/data/market.py:130-227`
 - `align_feeds()`: `src/trdr/backtest/timeframe.py:44-82`
 - Existing aggregation POC: `src/trdr/indicators/indicators.py:587-637`
 

@@ -25,7 +25,7 @@ Multi-Timeframe (MTF) Example:
 from dataclasses import dataclass
 
 from ...core import Duration, Timeframe
-from ...data.market import Bar
+from ...data import Bar
 from ...indicators import ema, ema_series
 from ..base_strategy import BaseStrategy, StrategyConfig
 from ..types import DataRequirement, Position, Signal, SignalAction

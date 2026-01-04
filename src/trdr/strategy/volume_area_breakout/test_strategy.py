@@ -18,7 +18,7 @@ import pytest
 
 from trdr.backtest import PaperExchange, PaperExchangeConfig, PaperExchangeResult
 from trdr.core import load_config
-from trdr.data import MarketDataClient
+from trdr.data import AlpacaDataClient
 from trdr.strategy import VolumeAreaBreakoutConfig, VolumeAreaBreakoutStrategy, get_backtest_env
 from trdr.strategy.targets import score_result
 
@@ -50,7 +50,7 @@ def bars(event_loop):
 
     async def fetch():
         config = load_config()
-        client = MarketDataClient(config.alpaca, Path("data/cache"))
+        client = AlpacaDataClient(config.alpaca, Path("data/cache"))
         # Use TIMEFRAME_STR - get_bars handles aggregation for arbitrary timeframes
         bars = await client.get_bars(SYMBOL, lookback=3000, timeframe=TIMEFRAME_STR)
         return bars
@@ -181,7 +181,7 @@ def print_results():
 
     async def run():
         config = load_config()
-        client = MarketDataClient(config.alpaca, Path("data/cache"))
+        client = AlpacaDataClient(config.alpaca, Path("data/cache"))
         bars = await client.get_bars(SYMBOL, lookback=3000, timeframe=TIMEFRAME_STR)
 
         strategy_config = VolumeAreaBreakoutConfig(

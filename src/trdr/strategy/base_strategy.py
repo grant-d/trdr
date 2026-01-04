@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from ..core.duration import Duration
 from ..core.timeframe import Timeframe
-from ..data.market import Bar
+from ..data import Bar
 from .types import DataRequirement, Position, Signal
 
 if TYPE_CHECKING:

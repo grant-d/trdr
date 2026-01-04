@@ -13,7 +13,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from ...core import Timeframe
-from ...data.market import Bar
+from ...data import Bar
 from ..base_strategy import BaseStrategy, StrategyConfig
 from ..types import DataRequirement, Position, Signal, SignalAction
 from ...indicators import (

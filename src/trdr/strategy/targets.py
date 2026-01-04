@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from trdr.backtest import PaperExchangeResult
-    from trdr.data.market import Bar
+    from trdr.data import Bar
 
 # === SCORING TARGETS ===
 # Asymptotic targets: score = 0.5 at target value

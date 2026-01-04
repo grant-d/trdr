@@ -8,7 +8,7 @@ import numpy as np
 from dataclasses import dataclass
 from typing import NamedTuple
 
-from ..data.market import Bar
+from ..data import Bar
 
 
 class _AggBar(NamedTuple):

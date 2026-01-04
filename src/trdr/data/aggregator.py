@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Iterator
 
-from .market import Bar
+from .bar import Bar
 
 
 @dataclass

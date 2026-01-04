@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from .core import BotConfig, Symbol, load_config
-from .data import MarketDataClient
+from .data import AlpacaDataClient
 from .storage import RunArchive
 from .strategy import (
     Position,
@@ -46,7 +46,7 @@ class TradingBot:
         self.symbol = Symbol.parse(config.strategy.symbol)
 
         # Components
-        self.market = MarketDataClient(config.alpaca, config.cache_dir)
+        self.market = AlpacaDataClient(config.alpaca, config.cache_dir)
         self.executor = OrderExecutor(config.alpaca)
         self.archive = RunArchive(config.runs_dir)
 
@@ -282,9 +282,11 @@ class TradingBot:
             if order.status == OrderStatus.FILLED:
                 filled_price = order.filled_price
                 self._log(
-                    f"Order filled: {order.filled_qty} @ ${filled_price:.2f}"
-                    if filled_price is not None
-                    else f"Order filled: {order.filled_qty}",
+                    (
+                        f"Order filled: {order.filled_qty} @ ${filled_price:.2f}"
+                        if filled_price is not None
+                        else f"Order filled: {order.filled_qty}"
+                    ),
                     "success",
                 )
 
@@ -296,7 +298,9 @@ class TradingBot:
                 # P&L and position clearing deferred until sell is confirmed filled.
                 # This prevents booking incorrect P&L if the close order is rejected.
                 if self._position and order.side == "sell":
-                    exit_price = filled_price or self._pending_exit_price or self._position.entry_price
+                    exit_price = (
+                        filled_price or self._pending_exit_price or self._position.entry_price
+                    )
                     pnl = (exit_price - self._position.entry_price) * self._position.size
 
                     self.archive.record_trade(

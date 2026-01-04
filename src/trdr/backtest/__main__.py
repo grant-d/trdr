@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 from ..core import load_config
-from ..data import MarketDataClient
+from ..data import AlpacaDataClient
 from ..strategy.macd_template.strategy import MACDConfig, MACDStrategy
 from .paper_exchange import PaperExchange, PaperExchangeConfig
 from .walk_forward import WalkForwardConfig, run_walk_forward
@@ -71,7 +71,7 @@ async def fetch_bars(symbol: str, lookback: int, verbose: bool) -> list:
     if verbose:
         print(f"Fetching {lookback} bars for {symbol}...", file=sys.stderr)
 
-    client = MarketDataClient(config.alpaca, Path("data/cache"))
+    client = AlpacaDataClient(config.alpaca, Path("data/cache"))
     bars = await client.get_bars(symbol, lookback=lookback)
 
     if verbose:

@@ -5,8 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from trdr.core import Timeframe
-from trdr.data.market import Bar, MarketDataClient, Quote, Symbol
+from trdr.core import Symbol, Timeframe
+from trdr.data import AlpacaDataClient, Bar, Quote
 
 
 class FakeQuote:
@@ -67,11 +67,11 @@ def test_symbol_hash():
 async def test_get_current_price_handles_data_wrapper():
     ts = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
     quote = FakeQuote(100.0, 102.0, ts)
-    client = MarketDataClient.__new__(MarketDataClient)
+    client = AlpacaDataClient.__new__(AlpacaDataClient)
     client._crypto_client = FakeClient(quote)
     client._stock_client = FakeClient(quote)
 
-    result = await MarketDataClient.get_current_price(client, Symbol.parse("crypto:BTC/USD"))
+    result = await AlpacaDataClient.get_current_price(client, Symbol.parse("crypto:BTC/USD"))
     assert isinstance(result, Quote)
     assert result.price == 101.0
     assert result.bid == 100.0
@@ -146,7 +146,7 @@ async def test_cache_append_preserves_order_no_duplicates(tmp_path: Path):
     api_bars = [make_fake_bar(i, 150.0 + i) for i in range(10, 26)]
 
     # Create client with fake Alpaca client
-    client = MarketDataClient.__new__(MarketDataClient)
+    client = AlpacaDataClient.__new__(AlpacaDataClient)
     client.cache_dir = tmp_path
     client._crypto_client = FakeBarsClient(api_bars)
 
@@ -216,7 +216,7 @@ async def test_cache_gap_behavior(tmp_path: Path):
     )
     write_cache_csv(cache_file, stale_bars)
 
-    client = MarketDataClient.__new__(MarketDataClient)
+    client = AlpacaDataClient.__new__(AlpacaDataClient)
     client.cache_dir = tmp_path
     client._crypto_client = FakeBarsClient(api_bars)
 
@@ -247,7 +247,7 @@ async def test_cache_backfill_when_lookback_exceeds_cache(tmp_path: Path):
     # API returns 100 bars (hours 0-99) for full fetch
     api_bars = [make_fake_bar(i, 200.0 + i) for i in range(100)]
 
-    client = MarketDataClient.__new__(MarketDataClient)
+    client = AlpacaDataClient.__new__(AlpacaDataClient)
     client.cache_dir = tmp_path
     client._crypto_client = FakeBarsClient(api_bars)
 
@@ -288,7 +288,7 @@ async def test_cache_fresh_returns_cached_bars(tmp_path: Path):
     write_cache_csv(cache_file, fresh_bars)
 
     # Create client with None API client (should not be called)
-    client = MarketDataClient.__new__(MarketDataClient)
+    client = AlpacaDataClient.__new__(AlpacaDataClient)
     client.cache_dir = tmp_path
     client._crypto_client = None  # Would error if called
 

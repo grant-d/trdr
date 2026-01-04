@@ -6,7 +6,7 @@ import pytest
 
 from trdr.backtest import align_feeds
 from trdr.core import Duration, Timeframe, get_interval_seconds, parse_timeframe
-from trdr.data.market import Bar
+from trdr.data import Bar
 from trdr.strategy.sica_runner import get_primary_requirement
 from trdr.strategy.types import DataRequirement
 

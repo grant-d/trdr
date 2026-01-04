@@ -3,7 +3,7 @@
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..data.market import Bar
+    from ..data import Bar
 
 
 def align_feeds(

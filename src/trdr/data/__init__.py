@@ -1,13 +1,15 @@
 """Market data fetching and analysis."""
 
 from .aggregator import BarAggregator
-from .market import Bar, MarketDataClient, Quote
+from .alpaca_client import AlpacaDataClient
+from .bar import Bar
+from .quote import Quote
 from .timeframe_adapter import TimeframeAdapter
 
 __all__ = [
     "Bar",
     "BarAggregator",
-    "MarketDataClient",
+    "AlpacaDataClient",
     "Quote",
     "TimeframeAdapter",
 ]

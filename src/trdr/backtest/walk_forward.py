@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from ..data.market import Bar
+from ..data import Bar
 from .paper_exchange import PaperExchange, PaperExchangeConfig, PaperExchangeResult, Trade
 
 if TYPE_CHECKING:

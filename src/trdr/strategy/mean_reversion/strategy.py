@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from ...data.market import Bar
+from ...data import Bar
 from ...indicators import atr, ema, sma
 from ..base_strategy import BaseStrategy, StrategyConfig
 from ..types import DataRequirement, Position, Signal, SignalAction

@@ -120,7 +120,7 @@ This means **no changes needed to existing SICA configs** - they already set `BA
 │ 1. Load strategy class                                          │
 │ 2. Call get_data_requirements()                                 │
 │ 3. Apply BACKTEST_TIMEFRAME if set (overrides primary TF)       │
-│ 4. Fetch bars for each requirement via MarketDataClient         │
+│ 4. Fetch bars for each requirement via AlpacaDataClient         │
 │ 5. Align informative feeds to primary feed timestamps           │
 │ 6. Pass dict[str, list[Bar]] to PaperExchange                   │
 └─────────────────────┬───────────────────────────────────────────┘
@@ -325,7 +325,7 @@ def get_primary_requirement(requirements: list[DataRequirement]) -> DataRequirem
     return primaries[0]
 
 async def _get_bars(
-    client: MarketDataClient,
+    client: AlpacaDataClient,
     strategy: BaseStrategy,
 ) -> tuple[dict[str, list[Bar]], DataRequirement]:
     """Fetch bars based on strategy requirements.
@@ -549,7 +549,7 @@ When SICA runs this, `BACKTEST_TIMEFRAME=15m` overrides whatever the strategy de
 ## Dependencies & Prerequisites
 
 1. **None blocking** - All dependencies are internal to this repo
-2. **MarketDataClient** - Already supports single-TF fetching, just needs multi-TF wrapper
+2. **AlpacaDataClient** - Already supports single-TF fetching, just needs multi-TF wrapper
 3. **Cache** - Existing CSV cache works per-TF, no changes needed
 
 ## Risk Analysis & Mitigation
@@ -568,7 +568,7 @@ When SICA runs this, `BACKTEST_TIMEFRAME=15m` overrides whatever the strategy de
 
 - Base Strategy: `src/trdr/strategy/base_strategy.py:14-52`
 - SICA Runner: `src/trdr/strategy/sica_runner.py:79-100`
-- MarketDataClient: `src/trdr/data/market.py:130-227`
+- AlpacaDataClient: `src/trdr/data/market.py:130-227`
 - PaperExchange: `src/trdr/backtest/paper_exchange.py:475-652`
 - Multi-TF POC (workaround): `src/trdr/indicators/indicators.py:587-638`
 - SICA config: `.sica/configs/ethusd-15m/config.json`

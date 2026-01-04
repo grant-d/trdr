@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Literal
 from uuid import uuid4
 
-from ..data.market import Bar
+from ..data import Bar
 
 
 class OrderType(Enum):

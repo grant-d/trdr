@@ -12,7 +12,7 @@ from trdr.backtest.paper_exchange import (
     Trade,
 )
 from trdr.backtest.portfolio import Portfolio
-from trdr.data.market import Bar
+from trdr.data import Bar
 from trdr.strategy.base_strategy import BaseStrategy, StrategyConfig
 from trdr.strategy.types import DataRequirement, Position, Signal, SignalAction
 

@@ -6,7 +6,7 @@ from trdr.backtest.calendar import (
     is_market_hours,
     is_trading_day,
 )
-from trdr.data.market import Bar
+from trdr.data import Bar
 
 
 def make_bar(timestamp: str) -> Bar:

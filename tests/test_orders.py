@@ -3,7 +3,7 @@
 import pytest
 
 from trdr.backtest.orders import Fill, Order, OrderManager, OrderType
-from trdr.data.market import Bar
+from trdr.data import Bar
 
 
 def make_bar(

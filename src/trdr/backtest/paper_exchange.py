@@ -14,7 +14,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from ..data.market import Bar, Symbol
+from ..data import Bar
+from ..core import Symbol
 from ..strategy.types import Position as StrategyPosition
 from ..strategy.types import Signal, SignalAction
 from .calendar import filter_trading_bars
