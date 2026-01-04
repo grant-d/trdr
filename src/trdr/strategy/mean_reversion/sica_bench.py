@@ -8,6 +8,8 @@ if __name__ == "__main__":
         strategy_module="trdr.strategy.mean_reversion.strategy",
         config_class="MeanReversionConfig",
         strategy_class="MeanReversionStrategy",
-        default_symbol="crypto:BTC/USD",
-        default_position_pct=0.5,
+        symbol="crypto:BTC/USD",
+        timeframe="1d",
+        lookback=1000,  # ~2.7 years crypto, ~4 years stock (252 days/yr)
+        position_pct=0.5,
     )

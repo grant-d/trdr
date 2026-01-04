@@ -76,7 +76,7 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             DataRequirement(
                 symbol=self.config.symbol,
                 timeframe=self.config.timeframe,
-                lookback=3000,
+                lookback=self.config.lookback,
                 role="primary",
             ),
         ]

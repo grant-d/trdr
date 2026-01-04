@@ -8,6 +8,8 @@ if __name__ == "__main__":
         strategy_module="trdr.strategy.volume_area_breakout.strategy",
         config_class="VolumeAreaBreakoutConfig",
         strategy_class="VolumeAreaBreakoutStrategy",
-        default_symbol="stock:AAPL",
-        default_position_pct=1.0,
+        symbol="crypto:BTC/USD",
+        timeframe="15m",
+        lookback=3000,  # ~31 days crypto (24/7), ~115 trading days stock
+        position_pct=1.0,
     )

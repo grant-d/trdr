@@ -1,23 +1,21 @@
 {
-  "benchmark_cmd": "BACKTEST_SYMBOL={symbol} BACKTEST_TIMEFRAME={timeframe} BACKTEST_LOOKBACK={lookback} python src/trdr/strategy/mean_reversion/sica_bench.py",
+  "benchmark_cmd": "BACKTEST_SYMBOL={symbol} python src/trdr/strategy/mean_reversion/sica_bench.py",
   "max_iterations": 30,
   "target_score": 0.95,
   "benchmark_timeout": 120,
   "completion_promise": "TESTS PASSING",
-  "prompt": "Optimize BTC/USD 1d strategy",
+  "prompt": "Optimize BTC/USD MR strategy",
   "context_files": [
     "src/trdr/backtest/STRATEGY_API.md",
     "src/trdr/indicators/INDICATORS.md",
     "thoughts/grantdickinson/2026-01-01-research-combined-trading-algorithms.md"
   ],
   "params": {
-    "symbol": "crypto:BTC/USD",
-    "timeframe": "1d",
-    "lookback": "1000"
+    "symbol": "crypto:BTC/USD"
   },
   "state": {
     "run_id": "20260104_100604",
-    "run_dir": ".sica/configs/btcusd-1d-mr/runs/run_20260104_100604",
+    "run_dir": ".sica/configs/btcusd-mr/runs/run_20260104_100604",
     "status": "complete",
     "iteration": 31,
     "last_score": 0.42,
@@ -59,6 +57,6 @@
     "started_at": "2026-01-04T10:06:04.423705+00:00",
     "completed_at": "2026-01-04T11:02:59.386852+00:00",
     "iterations_added": 20,
-    "interpolated_prompt": "Optimize BTC/USD 1d strategy\nThink"
+    "interpolated_prompt": "Optimize BTC/USD MR strategy\nThink"
   }
 }

@@ -1,23 +1,21 @@
 {
-  "benchmark_cmd": "BACKTEST_SYMBOL={symbol} BACKTEST_TIMEFRAME={timeframe} BACKTEST_LOOKBACK={lookback} python src/trdr/strategy/mean_reversion/sica_bench.py",
+  "benchmark_cmd": "BACKTEST_SYMBOL={symbol} python src/trdr/strategy/mean_reversion/sica_bench.py",
   "max_iterations": 30,
   "target_score": 0.95,
   "benchmark_timeout": 300,
   "completion_promise": "TESTS PASSING",
-  "prompt": "Optimize {symbol} strategy for {timeframe}",
+  "prompt": "Optimize {symbol} MR strategy",
   "context_files": [
     "src/trdr/backtest/STRATEGY_API.md",
     "src/trdr/indicators/INDICATORS.md",
     "thoughts/grantdickinson/2026-01-01-research-combined-trading-algorithms.md"
   ],
   "params": {
-    "symbol": "stock:AAPL",
-    "timeframe": "1d",
-    "lookback": "1000"
+    "symbol": "stock:AAPL"
   },
   "state": {
     "run_id": "20260104_112311",
-    "run_dir": ".sica/configs/aapl-1d-mr/runs/run_20260104_112311",
+    "run_dir": ".sica/configs/aapl-mr/runs/run_20260104_112311",
     "status": "complete",
     "iteration": 18,
     "last_score": 0.37,
@@ -45,6 +43,6 @@
     "started_at": "2026-01-04T11:23:11.134303+00:00",
     "completed_at": "2026-01-04T11:34:16.176214+00:00",
     "iterations_added": 20,
-    "interpolated_prompt": "Optimize stock:AAPL strategy for 1d\nThink"
+    "interpolated_prompt": "Optimize stock:AAPL strategy for MR\nThink"
   }
 }

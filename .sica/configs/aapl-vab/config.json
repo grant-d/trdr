@@ -1,18 +1,16 @@
 {
-  "benchmark_cmd": "BACKTEST_SYMBOL={symbol} BACKTEST_TIMEFRAME={timeframe} BACKTEST_LOOKBACK={lookback} python src/trdr/strategy/volume_area_breakout/sica_bench.py",
+  "benchmark_cmd": "BACKTEST_SYMBOL={symbol} python src/trdr/strategy/volume_area_breakout/sica_bench.py",
   "max_iterations": 30,
   "target_score": 0.95,
   "benchmark_timeout": 300,
   "completion_promise": "TESTS PASSING",
-  "prompt": "Optimize {symbol} strategy for {timeframe}",
+  "prompt": "Optimize {symbol} VAB strategy",
   "context_files": [
     "src/trdr/backtest/STRATEGY_API.md",
     "src/trdr/indicators/INDICATORS.md",
     "thoughts/grantdickinson/2026-01-01-research-combined-trading-algorithms.md"
   ],
   "params": {
-    "symbol": "stock:AAPL",
-    "timeframe": "1d",
-    "lookback": "1000"
+    "symbol": "stock:AAPL"
   }
 }

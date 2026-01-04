@@ -8,6 +8,8 @@ if __name__ == "__main__":
         strategy_module="trdr.strategy.macd_template.strategy",
         config_class="MACDConfig",
         strategy_class="MACDStrategy",
-        default_symbol="stock:AAPL",
-        default_position_pct=1.0,
+        symbol="crypto:ETH/USD",
+        timeframe="4h",
+        lookback=1000,  # ~167 days crypto (24/7), ~2.6 years stock
+        position_pct=1.0,
     )

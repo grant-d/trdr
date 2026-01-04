@@ -104,10 +104,10 @@ def run_sica_benchmark(
     strategy_module: str,
     config_class: str,
     strategy_class: str,
-    default_symbol: str = "stock:AAPL",
-    default_timeframe: str = "1d",
-    default_lookback: int = 1000,
-    default_position_pct: float = 1.0,
+    symbol: str,
+    timeframe: str,
+    lookback: int,
+    position_pct: float,
 ) -> None:
     """Run SICA benchmark for a strategy.
 
@@ -115,26 +115,26 @@ def run_sica_benchmark(
         strategy_module: Full module path (e.g., "trdr.strategy.volume_area_breakout.strategy")
         config_class: Config class name (e.g., "VolumeAreaBreakoutConfig")
         strategy_class: Strategy class name (e.g., "VolumeAreaBreakoutStrategy")
-        default_symbol: Default trading symbol
-        default_timeframe: Default timeframe
-        default_lookback: Default lookback bars
-        default_position_pct: Default position size as fraction of capital
+        symbol: Trading symbol (can be overridden by BACKTEST_SYMBOL env var)
+        timeframe: Bar timeframe (can be overridden by BACKTEST_TIMEFRAME env var)
+        lookback: Number of bars to fetch
+        position_pct: Position size as fraction of capital (1.0 = 100%)
     """
     from trdr.backtest import PaperExchange, PaperExchangeConfig
 
-    # Get params from environment or defaults
-    symbol = os.environ.get("BACKTEST_SYMBOL", default_symbol)
-    timeframe = os.environ.get("BACKTEST_TIMEFRAME", default_timeframe)
+    # Env vars can override specific code-driven values
+    symbol = os.environ.get("BACKTEST_SYMBOL", symbol)
+    timeframe = os.environ.get("BACKTEST_TIMEFRAME", timeframe)
 
     # Load strategy
     Config, Strategy = _reload_strategy(strategy_module, config_class, strategy_class)
 
     # Create strategy instance (needed to get data requirements)
-    config = Config(symbol=symbol, timeframe=timeframe)
+    config = Config(symbol=symbol, timeframe=timeframe, lookback=lookback)
     strategy = Strategy(config)
 
     # Get bars using strategy's data requirements
-    bars, primary = asyncio.run(_get_bars(strategy, default_lookback))
+    bars, primary = asyncio.run(_get_bars(strategy, lookback))
 
     # Calculate buy-hold return using primary bars
     initial_capital = 10000
@@ -147,7 +147,7 @@ def run_sica_benchmark(
     bt_config = PaperExchangeConfig(
         symbol=primary.symbol,
         initial_capital=initial_capital,
-        default_position_pct=default_position_pct,
+        default_position_pct=position_pct,
         primary_feed=primary.key,
     )
     engine = PaperExchange(bt_config, strategy)

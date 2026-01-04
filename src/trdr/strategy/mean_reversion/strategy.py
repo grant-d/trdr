@@ -122,7 +122,7 @@ class MeanReversionStrategy(BaseStrategy):
             DataRequirement(
                 symbol=self.config.symbol,
                 timeframe=self.config.timeframe,
-                lookback=1000,
+                lookback=self.config.lookback,
                 role="primary",
             ),
         ]

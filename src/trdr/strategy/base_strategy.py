@@ -19,7 +19,8 @@ class StrategyConfig:
     """
 
     symbol: str
-    timeframe: str = "1h"
+    timeframe: str
+    lookback: int
 
 
 class BaseStrategy(ABC):
@@ -37,13 +38,16 @@ class BaseStrategy(ABC):
         class MyStrategy(BaseStrategy):
             def get_data_requirements(self) -> list[DataRequirement]:
                 return [
-                    DataRequirement(self.config.symbol, "15m", 3000, role="primary"),
-                    DataRequirement(self.config.symbol, "1h", 500),  # MTF context
+                    DataRequirement(
+                        self.config.symbol,
+                        self.config.timeframe,
+                        self.config.lookback,
+                        role="primary",
+                    ),
                 ]
 
             def generate_signal(self, bars, position):
-                primary = bars[f"{self.config.symbol}:15m"]
-                htf = bars.get(f"{self.config.symbol}:1h", [])
+                primary = bars[f"{self.config.symbol}:{self.config.timeframe}"]
                 ...
     """
 
@@ -74,9 +78,12 @@ class BaseStrategy(ABC):
 
         Example:
             return [
-                DataRequirement(self.config.symbol, "15m", 3000, role="primary"),
-                DataRequirement(self.config.symbol, "1h", 500),
-                DataRequirement("crypto:BTC/USD", "1h", 500),  # Cross-asset
+                DataRequirement(
+                    self.config.symbol,
+                    self.config.timeframe,
+                    self.config.lookback,
+                    role="primary",
+                ),
             ]
         """
         ...

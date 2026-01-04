@@ -110,7 +110,7 @@ class MACDStrategy(BaseStrategy):
             DataRequirement(
                 symbol=self.config.symbol,
                 timeframe=self.config.timeframe,
-                lookback=500,
+                lookback=self.config.lookback,
                 role="primary",
             ),
         ]

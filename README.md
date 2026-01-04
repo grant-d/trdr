@@ -27,32 +27,29 @@ ALPACA_SECRET_KEY=your_secret_key_here
 
 # Optional - defaults to paper trading
 ALPACA_BASE_URL=https://paper-api.alpaca.markets
-
-# Optional - trading symbol (default: AAPL)
-# Crypto: crypto:BTC/USD, crypto:ETH/USD
-# Stock: stock:AAPL or just AAPL
-SYMBOL=crypto:BTC/USD
-
-# Optional - backtest timeframe (default: 1h)
-# Examples: 1m, 5m, 15m, 30m, 1h, 4h, 1d
-BACKTEST_TIMEFRAME=1h
 ```
 
 ## Running Tests
 
-Run backtest with default settings (BTC/USD, 1h bars):
+Run strategy benchmark (symbol/timeframe defined in sica_bench.py):
 
 ```bash
 .venv/bin/python -m pytest tests/test_volume_area_breakout.py -v
 ```
 
-Override symbol and timeframe:
+Override symbol (timeframe is code-driven in sica_bench.py):
 
 ```bash
-BACKTEST_SYMBOL=stock:AAPL BACKTEST_TIMEFRAME=4h .venv/bin/python -m pytest tests/test_volume_area_breakout.py -v
+BACKTEST_SYMBOL=stock:AAPL .venv/bin/python src/trdr/strategy/volume_area_breakout/sica_bench.py
 ```
 
-Timeframe formats: `1h`, `4h`, `15m`, `1d`, `hour`, `minute`, `day`
+Timeframe can be overridden via env var if needed:
+
+```bash
+BACKTEST_SYMBOL=crypto:ETH/USD BACKTEST_TIMEFRAME=4h .venv/bin/python src/trdr/strategy/volume_area_breakout/sica_bench.py
+```
+
+Timeframe formats: `1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d`
 
 ## SICA Optimization
 
