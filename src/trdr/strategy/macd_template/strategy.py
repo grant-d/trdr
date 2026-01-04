@@ -19,11 +19,10 @@ RuntimeContext available via self.context in generate_signal():
 
 from dataclasses import dataclass
 
-import numpy as np
-
 from ...data.market import Bar
-from ..types import Position, Signal, SignalAction
+from ...indicators import ema_series
 from ..base_strategy import BaseStrategy, StrategyConfig
+from ..types import Position, Signal, SignalAction
 
 
 # =============================================================================
@@ -53,31 +52,7 @@ class MACDConfig(StrategyConfig):
 
 
 # =============================================================================
-# STEP 2: Define helper functions (optional)
-# =============================================================================
-# Keep indicator calculations as module-level functions for reusability
-
-
-def _ema(values: list[float], period: int) -> list[float]:
-    """Calculate Exponential Moving Average."""
-    if len(values) < period:
-        return [0.0] * len(values)
-
-    alpha = 2 / (period + 1)
-    ema = [0.0] * len(values)
-
-    # Start with SMA for first period
-    ema[period - 1] = np.mean(values[:period])
-
-    # Calculate EMA for rest
-    for i in range(period, len(values)):
-        ema[i] = alpha * values[i] + (1 - alpha) * ema[i - 1]
-
-    return ema
-
-
-# =============================================================================
-# STEP 3: Implement your strategy class
+# STEP 2: Implement your strategy class
 # =============================================================================
 # Extend BaseStrategy and implement generate_signal()
 
@@ -158,11 +133,11 @@ class MACDStrategy(BaseStrategy):
         closes = [b.close for b in bars]
         current_price = closes[-1]
 
-        fast_ema = _ema(closes, self.config.fast_period)
-        slow_ema = _ema(closes, self.config.slow_period)
+        fast_ema = ema_series(closes, self.config.fast_period)
+        slow_ema = ema_series(closes, self.config.slow_period)
 
         macd_line = [f - s for f, s in zip(fast_ema, slow_ema)]
-        signal_line = _ema(macd_line, self.config.signal_period)
+        signal_line = ema_series(macd_line, self.config.signal_period)
 
         macd_current = macd_line[-1]
         macd_prev = macd_line[-2]

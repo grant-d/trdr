@@ -15,20 +15,6 @@ class SignalAction(Enum):
 
 
 @dataclass
-class VolumeProfile:
-    """Calculated volume profile with key levels."""
-
-    poc: float  # Point of Control (highest volume price)
-    vah: float  # Value Area High
-    val: float  # Value Area Low
-    hvns: list[float]  # High Volume Nodes
-    lvns: list[float]  # Low Volume Nodes
-    price_levels: list[float]  # All price level midpoints
-    volumes: list[float]  # Volume at each level
-    total_volume: float
-
-
-@dataclass
 class Signal:
     """Trading signal from strategy."""
 

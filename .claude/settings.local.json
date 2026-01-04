@@ -77,7 +77,9 @@
       "Bash(.venv/bin/flake8:*)",
       "Bash(git diff:*)",
       "Skill(compound-engineering:workflows:work)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git -C /Users/grantdickinson/repos/trdr diff --cached src/trdr/indicators/__init__.py)",
+      "Bash(git -C /Users/grantdickinson/repos/trdr diff --cached src/trdr/strategy/volume_area_breakout/strategy.py)"
     ],
     "deny": []
   }

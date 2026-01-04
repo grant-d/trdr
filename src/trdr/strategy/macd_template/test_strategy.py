@@ -20,7 +20,7 @@ from trdr.backtest import PaperExchange, PaperExchangeConfig, PaperExchangeResul
 from trdr.core import load_config
 from trdr.data import MarketDataClient
 from trdr.strategy import MACDConfig, MACDStrategy, get_backtest_env
-from trdr.strategy.score import score_result
+from trdr.strategy.targets import score_result
 
 # Read env vars once at module load
 SYMBOL, TIMEFRAME_STR, TIMEFRAME, _ = get_backtest_env(
@@ -47,6 +47,7 @@ def bars(event_loop):
     This fetches data once and reuses across all tests.
     Adjust lookback based on strategy's data requirements.
     """
+
     async def fetch():
         config = load_config()
         client = MarketDataClient(config.alpaca, Path("data/cache"))

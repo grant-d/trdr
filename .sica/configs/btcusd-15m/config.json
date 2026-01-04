@@ -7,6 +7,7 @@
   "prompt": "Optimize BTC/USD 15m strategy",
   "context_files": [
     "src/trdr/backtest/STRATEGY_API.md",
+    "src/trdr/indicators/INDICATORS.md",
     "thoughts/grantdickinson/2026-01-01-research-combined-trading-algorithms.md"
   ],
   "params": {

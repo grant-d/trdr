@@ -18,7 +18,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent.parent.parent
 sys.path.insert(0, str(project_root / "src"))
 
-from trdr.strategy.score import score_result
+from trdr.strategy.targets import score_result
 
 
 def reload_strategy():
@@ -31,6 +31,7 @@ def reload_strategy():
         VolumeAreaBreakoutConfig,
         VolumeAreaBreakoutStrategy,
     )
+
     return VolumeAreaBreakoutConfig, VolumeAreaBreakoutStrategy
 
 
