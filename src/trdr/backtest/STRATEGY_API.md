@@ -36,7 +36,39 @@ class MyStrategy(BaseStrategy):
                 position_size_pct=size,
             )
         return Signal(action=SignalAction.HOLD, price=bars[-1].close, ...)
+
+    def on_trade_complete(self, pnl: float, reason: str) -> None:
+        # Called after each trade closes - use for adaptive behavior
+        if pnl < 0:
+            self.consecutive_losses += 1
 ```
+
+### OCO Behavior
+
+Stop loss and take profit orders are pseudo-OCO: when either fills, the engine cancels all pending orders. Set both to bracket your position:
+
+```python
+Signal(action=SignalAction.BUY, ..., stop_loss=95.0, take_profit=110.0)
+# If SL hits → TP cancelled. If TP hits → SL cancelled.
+```
+
+### Order Types
+
+Internally, signals map to these order types:
+
+| Order Type | Trigger | Fill Price |
+| --- | --- | --- |
+| MARKET | Immediately | Bar open + slippage |
+| LIMIT | Price reaches limit | Limit price (no slippage) |
+| STOP | Bar range touches stop | Stop price + slippage |
+| STOP_LIMIT | Bar range touches stop | Limit price (no slippage) |
+| TRAILING_STOP | Trail touched after tracking | Stop price + slippage |
+| TRAILING_STOP_LIMIT | Trail touched after tracking | Limit price (no slippage) |
+
+Exchange semantics enforced:
+
+- `stop_loss` → STOP order (sell stop below price, triggers on drop)
+- `take_profit` → LIMIT order (sell limit above price, fills at limit, no slippage)
 
 ## Runtime Context
 
@@ -84,6 +116,22 @@ Signal(action=SignalAction.BUY, price=100.0, confidence=0.6,
        reason="VAL bounce", stop_loss=97.0, take_profit=103.0,
        position_size_pct=0.5)
 
+# Limit order entry (buy on dip)
+# price=100 is current market price, limit_price=98 is where order fills
+Signal(action=SignalAction.BUY, price=100.0, confidence=0.7,
+       reason="Limit buy at support", limit_price=98.0)
+
+# Bracket order: limit entry with stop loss and take profit
+# Enters at 98, exits at 94 (stop) or 106 (target)
+Signal(action=SignalAction.BUY, price=100.0, confidence=0.8,
+       reason="Limit buy with bracket", limit_price=98.0,
+       stop_loss=94.0, take_profit=106.0)
+
+# Stop-limit order: dormant until stop_price hit, then fills at limit_price
+# Entry triggers when price >= 105, fills at 106 or better
+Signal(action=SignalAction.BUY, price=100.0, confidence=0.7,
+       reason="Breakout stop-limit", stop_price=105.0, limit_price=106.0)
+
 # Exit on stop loss
 Signal(action=SignalAction.CLOSE, price=98.0, confidence=1.0,
        reason="Stop loss hit at 98.00")
@@ -110,12 +158,14 @@ Signal(action=SignalAction.HOLD, price=100.0, confidence=0.35,
 | Field | Type | Description |
 | --- | --- | --- |
 | `action` | `SignalAction` | BUY, SELL, CLOSE, HOLD |
-| `price` | `float` | Current price |
+| `price` | `float` | Current market price (informational, not order price) |
 | `confidence` | `float` | 0.0-1.0 signal strength |
 | `reason` | `str` | Entry/exit reason |
-| `stop_loss` | `float?` | Stop loss price |
-| `take_profit` | `float?` | Take profit price |
-| `trailing_stop` | `float?` | Trail % (<1) or $ amount |
+| `stop_loss` | `float?` | Stop loss trigger price |
+| `take_profit` | `float?` | Take profit trigger price |
+| `stop_price` | `float?` | Stop trigger for stop-limit entry (requires limit_price) |
+| `limit_price` | `float?` | Limit order entry price (fills at this price, no slippage) |
+| `trailing_stop` | `float?` | Trail % (<1) or $ amount. Creates TRAILING_STOP order that tracks highs (for sell) or lows (for buy). |
 | `quantity` | `float?` | Explicit size (overrides default) |
 | `position_size_pct` | `float` | Size as % of default (1.0 = 100%) |
 

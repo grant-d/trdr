@@ -26,6 +26,36 @@ if TYPE_CHECKING:
     from ..strategy import BaseStrategy
 
 
+def _validate_order_direction(
+    side: str,
+    order_type: OrderType,
+    price: float,
+    stop_price: float | None,
+    limit_price: float | None,
+) -> str | None:
+    """Validate order direction matches exchange semantics.
+
+    Returns error message if invalid, None if valid.
+    """
+    if order_type in (OrderType.STOP, OrderType.STOP_LIMIT):
+        if stop_price is None:
+            return None  # Will fail later validation
+        if side == "buy" and stop_price <= price:
+            return f"Buy stop must be above price ({stop_price} <= {price})"
+        if side == "sell" and stop_price >= price:
+            return f"Sell stop must be below price ({stop_price} >= {price})"
+
+    if order_type == OrderType.LIMIT:
+        if limit_price is None:
+            return None
+        if side == "buy" and limit_price >= price:
+            return f"Buy limit must be below price ({limit_price} >= {price})"
+        if side == "sell" and limit_price <= price:
+            return f"Sell limit must be above price ({limit_price} <= {price})"
+
+    return None
+
+
 @dataclass(frozen=True)
 class PaperExchangeConfig:
     """Configuration for paper exchange.
@@ -482,6 +512,7 @@ class PaperExchange:
 
             # 2. Process fills
             fills = order_manager.process_bar(bar, slippage)
+            position_closed = False
             for fill in fills:
                 cost = fill.price * fill.quantity * self.config.transaction_cost_pct
 
@@ -518,7 +549,7 @@ class PaperExchange:
                                 if hasattr(order, "order_type"):
                                     exit_reason = str(order.order_type)
 
-                        trades.append(Trade(
+                        trade = Trade(
                             entry_time=entry_time,
                             exit_time=fill.timestamp,
                             entry_price=avg_entry,
@@ -530,9 +561,16 @@ class PaperExchange:
                             net_pnl=pnl,
                             entry_reason=entry_reason,
                             exit_reason=exit_reason,
-                        ))
+                        )
+                        trades.append(trade)
+                        self.strategy.on_trade_complete(trade.net_pnl, trade.exit_reason)
                         entry_time = ""
                         entry_cost = 0.0
+                        position_closed = True
+
+            # Pseudo-OCO: cancel remaining orders when position closes
+            if position_closed:
+                order_manager.cancel_all()
 
             # 3. Get current position for strategy
             pos = portfolio.get_position(self.config.symbol)
@@ -644,21 +682,60 @@ class PaperExchange:
             if qty <= 0:
                 return
 
-            # Submit market buy
-            order_manager.submit(Order(
-                symbol=self.config.symbol,
-                side="buy",
-                order_type=OrderType.MARKET,
-                quantity=qty,
-                created_at=bar.timestamp,
-            ))
+            # Submit entry order (stop-limit, limit, or market)
+            if signal.stop_price and signal.limit_price:
+                # Stop-limit: triggered at stop_price, fills at limit_price
+                err = _validate_order_direction(
+                    "buy", OrderType.STOP_LIMIT, bar.close,
+                    signal.stop_price, signal.limit_price,
+                )
+                if err:
+                    raise ValueError(f"Invalid buy stop-limit: {err}")
+                order_manager.submit(Order(
+                    symbol=self.config.symbol,
+                    side="buy",
+                    order_type=OrderType.STOP_LIMIT,
+                    quantity=qty,
+                    stop_price=signal.stop_price,
+                    limit_price=signal.limit_price,
+                    created_at=bar.timestamp,
+                ))
+            elif signal.limit_price:
+                err = _validate_order_direction(
+                    "buy", OrderType.LIMIT, bar.close,
+                    None, signal.limit_price,
+                )
+                if err:
+                    raise ValueError(f"Invalid buy limit: {err}")
+                order_manager.submit(Order(
+                    symbol=self.config.symbol,
+                    side="buy",
+                    order_type=OrderType.LIMIT,
+                    quantity=qty,
+                    limit_price=signal.limit_price,
+                    created_at=bar.timestamp,
+                ))
+            else:
+                order_manager.submit(Order(
+                    symbol=self.config.symbol,
+                    side="buy",
+                    order_type=OrderType.MARKET,
+                    quantity=qty,
+                    created_at=bar.timestamp,
+                ))
 
-            # Submit stop loss if specified
+            # Submit stop loss if specified (sell stop below price)
             if signal.stop_loss:
+                err = _validate_order_direction(
+                    "sell", OrderType.STOP, bar.close,
+                    signal.stop_loss, None,
+                )
+                if err:
+                    raise ValueError(f"Invalid stop loss: {err}")
                 order_manager.submit(Order(
                     symbol=self.config.symbol,
                     side="sell",
-                    order_type=OrderType.STOP_LOSS,
+                    order_type=OrderType.STOP,
                     quantity=qty,
                     stop_price=signal.stop_loss,
                     created_at=bar.timestamp,
@@ -687,6 +764,23 @@ class PaperExchange:
                         trail_amount=signal.trailing_stop,
                         created_at=bar.timestamp,
                     ))
+
+            # Submit take profit if specified (sell limit above price)
+            if signal.take_profit:
+                err = _validate_order_direction(
+                    "sell", OrderType.LIMIT, bar.close,
+                    None, signal.take_profit,
+                )
+                if err:
+                    raise ValueError(f"Invalid take profit: {err}")
+                order_manager.submit(Order(
+                    symbol=self.config.symbol,
+                    side="sell",
+                    order_type=OrderType.LIMIT,
+                    quantity=qty,
+                    limit_price=signal.take_profit,
+                    created_at=bar.timestamp,
+                ))
 
         elif signal.action == SignalAction.CLOSE and position:
             # Cancel any pending stop orders

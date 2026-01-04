@@ -15,19 +15,27 @@ Enhance the backtest/forward engine to act more like a paper exchange with advan
 `src/trdr/backtest/paper_exchange.py`:
 
 - ✅ PaperExchange replaces BacktestEngine
-- ✅ Market orders, Stop Loss, Trailing Stop orders
+- ✅ All 6 order types: MARKET, LIMIT, STOP, STOP_LIMIT, TRAILING_STOP, TRAILING_STOP_LIMIT
+- ✅ Exchange semantics enforced (directional validation)
 - ✅ Portfolio with cash + positions MTM
 - ✅ Trading calendar (filter by asset type)
 - ✅ Slippage (% based) and transaction costs
 - ✅ Equity curve tracking
+- ✅ RuntimeContext for adaptive strategies
+- ✅ 65 tests passing
 
 ## Requirements
 
-### 1. Order Types (KISS) ✅ DONE
+### 1. Order Types ✅ DONE
 
-- ✅ Market (existing)
-- ✅ Stop Loss (exit on price breach)
-- ✅ Trailing Stop Loss (TSL) - follows price, exits on reversal
+- ✅ MARKET - immediate fill at bar open + slippage
+- ✅ LIMIT - fill at limit price (no slippage)
+- ✅ STOP - triggers when bar range touches stop, fills at stop + slippage
+- ✅ STOP_LIMIT - triggers at stop, then acts as limit order (two-phase)
+- ✅ TRAILING_STOP - follows price, exits on reversal + slippage
+- ✅ TRAILING_STOP_LIMIT - follows price, exits as limit order (no slippage)
+- ✅ Exchange semantics enforced (buy stop above, sell stop below, etc.)
+- ✅ OCO behavior (stop loss/take profit cancel each other)
 
 ### 2. Position Management ✅ DONE
 
@@ -337,6 +345,158 @@ class PaperExchangeResult:
 | `tests/test_metrics.py` | New - TradeMetrics tests |
 | `tests/test_runtime_context.py` | New - RuntimeContext tests |
 
+### Phase 7: Advanced Order Types ✅ DONE
+
+Implement exchange-compliant order types with proper semantics.
+
+#### 7.1 Order Type Consolidation
+
+Consolidated redundant order types into standard exchange semantics:
+
+| Order Type | Trigger | Fill Price | Use Case |
+| --- | --- | --- | --- |
+| MARKET | Immediately | Bar open + slippage | Immediate entry/exit |
+| LIMIT | Price reaches limit | Limit price (no slippage) | Entry at target price |
+| STOP | Bar range touches stop | Stop price + slippage | Stop loss |
+| STOP_LIMIT | Bar range touches stop | Limit price (no slippage) | Entry on breakout |
+| TRAILING_STOP | Trail touched after tracking | Stop price + slippage | Dynamic stop loss |
+| TRAILING_STOP_LIMIT | Trail touched after tracking | Limit price (no slippage) | Dynamic with limit |
+
+**Removed:** `STOP_LOSS` and `TAKE_PROFIT` - these are just STOP and LIMIT with proper placement.
+
+#### 7.2 Exchange Semantics Enforcement
+
+Directional validation enforced in `paper_exchange.py`:
+
+```python
+def _validate_order_direction(side, order_type, price, stop_price, limit_price) -> str | None:
+    """Validate order direction matches exchange semantics."""
+    # Buy stop/stop-limit: stop_price must be > current price
+    # Sell stop/stop-limit: stop_price must be < current price
+    # Buy limit: limit_price must be < current price
+    # Sell limit: limit_price must be > current price
+```
+
+Signal fields mapped correctly:
+
+- `stop_loss` → STOP order (sell stop below price, triggers on drop)
+- `take_profit` → LIMIT order (sell limit above price, fills at limit, no slippage)
+- `trailing_stop` → TRAILING_STOP order (tracks highs, exits on reversal)
+
+#### 7.3 STOP_LIMIT Two-Phase Execution
+
+Stop-limit orders have proper two-phase behavior:
+
+1. **Phase 1 (Dormant):** Wait for bar range to touch stop_price, then set `triggered=True`
+2. **Phase 2 (Active):** Act as limit order - may fill immediately or hang around
+
+```python
+# On same bar: can trigger AND fill if both conditions met
+# On later bars: triggered order stays pending until limit fills
+if not order.triggered:
+    if bar.low <= order.stop_price <= bar.high:
+        order.triggered = True
+    else:
+        return None  # Still waiting for trigger
+
+# Now act as limit order
+if order.side == "buy" and bar.low <= order.limit_price:
+    fill_price = min(order.limit_price, bar.open)
+```
+
+#### 7.4 TRAILING_STOP_LIMIT
+
+New order type combining trailing behavior with limit execution:
+
+- Trails like TRAILING_STOP (ratchets with market)
+- When triggered, becomes limit order (no slippage, possible fill risk)
+
+```python
+Order(
+    side="sell",
+    order_type=OrderType.TRAILING_STOP_LIMIT,
+    trail_percent=0.02,  # 2% trail
+    limit_price=105.0,   # Fills at 105 or better when triggered
+)
+```
+
+#### 7.5 Files Changed
+
+| File | Change |
+| --- | --- |
+| `src/trdr/backtest/orders.py` | Consolidated OrderType enum, added TRAILING_STOP_LIMIT, two-phase STOP_LIMIT logic |
+| `src/trdr/backtest/paper_exchange.py` | Added `_validate_order_direction()`, take_profit uses LIMIT |
+| `src/trdr/backtest/STRATEGY_API.md` | Documented order types and exchange semantics |
+| `tests/test_orders.py` | 44 tests for all order types and scenarios |
+| `tests/test_paper_exchange.py` | 21 tests including direction validation |
+
+#### 7.6 Test Coverage
+
+**Order Manager Tests (44):**
+
+- STOP triggers when bar range includes stop_price
+- STOP_LIMIT triggers then fills (same bar)
+- STOP_LIMIT triggers, hangs around, fills later bar
+- TRAILING_STOP tracks highs/lows, triggers on reversal
+- TRAILING_STOP_LIMIT trails, triggers, fills at limit
+- TRAILING_STOP_LIMIT triggers, hangs around, fills later bar
+- No slippage on limit orders
+
+**Paper Exchange Tests (21):**
+
+- Stop loss below price works
+- Take profit above price works (via LIMIT)
+- OCO behavior (one fills, cancels other)
+- Direction validation rejects invalid orders
+
+### Phase 8: OTO (One-Triggers-Other) ⏳ FUTURE
+
+True OTO where child orders are only submitted when parent fills.
+
+#### Current Behavior
+
+Exit orders (stop_loss, take_profit, trailing_stop) are submitted immediately with entry order. Works for market entries, but wrong for limit/stop-limit entries that may never fill.
+
+#### Proper OTO Behavior
+
+1. Submit entry order only
+2. On entry fill, automatically submit child orders (SL/TP)
+3. If entry never fills (limit order), children never get submitted
+4. If entry cancelled, children never get submitted
+
+#### Implementation Options
+
+**Option A: Child Orders on Order**
+
+```python
+@dataclass
+class Order:
+    ...
+    child_orders: list[Order] = field(default_factory=list)
+```
+
+OrderManager submits children only when parent fills.
+
+**Option B: Order Groups**
+
+```python
+@dataclass
+class OrderGroup:
+    parent: Order
+    children: list[Order]
+    submit_children_on_fill: bool = True
+```
+
+**Option C: Conditional Logic in Paper Exchange**
+
+Defer SL/TP submission until entry fill detected. Simplest but less reusable.
+
+#### Use Cases
+
+- Limit entry with bracket: submit limit buy at 98, only create SL/TP if filled
+- Stop-limit breakout: submit stop-limit at 105, only create SL/TP if triggered and filled
+- Cancel-if-not-filled: if entry expires, no orphaned exit orders
+
 ## Migration
 
 Backward compatible:
@@ -344,3 +504,4 @@ Backward compatible:
 - Existing strategies work unchanged (context is optional to use)
 - Signal without new fields works as before
 - PaperExchangeResult API unchanged (just refactored internally)
+- `stop_loss` and `take_profit` Signal fields still work (mapped to correct order types internally)

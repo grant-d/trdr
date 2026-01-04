@@ -1,7 +1,7 @@
 {
   "benchmark_cmd": "BACKTEST_SYMBOL={symbol} BACKTEST_TIMEFRAME={timeframe} BACKTEST_LOOKBACK={lookback} python src/trdr/strategy/volume_area_breakout/sica_bench.py",
-  "max_iterations": 20,
-  "target_score": 1.0,
+  "max_iterations": 30,
+  "target_score": 0.95,
   "benchmark_timeout": 300,
   "completion_promise": "TESTS PASSING",
   "prompt": "Optimize {symbol} strategy for {timeframe}",

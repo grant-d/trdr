@@ -12,9 +12,11 @@ class OrderType(Enum):
     """Order types supported by the engine."""
 
     MARKET = "market"
-    STOP = "stop"  # Trigger buy/sell at price
-    STOP_LOSS = "stop_loss"  # Exit on price breach
-    TRAILING_STOP = "trailing_stop"  # Follows price, exits on reversal
+    STOP = "stop"  # Becomes market when stop_price touched (either direction)
+    LIMIT = "limit"  # Entry at specified price or better
+    STOP_LIMIT = "stop_limit"  # Becomes limit when stop_price touched (either direction)
+    TRAILING_STOP = "trailing_stop"  # Follows price, becomes market on reversal
+    TRAILING_STOP_LIMIT = "trailing_stop_limit"  # Follows price, becomes limit on reversal
 
 
 @dataclass
@@ -26,7 +28,8 @@ class Order:
         side: "buy" or "sell"
         order_type: Type of order
         quantity: Number of units
-        stop_price: Trigger price for stop/SL orders
+        stop_price: Trigger price for stop/SL/TP orders
+        limit_price: Price for limit orders
         trail_percent: Trail % for TSL (e.g., 0.02 = 2%)
         trail_amount: Trail $ for TSL (alternative to %)
     """
@@ -36,22 +39,35 @@ class Order:
     order_type: OrderType
     quantity: float
     stop_price: float | None = None
+    limit_price: float | None = None
     trail_percent: float | None = None
     trail_amount: float | None = None
     id: str = field(default_factory=lambda: str(uuid4())[:8])
     status: Literal["pending", "filled", "cancelled"] = "pending"
+    triggered: bool = False  # For stop-limit: True after stop_price hit
     created_at: str = ""
     filled_at: str | None = None
     fill_price: float | None = None
 
     def __post_init__(self) -> None:
         """Validate order parameters."""
-        if self.order_type in (OrderType.STOP, OrderType.STOP_LOSS):
+        if self.order_type == OrderType.STOP:
             if self.stop_price is None:
-                raise ValueError(f"{self.order_type} requires stop_price")
+                raise ValueError("STOP requires stop_price")
         if self.order_type == OrderType.TRAILING_STOP:
             if self.trail_percent is None and self.trail_amount is None:
                 raise ValueError("TRAILING_STOP requires trail_percent or trail_amount")
+        if self.order_type == OrderType.TRAILING_STOP_LIMIT:
+            if self.trail_percent is None and self.trail_amount is None:
+                raise ValueError("TRAILING_STOP_LIMIT requires trail_percent or trail_amount")
+            if self.limit_price is None:
+                raise ValueError("TRAILING_STOP_LIMIT requires limit_price")
+        if self.order_type == OrderType.LIMIT:
+            if self.limit_price is None:
+                raise ValueError("LIMIT requires limit_price")
+        if self.order_type == OrderType.STOP_LIMIT:
+            if self.stop_price is None or self.limit_price is None:
+                raise ValueError("STOP_LIMIT requires both stop_price and limit_price")
 
 
 @dataclass
@@ -147,7 +163,7 @@ class OrderManager:
             bar: Current bar
         """
         for order in self._pending:
-            if order.order_type != OrderType.TRAILING_STOP:
+            if order.order_type not in (OrderType.TRAILING_STOP, OrderType.TRAILING_STOP_LIMIT):
                 continue
 
             if order.side == "sell":  # Long position TSL
@@ -217,25 +233,115 @@ class OrderManager:
             # Market orders fill at open
             fill_price = bar.open
 
-        elif order.order_type in (OrderType.STOP, OrderType.STOP_LOSS, OrderType.TRAILING_STOP):
-            # Stop orders trigger when price crosses stop_price
+        elif order.order_type in (OrderType.STOP, OrderType.TRAILING_STOP):
+            # Stop triggers when bar range includes stop_price
             if order.stop_price is None:
                 return None
 
-            if order.side == "sell":
-                # Sell stop triggers when price drops to/below stop
-                if bar.low <= order.stop_price:
-                    # Fill at stop price or open if gapped through
-                    fill_price = min(order.stop_price, bar.open)
+            if bar.low <= order.stop_price <= bar.high:
+                fill_price = order.stop_price
+
+        elif order.order_type == OrderType.LIMIT:
+            # Limit orders fill at limit price or better (no slippage)
+            if order.limit_price is None:
+                return None
+
+            if order.side == "buy":
+                # Buy limit triggers when price drops to/below limit
+                if bar.low <= order.limit_price:
+                    # Fill at limit price (guaranteed) or open if gapped below
+                    fill_price = min(order.limit_price, bar.open)
             else:
-                # Buy stop triggers when price rises to/above stop
-                if bar.high >= order.stop_price:
-                    fill_price = max(order.stop_price, bar.open)
+                # Sell limit triggers when price rises to/above limit
+                if bar.high >= order.limit_price:
+                    fill_price = max(order.limit_price, bar.open)
+
+            # Limit orders have no slippage - fill at price and return early
+            if fill_price is not None:
+                order.status = "filled"
+                order.filled_at = bar.timestamp
+                order.fill_price = fill_price
+                return Fill(
+                    order_id=order.id,
+                    price=fill_price,
+                    quantity=order.quantity,
+                    timestamp=bar.timestamp,
+                    side=order.side,
+                )
+            return None
+
+        elif order.order_type == OrderType.STOP_LIMIT:
+            # Stop-limit: dormant until stop triggered, then acts as limit
+            if order.stop_price is None or order.limit_price is None:
+                return None
+
+            # Phase 1: Check if stop is triggered (bar range touches stop)
+            if not order.triggered:
+                if bar.low <= order.stop_price <= bar.high:
+                    order.triggered = True
+                else:
+                    return None
+
+            # Phase 2: Triggered - act as limit order (no slippage)
+            if order.side == "buy":
+                # Buy limit fills when price drops to/below limit
+                if bar.low <= order.limit_price:
+                    fill_price = min(order.limit_price, bar.open)
+            else:
+                # Sell limit fills when price rises to/above limit
+                if bar.high >= order.limit_price:
+                    fill_price = max(order.limit_price, bar.open)
+
+            if fill_price is not None:
+                order.status = "filled"
+                order.filled_at = bar.timestamp
+                order.fill_price = fill_price
+                return Fill(
+                    order_id=order.id,
+                    price=fill_price,
+                    quantity=order.quantity,
+                    timestamp=bar.timestamp,
+                    side=order.side,
+                )
+            return None
+
+        elif order.order_type == OrderType.TRAILING_STOP_LIMIT:
+            # Trailing stop-limit: trails like TSL, then acts as limit when triggered
+            if order.stop_price is None or order.limit_price is None:
+                return None
+
+            # Phase 1: Check if trailing stop is triggered (bar range touches stop)
+            if not order.triggered:
+                if bar.low <= order.stop_price <= bar.high:
+                    order.triggered = True
+                else:
+                    return None
+
+            # Phase 2: Triggered - act as limit order (no slippage)
+            if order.side == "buy":
+                if bar.low <= order.limit_price:
+                    fill_price = min(order.limit_price, bar.open)
+            else:
+                if bar.high >= order.limit_price:
+                    fill_price = max(order.limit_price, bar.open)
+
+            if fill_price is not None:
+                order.status = "filled"
+                order.filled_at = bar.timestamp
+                order.fill_price = fill_price
+                return Fill(
+                    order_id=order.id,
+                    price=fill_price,
+                    quantity=order.quantity,
+                    timestamp=bar.timestamp,
+                    side=order.side,
+                )
+            return None
 
         if fill_price is None:
             return None
 
-        # Apply slippage
+        # Apply slippage (for non-limit orders)
         if order.side == "buy":
             fill_price += slippage
         else:

@@ -273,9 +273,10 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         # Calculate stops and targets
         if is_daily or vah_breakout or poc_pullback or poc_breakout:
             if is_daily:
-                # Daily: maximize CAGR with wider targets
+                # Daily: tighter stop to reduce DD below 25% threshold
+                # Iter 33: test 0.5 ATR stop (was 0.6) to cut DD from 32% to ~26%
                 take_profit = current_price + atr_val * 3.0
-                stop_loss = current_price - atr_val * 0.6
+                stop_loss = current_price - atr_val * 0.5
                 confidence_base = 0.50  # Ensure always above threshold
             elif is_15m:
                 # 15m: Target 0.95x alpha
@@ -307,9 +308,9 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             signal_type = "VAL_bounce"
 
             if is_daily:
-                # Daily: maximize CAGR with wider targets
+                # Daily: tighter stop to reduce DD below 25% threshold
                 take_profit = current_price + atr_val * 2.5
-                stop_loss = current_price - atr_val * 0.6
+                stop_loss = current_price - atr_val * 0.5
                 confidence_base = 0.50  # Ensure always above threshold
             elif is_15m:
                 # 15m: Target 0.95x alpha

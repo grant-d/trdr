@@ -25,6 +25,7 @@ from ..indicators import (
     wma,
 )
 from .macd_template import MACDConfig, MACDStrategy
+from .mean_reversion import MeanReversionConfig, MeanReversionStrategy
 from .types import Position, Signal, SignalAction
 from .utils import get_backtest_env
 from .volume_area_breakout import VolumeAreaBreakoutConfig, VolumeAreaBreakoutStrategy
@@ -61,6 +62,8 @@ __all__ = [
     # Strategies
     "MACDConfig",
     "MACDStrategy",
+    "MeanReversionConfig",
+    "MeanReversionStrategy",
     "VolumeAreaBreakoutConfig",
     "VolumeAreaBreakoutStrategy",
     # Types

@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 
+import pytest
+
 from trdr.backtest.paper_exchange import PaperExchange, PaperExchangeConfig
 from trdr.data.market import Bar
 from trdr.strategy.base_strategy import BaseStrategy, StrategyConfig
@@ -101,6 +103,86 @@ class TrailingStopStrategy(BaseStrategy):
                 confidence=1.0,
                 reason="buy_with_tsl",
                 trailing_stop=0.05,  # 5% trailing stop
+            )
+        return Signal(action=SignalAction.HOLD, price=bars[-1].close, confidence=0.0, reason="")
+
+    def reset(self) -> None:
+        self.bought = False
+
+
+class TakeProfitStrategy(BaseStrategy):
+    """Buy with take profit target."""
+
+    def __init__(self, config: SimpleConfig):
+        super().__init__(config)
+        self.bought = False
+        self.trade_callbacks: list[tuple[float, str]] = []
+
+    def generate_signal(self, bars: list[Bar], position: Position | None) -> Signal:
+        if not position and not self.bought:
+            self.bought = True
+            price = bars[-1].close
+            return Signal(
+                action=SignalAction.BUY,
+                price=price,
+                confidence=1.0,
+                reason="buy_with_tp",
+                take_profit=price * 1.10,  # 10% take profit
+                stop_loss=price * 0.95,  # 5% stop loss
+            )
+        return Signal(action=SignalAction.HOLD, price=bars[-1].close, confidence=0.0, reason="")
+
+    def on_trade_complete(self, pnl: float, reason: str) -> None:
+        self.trade_callbacks.append((pnl, reason))
+
+    def reset(self) -> None:
+        self.bought = False
+        self.trade_callbacks = []
+
+
+class LimitOrderStrategy(BaseStrategy):
+    """Buy with limit order entry."""
+
+    def __init__(self, config: SimpleConfig, limit_pct: float = 0.98):
+        super().__init__(config)
+        self.bought = False
+        self.limit_pct = limit_pct
+
+    def generate_signal(self, bars: list[Bar], position: Position | None) -> Signal:
+        if not position and not self.bought:
+            self.bought = True
+            price = bars[-1].close
+            return Signal(
+                action=SignalAction.BUY,
+                price=price,
+                confidence=1.0,
+                reason="limit_buy",
+                limit_price=price * self.limit_pct,  # Buy below current price
+            )
+        return Signal(action=SignalAction.HOLD, price=bars[-1].close, confidence=0.0, reason="")
+
+    def reset(self) -> None:
+        self.bought = False
+
+
+class StopLimitStrategy(BaseStrategy):
+    """Buy with stop-limit order (breakout with limit)."""
+
+    def __init__(self, config: SimpleConfig):
+        super().__init__(config)
+        self.bought = False
+
+    def generate_signal(self, bars: list[Bar], position: Position | None) -> Signal:
+        if not position and not self.bought:
+            self.bought = True
+            price = bars[-1].close
+            return Signal(
+                action=SignalAction.BUY,
+                price=price,
+                confidence=1.0,
+                reason="stop_limit_buy",
+                stop_price=price * 1.05,  # Trigger on 5% breakout
+                limit_price=price * 1.06,  # Fill at 6% above or better
             )
         return Signal(action=SignalAction.HOLD, price=bars[-1].close, confidence=0.0, reason="")
 
@@ -312,6 +394,179 @@ class TestMultipleEntries:
         assert result.trades[0].quantity == 30.0
 
 
+class TestTakeProfitIntegration:
+    """Tests for take profit and on_trade_complete integration."""
+
+    def test_take_profit_triggers(self) -> None:
+        """Take profit exits when price reaches target."""
+        config = PaperExchangeConfig(
+            symbol="crypto:TEST",
+            warmup_bars=2,
+            initial_capital=10000.0,
+            transaction_cost_pct=0.0,
+            slippage_pct=0.0,
+        )
+        strategy = TakeProfitStrategy(SimpleConfig(symbol="crypto:TEST"))
+        engine = PaperExchange(config, strategy)
+
+        # Price rises to hit 10% take profit
+        # Entry at 100, TP at 110. Bar with close=110 has range [107.8, 111.1]
+        bars = make_bars([100, 100, 100, 105, 110])
+        result = engine.run(bars)
+
+        assert result.total_trades == 1
+        assert result.trades[0].net_pnl > 0  # Should profit
+
+    def test_stop_loss_cancels_take_profit(self) -> None:
+        """Stop loss triggers and cancels take profit (pseudo-OCO)."""
+        config = PaperExchangeConfig(
+            symbol="crypto:TEST",
+            warmup_bars=2,
+            initial_capital=10000.0,
+            transaction_cost_pct=0.0,
+            slippage_pct=0.0,
+        )
+        strategy = TakeProfitStrategy(SimpleConfig(symbol="crypto:TEST"))
+        engine = PaperExchange(config, strategy)
+
+        # Entry at 100, then price drops to hit 5% stop loss (95)
+        # Bar with close=95 has range [93.1, 95.95] which includes 95
+        bars = make_bars([100, 100, 100, 100, 95])
+        result = engine.run(bars)
+
+        assert result.total_trades == 1
+        assert result.trades[0].net_pnl < 0  # Should lose from entry ~100 to exit at 95
+
+    def test_on_trade_complete_called(self) -> None:
+        """on_trade_complete callback is called after trade closes."""
+        config = PaperExchangeConfig(
+            symbol="crypto:TEST",
+            warmup_bars=2,
+            initial_capital=10000.0,
+            transaction_cost_pct=0.0,
+            slippage_pct=0.0,
+        )
+        strategy = TakeProfitStrategy(SimpleConfig(symbol="crypto:TEST"))
+        engine = PaperExchange(config, strategy)
+
+        # Price rises to hit take profit (110)
+        # Bar with close=110 has range [107.8, 111.1] which includes 110
+        bars = make_bars([100, 100, 100, 105, 110])
+        engine.run(bars)
+
+        assert len(strategy.trade_callbacks) == 1
+        pnl, reason = strategy.trade_callbacks[0]
+        assert pnl > 0  # Profitable trade
+
+
+class TestLimitOrderIntegration:
+    """Tests for limit order integration with paper exchange."""
+
+    def test_limit_order_fills_on_dip(self) -> None:
+        """Limit order fills when price dips to limit."""
+        config = PaperExchangeConfig(
+            symbol="crypto:TEST",
+            warmup_bars=2,
+            initial_capital=10000.0,
+            transaction_cost_pct=0.0,
+            slippage_pct=0.0,
+        )
+        # Limit at 98% of current price
+        strategy = LimitOrderStrategy(SimpleConfig(symbol="crypto:TEST"), limit_pct=0.98)
+        engine = PaperExchange(config, strategy)
+
+        # Price dips below limit then recovers
+        bars = make_bars([100, 100, 100, 95, 110])  # 95 < 98 (limit), then 110
+        result = engine.run(bars)
+
+        assert result.total_trades == 1
+        assert result.trades[0].net_pnl > 0  # Should profit from 98 entry to 110
+
+    def test_limit_order_never_fills(self) -> None:
+        """Limit order stays pending if never touched."""
+        config = PaperExchangeConfig(
+            symbol="crypto:TEST",
+            warmup_bars=2,
+            initial_capital=10000.0,
+            transaction_cost_pct=0.0,
+            slippage_pct=0.0,
+        )
+        # Limit at 90% - price never gets there
+        strategy = LimitOrderStrategy(SimpleConfig(symbol="crypto:TEST"), limit_pct=0.90)
+        engine = PaperExchange(config, strategy)
+
+        # Price stays above limit
+        bars = make_bars([100, 100, 100, 105, 110])  # Never below 90
+        result = engine.run(bars)
+
+        # No trade executed (limit never filled)
+        assert result.total_trades == 0
+
+    def test_limit_order_no_slippage(self) -> None:
+        """Limit orders have no slippage."""
+        config = PaperExchangeConfig(
+            symbol="crypto:TEST",
+            warmup_bars=2,
+            initial_capital=10000.0,
+            transaction_cost_pct=0.0,
+            slippage_pct=0.05,  # 5% slippage - should be ignored for limit
+        )
+        strategy = LimitOrderStrategy(SimpleConfig(symbol="crypto:TEST"), limit_pct=0.98)
+        engine = PaperExchange(config, strategy)
+
+        bars = make_bars([100, 100, 100, 95, 110])
+        result = engine.run(bars)
+
+        # Should have entered at limit price (98), not 98 + 5% slippage
+        assert result.total_trades == 1
+        # Entry price should be 98 or the gap-down open (whichever is lower)
+        assert result.trades[0].entry_price <= 98.0
+
+
+class TestStopLimitIntegration:
+    """Tests for stop-limit order integration."""
+
+    def test_stop_limit_triggers_and_fills(self) -> None:
+        """Stop-limit triggers on breakout and fills at limit."""
+        config = PaperExchangeConfig(
+            symbol="crypto:TEST",
+            warmup_bars=2,
+            initial_capital=10000.0,
+            transaction_cost_pct=0.0,
+            slippage_pct=0.0,
+        )
+        strategy = StopLimitStrategy(SimpleConfig(symbol="crypto:TEST"))
+        engine = PaperExchange(config, strategy)
+
+        # Signal at price=100, stop=105, limit=106
+        # make_bars creates: open=99%, high=101%, low=98%, close=price
+        # Bar 3 (close=107): high=108.07 > 105 (triggers), low=104.86 < 106 (fills)
+        bars = make_bars([100, 100, 100, 107, 115])
+        result = engine.run(bars)
+
+        assert result.total_trades == 1
+        assert result.trades[0].entry_price <= 106.0  # Filled at limit or better
+
+    def test_stop_limit_never_triggers(self) -> None:
+        """Stop-limit stays pending if stop never hit."""
+        config = PaperExchangeConfig(
+            symbol="crypto:TEST",
+            warmup_bars=2,
+            initial_capital=10000.0,
+            transaction_cost_pct=0.0,
+            slippage_pct=0.0,
+        )
+        strategy = StopLimitStrategy(SimpleConfig(symbol="crypto:TEST"))
+        engine = PaperExchange(config, strategy)
+
+        # Signal at price=100, stop=105, but price never reaches 105
+        bars = make_bars([100, 100, 100, 102, 103])
+        result = engine.run(bars)
+
+        # No trade - stop never triggered
+        assert result.total_trades == 0
+
+
 class TestStockCalendar:
     """Tests for stock trading calendar integration."""
 
@@ -339,3 +594,100 @@ class TestStockCalendar:
         # Should have processed only weekday bars
         # Equity curve length = total bars - warmup - weekend bars
         assert len(result.equity_curve) == 2  # Mon, Tue, Wed after warmup (Fri, Mon)
+
+
+class TestOrderDirectionValidation:
+    """Tests for exchange-style order direction enforcement."""
+
+    def test_stop_loss_above_price_rejected(self) -> None:
+        """Stop loss above current price is rejected."""
+
+        class BadStopLossStrategy(BaseStrategy):
+            def generate_signal(
+                self, bars: list[Bar], position: Position | None
+            ) -> Signal:
+                if len(bars) < 3:
+                    return Signal(
+                        action=SignalAction.HOLD, price=bars[-1].close, confidence=0.0
+                    )
+                if position is None:
+                    return Signal(
+                        action=SignalAction.BUY,
+                        price=bars[-1].close,
+                        confidence=0.8,
+                        reason="buy",
+                        stop_loss=bars[-1].close * 1.05,  # WRONG: above price
+                    )
+                return Signal(
+                    action=SignalAction.HOLD, price=bars[-1].close, confidence=0.5
+                )
+
+        config = PaperExchangeConfig(symbol="crypto:TEST", warmup_bars=2)
+        strategy = BadStopLossStrategy(SimpleConfig(symbol="crypto:TEST"))
+        engine = PaperExchange(config, strategy)
+        bars = make_bars([100, 100, 100, 100])
+
+        with pytest.raises(ValueError, match="Sell stop must be below price"):
+            engine.run(bars)
+
+    def test_take_profit_below_price_rejected(self) -> None:
+        """Take profit below current price is rejected."""
+
+        class BadTakeProfitStrategy(BaseStrategy):
+            def generate_signal(
+                self, bars: list[Bar], position: Position | None
+            ) -> Signal:
+                if len(bars) < 3:
+                    return Signal(
+                        action=SignalAction.HOLD, price=bars[-1].close, confidence=0.0
+                    )
+                if position is None:
+                    return Signal(
+                        action=SignalAction.BUY,
+                        price=bars[-1].close,
+                        confidence=0.8,
+                        reason="buy",
+                        take_profit=bars[-1].close * 0.95,  # WRONG: below price
+                    )
+                return Signal(
+                    action=SignalAction.HOLD, price=bars[-1].close, confidence=0.5
+                )
+
+        config = PaperExchangeConfig(symbol="crypto:TEST", warmup_bars=2)
+        strategy = BadTakeProfitStrategy(SimpleConfig(symbol="crypto:TEST"))
+        engine = PaperExchange(config, strategy)
+        bars = make_bars([100, 100, 100, 100])
+
+        with pytest.raises(ValueError, match="Sell limit must be above price"):
+            engine.run(bars)
+
+    def test_buy_limit_above_price_rejected(self) -> None:
+        """Buy limit above current price is rejected."""
+
+        class BadBuyLimitStrategy(BaseStrategy):
+            def generate_signal(
+                self, bars: list[Bar], position: Position | None
+            ) -> Signal:
+                if len(bars) < 3:
+                    return Signal(
+                        action=SignalAction.HOLD, price=bars[-1].close, confidence=0.0
+                    )
+                if position is None:
+                    return Signal(
+                        action=SignalAction.BUY,
+                        price=bars[-1].close,
+                        confidence=0.8,
+                        reason="buy",
+                        limit_price=bars[-1].close * 1.05,  # WRONG: above price
+                    )
+                return Signal(
+                    action=SignalAction.HOLD, price=bars[-1].close, confidence=0.5
+                )
+
+        config = PaperExchangeConfig(symbol="crypto:TEST", warmup_bars=2)
+        strategy = BadBuyLimitStrategy(SimpleConfig(symbol="crypto:TEST"))
+        engine = PaperExchange(config, strategy)
+        bars = make_bars([100, 100, 100, 100])
+
+        with pytest.raises(ValueError, match="Buy limit must be below price"):
+            engine.run(bars)

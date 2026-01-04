@@ -243,9 +243,13 @@ def compute_composite_score(
                 if buyhold_return > ALPHA_MEGATREND_THRESHOLD
                 else ALPHA_FLOOR_NORMAL
             )
-            alpha_penalty = max(
-                floor, math.sqrt(alpha) if buyhold_return > ALPHA_MEGATREND_THRESHOLD else alpha
-            )
+            # Only sqrt if alpha is positive (strategy made money)
+            if alpha > 0:
+                alpha_penalty = max(
+                    floor, math.sqrt(alpha) if buyhold_return > ALPHA_MEGATREND_THRESHOLD else alpha
+                )
+            else:
+                alpha_penalty = floor  # Strategy lost money, use floor penalty
         details.append(f"Alpha: {alpha:.2f}x buy-hold → penalty {alpha_penalty:.2f}")
 
     # Final composite
@@ -354,9 +358,13 @@ def score_result(
                 if buyhold_return > ALPHA_MEGATREND_THRESHOLD
                 else ALPHA_FLOOR_NORMAL
             )
-            alpha_penalty = max(
-                floor, math.sqrt(alpha) if buyhold_return > ALPHA_MEGATREND_THRESHOLD else alpha
-            )
+            # Only sqrt if alpha is positive (strategy made money)
+            if alpha > 0:
+                alpha_penalty = max(
+                    floor, math.sqrt(alpha) if buyhold_return > ALPHA_MEGATREND_THRESHOLD else alpha
+                )
+            else:
+                alpha_penalty = floor  # Strategy lost money, use floor penalty
         details.append(f"Alpha: {alpha:.2f}x → penalty {alpha_penalty:.2f}")
 
     # Final composite
