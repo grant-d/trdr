@@ -753,6 +753,9 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         volume_ratio = current_bar.volume / avg_recent_volume if avg_recent_volume > 0 else 0
         volume_trend = analyze_volume_trend(bars)
 
+        # Calculate order flow imbalance (buying vs selling pressure)
+        ofi = compute_order_flow_imbalance(bars, lookback=5)
+
         # Calculate historical support strength at VAL level
         hvn_strength = detect_hvn_support_strength(bars, profile.val, lookback=30)
 
@@ -784,11 +787,11 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
 
         # Daily requires HMA trending up, intraday (4h/1h) just needs price > HMA or above recent swing
         # For 4h: require HMA bullish to improve win rate (price > HMA confirms uptrend)
-        # For 15m: Disable VAH breakout entirely - focus on mean reversion for better WR
+        # For 15m: Disable VAH breakout - focus on VAL bounces with HMA filter for best score
         if is_daily:
             hma_filter = hma_bullish and hma_trending_up
         elif is_15m:
-            # 15m: Disable VAH breakout (poor Sharpe) - focus on VAL bounces instead
+            # 15m: Disable VAH breakout (lower Sharpe) - focus on HMA-filtered VAL bounces
             hma_filter = False  # Force vah_breakout = False
         elif is_4h:
             # 4h: VAH breakout requires price > HMA for uptrend confirmation
@@ -807,10 +810,11 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             near_vah = abs(current_price - profile.vah) < atr * 0.5
             poc_pullback = near_vah and hma_bullish and hma_trending_up and mss > 5
         elif is_15m:
-            # 15m: Mean reversion for high frequency (2 trades/week target)
-            # Tighter proximity and very permissive regime for max signals
-            near_val = abs(current_price - profile.val) < atr * 0.8  # Return to narrower proximity
-            val_bounce = near_val and mss > -70  # Very permissive
+            # 15m: Mean reversion for high frequency
+            # Tight proximity + HMA uptrend + modest regime for best P&L
+            near_val = abs(current_price - profile.val) < atr * 0.65
+            hma_filter_15m = current_price > hma
+            val_bounce = near_val and hma_filter_15m and mss > -50
             poc_pullback = False
         elif is_4h:
             # 4h: Mean reversion on VAL - maximum relaxation for trade volume
@@ -860,16 +864,18 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         else:  # val_bounce
             # VAL bounce: mean reversion to POC (research: 55-65% win rate)
             # Take profit at POC (defined by volume, not arbitrary)
-            take_profit = profile.poc
-            # Stop: For 4h, widen stops slightly on mean reversion plays
             if is_15m:
-                stop_loss = current_price - atr * 0.06  # Minimal stop for maximum reward/risk scaling
-            elif is_4h:
-                stop_loss = current_price - atr * 1.8  # Wider stop for better WR
+                # 15m: Tight TP at POC, very tight stop to minimize losses
+                take_profit = profile.poc
+                stop_loss = current_price - atr * 0.035  # Ultra-tight stop
             else:
-                stop_loss = current_price - atr * 2.0
+                take_profit = profile.poc
+                if is_4h:
+                    stop_loss = current_price - atr * 1.6  # Moderate tightening (was 1.8)
+                else:
+                    stop_loss = current_price - atr * 2.0
             signal_type = "VAL_bounce"
-            confidence_base = 0.50  # Very permissive on 15m, volume bonus will boost confident ones
+            confidence_base = 0.52  # Slightly higher base from 0.50
 
         confidence = confidence_base
 
@@ -882,15 +888,20 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         if val_bounce and volume_trend == "declining":
             confidence += 0.45  # Maximum bonus for volume-declining bounces
 
+        # Order Flow Imbalance bonus for bounces (positive OFI = buying pressure = bounce support)
+        # Positive OFI near VAL indicates institutional buyers catching the dip
+        if val_bounce and ofi > 0.25:  # Strong buying pressure only
+            confidence += 0.18  # Meaningful bonus for strong OFI signal
+
         # HVN strength bonus for historically validated support on VAL bounces
         # If VAL is a historically tested support, confidence boost is justified
         if val_bounce:
             if hvn_strength > 0.7:
-                confidence += 0.30  # Very strong historical support
+                confidence += 0.35  # Very strong historical support (increased)
             elif hvn_strength > 0.5:
-                confidence += 0.25  # Moderate historical support (increased)
+                confidence += 0.30  # Moderate historical support (increased)
             elif hvn_strength > 0.3:
-                confidence += 0.15  # Weak support (increased)
+                confidence += 0.20  # Weak support (increased from 0.15)
 
         # Regime bonus (only for strong trends to avoid noise)
         if mss > 20:
@@ -904,11 +915,11 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         confidence = min(confidence, 1.0)
 
         # Confidence threshold: relax to capture more trades while maintaining quality
-        # Daily: 0.55, 4h: 0.40, 15m: 0.52 (slightly lower for more volume-declining bounces), 1h: 0.65
+        # Daily: 0.55, 4h: 0.40, 15m: 0.45 (very permissive for volume), 1h: 0.65
         if is_daily:
             min_confidence_threshold = 0.55
         elif is_15m:
-            min_confidence_threshold = 0.52  # Slightly lower to capture more volume-declining bounces
+            min_confidence_threshold = 0.45  # Very permissive - entry filters do quality control
         elif is_4h:
             min_confidence_threshold = 0.40  # Maximum permissive on 4h for maximum signal generation
         else:
@@ -923,16 +934,15 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             )
 
         # Position sizing: Scale with confidence and profit/loss ratio
-        # For 15m, use higher position sizes since stop is tighter
+        # For 15m, use higher position sizes on high-confidence setups
         if is_15m:
-            # Risk-reward ratio
+            # Risk-reward ratio + confidence scaling
             risk = abs(current_price - stop_loss)
             reward = abs(take_profit - current_price)
             if risk > 0:
                 rr_ratio = reward / risk
-                # More aggressive sizing on 15m with good reward/risk
-                # Can afford larger positions because stops are tight
-                position_size_pct = min(1.0, 0.7 + rr_ratio * 0.2)
+                # Aggressive sizing: base 0.8 + rr_ratio bonus + confidence bonus
+                position_size_pct = min(1.0, 0.8 + rr_ratio * 0.2 + (confidence - 0.5) * 0.2)
             else:
                 position_size_pct = 1.0
         else:

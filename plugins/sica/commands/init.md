@@ -8,9 +8,11 @@ model: haiku
 
 Create a new SICA config at `.sica/configs/$1/config.json`.
 
-If `$1` is empty, ask the user for a config name.
+If `$1` is empty, use `AskUserQuestion` tool to ask if user wants specific or derived name.
+If user does not provide a name, derive it from answers below: `symbol-timeframe`.
+If config already exists, inform the user and exit.
 
-Then ask the user for each config field (one question at a time, use AskUserQuestion tool):
+Then ask the user for each config field (one question at a time, use `AskUserQuestion` tool):
 
 1. **benchmark_cmd** (required): Command to run for benchmarking
    - Use a `sica_bench.py` script (not pytest) to pick up code changes between iterations

@@ -60,8 +60,13 @@
       "Bash(exit)",
       "Bash(test:*)",
       "Bash(/sica:*)",
-      "Bash(BACKTEST_SYMBOL=:*)",
-      "Bash(BACKTEST_SYMBOL=crypto:BTC/USD BACKTEST_TIMEFRAME=15m python:*)"
+      "Bash(BACKTEST_SYMBOL=crypto:*)",
+      "Bash(BACKTEST_SYMBOL=stock:*)",
+      "Bash(BACKTEST_SYMBOL=crypto:BTC/USD BACKTEST_TIMEFRAME=15m python:*)",
+      "Bash(BACKTEST_SYMBOL=crypto:ETH/USD BACKTEST_TIMEFRAME=15m python:*)",
+      "Bash(BACKTEST_SYMBOL=crypto:ETH/USD BACKTEST_TIMEFRAME=15m timeout 150 python:*)",
+      "mcp__plugin_compound-engineering:*",
+      "WebFetch(domain:pypi.org)"
     ],
     "deny": []
   }

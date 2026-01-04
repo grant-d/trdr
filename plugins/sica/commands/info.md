@@ -3,6 +3,8 @@ description: "Show SICA loop info"
 model: haiku
 ---
 
+# SICA Loop Info
+
 Run this command and summarize the output for the user:
 
 ```bash

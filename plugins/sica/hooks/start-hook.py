@@ -37,7 +37,6 @@ def main() -> None:
         hook_input = json.loads(sys.stdin.read())
     except json.JSONDecodeError:
         hook_input = {}
-    dbg(f"Hook input: {hook_input}")
 
     hook_event_name = hook_input.get("hook_event_name", "")
     source = hook_input.get("source", "")
