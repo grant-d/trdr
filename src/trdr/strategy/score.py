@@ -27,11 +27,14 @@ References:
 - https://www.dakotaridgecapital.com/fearless-investor/portfolio-risk-ratios-sharpe-sortino-calmar
 """
 
+from __future__ import annotations
+
 import math
 from datetime import datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from trdr.backtest import PaperExchangeResult
     from trdr.data.market import Bar
 
 # === SCORING TARGETS ===
@@ -74,9 +77,7 @@ def asymptotic(value: float, target: float) -> float:
     Returns:
         Score between 0 and 1 (approaches 1 asymptotically)
     """
-    if value <= 0:
-        return 0.0
-    return value / (value + target)
+    return max(0.0, value / (value + target))
 
 
 def quadratic(value: float, target: float, delta: float) -> float:
@@ -98,8 +99,7 @@ def quadratic(value: float, target: float, delta: float) -> float:
         quadratic(0, 100, 100)   → 0.0  (at target - delta)
         quadratic(200, 100, 100) → 0.0  (at target + delta)
     """
-    normalized = (value - target) / delta
-    return max(0.0, 1 - normalized ** 2)
+    return max(0.0, 1 - ((value - target) / delta) ** 2)
 
 
 def compute_composite_score(
@@ -150,11 +150,8 @@ def compute_composite_score(
     details = []
 
     # Calculate period info, CAGR, and Calmar
-    days_span = 0
-    years = 0
-    cagr = 0.0
-    calmar = 0.0
     total_return = pnl / initial_capital if initial_capital > 0 else 0
+    days_span, years, cagr, calmar = 0, 0, 0.0, 0.0
 
     if bars and len(bars) >= 2 and timeframe:
         num_bars = len(bars)
@@ -164,20 +161,15 @@ def compute_composite_score(
         years = days_span / 365.25
 
         # CAGR = (1 + total_return)^(1/years) - 1
-        if years > 0 and total_return > -1:
-            cagr = (1 + total_return) ** (1 / years) - 1
-        elif years > 0:
-            cagr = -1.0  # Total loss
-
-        # Calmar = CAGR / Max Drawdown
-        dd = max(0.001, max_drawdown)  # Avoid division by zero
-        calmar = cagr / dd if cagr > 0 else 0
+        if years > 0:
+            cagr = (1 + total_return) ** (1 / years) - 1 if total_return > -1 else -1.0
+            calmar = cagr / max(0.001, max_drawdown) if cagr > 0 else 0
 
         details.append(f"Period: {timeframe} x {num_bars} bars ({days_span} days)")
 
-    # Handle edge cases for other metrics
-    pf = max(0, profit_factor) if profit_factor != float("inf") else 10.0
-    s = max(0, sortino) if sortino and sortino != float("inf") else 0.0
+    # Clamp metrics
+    pf = 10.0 if profit_factor == float("inf") else max(0, profit_factor)
+    s = 0.0 if (sortino is None or sortino == float("inf")) else max(0, sortino)
     wr = max(0, min(1, win_rate))
     dd = max(0, min(1, max_drawdown))
 
@@ -195,7 +187,7 @@ def compute_composite_score(
 
     # Trades/year - quadratic curve penalizing both too few and too many
     trades_per_year = total_trades / years if years > 0 else total_trades
-    trades_score = quadratic(trades_per_year, target=TARGET_TRADES_PER_YEAR, delta=TRADES_DELTA)
+    trades_score = quadratic(trades_per_year, TARGET_TRADES_PER_YEAR, TRADES_DELTA)
     trades_min = TARGET_TRADES_PER_YEAR - TRADES_DELTA
     trades_max = TARGET_TRADES_PER_YEAR + TRADES_DELTA
 
@@ -217,10 +209,7 @@ def compute_composite_score(
     # === PENALTIES ===
 
     # Drawdown penalty: exponential decay past threshold
-    if dd <= DD_PENALTY_THRESHOLD:
-        dd_penalty = 1.0
-    else:
-        dd_penalty = math.exp(-DD_DECAY_RATE * (dd - DD_PENALTY_THRESHOLD))
+    dd_penalty = 1.0 if dd <= DD_PENALTY_THRESHOLD else math.exp(-DD_DECAY_RATE * (dd - DD_PENALTY_THRESHOLD))
     details.append(f"DD: {dd:.1%} → penalty {dd_penalty:.2f} [threshold: {DD_PENALTY_THRESHOLD:.0%}]")
 
     # Alpha penalty: penalize underperforming buy-hold
@@ -229,18 +218,92 @@ def compute_composite_score(
         alpha = total_return / buyhold_return
         if alpha < 1.0:
             # Soften on mega-trends
-            if buyhold_return > ALPHA_MEGATREND_THRESHOLD:
-                alpha_penalty = max(ALPHA_FLOOR_MEGATREND, math.sqrt(alpha))
-            else:
-                alpha_penalty = max(ALPHA_FLOOR_NORMAL, alpha)
+            floor = ALPHA_FLOOR_MEGATREND if buyhold_return > ALPHA_MEGATREND_THRESHOLD else ALPHA_FLOOR_NORMAL
+            alpha_penalty = max(floor, math.sqrt(alpha) if buyhold_return > ALPHA_MEGATREND_THRESHOLD else alpha)
         details.append(f"Alpha: {alpha:.2f}x buy-hold → penalty {alpha_penalty:.2f}")
 
     # Final composite
     composite = weighted_score * dd_penalty * alpha_penalty
+    penalty_str = f"{dd_penalty:.2f}" + (f" × {alpha_penalty:.2f}" if buyhold_return and buyhold_return > 0 else "")
+    details.append(f"Score: {weighted_score:.3f} × {penalty_str} = {composite:.3f}")
 
-    penalty_str = f"{dd_penalty:.2f}"
+    return composite, details
+
+
+def score_result(
+    result: "PaperExchangeResult",
+    buyhold_return: float | None = None,
+) -> tuple[float, list[str]]:
+    """Compute composite score from PaperExchangeResult.
+
+    Args:
+        result: Backtest result with metrics
+        buyhold_return: Buy-hold return for alpha comparison (optional)
+
+    Returns:
+        Tuple of (score 0-1, list of metric descriptions)
+    """
+    details = []
+
+    # Extract and clamp metrics
+    cagr = result.cagr or 0.0
+    calmar = result.calmar_ratio or 0.0
+    sortino = 0.0 if (result.sortino_ratio is None or result.sortino_ratio == float("inf")) else max(0, result.sortino_ratio)
+    pf = 10.0 if result.profit_factor == float("inf") else max(0, result.profit_factor)
+    wr = max(0, min(1, result.win_rate))
+    dd = max(0, min(1, result.max_drawdown))
+
+    # Period info
+    if result.start_time and result.end_time:
+        start = datetime.fromisoformat(result.start_time.replace("Z", "+00:00"))
+        end = datetime.fromisoformat(result.end_time.replace("Z", "+00:00"))
+        days_span = (end - start).days
+        details.append(f"Period: {days_span} days, {result.total_trades} trades ({result.trades_per_year:.0f}/yr)")
+
+    # Score components
+    cagr_score = asymptotic(max(0, cagr), TARGET_CAGR)
+    calmar_score = asymptotic(calmar, TARGET_CALMAR)
+    sortino_score = asymptotic(sortino, TARGET_SORTINO)
+    pf_score = asymptotic(pf, TARGET_PF)
+    wr_score = asymptotic(wr, TARGET_WR)
+    trades_score = quadratic(result.trades_per_year, TARGET_TRADES_PER_YEAR, TRADES_DELTA)
+
+    trades_min = TARGET_TRADES_PER_YEAR - TRADES_DELTA
+    trades_max = TARGET_TRADES_PER_YEAR + TRADES_DELTA
+
+    details.append(f"CAGR: {cagr:.1%} → {cagr_score:.2f} ({WEIGHT_CAGR:.0%}) [target: {TARGET_CAGR:.0%} for 0.50]")
+    details.append(f"Calmar: {calmar:.2f} → {calmar_score:.2f} ({WEIGHT_CALMAR:.0%}) [target: {TARGET_CALMAR} for 0.50]")
+    details.append(f"Sortino: {sortino:.2f} → {sortino_score:.2f} ({WEIGHT_SORTINO:.0%}) [target: {TARGET_SORTINO} for 0.50]")
+    details.append(f"PF: {pf:.2f} → {pf_score:.2f} ({WEIGHT_PF:.0%}) [target: {TARGET_PF} for 0.50]")
+    details.append(f"WR: {wr:.1%} → {wr_score:.2f} ({WEIGHT_WR:.0%}) [target: {TARGET_WR:.0%} for 0.50]")
+    details.append(f"Trades: {result.trades_per_year:.0f}/yr → {trades_score:.2f} ({WEIGHT_TRADES:.0%}) [target: {trades_min}-{trades_max}]")
+
+    # Weighted sum
+    weighted_score = (
+        WEIGHT_CAGR * cagr_score
+        + WEIGHT_CALMAR * calmar_score
+        + WEIGHT_SORTINO * sortino_score
+        + WEIGHT_PF * pf_score
+        + WEIGHT_WR * wr_score
+        + WEIGHT_TRADES * trades_score
+    )
+
+    # Drawdown penalty
+    dd_penalty = 1.0 if dd <= DD_PENALTY_THRESHOLD else math.exp(-DD_DECAY_RATE * (dd - DD_PENALTY_THRESHOLD))
+    details.append(f"DD: {dd:.1%} → penalty {dd_penalty:.2f} [threshold: {DD_PENALTY_THRESHOLD:.0%}]")
+
+    # Alpha penalty
+    alpha_penalty = 1.0
     if buyhold_return is not None and buyhold_return > 0:
-        penalty_str += f" × {alpha_penalty:.2f}"
+        alpha = result.total_return / buyhold_return
+        if alpha < 1.0:
+            floor = ALPHA_FLOOR_MEGATREND if buyhold_return > ALPHA_MEGATREND_THRESHOLD else ALPHA_FLOOR_NORMAL
+            alpha_penalty = max(floor, math.sqrt(alpha) if buyhold_return > ALPHA_MEGATREND_THRESHOLD else alpha)
+        details.append(f"Alpha: {alpha:.2f}x → penalty {alpha_penalty:.2f}")
+
+    # Final composite
+    composite = weighted_score * dd_penalty * alpha_penalty
+    penalty_str = f"{dd_penalty:.2f}" + (f" × {alpha_penalty:.2f}" if buyhold_return and buyhold_return > 0 else "")
     details.append(f"Score: {weighted_score:.3f} × {penalty_str} = {composite:.3f}")
 
     return composite, details

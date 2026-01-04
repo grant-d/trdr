@@ -73,7 +73,8 @@
       "Bash(BACKTEST_SYMBOL=crypto:ETH/USD BACKTEST_TIMEFRAME=15m timeout 120 python:*)",
       "mcp__plugin_compound-engineering_context7__resolve-library-id",
       "mcp__plugin_compound-engineering_context7__query-docs",
-      "WebFetch(domain:www.quantstart.com)"
+      "WebFetch(domain:www.quantstart.com)",
+      "Bash(.venv/bin/flake8:*)"
     ],
     "deny": []
   }

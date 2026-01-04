@@ -2,6 +2,13 @@
 
 import csv
 from dataclasses import asdict, dataclass
+
+# Max historical data available from Alpaca IEX feed (free tier).
+# IEX data starts from ~2020, Alpaca limit is ~7 years.
+# See: https://docs.alpaca.markets/docs/about-market-data-api
+#      https://alpaca.markets/data
+MAX_HISTORY_DAYS = 365 * 7  # 7 years
+
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -151,26 +158,27 @@ class MarketDataClient:
             if datetime.now(last_bar_time.tzinfo) - last_bar_time < timedelta(hours=1):
                 return cached_bars[-lookback:]
 
-        # Determine fetch start: overlap last 10 bars for restatement, or lookback days ago
+        # Determine fetch start: full history if insufficient, else overlap for restatement
         end = datetime.now(timezone.utc)
         restatement_overlap = 10
-        if cached_bars and len(cached_bars) > restatement_overlap:
-            # Fetch starting from 10 bars back to handle restatements
+
+        # Full fetch if: no cache, insufficient bars for lookback, or tiny cache
+        needs_full_fetch: bool = (
+            not cached_bars
+            or len(cached_bars) < lookback
+            or len(cached_bars) <= restatement_overlap
+        )
+
+        if needs_full_fetch:
+            start = end - timedelta(days=MAX_HISTORY_DAYS)
+            cached_bars = []
+        else:
+            # Fetch from 10 bars back to handle restatements
             overlap_ts = datetime.fromisoformat(
                 cached_bars[-restatement_overlap].timestamp.replace("Z", "+00:00")
             )
             start = overlap_ts
-            # Keep only bars before the overlap period
             cached_bars = cached_bars[:-restatement_overlap]
-        else:
-            # No cache - fetch max available history (7 years)
-            # The IEX feed (free tier) has data starting from ~2020.
-            # - https://docs.alpaca.markets/docs/about-market-data-api
-            # - https://alpaca.markets/data
-            start = end - timedelta(days=365 * 5)  # Alpaca limit is 7y
-
-            if cached_bars:
-                cached_bars = []
 
         # Only fetch if start is before end
         new_bars = []

@@ -1,5 +1,5 @@
 {
-  "benchmark_cmd": "BACKTEST_SYMBOL={symbol} BACKTEST_TIMEFRAME={timeframe} python src/trdr/strategy/volume_area_breakout/sica_bench.py",
+  "benchmark_cmd": "BACKTEST_SYMBOL={symbol} BACKTEST_TIMEFRAME={timeframe} BACKTEST_LOOKBACK={lookback} python src/trdr/strategy/volume_area_breakout/sica_bench.py",
   "max_iterations": 20,
   "target_score": 1.0,
   "benchmark_timeout": 300,
@@ -11,6 +11,7 @@
   ],
   "params": {
     "symbol": "stock:AAPL",
-    "timeframe": "1d"
+    "timeframe": "1d",
+    "lookback": "1000"
   }
 }

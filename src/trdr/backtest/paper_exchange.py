@@ -44,7 +44,7 @@ class PaperExchangeConfig:
     transaction_cost_pct: float = 0.0025
     slippage_pct: float = 0.001
     default_position_pct: float = 1.0
-    initial_capital: float = 10000.0
+    initial_capital: float = 10_000.0
 
     @property
     def asset_type(self) -> str:
@@ -157,10 +157,9 @@ class PaperExchangeResult:
         peak = self.equity_curve[0]
         max_dd = 0.0
         for equity in self.equity_curve:
-            if equity > peak:
-                peak = equity
-            dd = (peak - equity) / peak if peak > 0 else 1.0
-            max_dd = max(max_dd, min(dd, 1.0))
+            peak = max(peak, equity)
+            if peak > 0:
+                max_dd = max(max_dd, min((peak - equity) / peak, 1.0))
         return max_dd
 
     @property
@@ -177,6 +176,140 @@ class PaperExchangeResult:
             return None
         days = get_trading_days_in_year(self.config.asset_type)
         return float(np.mean(returns) / downside_std * np.sqrt(days))
+
+    @property
+    def sharpe_ratio(self) -> float | None:
+        """Annualized Sharpe ratio (assumes 0 risk-free rate)."""
+        if len(self.trades) < 2:
+            return None
+        returns = [t.net_pnl / (t.entry_price * t.quantity) for t in self.trades]
+        std = np.std(returns)
+        if std == 0:
+            return float("inf") if np.mean(returns) > 0 else None
+        days = get_trading_days_in_year(self.config.asset_type)
+        return float(np.mean(returns) / std * np.sqrt(days))
+
+    @property
+    def calmar_ratio(self) -> float | None:
+        """Calmar ratio: CAGR / max drawdown."""
+        cagr = self.cagr
+        max_dd = self.max_drawdown
+        if cagr is None or max_dd == 0:
+            return float("inf") if cagr and cagr > 0 else None
+        return cagr / max_dd
+
+    @property
+    def total_return(self) -> float:
+        """Total return as decimal (0.10 = 10%)."""
+        if not self.equity_curve:
+            return 0.0
+        initial = self.config.initial_capital
+        final = self.equity_curve[-1]
+        return (final - initial) / initial if initial > 0 else 0.0
+
+    @property
+    def cagr(self) -> float | None:
+        """Compound Annual Growth Rate."""
+        if not self.equity_curve or not self.start_time or not self.end_time:
+            return None
+        initial = self.config.initial_capital
+        final = self.equity_curve[-1]
+        if initial <= 0 or final <= 0:
+            return None
+
+        # Calculate years between start and end
+        start = datetime.fromisoformat(self.start_time.replace("Z", "+00:00"))
+        end = datetime.fromisoformat(self.end_time.replace("Z", "+00:00"))
+        years = (end - start).total_seconds() / (365.25 * 24 * 3600)
+        if years <= 0:
+            return None
+
+        return float((final / initial) ** (1 / years) - 1)
+
+    @property
+    def avg_trade_pnl(self) -> float:
+        """Average P&L per trade."""
+        if not self.trades:
+            return 0.0
+        return self.total_pnl / self.total_trades
+
+    @property
+    def avg_win(self) -> float:
+        """Average winning trade P&L."""
+        winners = [t.net_pnl for t in self.trades if t.net_pnl > 0]
+        return float(np.mean(winners)) if winners else 0.0
+
+    @property
+    def avg_loss(self) -> float:
+        """Average losing trade P&L (negative value)."""
+        losers = [t.net_pnl for t in self.trades if t.net_pnl < 0]
+        return float(np.mean(losers)) if losers else 0.0
+
+    @property
+    def largest_win(self) -> float:
+        """Largest single winning trade."""
+        winners = [t.net_pnl for t in self.trades if t.net_pnl > 0]
+        return max(winners) if winners else 0.0
+
+    @property
+    def largest_loss(self) -> float:
+        """Largest single losing trade (negative value)."""
+        losers = [t.net_pnl for t in self.trades if t.net_pnl < 0]
+        return min(losers) if losers else 0.0
+
+    @property
+    def avg_trade_duration_hours(self) -> float:
+        """Average trade duration in hours."""
+        if not self.trades:
+            return 0.0
+        return float(np.mean([t.duration_hours for t in self.trades]))
+
+    @property
+    def max_consecutive_wins(self) -> int:
+        """Maximum consecutive winning trades."""
+        if not self.trades:
+            return 0
+        max_streak, current = 0, 0
+        for t in self.trades:
+            current = (current + 1) if t.is_winner else 0
+            max_streak = max(max_streak, current)
+        return max_streak
+
+    @property
+    def max_consecutive_losses(self) -> int:
+        """Maximum consecutive losing trades."""
+        if not self.trades:
+            return 0
+        max_streak, current = 0, 0
+        for t in self.trades:
+            current = (current + 1) if not t.is_winner else 0
+            max_streak = max(max_streak, current)
+        return max_streak
+
+    @property
+    def expectancy(self) -> float:
+        """Expected value per trade: (WR * avg_win) + ((1-WR) * avg_loss)."""
+        if not self.trades:
+            return 0.0
+        wr = self.win_rate
+        return (wr * self.avg_win) + ((1 - wr) * self.avg_loss)
+
+    @property
+    def trades_per_year(self) -> float:
+        """Annualized trade frequency."""
+        if not self.trades or not self.start_time or not self.end_time:
+            return 0.0
+        start = datetime.fromisoformat(self.start_time.replace("Z", "+00:00"))
+        end = datetime.fromisoformat(self.end_time.replace("Z", "+00:00"))
+        years = (end - start).total_seconds() / (365.25 * 24 * 3600)
+        if years <= 0:
+            return 0.0
+        return self.total_trades / years
+
+    @property
+    def total_costs(self) -> float:
+        """Total transaction costs across all trades."""
+        return sum(t.costs for t in self.trades)
 
 
 class PaperExchange:

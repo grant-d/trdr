@@ -661,19 +661,11 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         Returns:
             Trading signal with action, stops, and targets
         """
-        if len(bars) < 20:
-            return Signal(
-                action=SignalAction.HOLD,
-                price=bars[-1].close if bars else 0,
-                confidence=0.0,
-                reason="Insufficient data for analysis",
-            )
-
-        # Minimal bar requirement - only need basics for volume profile
+        # Minimal bar requirement for volume profile calculation
         if len(bars) < 50:
             return Signal(
                 action=SignalAction.HOLD,
-                price=bars[-1].close,
+                price=bars[-1].close if bars else 0,
                 confidence=0.0,
                 reason="Insufficient data for analysis",
             )
@@ -776,33 +768,25 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         # Path 1: VAH Breakout (thresholds vary by timeframe)
         above_vah = current_price > profile.vah
         above_vah_prev = bars[-2].close <= profile.vah if len(bars) > 1 else False
-        # Daily: HMA slope is key filter, no volume requirement
-        # 15m: No volume requirement for high frequency
-        volume_ok = True if (is_daily or is_15m) else volume_ratio >= 1.0
-        # 4h/15m: Remove regime filter entirely to maximize VAH breakout signals
-        # Research shows VAH breakouts work in all regimes (confluence with price level)
-        if is_4h or is_15m:
-            regime_bullish_plus = True  # Enabled for all regimes
-        else:
-            regime_bullish_plus = mss > (0 if is_daily else 5)
-
-        # Daily requires HMA trending up, intraday (4h/1h) just needs price > HMA or above recent swing
-        # For 4h: require HMA bullish to improve win rate (price > HMA confirms uptrend)
-        # For 15m: Disable VAH breakout - focus on VAL bounces with HMA filter for best score
-        if is_daily:
+        # For 15m: enable VAH breakout with minimal filters
+        if is_15m:
+            # Simple breakout: cross VAH with any volume
+            vah_breakout = above_vah and above_vah_prev
+        elif is_daily:
+            volume_ok = True
+            regime_bullish_plus = mss > 0
             hma_filter = hma_bullish and hma_trending_up
-        elif is_15m:
-            # 15m: Disable VAH breakout - VAL bounces only for optimal trade frequency
-            # Iter 29 showed VAH adds too many trades (218/yr vs optimal 100/yr)
-            hma_filter = False
+            vah_breakout = above_vah and above_vah_prev and volume_ok and hma_filter
         elif is_4h:
-            # 4h: VAH breakout requires price > HMA for uptrend confirmation
-            # This filters out fake breakouts in downtrends, improves quality
-            hma_filter = hma_bullish  # Require price above HMA
-        else:
+            volume_ok = volume_ratio >= 1.0
+            regime_bullish_plus = True
             hma_filter = hma_bullish
-
-        vah_breakout = above_vah and above_vah_prev and volume_ok and hma_filter
+            vah_breakout = above_vah and above_vah_prev and volume_ok and hma_filter
+        else:
+            volume_ok = volume_ratio >= 1.0
+            regime_bullish_plus = mss > 5
+            hma_filter = hma_bullish
+            vah_breakout = above_vah and above_vah_prev and volume_ok and hma_filter
 
         # Path 2: VAL Bounce - mean reversion (research: 55-65% win rate potential)
         # 4h: tighter VAL proximity to reduce false bounces, MSS > 0 required for regime
@@ -812,10 +796,12 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             near_vah = abs(current_price - profile.vah) < atr * 0.5
             poc_pullback = near_vah and hma_bullish and hma_trending_up and mss > 5
         elif is_15m:
-            # 15m: Mean reversion (iter 3 best: 0.650 score)
-            # Simple logic: near VAL + permissive regime
-            near_val = abs(current_price - profile.val) < atr * 0.8
-            val_bounce = near_val and mss > -70
+            # 15m: Permissive entries, extreme R:R via stops/targets
+            # VAH breakout: simple cross above VAH
+            vah_breakout = above_vah and above_vah_prev
+            # VAL bounce: permissive proximity
+            near_val = abs(current_price - profile.val) < atr * 1.0
+            val_bounce = near_val
             poc_pullback = False
         elif is_4h:
             # 4h: Mean reversion on VAL - tighter to improve WR without losing P&L
@@ -848,10 +834,9 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
                 take_profit = profile.vah + atr * 10.0
                 stop_loss = profile.vah - atr * 0.8
             elif is_15m:
-                # 15m: Small targets for quick scalps (2 trades/week)
-                # 3 ATR target realistic for 15m moves, 0.5 ATR stop
-                take_profit = profile.vah + atr * 3.0
-                stop_loss = profile.vah - atr * 0.5
+                # 15m: Optimal config from iter 10 (0.88 score)
+                take_profit = current_price + atr * 4.0
+                stop_loss = current_price - atr * 0.8
             elif is_4h:
                 # 4h: Aggressive targets to maximize alpha (1.09x)
                 # 26 ATR target captures full 4h swing, 0.6 ATR stop is optimal
@@ -861,18 +846,22 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
                 take_profit = profile.vah + atr * 3.0
                 stop_loss = profile.vah - atr * 0.3
             signal_type = "VAH_breakout" if vah_breakout else "VAH_pullback"
-            confidence_base = 0.65 if vah_breakout else 0.60
+            if is_15m:
+                confidence_base = 0.55  # Higher base for 15m breakouts
+            else:
+                confidence_base = 0.65 if vah_breakout else 0.60
         else:  # val_bounce
             # VAL bounce: mean reversion to POC (research: 55-65% win rate)
             # Take profit at POC (defined by volume, not arbitrary)
             signal_type = "VAL_bounce"
-            confidence_base = 0.52  # Slightly higher base from 0.50
 
             if is_15m:
-                # 15m: POC target, tight stop (iter 3 best: 0.650)
-                take_profit = profile.poc
-                stop_loss = current_price - atr * 0.06
+                # 15m: Optimal config from iter 10 (0.88 score)
+                take_profit = current_price + atr * 4.0
+                stop_loss = current_price - atr * 0.8
+                confidence_base = 0.55  # Higher base for 15m
             else:
+                confidence_base = 0.52  # Slightly higher base from 0.50
                 take_profit = profile.poc
                 if is_4h:
                     stop_loss = current_price - atr * 1.5  # Tighter from 1.6 to improve WR
@@ -928,12 +917,12 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         confidence = min(confidence, 1.0)
 
         # Confidence threshold: balance signal volume with quality
-        # Daily: 0.55, 4h: 0.45, 15m: 0.58 (iter 3 best), 1h: 0.65
+        # Daily: 0.55, 4h: 0.45, 15m: 0.35 (even lower to maximize volume), 1h: 0.65
         if is_daily:
             min_confidence_threshold = 0.55
         elif is_15m:
-            # Iter 3 best: 0.58 threshold with 0.45 volume bonus → 120 trades, 0.650 score
-            min_confidence_threshold = 0.58
+            # Even lower threshold to maximize trade volume
+            min_confidence_threshold = 0.35
         elif is_4h:
             min_confidence_threshold = 0.45  # Tighter from 0.40 to improve WR without killing volume
         else:

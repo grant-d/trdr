@@ -1,5 +1,5 @@
 {
-  "benchmark_cmd": "BACKTEST_SYMBOL={symbol} BACKTEST_TIMEFRAME={timeframe} python src/trdr/strategy/volume_area_breakout/sica_bench.py",
+  "benchmark_cmd": "BACKTEST_SYMBOL={symbol} BACKTEST_TIMEFRAME={timeframe} BACKTEST_LOOKBACK={lookback} python src/trdr/strategy/volume_area_breakout/sica_bench.py",
   "max_iterations": 50,
   "target_score": 0.85,
   "benchmark_timeout": 120,
@@ -11,6 +11,7 @@
   ],
   "params": {
     "symbol": "crypto:ETH/USD",
-    "timeframe": "4h"
+    "timeframe": "4h",
+    "lookback": "1000"
   }
 }

@@ -12,77 +12,27 @@ Run with:
 """
 
 import asyncio
-import math
-import os
-import re
 from pathlib import Path
 
 import pytest
-from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
-from dotenv import load_dotenv
 
 from trdr.backtest import PaperExchange, PaperExchangeConfig, PaperExchangeResult
 from trdr.core import load_config
 from trdr.data import MarketDataClient
-from trdr.strategy import VolumeAreaBreakoutConfig, VolumeAreaBreakoutStrategy
+from trdr.strategy import VolumeAreaBreakoutConfig, VolumeAreaBreakoutStrategy, get_backtest_env
+from trdr.strategy.score import score_result
 
-# Load .env for BACKTEST_* vars
-load_dotenv()
-
-
-def get_symbol() -> str:
-    """Get symbol from env var. Default: crypto:BTC/USD."""
-    return os.environ.get("BACKTEST_SYMBOL", "crypto:BTC/USD")
-
-
-def get_timeframe_str() -> str:
-    """Get timeframe string from env var. Default: 1h."""
-    return os.environ.get("BACKTEST_TIMEFRAME", "1h").lower().strip()
+# Read env vars once at module load
+SYMBOL, TIMEFRAME_STR, TIMEFRAME, _ = get_backtest_env(
+    default_symbol="crypto:BTC/USD",
+    default_timeframe="1h",
+)
 
 
-def get_timeframe() -> TimeFrame:
-    """Get timeframe from env var as Alpaca TimeFrame.
-
-    Supports Alpaca syntax: 1h, 4h, 15m, 1d, etc.
-    Also supports simple names: hour, day, minute (defaults to 1x).
-    Note: Day only supports amount=1 (Alpaca constraint).
-    Default: 1h (hourly).
-    """
-    tf = get_timeframe_str()
-
-    # Map unit suffix to TimeFrameUnit
-    unit_map = {
-        "m": TimeFrameUnit.Minute,
-        "min": TimeFrameUnit.Minute,
-        "minute": TimeFrameUnit.Minute,
-        "h": TimeFrameUnit.Hour,
-        "hour": TimeFrameUnit.Hour,
-        "d": TimeFrameUnit.Day,
-        "day": TimeFrameUnit.Day,
-    }
-
-    # Try parsing "NNx" format (e.g., "4h", "15m", "1d")
-    match = re.match(r"^(\d+)([a-z]+)$", tf)
-    if match:
-        amount = int(match.group(1))
-        unit_str = match.group(2)
-        unit = unit_map.get(unit_str)
-        if unit:
-            # Alpaca constraint: Day only allows amount=1
-            if unit == TimeFrameUnit.Day and amount != 1:
-                amount = 1
-            return TimeFrame(amount, unit)
-
-    # Fallback: simple name (e.g., "hour" -> 1h)
-    unit = unit_map.get(tf)
-    if unit:
-        return TimeFrame(1, unit)
-
-    # Default to 1 hour
-    return TimeFrame.Hour
-
-
-@pytest.fixture(scope="module")
+# IMPORTANT: MUST use scope="function" NOT "module"!
+# "module" caches results and WON'T pick up strategy code changes.
+# This cost hours of debugging. Do NOT change it back.
+@pytest.fixture(scope="function")
 def event_loop():
     """Create event loop for async fixtures."""
     loop = asyncio.new_event_loop()
@@ -90,42 +40,50 @@ def event_loop():
     loop.close()
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def bars(event_loop):
-    """Fetch bars for backtesting."""
-    symbol = get_symbol()
-    timeframe = get_timeframe()
+    """Fetch historical bars for backtesting.
 
+    This fetches data once and reuses across all tests.
+    Adjust lookback based on strategy's data requirements.
+    """
     async def fetch():
         config = load_config()
         client = MarketDataClient(config.alpaca, Path("data/cache"))
-        bars = await client.get_bars(symbol, lookback=3000, timeframe=timeframe)
+        bars = await client.get_bars(SYMBOL, lookback=3000, timeframe=TIMEFRAME)
         return bars
 
     return event_loop.run_until_complete(fetch())
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def strategy():
-    """Create strategy with config from env vars."""
-    symbol = get_symbol()
-    timeframe = get_timeframe_str()
+    """Create strategy instance with config.
 
+    Set strategy-specific parameters here.
+    These should match reasonable defaults or test values.
+    """
     config = VolumeAreaBreakoutConfig(
-        symbol=symbol,
-        timeframe=timeframe,
+        symbol=SYMBOL,
+        timeframe=TIMEFRAME_STR,
         atr_threshold=2.0,
         stop_loss_multiplier=1.75,
     )
     return VolumeAreaBreakoutStrategy(config)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def backtest_config():
-    """Paper exchange configuration (no strategy params)."""
-    symbol = get_symbol()
+    """Paper exchange configuration.
+
+    Engine-level settings (not strategy settings):
+    - warmup_bars: Bars before strategy can generate signals
+    - transaction_cost_pct: Simulated trading costs
+    - slippage_pct: Simulated slippage as % of price
+    - default_position_pct: Position size as % of equity
+    """
     return PaperExchangeConfig(
-        symbol=symbol,
+        symbol=SYMBOL,
         warmup_bars=65,
         transaction_cost_pct=0.0025,
         slippage_pct=0.01,
@@ -133,7 +91,7 @@ def backtest_config():
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def backtest_result(bars, backtest_config, strategy) -> PaperExchangeResult:
     """Run single backtest with Volume Profile strategy."""
     engine = PaperExchange(backtest_config, strategy)
@@ -146,38 +104,19 @@ def backtest_result(bars, backtest_config, strategy) -> PaperExchangeResult:
     print(f"Strategy: {strategy.name}")
     print(f"Symbol: {strategy.config.symbol}")
     print(f"Timeframe: {strategy.config.timeframe}")
-    print(f"Trades: {result.total_trades}")
+    print(f"Trades: {result.total_trades} ({result.trades_per_year:.0f}/yr)")
     print(f"Win Rate: {result.win_rate:.1%}")
     print(f"Profit Factor: {result.profit_factor:.2f}")
     print(f"Total P&L: ${result.total_pnl:.2f}")
+    print(f"CAGR: {result.cagr:.1%}" if result.cagr else "CAGR: N/A")
     print(f"Max Drawdown: {result.max_drawdown:.1%}")
+    print(f"Sharpe: {result.sharpe_ratio:.2f}" if result.sharpe_ratio else "Sharpe: N/A")
     print(f"Sortino: {result.sortino_ratio:.2f}" if result.sortino_ratio else "Sortino: N/A")
+    print(f"Calmar: {result.calmar_ratio:.2f}" if result.calmar_ratio else "Calmar: N/A")
 
-    # Composite score for SICA ranking (0-1 scale)
-    # Uses asymptotic scaling: score = x / (x + k) where k = target value
-    # This gives 0.5 at target, approaches 1.0 asymptotically, handles inf
-
-    def asymptotic(x: float, k: float) -> float:
-        """Score 0-1 where x=k gives 0.5, x=inf gives 1.0."""
-        if x <= 0 or math.isinf(x):
-            return 1.0 if x > 0 or math.isinf(x) else 0.0
-        return x / (x + k)
-
-    # Weights: WR 25%, PF 25%, DD 25%, Sortino 25%
-    wr_score = min(result.win_rate / 0.60, 1.0)  # linear cap at 60%
-    pf_score = asymptotic(result.profit_factor, 2.0)  # PF=2 → 0.5, PF=inf → 1.0
-    dd_score = max(0, 1 - result.max_drawdown / 0.30)  # 0% DD = 1.0, 30% = 0
-
-    sortino = max(0, result.sortino_ratio or 0)
-    sortino_score = asymptotic(sortino, 2.0)  # Sortino=2 → 0.5
-
-    composite = (
-        0.25 * wr_score
-        + 0.25 * pf_score
-        + 0.25 * dd_score
-        + 0.25 * sortino_score
-    )
-    print(f"SICA_SCORE: {composite:.3f}")
+    # Use centralized scoring
+    score, details = score_result(result)
+    print(f"SICA_SCORE: {score:.3f}")
     print(f"{'='*50}\n")
 
     return result
@@ -239,23 +178,20 @@ def print_results():
     """Helper to print detailed results."""
 
     async def run():
-        symbol = get_symbol()
-        timeframe = get_timeframe()
-
         config = load_config()
         client = MarketDataClient(config.alpaca, Path("data/cache"))
-        bars = await client.get_bars(symbol, lookback=3000, timeframe=timeframe)
+        bars = await client.get_bars(SYMBOL, lookback=3000, timeframe=TIMEFRAME)
 
         strategy_config = VolumeAreaBreakoutConfig(
-            symbol=symbol,
-            timeframe=get_timeframe_str(),
+            symbol=SYMBOL,
+            timeframe=TIMEFRAME_STR,
             atr_threshold=2.0,
             stop_loss_multiplier=1.75,
         )
         strategy = VolumeAreaBreakoutStrategy(strategy_config)
 
         bt_config = PaperExchangeConfig(
-            symbol=symbol,
+            symbol=SYMBOL,
             warmup_bars=65,
             transaction_cost_pct=0.0025,
             default_position_pct=1.0,

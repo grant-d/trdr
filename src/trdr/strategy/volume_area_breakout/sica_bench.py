@@ -18,7 +18,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent.parent.parent
 sys.path.insert(0, str(project_root / "src"))
 
-from trdr.strategy.score import compute_composite_score
+from trdr.strategy.score import score_result
 
 
 def reload_strategy():
@@ -34,33 +34,24 @@ def reload_strategy():
     return VolumeAreaBreakoutConfig, VolumeAreaBreakoutStrategy
 
 
-async def get_bars(symbol: str, timeframe: str, lookback: int = 10000):
+async def get_bars(symbol: str, timeframe: str, lookback: int):
     """Fetch bars from market data client."""
+    from trdr.backtest import parse_timeframe
     from trdr.core import load_config
     from trdr.data import MarketDataClient
     from trdr.data.market import Symbol
-    from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
 
     config = load_config()
     client = MarketDataClient(config.alpaca, Path(project_root / "data/cache"))
     sym = Symbol.parse(symbol)
 
     # Parse timeframe
-    tf_map = {
-        "1d": TimeFrame(1, TimeFrameUnit.Day),
-        "d": TimeFrame(1, TimeFrameUnit.Day),
-        "day": TimeFrame(1, TimeFrameUnit.Day),
-        "1h": TimeFrame(1, TimeFrameUnit.Hour),
-        "4h": TimeFrame(4, TimeFrameUnit.Hour),
-        "15m": TimeFrame(15, TimeFrameUnit.Minute),
-        "15min": TimeFrame(15, TimeFrameUnit.Minute),
-    }
-    tf = tf_map.get(timeframe.lower(), TimeFrame(1, TimeFrameUnit.Day))
+    tf = parse_timeframe(timeframe)
 
     return await client.get_bars(sym, lookback, tf)
 
 
-def run_backtest(symbol: str, timeframe: str):
+def run_backtest(symbol: str, timeframe: str, lookback: int):
     """Run backtest and return results plus buy-hold info."""
     # Force reimport to pick up code changes
     Config, Strategy = reload_strategy()
@@ -68,7 +59,7 @@ def run_backtest(symbol: str, timeframe: str):
     from trdr.backtest import PaperExchange, PaperExchangeConfig
 
     # Get bars
-    bars = asyncio.run(get_bars(symbol, timeframe))
+    bars = asyncio.run(get_bars(symbol, timeframe, lookback))
 
     # Calculate buy-hold return
     initial_capital = 10000
@@ -96,38 +87,27 @@ def run_backtest(symbol: str, timeframe: str):
 def main():
     symbol = os.environ.get("BACKTEST_SYMBOL", "stock:AAPL")
     timeframe = os.environ.get("BACKTEST_TIMEFRAME", "1d")
+    lookback = int(os.environ.get("BACKTEST_LOOKBACK", "1000"))
 
-    result, initial_capital, buyhold_return, bars = run_backtest(symbol, timeframe)
+    result, initial_capital, buyhold_return, bars = run_backtest(symbol, timeframe, lookback)
 
-    # Get metrics
-    sortino = result.sortino_ratio
-
-    # Compute composite score with buy-hold comparison
-    score, details = compute_composite_score(
-        profit_factor=result.profit_factor,
-        sortino=sortino,
-        pnl=result.total_pnl,
-        win_rate=result.win_rate,
-        max_drawdown=result.max_drawdown,
-        total_trades=result.total_trades,
-        initial_capital=initial_capital,
-        buyhold_return=buyhold_return,
-        timeframe=timeframe,
-        bars=bars,
-    )
+    # Compute composite score (uses metrics from result directly)
+    score, details = score_result(result, buyhold_return)
 
     # Print summary
     print("=" * 50)
     print("BACKTEST SUMMARY")
     print("=" * 50)
     print(f"Symbol: {symbol}")
-    print(f"Trades: {result.total_trades}")
+    print(f"Trades: {result.total_trades} ({result.trades_per_year:.0f}/yr)")
     print(f"Win Rate: {result.win_rate:.1%}")
     print(f"Profit Factor: {result.profit_factor:.2f}")
     print(f"Total P&L: ${result.total_pnl:.2f}")
+    print(f"CAGR: {result.cagr:.1%}" if result.cagr else "CAGR: N/A")
     print(f"Buy-Hold P&L: ${initial_capital * buyhold_return:,.2f}")
-    sortino_str = f"{sortino:.2f}" if sortino and sortino != float("inf") else str(sortino)
-    print(f"Sortino: {sortino_str}")
+    print(f"Sharpe: {result.sharpe_ratio:.2f}" if result.sharpe_ratio else "Sharpe: N/A")
+    print(f"Sortino: {result.sortino_ratio:.2f}" if result.sortino_ratio else "Sortino: N/A")
+    print(f"Calmar: {result.calmar_ratio:.2f}" if result.calmar_ratio else "Calmar: N/A")
     print(f"Max Drawdown: {result.max_drawdown:.1%}")
     print("=" * 50)
 

@@ -1,20 +1,14 @@
-"""Backtest tests for MACD strategy - TEMPLATE for strategy tests.
+"""Backtest tests for MACD strategy.
 
-This test file demonstrates the pattern for testing strategies:
-1. Define fixtures for data, strategy, and backtest config
-2. Run backtest once (module-scoped fixtures)
-3. Assert on results
+Strategy: MACD crossover with signal line.
+Tests MACDStrategy from trdr.strategy.
 
 These tests are for normal development/CI. Feel free to modify thresholds
 as needed. SICA uses sica_bench.py instead (which should NOT be modified).
 
-To create tests for a new strategy:
-1. Copy this file to your strategy folder
-2. Update imports and constants
-3. Adjust assertions for your strategy's expected behavior
-
 Run with:
-    .venv/bin/python -m pytest src/trdr/strategy/macd_template/test_strategy.py -v
+  .venv/bin/python -m pytest src/trdr/strategy/macd_template/test_strategy.py -v
+  BACKTEST_SYMBOL=stock:AAPL BACKTEST_TIMEFRAME=1d .venv/bin/python -m pytest ... -v
 """
 
 import asyncio
@@ -25,27 +19,20 @@ import pytest
 from trdr.backtest import PaperExchange, PaperExchangeConfig, PaperExchangeResult
 from trdr.core import load_config
 from trdr.data import MarketDataClient
-from trdr.strategy import MACDConfig, MACDStrategy
+from trdr.strategy import MACDConfig, MACDStrategy, get_backtest_env
+from trdr.strategy.score import score_result
+
+# Read env vars once at module load
+SYMBOL, TIMEFRAME_STR, TIMEFRAME, _ = get_backtest_env(
+    default_symbol="crypto:ETH/USD",
+    default_timeframe="4h",
+)
 
 
-# =============================================================================
-# STEP 1: Define constants
-# =============================================================================
-# Set symbol and timeframe for this strategy's tests
-# Use different values than other strategies to verify decoupling
-
-SYMBOL = "crypto:ETH/USD"
-TIMEFRAME = "4h"
-
-
-# =============================================================================
-# STEP 2: Define fixtures
-# =============================================================================
-# Fixtures are shared across all tests in this file
-# Use scope="module" to run expensive operations (data fetch, backtest) once
-
-
-@pytest.fixture(scope="module")
+# IMPORTANT: MUST use scope="function" NOT "module"!
+# "module" caches results and WON'T pick up strategy code changes.
+# This cost hours of debugging. Do NOT change it back.
+@pytest.fixture(scope="function")
 def event_loop():
     """Create event loop for async fixtures."""
     loop = asyncio.new_event_loop()
@@ -53,31 +40,22 @@ def event_loop():
     loop.close()
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def bars(event_loop):
     """Fetch historical bars for backtesting.
 
     This fetches data once and reuses across all tests.
     Adjust lookback based on strategy's data requirements.
     """
-    from alpaca.data.timeframe import TimeFrame
-
     async def fetch():
         config = load_config()
         client = MarketDataClient(config.alpaca, Path("data/cache"))
-        bars = await client.get_bars(
-            SYMBOL,
-            lookback=1000,  # Adjust based on strategy needs
-            timeframe=TimeFrame(4, TimeFrame.Hour.unit),
-        )
+        bars = await client.get_bars(SYMBOL, lookback=1000, timeframe=TIMEFRAME)
         return bars
 
     return event_loop.run_until_complete(fetch())
 
 
-# IMPORTANT: scope="function" NOT "module"!
-# "module" caches results and WON'T pick up strategy code changes.
-# This cost hours of debugging. Do NOT change it back.
 @pytest.fixture(scope="function")
 def strategy():
     """Create strategy instance with config.
@@ -87,16 +65,16 @@ def strategy():
     """
     config = MACDConfig(
         symbol=SYMBOL,
-        timeframe=TIMEFRAME,
+        timeframe=TIMEFRAME_STR,
         fast_period=12,
         slow_period=26,
         signal_period=9,
-        stop_loss_pct=0.03,  # 3% stop
+        stop_loss_pct=0.03,
     )
     return MACDStrategy(config)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def backtest_config():
     """Paper exchange configuration.
 
@@ -117,76 +95,139 @@ def backtest_config():
 
 @pytest.fixture(scope="function")
 def backtest_result(bars, backtest_config, strategy) -> PaperExchangeResult:
-    """Run backtest and return results."""
+    """Run single backtest with MACD strategy."""
     engine = PaperExchange(backtest_config, strategy)
     result = engine.run(bars)
 
-    # Print summary for visibility
+    # Print summary for LLM visibility
     print(f"\n{'='*50}")
-    print(f"{strategy.name} BACKTEST SUMMARY")
+    print("BACKTEST SUMMARY")
     print(f"{'='*50}")
+    print(f"Strategy: {strategy.name}")
     print(f"Symbol: {strategy.config.symbol}")
     print(f"Timeframe: {strategy.config.timeframe}")
-    print(f"Trades: {result.total_trades}")
+    print(f"Trades: {result.total_trades} ({result.trades_per_year:.0f}/yr)")
     print(f"Win Rate: {result.win_rate:.1%}")
     print(f"Profit Factor: {result.profit_factor:.2f}")
     print(f"Total P&L: ${result.total_pnl:.2f}")
+    print(f"CAGR: {result.cagr:.1%}" if result.cagr else "CAGR: N/A")
     print(f"Max Drawdown: {result.max_drawdown:.1%}")
+    print(f"Sharpe: {result.sharpe_ratio:.2f}" if result.sharpe_ratio else "Sharpe: N/A")
+    print(f"Sortino: {result.sortino_ratio:.2f}" if result.sortino_ratio else "Sortino: N/A")
+    print(f"Calmar: {result.calmar_ratio:.2f}" if result.calmar_ratio else "Calmar: N/A")
+
+    # Use centralized scoring
+    score, details = score_result(result)
+    print(f"SICA_SCORE: {score:.3f}")
     print(f"{'='*50}\n")
 
     return result
 
 
-# =============================================================================
-# STEP 3: Write tests
-# =============================================================================
-# Test categories:
-# - Basic sanity checks (strategy name, config)
-# - Functional tests (generates trades, uses correct signals)
-# - Performance tests (win rate, profit factor) - optional for templates
+class TestAlgoPerformance:
+    """Sanity checks for MACD strategy.
 
-
-class TestMACDStrategy:
-    """Tests for MACD strategy.
-
-    For a template strategy, focus on:
-    - Verifying the abstraction works
-    - Basic sanity checks
-
-    For production strategies, add:
-    - Performance thresholds (win rate, profit factor)
-    - Robustness checks (max drawdown, losing streaks)
+    These are NOT performance gates - SICA uses sica_bench.py for that.
+    These just verify the backtest runs and produces valid metrics.
     """
 
-    def test_strategy_name(self, strategy):
-        """Strategy has correct name."""
-        assert strategy.name == "MACD"
+    def test_has_trades(self, backtest_result):
+        """Strategy generates trades."""
+        total = backtest_result.total_trades
+        assert total >= 1, f"No trades generated"
 
-    def test_strategy_config(self, strategy):
-        """Strategy config has expected values."""
-        assert strategy.config.symbol == SYMBOL
-        assert strategy.config.timeframe == TIMEFRAME
-        assert strategy.config.fast_period == 12
-        assert strategy.config.slow_period == 26
+    def test_win_rate_valid(self, backtest_result):
+        """Win rate is valid (0-1 range)."""
+        if backtest_result.total_trades == 0:
+            pytest.skip("No trades to evaluate")
+        wr = backtest_result.win_rate
+        assert 0.0 <= wr <= 1.0, f"Win rate {wr:.1%} out of range"
 
-    def test_generates_trades(self, backtest_result):
-        """Strategy generates trades (basic sanity check).
+    def test_profit_factor_computed(self, backtest_result):
+        """Profit factor is computed (non-negative)."""
+        if backtest_result.total_trades == 0:
+            pytest.skip("No trades to evaluate")
+        pf = backtest_result.profit_factor
+        assert pf >= 0.0, f"Profit factor {pf:.2f} is negative"
 
-        For templates, just verify it runs without error.
-        For production, set minimum trade thresholds.
-        """
-        # Template: just verify it works
-        assert backtest_result.total_trades >= 0
+    def test_sortino_computed(self, backtest_result):
+        """Sortino ratio is computed."""
+        sortino = backtest_result.sortino_ratio
+        # Just verify it's a number (can be negative)
+        assert sortino is None or isinstance(sortino, (int, float))
 
-        # Production example:
-        # assert backtest_result.total_trades >= 10, "Need enough trades for significance"
+    def test_max_drawdown_valid(self, backtest_result):
+        """Max drawdown is valid (0-1 range)."""
+        max_dd = backtest_result.max_drawdown
+        assert 0.0 <= max_dd <= 1.0, f"Max drawdown {max_dd:.1%} out of range"
 
-    def test_engine_uses_strategy(self, backtest_result, strategy):
-        """Verify engine used this strategy (not a hardcoded default).
 
-        Check that trade reasons contain strategy-specific text.
-        """
-        if backtest_result.trades:
-            entry_reasons = [t.entry_reason for t in backtest_result.trades]
-            assert any("MACD" in r for r in entry_reasons), \
-                f"Expected MACD in reasons, got: {entry_reasons}"
+class TestAlgoRobustness:
+    """Basic robustness checks.
+
+    These are NOT performance gates - SICA uses sica_bench.py for that.
+    """
+
+    def test_pnl_computed(self, backtest_result):
+        """P&L is computed (any value valid)."""
+        if backtest_result.total_trades == 0:
+            pytest.skip("No trades to evaluate")
+        pnl = backtest_result.total_pnl
+        assert isinstance(pnl, (int, float)), f"P&L not computed"
+
+
+def print_results():
+    """Helper to print detailed results."""
+
+    async def run():
+        config = load_config()
+        client = MarketDataClient(config.alpaca, Path("data/cache"))
+        bars = await client.get_bars(SYMBOL, lookback=1000, timeframe=TIMEFRAME)
+
+        strategy_config = MACDConfig(
+            symbol=SYMBOL,
+            timeframe=TIMEFRAME_STR,
+            fast_period=12,
+            slow_period=26,
+            signal_period=9,
+            stop_loss_pct=0.03,
+        )
+        strategy = MACDStrategy(strategy_config)
+
+        bt_config = PaperExchangeConfig(
+            symbol=SYMBOL,
+            warmup_bars=35,
+            transaction_cost_pct=0.001,
+            default_position_pct=1.0,
+        )
+
+        engine = PaperExchange(bt_config, strategy)
+        result = engine.run(bars)
+
+        print(f"\n=== Backtest Results ({len(bars)} bars) ===")
+        print(f"Strategy: {strategy.name}")
+        print(f"Period: {result.start_time} to {result.end_time}")
+        print(f"Total trades: {result.total_trades}")
+        print(f"Win rate: {result.win_rate:.1%}")
+        print(f"Total P&L: ${result.total_pnl:.2f}")
+        print(f"Profit Factor: {result.profit_factor:.2f}")
+        if result.sortino_ratio:
+            print(f"Sortino: {result.sortino_ratio:.2f}")
+        print(f"Max Drawdown: {result.max_drawdown:.1%}")
+
+        if result.trades:
+            print("\n=== Trades ===")
+            for i, t in enumerate(result.trades[:10]):
+                print(
+                    f"{i+1}. {t.side} @ {t.entry_price:.2f} -> "
+                    f"{t.exit_price:.2f}, "
+                    f"pnl=${t.net_pnl:.2f} ({t.exit_reason})"
+                )
+            if len(result.trades) > 10:
+                print(f"... and {len(result.trades) - 10} more trades")
+
+    asyncio.run(run())
+
+
+if __name__ == "__main__":
+    print_results()
