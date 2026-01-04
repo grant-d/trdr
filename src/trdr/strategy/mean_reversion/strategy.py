@@ -40,10 +40,12 @@ class MeanReversionConfig(StrategyConfig):
     trend_slope_threshold: float = 0.025  # 2.5% slope = trending (conservative)
     regime_lookback: int = 20
 
-    # Breakout/momentum settings - PROVEN OPTIMAL (Iteration 8)
-    breakout_period: int = 15  # Proven quality
-    volume_multiplier: float = 1.8  # CRITICAL quality filter
-    trend_ema: int = 50  # Trend filter (critical for quality)
+    # Breakout/momentum settings - ITERATION 1 OPTIMAL (FINAL)
+    breakout_period: int = 10  # Proven optimal for AAPL
+    volume_multiplier: float = 1.2  # Proven optimal - quality filter
+    trend_ema: int = 50  # Not used
+    enable_trend_filter: bool = False  # Disabled
+    gap_filter_pct: float = 0.10  # Disabled (raised to 10% = almost never triggers)
     lookback_period: int = 20  # For stats
     zscore_entry: float = 2.0  # Legacy (not used in breakout mode)
     zscore_exit: float = 0.0  # Legacy
@@ -60,12 +62,12 @@ class MeanReversionConfig(StrategyConfig):
     calendar_days_before_month_end: int = 2
     calendar_days_after_month_start: int = 2
 
-    # Risk management - PROVEN OPTIMAL (Iteration 8)
+    # Risk management - ITERATION 1 OPTIMAL
     atr_period: int = 14
-    stop_loss_atr_mult: float = 1.5  # Proven optimal
-    trailing_stop_atr_mult: float = 2.5  # Proven optimal
+    stop_loss_atr_mult: float = 2.0  # Proven optimal - not too tight
+    trailing_stop_atr_mult: float = 3.0  # Proven optimal - let winners run
     take_profit_atr_mult: float = 0.0  # No fixed target - trail only
-    max_holding_days: int = 30  # Capture full trends
+    max_holding_days: int = 60  # Proven optimal - let trends develop
 
     # Position sizing - PROVEN OPTIMAL (Iteration 8)
     base_position_pct: float = 1.0  # Max capital, no leverage (was 0.98)
@@ -226,17 +228,6 @@ class MeanReversionStrategy(BaseStrategy):
                 confidence=0.0,
                 reason="low_volume",
             )
-
-        # Trend filter: DISABLED to capture more bull run upside
-        # Testing if 50 EMA filter is too conservative in strong uptrends
-        # trend_ema_val = ema(bars, self.config.trend_ema)
-        # if current_price < trend_ema_val:
-        #     return Signal(
-        #         action=SignalAction.HOLD,
-        #         price=current_price,
-        #         confidence=0.0,
-        #         reason="below_trend_ema",
-        #     )
 
         # Strong breakout with volume - enter
         stop_loss = current_price - (current_atr * self.config.stop_loss_atr_mult)
