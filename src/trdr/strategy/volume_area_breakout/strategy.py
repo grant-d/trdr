@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from ...core import Timeframe
 from ...data.market import Bar
 from ..base_strategy import BaseStrategy, StrategyConfig
 from ..types import DataRequirement, Position, Signal, SignalAction
@@ -112,10 +113,8 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         # Research Strategy 2: LVN areas = low liquidity → rapid price movement
         # Entry: Volume surge (>150% avg) + direction aligned with higher TF
         # Target: Next HVN or POC, Stop: Inside LVN
-        tf = self.config.timeframe.lower() if self.config.timeframe else ""
-        is_15m = "15m" in tf
-
-        if is_15m:
+        tf = self.config.timeframe
+        if tf == Timeframe.parse("15m"):
             # ITER 86: Hybrid Strategy - LVN Breakout OR POC Mean Reversion
             # Combining both to increase trade frequency (2+ trades instead of 1)
 
@@ -228,10 +227,9 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         prev_close = bars[-2].close if len(bars) > 1 else current_price
 
         # Detect timeframe for threshold adjustments
-        tf = self.config.timeframe.lower() if self.config.timeframe else ""
-        is_daily = tf in ("1d", "d", "day")
-        is_4h = tf in ("4h", "4hour")
-        is_15m = tf in ("15m", "15min")
+        is_daily = tf == Timeframe.parse("1d")
+        is_4h = tf == Timeframe.parse("4h")
+        is_15m = tf == Timeframe.parse("15m")
 
         # Check exit conditions first if we have a position
         if position and position.side == "long":

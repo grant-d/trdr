@@ -5,8 +5,8 @@ import signal
 import sys
 from pathlib import Path
 
-from .core import BotConfig, load_config
-from .data import MarketDataClient, Symbol
+from .core import BotConfig, Symbol, load_config
+from .data import MarketDataClient
 from .storage import RunArchive
 from .strategy import (
     Position,

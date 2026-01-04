@@ -17,11 +17,30 @@ result = engine.run(bars)
 Implement `get_data_requirements()` and `generate_signal(bars, position) -> Signal`. Access live portfolio state via `self.context`:
 
 ```python
+from trdr.backtest import Duration, Timeframe
+from trdr.strategy.base_strategy import BaseStrategy, StrategyConfig
+from trdr.strategy.types import DataRequirement
+
+@dataclass
+class MyConfig(StrategyConfig):
+    rsi_period: int = 14
+
+config = MyConfig(
+    symbol="crypto:ETH/USD",
+    timeframe=Timeframe.parse("15m"),
+    lookback=Duration.parse("1M"),
+)
+
 class MyStrategy(BaseStrategy):
     def get_data_requirements(self) -> list[DataRequirement]:
         """Declare data feeds. Exactly one must have role='primary'."""
         return [
-            DataRequirement(self.config.symbol, self.config.timeframe, 3000, role="primary"),
+            DataRequirement(
+                self.config.symbol,
+                self.config.timeframe,
+                self.config.lookback,
+                role="primary",
+            ),
         ]
 
     def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
@@ -52,6 +71,37 @@ class MyStrategy(BaseStrategy):
             self.consecutive_losses += 1
 ```
 
+## Timeframe and Duration
+
+All strategy-facing APIs use typed `Timeframe` and `Duration` objects:
+
+```python
+from trdr.backtest import Duration, Timeframe
+
+# Timeframe: bar interval size
+tf = Timeframe.parse("15m")   # 15 minutes
+tf = Timeframe.parse("1h")    # 1 hour
+tf = Timeframe.parse("1d")    # 1 day
+
+# Duration: lookback period
+d = Duration.parse("1M")      # 1 month
+d = Duration.parse("2w")      # 2 weeks
+d = Duration.parse("3y")      # 3 years
+d = Duration.parse("24h")     # 24 hours
+
+# Duration converts to bar count (accounts for market type)
+d.to_bars(Timeframe.parse("15m"), "crypto:ETH/USD")  # 2880 bars (24/7)
+d.to_bars(Timeframe.parse("15m"), "stock:AAPL")      # 538 bars (6.5h/day)
+```
+
+Duration units (case-insensitive except M):
+
+- `h` = hours
+- `d` = days
+- `w` = weeks
+- `M` = months (capital M)
+- `y` = years
+
 ### Multi-Timeframe Strategy
 
 Request multiple timeframes for the same symbol:
@@ -60,9 +110,9 @@ Request multiple timeframes for the same symbol:
 class MTFStrategy(BaseStrategy):
     def get_data_requirements(self) -> list[DataRequirement]:
         return [
-            DataRequirement("crypto:ETH/USD", "15m", 3000, role="primary"),
-            DataRequirement("crypto:ETH/USD", "1h", 500),   # Trend context
-            DataRequirement("crypto:ETH/USD", "4h", 125),   # Regime detection
+            DataRequirement("crypto:ETH/USD", Timeframe.parse("15m"), Duration.parse("1M"), role="primary"),
+            DataRequirement("crypto:ETH/USD", Timeframe.parse("1h"), Duration.parse("2w")),   # Trend context
+            DataRequirement("crypto:ETH/USD", Timeframe.parse("4h"), Duration.parse("1w")),   # Regime detection
         ]
 
     def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
@@ -80,8 +130,8 @@ Reference other symbols for correlation/regime signals:
 class BTCCorrelationStrategy(BaseStrategy):
     def get_data_requirements(self) -> list[DataRequirement]:
         return [
-            DataRequirement("crypto:ETH/USD", "15m", 3000, role="primary"),
-            DataRequirement("crypto:BTC/USD", "1h", 500),  # BTC regime
+            DataRequirement("crypto:ETH/USD", Timeframe.parse("15m"), Duration.parse("1M"), role="primary"),
+            DataRequirement("crypto:BTC/USD", Timeframe.parse("1h"), Duration.parse("2w")),  # BTC regime
         ]
 
     def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
@@ -96,14 +146,14 @@ Any timeframe is supported. Non-native Alpaca timeframes are aggregated automati
 
 ```python
 # Native Alpaca (no aggregation)
-DataRequirement(symbol, "15m", 3000, role="primary")  # 1-59m native
-DataRequirement(symbol, "4h", 500)                     # 1-23h native
-DataRequirement(symbol, "1d", 200)                     # 1d native
+DataRequirement(symbol, Timeframe.parse("15m"), Duration.parse("1M"), role="primary")  # 1-59m native
+DataRequirement(symbol, Timeframe.parse("4h"), Duration.parse("2w"))                    # 1-23h native
+DataRequirement(symbol, Timeframe.parse("1d"), Duration.parse("1y"))                    # 1d native
 
 # Aggregated from base bars (handled transparently)
-DataRequirement(symbol, "60m", 500)   # 60m -> aggregated from 1m (or use "1h")
-DataRequirement(symbol, "3d", 100)    # 3d -> aggregated from 1d
-DataRequirement(symbol, "2w", 50)     # 2w -> aggregated from 1d (10 trading days)
+DataRequirement(symbol, Timeframe.parse("60m"), Duration.parse("2w"))   # 60m -> aggregated from 1m (or use "1h")
+DataRequirement(symbol, Timeframe.parse("3d"), Duration.parse("3M"))    # 3d -> aggregated from 1d
+DataRequirement(symbol, Timeframe.parse("2w"), Duration.parse("6M"))    # 2w -> aggregated from 1d (10 trading days)
 ```
 
 Canonical normalization optimizes fetching: `60m` -> `1h`, `24h` -> `1d`, `48h` -> `2d`.

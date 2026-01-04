@@ -24,6 +24,7 @@ Multi-Timeframe (MTF) Example:
 
 from dataclasses import dataclass
 
+from ...core import Duration, Timeframe
 from ...data.market import Bar
 from ...indicators import ema, ema_series
 from ..base_strategy import BaseStrategy, StrategyConfig
@@ -120,8 +121,8 @@ class MACDStrategy(BaseStrategy):
             reqs.append(
                 DataRequirement(
                     symbol=self.config.symbol,
-                    timeframe=self.config.htf_timeframe,
-                    lookback=200,  # Fewer bars needed for HTF
+                    timeframe=Timeframe.parse(self.config.htf_timeframe),
+                    lookback=Duration.parse("1M"),  # Fewer bars needed for HTF
                     role="informative",
                 )
             )

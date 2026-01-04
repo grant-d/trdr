@@ -1,5 +1,6 @@
 """Backtesting framework for strategy validation."""
 
+from .align import align_feeds
 from .calendar import filter_trading_bars, get_trading_days_in_year, is_trading_day
 from .orders import Fill, Order, OrderManager, OrderType
 from .paper_exchange import (
@@ -10,14 +11,6 @@ from .paper_exchange import (
     Trade,
 )
 from .portfolio import Portfolio, Position, PositionEntry
-from .timeframe import (
-    AggregationConfig,  # Deprecated
-    Timeframe,
-    align_feeds,
-    get_aggregation_config,  # Deprecated
-    get_interval_seconds,
-    parse_timeframe,
-)
 from .walk_forward import (
     Fold,
     WalkForwardConfig,
@@ -52,11 +45,6 @@ __all__ = [
     "is_trading_day",
     "filter_trading_bars",
     "get_trading_days_in_year",
-    # Utils
-    "AggregationConfig",  # Deprecated
-    "Timeframe",
+    # Alignment
     "align_feeds",
-    "get_aggregation_config",  # Deprecated
-    "get_interval_seconds",
-    "parse_timeframe",
 ]

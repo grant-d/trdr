@@ -1,7 +1,8 @@
 """Tests for TradeMetrics and RuntimeContext."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
+from trdr.core import Duration, Timeframe
 from trdr.backtest.metrics import TradeMetrics
 from trdr.backtest.orders import OrderManager
 from trdr.backtest.paper_exchange import (
@@ -14,6 +15,10 @@ from trdr.backtest.portfolio import Portfolio
 from trdr.data.market import Bar
 from trdr.strategy.base_strategy import BaseStrategy, StrategyConfig
 from trdr.strategy.types import DataRequirement, Position, Signal, SignalAction
+
+# Test defaults
+_TEST_TF = Timeframe.parse("1h")
+_TEST_LOOKBACK = Duration.parse("30d")
 
 
 def make_trade(
@@ -314,9 +319,11 @@ class TestPaperExchangeResultDelegates:
 
 @dataclass
 class SimpleConfig(StrategyConfig):
-    """Simple strategy config."""
+    """Simple strategy config with test defaults."""
 
-    pass
+    symbol: str = "crypto:TEST"
+    timeframe: Timeframe = field(default_factory=lambda: _TEST_TF)
+    lookback: Duration = field(default_factory=lambda: _TEST_LOOKBACK)
 
 
 def _get_primary_bars(bars: dict[str, list[Bar]], config: StrategyConfig) -> list[Bar]:
@@ -338,7 +345,7 @@ class ContextAwareStrategy(BaseStrategy):
         self.context_checks: list[tuple[float, float]] = []
 
     def get_data_requirements(self) -> list[DataRequirement]:
-        return [DataRequirement(self.config.symbol, self.config.timeframe, 100, role="primary")]
+        return [DataRequirement(self.config.symbol, self.config.timeframe, self.config.lookback, role="primary")]
 
     def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
         primary = _get_primary_bars(bars, self.config)

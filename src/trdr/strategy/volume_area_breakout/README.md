@@ -8,12 +8,14 @@ Optimized via SICA across multiple symbol/timeframe combinations.
 ### Daily Timeframe (1d)
 
 **VAH Breakout:**
+
 - Price breaks above Value Area High (VAH)
 - HMA slope positive (trend confirmation)
 - MSS regime > 0 (bullish)
 - Base confidence: 0.65
 
 **VAH Pullback:**
+
 - Price near VAH after prior breakout
 - HMA bullish and trending up
 - MSS > 5
@@ -22,12 +24,14 @@ Optimized via SICA across multiple symbol/timeframe combinations.
 ### Intraday Timeframes (1h, 4h)
 
 **VAH Breakout:**
+
 - Price breaks above VAH
 - Volume >= 1.0x average
 - MSS > 5, price > HMA
 - Base confidence: 0.65
 
 **VAL Bounce:**
+
 - Price bounces from Value Area Low (VAL)
 - Volume >= 1.0x average
 - MSS > 0
@@ -37,10 +41,12 @@ Optimized via SICA across multiple symbol/timeframe combinations.
 ## Exit Rules
 
 **Daily:**
+
 - Target: VAH + 10x ATR (trend-following)
 - Stop: VAH - 1x ATR
 
 **Intraday:**
+
 - Target: VAH + 3x ATR (breakout) or POC (bounce)
 - Stop: VAH - 0.3x ATR (breakout) or entry - 2x ATR (bounce)
 
@@ -57,8 +63,9 @@ Optimized via SICA across multiple symbol/timeframe combinations.
 
 ```python
 VolumeAreaBreakoutConfig(
-    symbol="stock:AAPL",  # or "crypto:BTC/USD"
-    timeframe="1d",       # 1d, 4h, 1h
+    symbol="stock:AAPL",      # or "crypto:BTC/USD"
+    timeframe="1d",           # 1d, 4h, 1h, 15m
+    lookback="1M",            # duration (or bars: 1000)
     atr_threshold=2.0,
     stop_loss_multiplier=1.75,
 )
@@ -80,10 +87,12 @@ VolumeAreaBreakoutConfig(
 ## SICA Optimization
 
 100+ iterations across 4 runs. Structural ceiling at 73% due to:
+
 - 10 VAH breakouts in AAPL daily data (limited opportunities)
 - Strategy already captures all high-quality setups
 
 Tested variations (all regressed or neutral):
+
 - Volume spike entries
 - Volatility regime filters
 - Order flow imbalance

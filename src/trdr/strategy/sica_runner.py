@@ -35,15 +35,11 @@ def get_primary_requirement(requirements: list[DataRequirement]) -> DataRequirem
     return primaries[0]
 
 
-async def _get_bars(
-    strategy,
-    default_lookback: int,
-) -> tuple[dict[str, list], DataRequirement]:
+async def _get_bars(strategy) -> tuple[dict[str, list], DataRequirement]:
     """Fetch bars based on strategy requirements.
 
     Args:
         strategy: Strategy instance with get_data_requirements()
-        default_lookback: Fallback lookback if not specified
 
     Returns:
         Tuple of (bars dict keyed by "symbol:tf", primary requirement)
@@ -105,8 +101,8 @@ def run_sica_benchmark(
     config_class: str,
     strategy_class: str,
     symbol: str,
-    timeframe: str,
-    lookback: int,
+    timeframe: "Timeframe",
+    lookback: "Duration",
     position_pct: float,
 ) -> None:
     """Run SICA benchmark for a strategy.
@@ -116,15 +112,21 @@ def run_sica_benchmark(
         config_class: Config class name (e.g., "VolumeAreaBreakoutConfig")
         strategy_class: Strategy class name (e.g., "VolumeAreaBreakoutStrategy")
         symbol: Trading symbol (can be overridden by BACKTEST_SYMBOL env var)
-        timeframe: Bar timeframe (can be overridden by BACKTEST_TIMEFRAME env var)
-        lookback: Number of bars to fetch
+        timeframe: Timeframe (can be overridden by BACKTEST_TIMEFRAME env var)
+        lookback: Duration
         position_pct: Position size as fraction of capital (1.0 = 100%)
     """
     from trdr.backtest import PaperExchange, PaperExchangeConfig
+    from trdr.core import Timeframe
 
     # Env vars can override specific code-driven values
     symbol = os.environ.get("BACKTEST_SYMBOL", symbol)
-    timeframe = os.environ.get("BACKTEST_TIMEFRAME", timeframe)
+    tf_override = os.environ.get("BACKTEST_TIMEFRAME")
+    if tf_override:
+        timeframe = Timeframe.parse(tf_override)
+
+    # Resolve Duration to bar count
+    lookback_bars = lookback.to_bars(timeframe, symbol)
 
     # Load strategy
     Config, Strategy = _reload_strategy(strategy_module, config_class, strategy_class)
@@ -134,7 +136,7 @@ def run_sica_benchmark(
     strategy = Strategy(config)
 
     # Get bars using strategy's data requirements
-    bars, primary = asyncio.run(_get_bars(strategy, lookback))
+    bars, primary = asyncio.run(_get_bars(strategy))
 
     # Calculate buy-hold return using primary bars
     initial_capital = 10000

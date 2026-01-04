@@ -1,10 +1,11 @@
+import csv
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-import csv
 
+from trdr.core import Timeframe
 from trdr.data.market import Bar, MarketDataClient, Quote, Symbol
 
 
@@ -38,6 +39,30 @@ def test_symbol_cache_key_format():
     assert stock_explicit.cache_key == "stock:msft"
 
 
+def test_symbol_equality():
+    """Symbols are equal if type and raw match."""
+    assert Symbol.parse("crypto:BTC/USD") == Symbol.parse("crypto:BTC/USD")
+    assert Symbol.parse("stock:AAPL") == Symbol.parse("AAPL")  # Default is stock
+    assert Symbol.parse("crypto:BTC/USD") != Symbol.parse("crypto:ETH/USD")
+    assert Symbol.parse("crypto:BTC/USD") != Symbol.parse("stock:BTC/USD")
+
+
+def test_symbol_equality_case_insensitive_type():
+    """Asset type comparison is case-insensitive."""
+    assert Symbol(asset_type="CRYPTO", raw="BTC/USD") == Symbol(asset_type="crypto", raw="BTC/USD")
+    assert Symbol(asset_type="Stock", raw="AAPL") == Symbol(asset_type="stock", raw="AAPL")
+
+
+def test_symbol_hash():
+    """Symbols are hashable and usable in sets."""
+    s = {Symbol.parse("crypto:BTC/USD"), Symbol.parse("crypto:BTC/USD")}
+    assert len(s) == 1
+
+    # Case-insensitive type hashing
+    s2 = {Symbol(asset_type="CRYPTO", raw="BTC/USD"), Symbol(asset_type="crypto", raw="BTC/USD")}
+    assert len(s2) == 1
+
+
 @pytest.mark.asyncio
 async def test_get_current_price_handles_data_wrapper():
     ts = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
@@ -56,7 +81,9 @@ async def test_get_current_price_handles_data_wrapper():
 class FakeBar:
     """Fake Alpaca bar for testing."""
 
-    def __init__(self, timestamp: datetime, open_: float, high: float, low: float, close: float, volume: int):
+    def __init__(
+        self, timestamp: datetime, open_: float, high: float, low: float, close: float, volume: int
+    ):
         self.timestamp = timestamp
         self.open = open_
         self.high = high
@@ -108,7 +135,6 @@ def write_cache_csv(cache_file: Path, bars: list[Bar]) -> None:
 @pytest.mark.asyncio
 async def test_cache_append_preserves_order_no_duplicates(tmp_path: Path):
     """Cache append merges correctly: no duplicates, maintains chronological order."""
-    from alpaca.data.timeframe import TimeFrame
 
     # Create initial cache with 20 bars (hours 0-19)
     initial_bars = [make_bar(i, 100.0 + i) for i in range(20)]
@@ -139,7 +165,7 @@ async def test_cache_append_preserves_order_no_duplicates(tmp_path: Path):
 
     # Call get_bars with lookback <= cache size to test overlap behavior
     # (lookback > cache triggers full fetch instead of overlap)
-    result = await client.get_bars("crypto:BTC/USD", lookback=20, timeframe=TimeFrame.Hour)
+    result = await client.get_bars("crypto:BTC/USD", lookback=20, timeframe=Timeframe.parse("1h"))
 
     # Cache has 20 bars, API provides 16 bars (hours 10-25)
     # Overlap removes last 10 from cache, keeping bars 0-9
@@ -157,18 +183,17 @@ async def test_cache_append_preserves_order_no_duplicates(tmp_path: Path):
     # First 4 bars (indices 0-3) are from cache (hours 6-9, prices 106-109)
     for i in range(4):
         expected = 100.0 + (6 + i)  # hours 6-9
-        assert result[i].close == expected, f"Bar {i} has price {result[i].close}, expected {expected}"
+        assert result[i].close == expected, f"Bar {i}: {result[i].close} != {expected}"
 
     # Remaining 16 bars (indices 4-19) are from API (hours 10-25, prices 160-175)
     for i in range(4, 20):
         expected = 150.0 + (6 + i)  # hours 10-25
-        assert result[i].close == expected, f"Bar {i} has price {result[i].close}, expected {expected}"
+        assert result[i].close == expected, f"Bar {i}: {result[i].close} != {expected}"
 
 
 @pytest.mark.asyncio
 async def test_cache_gap_behavior(tmp_path: Path):
     """Gaps within overlap window get filled; older gaps persist."""
-    from alpaca.data.timeframe import TimeFrame
 
     # Create cache with 30 bars but DELETE hour 17 (gap in overlap zone)
     all_bars = [make_bar(i, 100.0 + i) for i in range(30)]
@@ -196,7 +221,7 @@ async def test_cache_gap_behavior(tmp_path: Path):
     client._crypto_client = FakeBarsClient(api_bars)
 
     # Request 25 bars (less than 29 cached to use overlap logic)
-    result = await client.get_bars("crypto:BTC/USD", lookback=25, timeframe=TimeFrame.Hour)
+    result = await client.get_bars("crypto:BTC/USD", lookback=25, timeframe=Timeframe.parse("1h"))
 
     timestamps = [bar.timestamp for bar in result]
 
@@ -213,7 +238,6 @@ async def test_cache_gap_behavior(tmp_path: Path):
 @pytest.mark.asyncio
 async def test_cache_backfill_when_lookback_exceeds_cache(tmp_path: Path):
     """Requesting more bars than cached triggers full historical fetch."""
-    from alpaca.data.timeframe import TimeFrame
 
     # Create cache with only 20 bars
     initial_bars = [make_bar(i, 100.0 + i) for i in range(20)]
@@ -229,7 +253,7 @@ async def test_cache_backfill_when_lookback_exceeds_cache(tmp_path: Path):
 
     # Request 50 bars - more than the 20 cached
     # Should trigger full fetch, not overlap fetch
-    result = await client.get_bars("crypto:BTC/USD", lookback=50, timeframe=TimeFrame.Hour)
+    result = await client.get_bars("crypto:BTC/USD", lookback=50, timeframe=Timeframe.parse("1h"))
 
     # Should get 50 bars from the API (full fetch replaces cache)
     assert len(result) == 50, f"Expected 50 bars, got {len(result)}"
@@ -238,13 +262,12 @@ async def test_cache_backfill_when_lookback_exceeds_cache(tmp_path: Path):
     # The last 50 of 100 API bars
     for i, bar in enumerate(result):
         expected_price = 200.0 + (50 + i)  # API bars 50-99
-        assert bar.close == expected_price, f"Bar {i} has price {bar.close}, expected {expected_price}"
+        assert bar.close == expected_price, f"Bar {i}: {bar.close} != {expected_price}"
 
 
 @pytest.mark.asyncio
 async def test_cache_fresh_returns_cached_bars(tmp_path: Path):
     """Fresh cache with sufficient bars returns from cache without API call."""
-    from alpaca.data.timeframe import TimeFrame
 
     # Create fresh cache (last bar timestamp within 1 hour of now)
     now = datetime.now(timezone.utc)
@@ -270,7 +293,7 @@ async def test_cache_fresh_returns_cached_bars(tmp_path: Path):
     client._crypto_client = None  # Would error if called
 
     # Request 20 bars - cache has 30 fresh bars, should return from cache
-    result = await client.get_bars("crypto:BTC/USD", lookback=20, timeframe=TimeFrame.Hour)
+    result = await client.get_bars("crypto:BTC/USD", lookback=20, timeframe=Timeframe.parse("1h"))
 
     assert len(result) == 20, f"Expected 20 bars, got {len(result)}"
     # Should be last 20 bars from cache

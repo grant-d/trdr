@@ -1,11 +1,18 @@
 """Tests for timeframe utilities and multi-feed alignment."""
 
+from dataclasses import dataclass, field
+
 import pytest
 
-from trdr.backtest.timeframe import align_feeds, get_interval_seconds, parse_timeframe
+from trdr.backtest import align_feeds
+from trdr.core import Duration, Timeframe, get_interval_seconds, parse_timeframe
 from trdr.data.market import Bar
 from trdr.strategy.sica_runner import get_primary_requirement
 from trdr.strategy.types import DataRequirement
+
+# Test defaults
+_TEST_TF = Timeframe.parse("15m")
+_TEST_LOOKBACK = Duration.parse("30d")
 
 
 def make_bar(timestamp: str, close: float = 100.0) -> Bar:
@@ -229,17 +236,17 @@ class TestMultiFeedIntegration:
 
     def test_three_feed_strategy(self) -> None:
         """Strategy with 3 feeds (primary + 2 informative) executes correctly."""
-        from dataclasses import dataclass
-
         from trdr.backtest.paper_exchange import PaperExchange, PaperExchangeConfig
         from trdr.strategy.base_strategy import BaseStrategy, StrategyConfig
         from trdr.strategy.types import Position, Signal, SignalAction
 
         @dataclass
         class MTFConfig(StrategyConfig):
-            """Multi-TF config."""
+            """Multi-TF config with defaults."""
 
-            pass
+            symbol: str = "crypto:ETH/USD"
+            timeframe: Timeframe = field(default_factory=lambda: _TEST_TF)
+            lookback: Duration = field(default_factory=lambda: _TEST_LOOKBACK)
 
         class MTFStrategy(BaseStrategy):
             """Test strategy using 3 feeds."""
@@ -251,9 +258,9 @@ class TestMultiFeedIntegration:
 
             def get_data_requirements(self) -> list[DataRequirement]:
                 return [
-                    DataRequirement("crypto:ETH/USD", "15m", 100, role="primary"),
-                    DataRequirement("crypto:ETH/USD", "1h", 25),  # HTF same symbol
-                    DataRequirement("crypto:BTC/USD", "1h", 25),  # Cross-symbol
+                    DataRequirement("crypto:ETH/USD", Timeframe.parse("15m"), Duration.parse("7d"), role="primary"),
+                    DataRequirement("crypto:ETH/USD", Timeframe.parse("1h"), Duration.parse("2d")),  # HTF same symbol
+                    DataRequirement("crypto:BTC/USD", Timeframe.parse("1h"), Duration.parse("2d")),  # Cross-symbol
                 ]
 
             def generate_signal(

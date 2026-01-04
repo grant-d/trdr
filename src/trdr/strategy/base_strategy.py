@@ -4,6 +4,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from ..core.duration import Duration
+from ..core.timeframe import Timeframe
 from ..data.market import Bar
 from .types import DataRequirement, Position, Signal
 
@@ -16,11 +18,33 @@ class StrategyConfig:
     """Base configuration for strategies.
 
     Subclass to add strategy-specific parameters.
+
+    Args:
+        symbol: Trading symbol (e.g., "crypto:ETH/USD", "stock:AAPL")
+        timeframe: Timeframe (e.g., Timeframe.parse("15m"))
+        lookback: Duration (e.g., Duration.parse("1M"))
+
+    Example:
+        @dataclass
+        class MyConfig(StrategyConfig):
+            fast_period: int = 12
+            slow_period: int = 26
+
+        config = MyConfig(
+            symbol="crypto:ETH/USD",
+            timeframe=Timeframe.parse("15m"),
+            lookback=Duration.parse("1M"),
+        )
     """
 
     symbol: str
-    timeframe: str
-    lookback: int
+    timeframe: Timeframe
+    lookback: Duration
+
+    @property
+    def lookback_bars(self) -> int:
+        """Lookback as bar count."""
+        return self.lookback.to_bars(self.timeframe, self.symbol)
 
 
 class BaseStrategy(ABC):
@@ -41,7 +65,7 @@ class BaseStrategy(ABC):
                     DataRequirement(
                         self.config.symbol,
                         self.config.timeframe,
-                        self.config.lookback,
+                        self.config.lookback_bars,  # Use resolved bar count
                         role="primary",
                     ),
                 ]
@@ -81,7 +105,7 @@ class BaseStrategy(ABC):
                 DataRequirement(
                     self.config.symbol,
                     self.config.timeframe,
-                    self.config.lookback,
+                    self.config.lookback_bars,
                     role="primary",
                 ),
             ]

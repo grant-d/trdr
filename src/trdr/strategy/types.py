@@ -3,6 +3,11 @@
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..core.duration import Duration
+    from ..core.timeframe import Timeframe
 
 
 @dataclass
@@ -11,20 +16,25 @@ class DataRequirement:
 
     Args:
         symbol: Trading symbol (e.g., "crypto:ETH/USD", "crypto:BTC/USD")
-        timeframe: Bar timeframe (e.g., "15m", "1h", "4h")
-        lookback: Number of bars to fetch
+        timeframe: Timeframe
+        lookback: Duration
         role: "primary" (trading feed) or "informative" (reference data)
     """
 
     symbol: str
-    timeframe: str
-    lookback: int
+    timeframe: "Timeframe"
+    lookback: "Duration"
     role: str = "informative"
 
     @property
     def key(self) -> str:
         """Unique key for this data feed."""
         return f"{self.symbol}:{self.timeframe}"
+
+    @property
+    def lookback_bars(self) -> int:
+        """Lookback as bar count."""
+        return self.lookback.to_bars(self.timeframe, self.symbol)
 
     def __post_init__(self) -> None:
         if self.role not in ("primary", "informative"):

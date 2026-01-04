@@ -1,13 +1,18 @@
 """Tests for paper exchange engine."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pytest
 
+from trdr.core import Duration, Timeframe
 from trdr.backtest.paper_exchange import PaperExchange, PaperExchangeConfig
 from trdr.data.market import Bar
 from trdr.strategy.base_strategy import BaseStrategy, StrategyConfig
 from trdr.strategy.types import DataRequirement, Position, Signal, SignalAction
+
+# Test defaults
+_TEST_TF = Timeframe.parse("1h")
+_TEST_LOOKBACK = Duration.parse("30d")
 
 
 def make_bars(prices: list[float], start_ts: str = "2024-01-01T10:00:00Z") -> list[Bar]:
@@ -29,9 +34,11 @@ def make_bars(prices: list[float], start_ts: str = "2024-01-01T10:00:00Z") -> li
 
 @dataclass
 class SimpleConfig(StrategyConfig):
-    """Simple strategy config."""
+    """Simple strategy config with test defaults."""
 
-    pass
+    symbol: str = "crypto:TEST"
+    timeframe: Timeframe = field(default_factory=lambda: _TEST_TF)
+    lookback: Duration = field(default_factory=lambda: _TEST_LOOKBACK)
 
 
 def _get_primary_bars(bars: dict[str, list[Bar]], config: StrategyConfig) -> list[Bar]:
@@ -53,7 +60,7 @@ class AlwaysBuyStrategy(BaseStrategy):
         self.bought = False
 
     def get_data_requirements(self) -> list[DataRequirement]:
-        return [DataRequirement(self.config.symbol, self.config.timeframe, 100, role="primary")]
+        return [DataRequirement(self.config.symbol, self.config.timeframe, self.config.lookback, role="primary")]
 
     def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
         primary = _get_primary_bars(bars, self.config)
@@ -79,7 +86,7 @@ class BuyThenSellStrategy(BaseStrategy):
         self.bars_held = 0
 
     def get_data_requirements(self) -> list[DataRequirement]:
-        return [DataRequirement(self.config.symbol, self.config.timeframe, 100, role="primary")]
+        return [DataRequirement(self.config.symbol, self.config.timeframe, self.config.lookback, role="primary")]
 
     def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
         primary = _get_primary_bars(bars, self.config)
@@ -114,7 +121,7 @@ class TrailingStopStrategy(BaseStrategy):
         self.bought = False
 
     def get_data_requirements(self) -> list[DataRequirement]:
-        return [DataRequirement(self.config.symbol, self.config.timeframe, 100, role="primary")]
+        return [DataRequirement(self.config.symbol, self.config.timeframe, self.config.lookback, role="primary")]
 
     def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
         primary = _get_primary_bars(bars, self.config)
@@ -142,7 +149,7 @@ class TakeProfitStrategy(BaseStrategy):
         self.trade_callbacks: list[tuple[float, str]] = []
 
     def get_data_requirements(self) -> list[DataRequirement]:
-        return [DataRequirement(self.config.symbol, self.config.timeframe, 100, role="primary")]
+        return [DataRequirement(self.config.symbol, self.config.timeframe, self.config.lookback, role="primary")]
 
     def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
         primary = _get_primary_bars(bars, self.config)
@@ -176,7 +183,7 @@ class LimitOrderStrategy(BaseStrategy):
         self.limit_pct = limit_pct
 
     def get_data_requirements(self) -> list[DataRequirement]:
-        return [DataRequirement(self.config.symbol, self.config.timeframe, 100, role="primary")]
+        return [DataRequirement(self.config.symbol, self.config.timeframe, self.config.lookback, role="primary")]
 
     def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
         primary = _get_primary_bars(bars, self.config)
@@ -204,7 +211,7 @@ class StopLimitStrategy(BaseStrategy):
         self.bought = False
 
     def get_data_requirements(self) -> list[DataRequirement]:
-        return [DataRequirement(self.config.symbol, self.config.timeframe, 100, role="primary")]
+        return [DataRequirement(self.config.symbol, self.config.timeframe, self.config.lookback, role="primary")]
 
     def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
         primary = _get_primary_bars(bars, self.config)
@@ -233,7 +240,7 @@ class MultipleEntriesStrategy(BaseStrategy):
         self.buys = 0
 
     def get_data_requirements(self) -> list[DataRequirement]:
-        return [DataRequirement(self.config.symbol, self.config.timeframe, 100, role="primary")]
+        return [DataRequirement(self.config.symbol, self.config.timeframe, self.config.lookback, role="primary")]
 
     def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
         primary = _get_primary_bars(bars, self.config)
@@ -801,7 +808,7 @@ class TestOrderDirectionValidation:
 
         class BadStopLossStrategy(BaseStrategy):
             def get_data_requirements(self) -> list[DataRequirement]:
-                return [DataRequirement(self.config.symbol, self.config.timeframe, 100, role="primary")]
+                return [DataRequirement(self.config.symbol, self.config.timeframe, self.config.lookback, role="primary")]
 
             def generate_signal(
                 self, bars: dict[str, list[Bar]], position: Position | None
@@ -836,7 +843,7 @@ class TestOrderDirectionValidation:
 
         class BadTakeProfitStrategy(BaseStrategy):
             def get_data_requirements(self) -> list[DataRequirement]:
-                return [DataRequirement(self.config.symbol, self.config.timeframe, 100, role="primary")]
+                return [DataRequirement(self.config.symbol, self.config.timeframe, self.config.lookback, role="primary")]
 
             def generate_signal(
                 self, bars: dict[str, list[Bar]], position: Position | None
@@ -871,7 +878,7 @@ class TestOrderDirectionValidation:
 
         class BadBuyLimitStrategy(BaseStrategy):
             def get_data_requirements(self) -> list[DataRequirement]:
-                return [DataRequirement(self.config.symbol, self.config.timeframe, 100, role="primary")]
+                return [DataRequirement(self.config.symbol, self.config.timeframe, self.config.lookback, role="primary")]
 
             def generate_signal(
                 self, bars: dict[str, list[Bar]], position: Position | None

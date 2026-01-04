@@ -24,7 +24,7 @@ cp -r src/trdr/strategy/macd src/trdr/strategy/your_strategy
 ```python
 @dataclass
 class YourConfig(StrategyConfig):
-    # StrategyConfig provides: symbol, timeframe
+    # StrategyConfig provides: symbol, timeframe, lookback
     your_param: float = 1.0
     another_param: int = 10
 ```

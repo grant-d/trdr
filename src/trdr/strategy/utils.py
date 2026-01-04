@@ -4,7 +4,7 @@ import os
 
 from dotenv import load_dotenv
 
-from trdr.backtest import Timeframe, parse_timeframe
+from trdr.core import Timeframe, parse_timeframe
 
 load_dotenv()
 

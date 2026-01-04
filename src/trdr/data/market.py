@@ -2,13 +2,6 @@
 
 import csv
 from dataclasses import asdict, dataclass
-
-# Max historical data available from Alpaca IEX feed (free tier).
-# IEX data starts from ~2020, Alpaca limit is ~7 years.
-# See: https://docs.alpaca.markets/docs/about-market-data-api
-#      https://alpaca.markets/data
-MAX_HISTORY_DAYS = 365 * 7  # 7 years
-
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -24,6 +17,14 @@ from alpaca.data.timeframe import TimeFrame
 from alpaca.trading.client import TradingClient
 
 from ..core.config import AlpacaConfig
+from ..core.symbol import Symbol
+from ..core.timeframe import Timeframe
+
+# Max historical data available from Alpaca IEX feed (free tier).
+# IEX data starts from ~2020, Alpaca limit is ~7 years.
+# See: https://docs.alpaca.markets/docs/about-market-data-api
+#      https://alpaca.markets/data
+MAX_HISTORY_DAYS = 365 * 7  # 7 years
 
 
 @dataclass
@@ -58,46 +59,6 @@ class Quote:
     timestamp: str
 
 
-@dataclass
-class Symbol:
-    """Asset symbol with type info.
-
-    Format: "type:symbol" (e.g., "crypto:BTC/USD", "stock:AAPL")
-    Plain symbols default to stock type.
-    """
-
-    asset_type: str  # "stock" or "crypto"
-    raw: str  # The actual symbol (e.g., "BTC/USD", "AAPL")
-
-    @classmethod
-    def parse(cls, symbol: str) -> "Symbol":
-        """Parse symbol string into Symbol object."""
-        if ":" in symbol:
-            asset_type, raw = symbol.split(":", 1)
-            return cls(asset_type=asset_type.lower(), raw=raw)
-        return cls(asset_type="stock", raw=symbol)
-
-    @property
-    def is_crypto(self) -> bool:
-        """Check if this is a crypto asset."""
-        return self.asset_type == "crypto"
-
-    @property
-    def is_stock(self) -> bool:
-        """Check if this is a stock asset."""
-        return self.asset_type == "stock"
-
-    @property
-    def cache_key(self) -> str:
-        """Safe string for cache filenames. Format: type:symbol (lowercase)."""
-        safe_raw = self.raw.replace("/", "_").lower()
-        return f"{self.asset_type}:{safe_raw}"
-
-    def __str__(self) -> str:
-        """Return full symbol string."""
-        return f"{self.asset_type}:{self.raw}"
-
-
 class MarketDataClient:
     """Fetches market data from Alpaca with disk caching."""
 
@@ -130,8 +91,8 @@ class MarketDataClient:
     async def get_bars(
         self,
         symbol: str,
-        lookback: int = 50,
-        timeframe: TimeFrame | str = TimeFrame.Hour,
+        lookback: int,
+        timeframe: Timeframe,
     ) -> list[Bar]:
         """Fetch historical bars with caching.
 
@@ -141,31 +102,26 @@ class MarketDataClient:
         Args:
             symbol: Symbol (e.g., "AAPL" for stocks, "BTC/USD" for crypto)
             lookback: Number of bars to fetch
-            timeframe: Bar timeframe (Alpaca TimeFrame or string like "15m", "3d")
+            timeframe: Bar timeframe
 
         Returns:
             List of Bar objects, oldest first
         """
-        from ..backtest import parse_timeframe
         from .aggregator import BarAggregator
+        from .timeframe_adapter import TimeframeAdapter
 
-        # Handle string timeframe
-        if isinstance(timeframe, str):
-            tf = parse_timeframe(timeframe)
+        adapter = TimeframeAdapter(timeframe)
 
-            if tf.needs_aggregation:
-                # Fetch base bars and aggregate
-                bars_needed = lookback * tf.aggregation_factor + tf.aggregation_factor
-                raw_bars = await self._fetch_bars(symbol, tf.alpaca_timeframe, bars_needed)
+        if adapter.needs_aggregation:
+            # Fetch base bars and aggregate
+            bars_needed = lookback * adapter.aggregation_factor + adapter.aggregation_factor
+            raw_bars = await self._fetch_bars(symbol, adapter.to_alpaca(), bars_needed)
 
-                aggregator = BarAggregator()
-                aggregated = aggregator.aggregate(raw_bars, tf.aggregation_factor)
-                return aggregated[-lookback:]
-            else:
-                timeframe = tf.alpaca_timeframe
+            aggregator = BarAggregator()
+            aggregated = aggregator.aggregate(raw_bars, adapter.aggregation_factor)
+            return aggregated[-lookback:]
 
-        # Delegate to internal fetch method
-        return await self._fetch_bars(symbol, timeframe, lookback)
+        return await self._fetch_bars(symbol, adapter.to_alpaca(), lookback)
 
     async def _fetch_bars(
         self,
@@ -280,7 +236,7 @@ class MarketDataClient:
         result = {}
         for req in requirements:
             # Pass string timeframe directly - get_bars handles aggregation
-            bars = await self.get_bars(req.symbol, req.lookback, req.timeframe)
+            bars = await self.get_bars(req.symbol, req.lookback_bars, req.timeframe)
             result[req.key] = bars
         return result
 
