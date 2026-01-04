@@ -17,7 +17,7 @@ from config import SicaConfig, SicaState
 from debug import dbg
 from paths import (
     find_active_config,
-    get_run_dir,
+    get_iterations_dir,
     get_sica_root,
     list_configs,
     make_runtime_marker,
@@ -120,23 +120,19 @@ Examples:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Generate run ID and create run directory
+    # Generate run ID and iterations directory
     run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    run_dir = get_run_dir(config_name, run_id)
+    iterations_dir = get_iterations_dir(config_name)
 
     # Ensure .sica/.gitignore exists
     gitignore = get_sica_root() / ".gitignore"
     if not gitignore.exists():
         gitignore.parent.mkdir(parents=True, exist_ok=True)
-        gitignore.write_text("**/runs/\ndebug.log\n")
-
-    # Create empty journal
-    journal_path = run_dir / "journal.md"
-    journal_path.parent.mkdir(parents=True, exist_ok=True)
-    journal_path.write_text("# SICA Journal\n\n")
+        gitignore.write_text("**/iterations/\ndebug.log\n")
 
     # Create state and attach to config
-    config.state = SicaState.create(run_id, run_dir, config.interpolate_prompt("Think"))
+    # Note: journal.md is created per-iteration by stop-hook
+    config.state = SicaState.create(run_id, iterations_dir, config.interpolate_prompt("Think"))
     config.save()
     dbg(f"Created run {run_id} for {config_name}")
 
@@ -165,7 +161,7 @@ Completion promise: {config.completion_promise}{params_info}
 
 After each change:
 1. **Exit** - hook intercepts and runs benchmark
-2. Results archive to {run_dir}
+2. Results archive to {iterations_dir}/<timestamp>/
 3. If tests fail, you get improvement prompt
 4. Loop until target ({config.target_score}) or max ({config.max_iterations})
 
@@ -180,10 +176,9 @@ Change -> Exit -> Hook auto-benchmarks -> Repeat.
 - NEVER run benchmark yourself. Hook does it.
 - NO manual tests. Exit triggers auto-benchmark.
 - NO test file changes. Only source code.
-- MUST maintain journal.md in {run_dir}:
-  - Read FIRST before changes
+- MUST maintain journal.md per iteration in {iterations_dir}/<timestamp>/:
   - Log each approach (1-2 lines)
-  - Avoid repeating failed approaches
+  - Check recent iteration journals to avoid repeating failed approaches
 
 Done: <promise>{config.completion_promise}</promise>
 Stop: Press Esc or run /sica:reset

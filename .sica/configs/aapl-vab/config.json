@@ -5,12 +5,21 @@
   "benchmark_timeout": 300,
   "completion_promise": "TESTS PASSING",
   "prompt": "Optimize {symbol} VAB strategy",
-  "context_files": [
-    "src/trdr/backtest/STRATEGY_API.md",
-    "src/trdr/indicators/INDICATORS.md",
-    "thoughts/grantdickinson/2026-01-01-research-combined-trading-algorithms.md"
-  ],
+  "refs": {
+    "files": [
+      "src/trdr/backtest/STRATEGY_API.md",
+      "src/trdr/indicators/INDICATORS.md",
+      "thoughts/grantdickinson/2026-01-01-research-combined-trading-algorithms.md"
+    ],
+    "urls": []
+  },
   "params": {
     "symbol": "stock:AAPL"
-  }
+  },
+  "archive": {
+    "files": [
+      "src/trdr/strategy/volume_area_breakout/strategy.py"
+    ]
+  },
+  "state": null
 }

@@ -45,6 +45,49 @@ ThinkLevel = Literal["Think", "Think hard", "Think harder", "Ultrathink", ""]
 
 
 @dataclass
+class RefsConfig:
+    """Reference materials re-read after context compaction.
+
+    Attributes:
+        files: Local file paths (docs, specs, research notes)
+        urls: HTTP URLs (external documentation, APIs)
+    """
+
+    files: list[str] = field(default_factory=list)
+    urls: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "RefsConfig":
+        """Load refs config from dict."""
+        return cls(files=data.get("files", []), urls=data.get("urls", []))
+
+    def to_dict(self) -> dict:
+        """Convert to dict for JSON serialization."""
+        return {"files": self.files, "urls": self.urls}
+
+
+@dataclass
+class ArchiveConfig:
+    """Configuration for file snapshots before each iteration.
+
+    Attributes:
+        files: List of file paths to snapshot before each iteration.
+               These are the files being evolved by SICA.
+    """
+
+    files: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ArchiveConfig":
+        """Load archive config from dict."""
+        return cls(files=data.get("files", []))
+
+    def to_dict(self) -> dict:
+        """Convert to dict for JSON serialization."""
+        return {"files": self.files}
+
+
+@dataclass
 class SicaState:
     """SICA runtime state nested within config.json.
 
@@ -156,8 +199,9 @@ class SicaConfig:
     completion_promise: str = "TESTS PASSING"
     benchmark_timeout: int = 120
     prompt: str = ""
-    context_files: list[str] = field(default_factory=list)
+    refs: RefsConfig | None = None
     params: dict[str, str] = field(default_factory=dict)
+    archive: ArchiveConfig | None = None
     state: SicaState | None = None
 
     @classmethod
@@ -190,6 +234,14 @@ class SicaConfig:
         if "state" in data and data["state"]:
             state = SicaState.from_dict(data["state"])
 
+        archive = None
+        if "archive" in data and data["archive"]:
+            archive = ArchiveConfig.from_dict(data["archive"])
+
+        refs = None
+        if "refs" in data and data["refs"]:
+            refs = RefsConfig.from_dict(data["refs"])
+
         return cls(
             name=config_name,
             benchmark_cmd=data["benchmark_cmd"],
@@ -198,8 +250,9 @@ class SicaConfig:
             completion_promise=data.get("completion_promise", "TESTS PASSING"),
             benchmark_timeout=data.get("benchmark_timeout", 120),
             prompt=data.get("prompt", ""),
-            context_files=data.get("context_files", []),
+            refs=refs,
             params=data.get("params", {}),
+            archive=archive,
             state=state,
         )
 
@@ -214,8 +267,9 @@ class SicaConfig:
             "benchmark_timeout": self.benchmark_timeout,
             "completion_promise": self.completion_promise,
             "prompt": self.prompt,
-            "context_files": self.context_files,
+            "refs": self.refs.to_dict() if self.refs else None,
             "params": self.params,
+            "archive": self.archive.to_dict() if self.archive else None,
             "state": self.state.to_dict() if self.state else None,
         }
         config_path = get_config_file(self.name)

@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
 
 from config import SicaConfig
 from debug import dbg
-from paths import find_active_config
+from paths import find_active_config, get_iterations_dir
 
 
 def log(msg: str) -> None:
@@ -67,9 +67,9 @@ def main() -> None:
     log("SICA: Resuming after compaction...")
 
     # Build context to re-inject
-    context_files = config.context_files or []
+    refs = config.refs
     score_str = f"{state.last_score:.3f}" if state.last_score is not None else "N/A"
-    run_dir = state.run_dir
+    iterations_dir = get_iterations_dir(config_name)
     effective_max = config.max_iterations + state.iterations_added
 
     parts = ["SICA LOOP RESUMED AFTER COMPACTION", ""]
@@ -78,10 +78,16 @@ def main() -> None:
         parts.append(f"Original task: {state.interpolated_prompt}")
         parts.append("")
 
-    if context_files:
-        parts.append("IMPORTANT: Use the Read tool to re-read these files NOW:")
-        for f in context_files:
+    if refs and refs.files:
+        parts.append("MUST use Read tool to re-read these files NOW:")
+        for f in refs.files:
             parts.append(f"- {f}")
+        parts.append("")
+
+    if refs and refs.urls:
+        parts.append("MUST use WebFetch to re-read these URLs NOW:")
+        for u in refs.urls:
+            parts.append(f"- {u}")
         parts.append("")
 
     parts.append(f"Config: {config_name}")
@@ -100,7 +106,7 @@ def main() -> None:
     parts.append("- ONE fix per iteration, then EXIT")
     parts.append("- NEVER run benchmark yourself. Hook does it.")
     parts.append("- NO test file changes. Only modify source code.")
-    parts.append(f"- MUST update {run_dir}/journal.md (BEFORE: plan, AFTER: results)")
+    parts.append(f"- MUST update {iterations_dir}/<current>/journal.md (BEFORE: plan, AFTER: results)")
     parts.append(f"- Done: <promise>{config.completion_promise}</promise>")
 
     additional_context = "\n".join(parts)

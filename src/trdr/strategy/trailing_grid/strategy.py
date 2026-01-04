@@ -38,11 +38,11 @@ class TrailingGridConfig(StrategyConfig):
         sell_target_multiplier: Sell target as multiple of grid_width_pct
     """
 
-    grid_width_pct: float = 0.05  # 5.0% grid
-    trail_pct: float = 0.02  # 2.0% trail distance
+    grid_width_pct: float = 0.05  # 5.0% grid (optimal)
+    trail_pct: float = 0.02  # 2.0% trail distance (optimal)
     max_dca: int = 3  # Maximum DCA entries
     downtrend_bars: int = 1  # Bars to confirm downtrend
-    stop_loss_multiplier: float = 2.0  # Stop loss as multiple of grid_width
+    stop_loss_multiplier: float = 2.0  # Stop loss as multiple of grid_width (optimal)
     sell_target_multiplier: float = 1.15  # Sell target as multiple of grid_width
 
 
@@ -67,6 +67,13 @@ class TrailingGridStrategy(BaseStrategy):
         self.peak_price: float | None = None  # Track peak for trailing stop
         self.entries: list[dict] = []  # List of {price, qty} for DCA tracking
         self.last_high: float | None = None  # For downtrend detection
+        self.volume_threshold: float = 1.2  # Volume must be 1.2x average for entry
+
+    def _avg_volume(self, bars: list[Bar], lookback: int = 20) -> float:
+        """Calculate average volume over lookback period."""
+        if len(bars) < lookback:
+            return 0.0
+        return float(np.mean([b.volume for b in bars[-lookback:]]))
 
     def get_data_requirements(self) -> list[DataRequirement]:
         return [
@@ -151,7 +158,7 @@ class TrailingGridStrategy(BaseStrategy):
 
         # State machine
         if self.state == "WAIT_DOWN":
-            # Wait for downtrend to start trailing buy
+            # Wait for downtrend OR uptrend pullback to start trailing buy
             if self._is_downtrend(primary_bars):
                 # Start trailing buy above current price
                 self.trail_buy_price = price * (1 + self.config.trail_pct)
@@ -163,11 +170,22 @@ class TrailingGridStrategy(BaseStrategy):
                     reason=f"Downtrend detected, trail buy at {self.trail_buy_price:.2f}",
                 )
 
+            if self._is_uptrend_pullback(primary_bars):
+                # Uptrend pullback - set tighter trail for continuation
+                self.trail_buy_price = price * (1 + self.config.trail_pct * 0.75)
+                self.state = "TRAIL_BUY"
+                return Signal(
+                    action=SignalAction.HOLD,
+                    price=price,
+                    confidence=0.35,
+                    reason=f"Uptrend pullback, trail buy at {self.trail_buy_price:.2f}",
+                )
+
             return Signal(
                 action=SignalAction.HOLD,
                 price=price,
                 confidence=0.0,
-                reason="Waiting for downtrend",
+                reason="Waiting for entry signal",
             )
 
         elif self.state == "TRAIL_BUY":

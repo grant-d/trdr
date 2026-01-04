@@ -96,8 +96,8 @@ def main() -> None:
     dbg(f"Continued {config_name}: now {new_effective_max} max iterations")
 
     # Build output
-    run_dir = state.run_dir
-    context_files = config.context_files or []
+    iterations_dir = state.run_dir  # Now points to iterations dir
+    refs = config.refs
 
     # Runtime marker for session detection (checked by stop hook)
     marker = make_runtime_marker(config_name, state.run_id)
@@ -112,11 +112,18 @@ def main() -> None:
         f"Benchmark: {config.benchmark_cmd}",
         "",
         "## RE-READ NOW",
-        f"1. Read {run_dir}/journal.md",
+        f"1. Read recent journals in {iterations_dir}/*/journal.md",
     ]
 
-    for i, f in enumerate(context_files, 2):
-        parts.append(f"{i}. Read {f}")
+    idx = 2
+    if refs and refs.files:
+        for f in refs.files:
+            parts.append(f"{idx}. Read {f}")
+            idx += 1
+    if refs and refs.urls:
+        for u in refs.urls:
+            parts.append(f"{idx}. WebFetch {u}")
+            idx += 1
 
     if state.interpolated_prompt:
         parts.extend(["", "## Task", state.interpolated_prompt])

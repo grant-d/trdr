@@ -44,7 +44,7 @@ def main() -> None:
             params_str = ", ".join(f"{k}={v}" for k, v in config.params.items())
             print(f"Params: {params_str}")
 
-        print(f"Journal: {state.run_dir}/journal.md")
+        print(f"Journals: {state.run_dir}/*/journal.md")
     else:
         print("No active SICA loop")
         configs = list_configs()

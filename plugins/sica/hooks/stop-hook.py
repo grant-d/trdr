@@ -11,6 +11,7 @@ Intercepts Claude's exit attempts to:
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -22,6 +23,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
 from config import SicaConfig
 from debug import dbg
 from paths import (
+    get_iteration_dir,
+    get_iterations_dir,
     is_sica_session,
     list_active_configs,
     make_runtime_marker,
@@ -180,17 +183,41 @@ def parse_test_output(output: str) -> tuple[int, int, int]:
     return passed, failed, errors
 
 
+def snapshot_files(config: SicaConfig, iter_dir: Path) -> None:
+    """Create snapshot of archive files before iteration.
+
+    Args:
+        config: SICA config with optional archive.files
+        iter_dir: Iteration directory to store snapshot
+    """
+    if not config.archive or not config.archive.files:
+        return
+
+    snapshot_dir = iter_dir / "snapshot"
+    snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+    for file_path in config.archive.files:
+        src = Path(file_path)
+        if src.exists():
+            shutil.copy(src, snapshot_dir / src.name)
+            dbg(f"Snapshot: {src.name}")
+
+
 def archive_iteration(
     config: SicaConfig,
     benchmark_result: dict[str, str | int | float],
     transcript_path: str,
 ) -> Path:
-    """Save iteration results to archive."""
-    state = config.state
-    run_dir = Path(state.run_dir)
-    iteration = state.iteration
-    iter_dir = run_dir / f"iteration_{iteration}"
-    iter_dir.mkdir(parents=True, exist_ok=True)
+    """Save iteration results to archive.
+
+    Uses timestamp-based iteration IDs: YYYYMMDD-HHMMSS
+    """
+    # Generate timestamp-based iteration ID
+    iteration_id = datetime.now().strftime("%Y%m%d-%H%M%S")
+    iter_dir = get_iteration_dir(config.name, iteration_id)
+
+    # Snapshot files BEFORE saving other artifacts
+    snapshot_files(config, iter_dir)
 
     # Save benchmark results
     benchmark_file = iter_dir / "benchmark.json"
@@ -198,6 +225,7 @@ def archive_iteration(
         json.dumps(
             {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
+                "iteration": config.state.iteration,
                 "command": config.benchmark_cmd,
                 **benchmark_result,
             },
@@ -245,38 +273,38 @@ def archive_iteration(
 
 def get_archive_summary(config: SicaConfig, top_n: int = 10) -> str:
     """Generate compact CSV summary of top N iterations by score."""
-    state = config.state
-    run_dir = Path(state.run_dir)
-    entries: list[tuple[float, int, int, int, int]] = []
+    iterations_dir = get_iterations_dir(config.name)
+    entries: list[tuple[float, str, int, int, int]] = []
 
-    for i in range(state.iteration):
-        iter_dir = run_dir / f"iteration_{i}"
-        benchmark_file = iter_dir / "benchmark.json"
-
-        if benchmark_file.exists():
-            try:
-                d = json.loads(benchmark_file.read_text())
-                score = d.get("score", 0)
-                entries.append(
-                    (
-                        score,
-                        i,
-                        d.get("passed", 0),
-                        d.get("failed", 0),
-                        d.get("errors", 0),
+    if iterations_dir.exists():
+        for iter_dir in iterations_dir.iterdir():
+            if not iter_dir.is_dir():
+                continue
+            benchmark_file = iter_dir / "benchmark.json"
+            if benchmark_file.exists():
+                try:
+                    d = json.loads(benchmark_file.read_text())
+                    score = d.get("score", 0)
+                    entries.append(
+                        (
+                            score,
+                            iter_dir.name,  # timestamp ID
+                            d.get("passed", 0),
+                            d.get("failed", 0),
+                            d.get("errors", 0),
+                        )
                     )
-                )
-            except Exception:
-                pass
+                except Exception:
+                    pass
 
     if not entries:
         return "No previous iterations."
 
     entries.sort(reverse=True)
     entries = entries[:top_n]
-    rows = ["#,score,pass,fail,err"]
-    for score, i, p, f, e in entries:
-        rows.append(f"{i},{score:.3f},{p},{f},{e}")
+    rows = ["id,score,pass,fail,err"]
+    for score, iter_id, p, f, e in entries:
+        rows.append(f"{iter_id},{score:.3f},{p},{f},{e}")
 
     return "\n".join(rows)
 
@@ -326,15 +354,13 @@ def generate_improvement_prompt(
     """Generate compact improvement prompt with archive analysis."""
     state = config.state
     failures = extract_failures(benchmark_result)
-    top_n = 10
-    # archive_summary = get_archive_summary(config, top_n=top_n)
     original = state.interpolated_prompt
-    run_dir = state.run_dir
+    iterations_dir = get_iterations_dir(config.name)
 
     passed = benchmark_result.get("passed", 0)
     failed = benchmark_result.get("failed", 0)
 
-    journal_path = f"{run_dir}/journal.md"
+    journal_path = str(iter_dir / "journal.md")
     parts = [
         f"## Results: {passed}✓ {failed}✗",
         "",
@@ -367,14 +393,12 @@ def generate_improvement_prompt(
 
     parts.extend(
         [
-            # f"## Top {top_n} Iterations",
-            # archive_summary,
-            # "",
             "## Failures",
             failures,
             "",
-            "## Archive",
-            f"If stuck, read {run_dir}/iteration_N/changes.diff to restore a better approach.",
+            "## Rollback",
+            f"To revert: copy files from {iterations_dir}/<timestamp>/snapshot/ to source.",
+            "Each snapshot contains files BEFORE that iteration's changes.",
         ]
     )
 
@@ -506,7 +530,6 @@ def main() -> None:
     improvement_prompt = generate_improvement_prompt(config, benchmark_result, iter_dir)
 
     # Build system message for NEXT iteration (forward-looking, not describing what just happened)
-    run_dir = state.run_dir
     promise = config.completion_promise
     marker = make_runtime_marker(config.name, state.run_id)
     scores_str = "→".join(f"{s:.2f}" for s in state.recent_scores) if state.recent_scores else ""
@@ -515,7 +538,7 @@ def main() -> None:
         f"Score: {score:.3f}/{config.target_score} | "
         f"History: {scores_str} | "
         f"NEXT: ONE fix then EXIT (benchmark auto-runs). NO test changes. "
-        f"Update {run_dir}/journal.md. Done: <promise>{promise}</promise> "
+        f"Update {iter_dir}/journal.md. Done: <promise>{promise}</promise> "
         f"{marker}"
     )
 

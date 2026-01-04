@@ -33,7 +33,13 @@ Create a config at `.sica/configs/<name>/config.json`:
   "max_iterations": 20,
   "target_score": 1.0,
   "prompt": "Optimize {symbol} strategy for {timeframe}",
-  "context_files": ["docs/strategy-spec.md", "research/backtest-notes.md"],
+  "refs": {
+    "files": ["docs/strategy-spec.md", "research/backtest-notes.md"],
+    "urls": ["https://example.com/api-docs"]
+  },
+  "archive": {
+    "files": ["src/strategy.py"]
+  },
   "params": {
     "symbol": "BTC/USD",
     "timeframe": "1h"
@@ -72,7 +78,9 @@ Then run:
 | `completion_promise` | Phrase to signal completion | "TESTS PASSING" |
 | `benchmark_timeout` | Timeout in seconds | 120 |
 | `prompt` | Task description (supports `{param}` interpolation) | "" |
-| `context_files` | Docs to re-read after compaction (specs, research notes) | [] |
+| `refs.files` | Local files to re-read after compaction (specs, docs) | [] |
+| `refs.urls` | URLs to re-fetch after compaction (external docs) | [] |
+| `archive.files` | Source files to snapshot before each iteration (for rollback) | [] |
 | `params` | Key-value pairs for `{key}` interpolation | {} |
 
 ### Commands
@@ -89,20 +97,18 @@ Then run:
 
 ```text
 .sica/                                    # Tracked in git
-├── .gitignore                            # Ignores **/runs/
+├── .gitignore                            # Ignores **/iterations/
 └── configs/
     └── btc-1h/                           # Config folder
-        ├── config.json                   # Config params (tracked)
-        ├── state.json                    # Run state (tracked, single source of truth)
-        └── runs/                         # Archives (ignored)
-            └── run_YYYYMMDD_HHMMSS/
-                ├── journal.md            # Claude's log
-                └── iteration_N/
-                    ├── benchmark.json    # Test results, score
-                    ├── stdout.txt
-                    ├── stderr.txt
-                    ├── changes.diff      # Git diff
-                    └── summary.txt
+        ├── config.json                   # Config + state (tracked)
+        └── iterations/                   # Archives (ignored)
+            └── YYYYMMDD-HHMMSS/          # Timestamp-named iteration
+                ├── benchmark.json        # Test results, score
+                ├── journal.md            # Claude's iteration notes
+                ├── changes.diff          # Git diff
+                ├── stdout.txt
+                └── snapshot/             # Files before this iteration
+                    └── strategy.py       # Snapshot for rollback
 ```
 
 ## Supported Test Frameworks

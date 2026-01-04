@@ -13,6 +13,7 @@
     "pr-review-toolkit@claude-plugins-official": false,
     "typescript-lsp@claude-plugins-official": false,
     "compound-engineering@every-marketplace": true,
-    "sica@jigx-plugins": true
+    "sica@jigx-plugins": true,
+    "plugin-dev@claude-plugins-official": true
   }
 }

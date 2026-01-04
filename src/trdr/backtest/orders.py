@@ -80,6 +80,7 @@ class Fill:
         quantity: Filled quantity
         timestamp: Fill time
         side: "buy" or "sell"
+        order_type: Type of order that was filled
     """
 
     order_id: str
@@ -87,6 +88,7 @@ class Fill:
     quantity: float
     timestamp: str
     side: Literal["buy", "sell"]
+    order_type: OrderType
 
 
 class OrderManager:
@@ -267,6 +269,7 @@ class OrderManager:
                     quantity=order.quantity,
                     timestamp=bar.timestamp,
                     side=order.side,
+                    order_type=order.order_type,
                 )
             return None
 
@@ -302,6 +305,7 @@ class OrderManager:
                     quantity=order.quantity,
                     timestamp=bar.timestamp,
                     side=order.side,
+                    order_type=order.order_type,
                 )
             return None
 
@@ -335,6 +339,7 @@ class OrderManager:
                     quantity=order.quantity,
                     timestamp=bar.timestamp,
                     side=order.side,
+                    order_type=order.order_type,
                 )
             return None
 
@@ -357,4 +362,5 @@ class OrderManager:
             quantity=order.quantity,
             timestamp=bar.timestamp,
             side=order.side,
+            order_type=order.order_type,
         )

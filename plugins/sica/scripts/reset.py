@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Reset SICA state and stop loop.
 
-Clears config.state. Run archives in runs/ are preserved.
+Clears config.state. Iteration archives in iterations/ are preserved.
 """
 
 import argparse

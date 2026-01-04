@@ -5,13 +5,21 @@
   "benchmark_timeout": 120,
   "completion_promise": "TESTS PASSING",
   "prompt": "Optimize BTC/USD MR strategy",
-  "context_files": [
-    "src/trdr/backtest/STRATEGY_API.md",
-    "src/trdr/indicators/INDICATORS.md",
-    "thoughts/grantdickinson/2026-01-01-research-combined-trading-algorithms.md"
-  ],
+  "refs": {
+    "files": [
+      "src/trdr/backtest/STRATEGY_API.md",
+      "src/trdr/indicators/INDICATORS.md",
+      "thoughts/grantdickinson/2026-01-01-research-combined-trading-algorithms.md"
+    ],
+    "urls": []
+  },
   "params": {
     "symbol": "crypto:BTC/USD"
+  },
+  "archive": {
+    "files": [
+      "src/trdr/strategy/mean_reversion/strategy.py"
+    ]
   },
   "state": {
     "run_id": "20260104_100604",

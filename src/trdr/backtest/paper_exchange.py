@@ -153,14 +153,18 @@ class PaperExchangeResult:
 
     def __post_init__(self) -> None:
         """Create metrics calculator."""
-        object.__setattr__(self, "_metrics", TradeMetrics(
-            trades=self.trades,
-            equity_curve=self.equity_curve,
-            initial_capital=self.config.initial_capital,
-            asset_type=self.config.asset_type,
-            start_time=self.start_time,
-            end_time=self.end_time,
-        ))
+        object.__setattr__(
+            self,
+            "_metrics",
+            TradeMetrics(
+                trades=self.trades,
+                equity_curve=self.equity_curve,
+                initial_capital=self.config.initial_capital,
+                asset_type=self.config.asset_type,
+                start_time=self.start_time,
+                end_time=self.end_time,
+            ),
+        )
 
     # Delegate all metrics to TradeMetrics
     @property
@@ -599,12 +603,8 @@ class PaperExchange:
                             cost=cost,
                         )
 
-                        # Find the order that triggered this fill
-                        exit_reason = "signal"
-                        for order in order_manager.fills:
-                            if order.order_id == fill.order_id:
-                                if hasattr(order, "order_type"):
-                                    exit_reason = str(order.order_type)
+                        # Capture order type from fill
+                        exit_reason = str(fill.order_type.value)
 
                         trade = Trade(
                             entry_time=entry_time,
@@ -698,21 +698,23 @@ class PaperExchange:
                 price=final_bar.close,
                 cost=cost,
             )
-            trades.append(Trade(
-                entry_time=entry_time,
-                exit_time=final_bar.timestamp,
-                entry_price=pos_avg,
-                exit_price=final_bar.close,
-                quantity=pos_qty,
-                side="long",
-                gross_pnl=pnl + cost + entry_cost,
-                costs=cost + entry_cost,
-                net_pnl=pnl,
-                entry_reason=entry_reason,
-                exit_reason="end_of_data",
-                stop_loss=entry_stop_loss,
-                take_profit=entry_take_profit,
-            ))
+            trades.append(
+                Trade(
+                    entry_time=entry_time,
+                    exit_time=final_bar.timestamp,
+                    entry_price=pos_avg,
+                    exit_price=final_bar.close,
+                    quantity=pos_qty,
+                    side="long",
+                    gross_pnl=pnl + cost + entry_cost,
+                    costs=cost + entry_cost,
+                    net_pnl=pnl,
+                    entry_reason=entry_reason,
+                    exit_reason="end_of_data",
+                    stop_loss=entry_stop_loss,
+                    take_profit=entry_take_profit,
+                )
+            )
             if equity_curve:
                 equity_curve[-1] = portfolio.equity({self.config.symbol: final_bar.close})
 
@@ -759,101 +761,127 @@ class PaperExchange:
             if signal.stop_price and signal.limit_price:
                 # Stop-limit: triggered at stop_price, fills at limit_price
                 err = _validate_order_direction(
-                    "buy", OrderType.STOP_LIMIT, bar.close,
-                    signal.stop_price, signal.limit_price,
+                    "buy",
+                    OrderType.STOP_LIMIT,
+                    bar.close,
+                    signal.stop_price,
+                    signal.limit_price,
                 )
                 if err:
                     raise ValueError(f"Invalid buy stop-limit: {err}")
-                order_manager.submit(Order(
-                    symbol=self.config.symbol,
-                    side="buy",
-                    order_type=OrderType.STOP_LIMIT,
-                    quantity=qty,
-                    stop_price=signal.stop_price,
-                    limit_price=signal.limit_price,
-                    created_at=bar.timestamp,
-                ))
+                order_manager.submit(
+                    Order(
+                        symbol=self.config.symbol,
+                        side="buy",
+                        order_type=OrderType.STOP_LIMIT,
+                        quantity=qty,
+                        stop_price=signal.stop_price,
+                        limit_price=signal.limit_price,
+                        created_at=bar.timestamp,
+                    )
+                )
             elif signal.limit_price:
                 err = _validate_order_direction(
-                    "buy", OrderType.LIMIT, bar.close,
-                    None, signal.limit_price,
+                    "buy",
+                    OrderType.LIMIT,
+                    bar.close,
+                    None,
+                    signal.limit_price,
                 )
                 if err:
                     raise ValueError(f"Invalid buy limit: {err}")
-                order_manager.submit(Order(
-                    symbol=self.config.symbol,
-                    side="buy",
-                    order_type=OrderType.LIMIT,
-                    quantity=qty,
-                    limit_price=signal.limit_price,
-                    created_at=bar.timestamp,
-                ))
+                order_manager.submit(
+                    Order(
+                        symbol=self.config.symbol,
+                        side="buy",
+                        order_type=OrderType.LIMIT,
+                        quantity=qty,
+                        limit_price=signal.limit_price,
+                        created_at=bar.timestamp,
+                    )
+                )
             else:
-                order_manager.submit(Order(
-                    symbol=self.config.symbol,
-                    side="buy",
-                    order_type=OrderType.MARKET,
-                    quantity=qty,
-                    created_at=bar.timestamp,
-                ))
+                order_manager.submit(
+                    Order(
+                        symbol=self.config.symbol,
+                        side="buy",
+                        order_type=OrderType.MARKET,
+                        quantity=qty,
+                        created_at=bar.timestamp,
+                    )
+                )
 
             # Submit stop loss if specified (sell stop below price)
             if signal.stop_loss:
                 err = _validate_order_direction(
-                    "sell", OrderType.STOP, bar.close,
-                    signal.stop_loss, None,
+                    "sell",
+                    OrderType.STOP,
+                    bar.close,
+                    signal.stop_loss,
+                    None,
                 )
                 if err:
                     raise ValueError(f"Invalid stop loss: {err}")
-                order_manager.submit(Order(
-                    symbol=self.config.symbol,
-                    side="sell",
-                    order_type=OrderType.STOP,
-                    quantity=qty,
-                    stop_price=signal.stop_loss,
-                    created_at=bar.timestamp,
-                ))
+                order_manager.submit(
+                    Order(
+                        symbol=self.config.symbol,
+                        side="sell",
+                        order_type=OrderType.STOP,
+                        quantity=qty,
+                        stop_price=signal.stop_loss,
+                        created_at=bar.timestamp,
+                    )
+                )
 
             # Submit trailing stop if specified
             if signal.trailing_stop:
                 # Determine if it's a percent or absolute amount
                 if signal.trailing_stop < 1:
                     # Treat as percent
-                    order_manager.submit(Order(
-                        symbol=self.config.symbol,
-                        side="sell",
-                        order_type=OrderType.TRAILING_STOP,
-                        quantity=qty,
-                        trail_percent=signal.trailing_stop,
-                        created_at=bar.timestamp,
-                    ))
+                    order_manager.submit(
+                        Order(
+                            symbol=self.config.symbol,
+                            side="sell",
+                            order_type=OrderType.TRAILING_STOP,
+                            quantity=qty,
+                            trail_percent=signal.trailing_stop,
+                            created_at=bar.timestamp,
+                        )
+                    )
                 else:
                     # Treat as absolute amount
-                    order_manager.submit(Order(
-                        symbol=self.config.symbol,
-                        side="sell",
-                        order_type=OrderType.TRAILING_STOP,
-                        quantity=qty,
-                        trail_amount=signal.trailing_stop,
-                        created_at=bar.timestamp,
-                    ))
+                    order_manager.submit(
+                        Order(
+                            symbol=self.config.symbol,
+                            side="sell",
+                            order_type=OrderType.TRAILING_STOP,
+                            quantity=qty,
+                            trail_amount=signal.trailing_stop,
+                            created_at=bar.timestamp,
+                        )
+                    )
 
             # Submit take profit if specified (sell limit above price)
             if signal.take_profit:
                 err = _validate_order_direction(
-                    "sell", OrderType.LIMIT, bar.close,
-                    None, signal.take_profit,
+                    "sell",
+                    OrderType.LIMIT,
+                    bar.close,
+                    None,
+                    signal.take_profit,
                 )
                 if err:
                     raise ValueError(f"Invalid take profit: {err}")
-                order_manager.submit(Order(
-                    symbol=self.config.symbol,
-                    side="sell",
-                    order_type=OrderType.LIMIT,
-                    quantity=qty,
-                    limit_price=signal.take_profit,
-                    created_at=bar.timestamp,
-                ))
+                order_manager.submit(
+                    Order(
+                        symbol=self.config.symbol,
+                        side="sell",
+                        order_type=OrderType.LIMIT,
+                        quantity=qty,
+                        limit_price=signal.take_profit,
+                        created_at=bar.timestamp,
+                    )
+                )
 
         elif signal.action == SignalAction.CLOSE and position:
             # Cancel any pending stop orders
@@ -861,21 +889,25 @@ class PaperExchange:
 
             # Submit market sell
             qty = signal.quantity if signal.quantity else position.size
-            order_manager.submit(Order(
-                symbol=self.config.symbol,
-                side="sell",
-                order_type=OrderType.MARKET,
-                quantity=qty,
-                created_at=bar.timestamp,
-            ))
+            order_manager.submit(
+                Order(
+                    symbol=self.config.symbol,
+                    side="sell",
+                    order_type=OrderType.MARKET,
+                    quantity=qty,
+                    created_at=bar.timestamp,
+                )
+            )
 
         elif signal.action == SignalAction.SELL and position:
             # Partial sell
             qty = signal.quantity if signal.quantity else position.size
-            order_manager.submit(Order(
-                symbol=self.config.symbol,
-                side="sell",
-                order_type=OrderType.MARKET,
-                quantity=qty,
-                created_at=bar.timestamp,
-            ))
+            order_manager.submit(
+                Order(
+                    symbol=self.config.symbol,
+                    side="sell",
+                    order_type=OrderType.MARKET,
+                    quantity=qty,
+                    created_at=bar.timestamp,
+                )
+            )

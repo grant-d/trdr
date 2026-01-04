@@ -5,14 +5,16 @@ All paths are relative to current working directory.
 
 Directory Structure:
     .sica/                          # Root (created on first use)
-    ├── .gitignore                  # Contains: **/runs/
+    ├── .gitignore                  # Contains: **/iterations/
     └── configs/                    # Config folders
         └── <name>/                 # Individual config
             ├── config.json         # Config + nested state
-            └── runs/               # Run archives (gitignored)
-                └── run_YYYYMMDD_HHMMSS/
+            └── iterations/         # Iteration archives (gitignored)
+                └── YYYYMMDD-HHMMSS/ # Timestamp-named iterations
+                    ├── benchmark.json
+                    ├── changes.diff
                     ├── journal.md
-                    └── iteration_N/
+                    └── snapshot/   # Files before this iteration
 """
 
 import json
@@ -111,37 +113,37 @@ def get_config_file(name: str) -> Path:
     return get_config_dir(name) / "config.json"
 
 
-def get_runs_dir(name: str) -> Path:
-    """Get runs directory for a config, create if needed.
+def get_iterations_dir(name: str) -> Path:
+    """Get iterations directory for a config, create if needed.
 
-    Run archives are stored here and gitignored.
+    Iteration archives are stored here and gitignored.
 
     Args:
         name: Config name
 
     Returns:
-        Path to .sica/configs/<name>/runs/
+        Path to .sica/configs/<name>/iterations/
     """
-    runs = get_config_dir(name) / "runs"
-    runs.mkdir(parents=True, exist_ok=True)
-    return runs
+    iterations = get_config_dir(name) / "iterations"
+    iterations.mkdir(parents=True, exist_ok=True)
+    return iterations
 
 
-def get_run_dir(name: str, run_id: str) -> Path:
-    """Get specific run directory, create if needed.
+def get_iteration_dir(name: str, iteration_id: str) -> Path:
+    """Get specific iteration directory, create if needed.
 
-    Each run gets a timestamped directory containing iteration archives.
+    Each iteration gets a timestamp-named directory.
 
     Args:
         name: Config name
-        run_id: Run ID in YYYYMMDD_HHMMSS format
+        iteration_id: Iteration ID in YYYYMMDD-HHMMSS format
 
     Returns:
-        Path to .sica/configs/<name>/runs/run_<run_id>/
+        Path to .sica/configs/<name>/iterations/<iteration_id>/
     """
-    run_dir = get_runs_dir(name) / f"run_{run_id}"
-    run_dir.mkdir(parents=True, exist_ok=True)
-    return run_dir
+    iter_dir = get_iterations_dir(name) / iteration_id
+    iter_dir.mkdir(parents=True, exist_ok=True)
+    return iter_dir
 
 
 def list_configs() -> list[str]:
