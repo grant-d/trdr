@@ -1,7 +1,7 @@
 """Tests for composite scoring function.
 
 Tests cover:
-- Individual metric scaling (asymptotic function)
+- Individual metric scaling (asymptotic and quadratic functions)
 - Edge cases (zero, negative, infinity)
 - Drawdown penalty
 - Alpha penalty (vs buy-hold)
@@ -10,7 +10,7 @@ Tests cover:
 
 import pytest
 
-from trdr.strategy.score import asymptotic, compute_composite_score
+from trdr.strategy.score import asymptotic, quadratic, compute_composite_score
 
 
 class TestAsymptotic:
@@ -41,11 +41,58 @@ class TestAsymptotic:
         assert abs(asymptotic(0.5, 1.0) - 0.333) < 0.01
 
 
-class TestCompositeScoreBasic:
-    """Test basic composite score behavior."""
+class TestQuadratic:
+    """Test quadratic scaling function."""
 
-    def test_perfect_metrics_high_score(self):
-        """Excellent metrics should produce high score."""
+    def test_at_target_returns_one(self):
+        """Score = 1.0 at target."""
+        assert quadratic(100, target=100, delta=100) == 1.0
+        assert quadratic(50, target=50, delta=50) == 1.0
+
+    def test_at_zero_returns_zero(self):
+        """Score = 0 at target - delta."""
+        assert quadratic(0, target=100, delta=100) == 0.0
+
+    def test_at_double_target_returns_zero(self):
+        """Score = 0 at target + delta."""
+        assert quadratic(200, target=100, delta=100) == 0.0
+
+    def test_halfway_returns_three_quarters(self):
+        """Score = 0.75 at halfway points."""
+        # At 50 (halfway between 0 and 100): normalized = -0.5, score = 1 - 0.25 = 0.75
+        assert abs(quadratic(50, target=100, delta=100) - 0.75) < 0.01
+        # At 150 (halfway between 100 and 200): normalized = 0.5, score = 0.75
+        assert abs(quadratic(150, target=100, delta=100) - 0.75) < 0.01
+
+    def test_beyond_range_clamped_to_zero(self):
+        """Values beyond target ± delta clamp to 0."""
+        assert quadratic(-50, target=100, delta=100) == 0.0
+        assert quadratic(250, target=100, delta=100) == 0.0
+
+    def test_symmetric_around_target(self):
+        """Score is symmetric around target."""
+        # 80 and 120 are equidistant from 100
+        score_below = quadratic(80, target=100, delta=100)
+        score_above = quadratic(120, target=100, delta=100)
+        assert abs(score_below - score_above) < 0.001
+
+    def test_different_deltas(self):
+        """Different deltas change the curve width."""
+        # Narrow delta = steeper falloff
+        narrow = quadratic(80, target=100, delta=50)  # 20 away from 100, delta=50
+        wide = quadratic(80, target=100, delta=100)   # 20 away from 100, delta=100
+        assert narrow < wide  # Narrow penalizes more
+
+
+class TestCompositeScoreBasic:
+    """Test basic composite score behavior.
+
+    Note: Without bars, CAGR and Calmar are 0, which is 60% of the score.
+    These tests verify the secondary metrics (40%) behave correctly.
+    """
+
+    def test_good_secondary_metrics(self):
+        """Good secondary metrics should produce decent score (max 40% without bars)."""
         score, _ = compute_composite_score(
             profit_factor=5.0,
             sortino=3.0,
@@ -54,7 +101,9 @@ class TestCompositeScoreBasic:
             max_drawdown=0.05,
             total_trades=50,
         )
-        assert score > 0.7
+        # Without bars: CAGR=0, Calmar=0 (60% lost)
+        # Secondary metrics max out around 0.35-0.40
+        assert 0.2 < score < 0.5
 
     def test_poor_metrics_low_score(self):
         """Poor metrics should produce low score."""
@@ -66,7 +115,7 @@ class TestCompositeScoreBasic:
             max_drawdown=0.10,
             total_trades=5,
         )
-        assert score < 0.3
+        assert score < 0.2
 
     def test_zero_trades_near_zero_score(self):
         """Zero trades should produce very low score."""
@@ -85,7 +134,7 @@ class TestDrawdownPenalty:
     """Test drawdown penalty behavior."""
 
     def test_low_drawdown_no_penalty(self):
-        """Drawdown <= 20% should not be penalized."""
+        """Drawdown <= 25% should not be penalized."""
         score_5pct, details_5 = compute_composite_score(
             profit_factor=2.0,
             sortino=1.5,
@@ -94,50 +143,50 @@ class TestDrawdownPenalty:
             max_drawdown=0.05,
             total_trades=20,
         )
-        score_20pct, details_20 = compute_composite_score(
+        score_25pct, details_25 = compute_composite_score(
             profit_factor=2.0,
             sortino=1.5,
             pnl=2000,
             win_rate=0.50,
-            max_drawdown=0.20,
+            max_drawdown=0.25,
             total_trades=20,
         )
-        # Both should have penalty 1.0
-        assert "penalty 1.00" in str(details_5)
-        assert "penalty 1.00" in str(details_20)
-        assert score_5pct == score_20pct
+        # Both should have DD penalty 1.0
+        assert "DD: 5.0% → penalty 1.00" in str(details_5)
+        assert "DD: 25.0% → penalty 1.00" in str(details_25)
+        assert score_5pct == score_25pct
 
     def test_high_drawdown_penalized(self):
-        """Drawdown > 20% should be penalized exponentially."""
-        score_20pct, _ = compute_composite_score(
+        """Drawdown > 25% should be penalized exponentially."""
+        score_25pct, _ = compute_composite_score(
             profit_factor=2.0,
             sortino=1.5,
             pnl=2000,
             win_rate=0.50,
-            max_drawdown=0.20,
+            max_drawdown=0.25,
             total_trades=20,
         )
-        score_30pct, _ = compute_composite_score(
+        score_35pct, _ = compute_composite_score(
             profit_factor=2.0,
             sortino=1.5,
             pnl=2000,
             win_rate=0.50,
-            max_drawdown=0.30,
+            max_drawdown=0.35,
             total_trades=20,
         )
-        score_40pct, _ = compute_composite_score(
+        score_45pct, _ = compute_composite_score(
             profit_factor=2.0,
             sortino=1.5,
             pnl=2000,
             win_rate=0.50,
-            max_drawdown=0.40,
+            max_drawdown=0.45,
             total_trades=20,
         )
         # Higher DD = lower score
-        assert score_30pct < score_20pct
-        assert score_40pct < score_30pct
-        # 40% DD should be heavily penalized
-        assert score_40pct < score_20pct * 0.5
+        assert score_35pct < score_25pct
+        assert score_45pct < score_35pct
+        # 45% DD should be heavily penalized
+        assert score_45pct < score_25pct * 0.5
 
 
 class TestAlphaPenalty:
@@ -201,34 +250,35 @@ class TestAlphaPenalty:
 
     def test_alpha_penalty_proportional(self):
         """Alpha penalty should be proportional to underperformance."""
+        # Normal market (buyhold < 25%): penalty = alpha directly
         # 80% of buy-hold → 0.8 penalty
         score_80pct, details_80 = compute_composite_score(
             profit_factor=2.0,
             sortino=1.5,
-            pnl=4000,  # 40% return
+            pnl=1600,  # 16% return
             win_rate=0.50,
             max_drawdown=0.10,
             total_trades=20,
             initial_capital=10000,
-            buyhold_return=0.50,  # 50%
+            buyhold_return=0.20,  # 20% (normal market)
         )
         # 50% of buy-hold → 0.5 penalty
         score_50pct, details_50 = compute_composite_score(
             profit_factor=2.0,
             sortino=1.5,
-            pnl=2500,  # 25% return
+            pnl=1000,  # 10% return
             win_rate=0.50,
             max_drawdown=0.10,
             total_trades=20,
             initial_capital=10000,
-            buyhold_return=0.50,  # 50%
+            buyhold_return=0.20,  # 20% (normal market)
         )
         assert "penalty 0.80" in str(details_80)
         assert "penalty 0.50" in str(details_50)
         assert score_80pct > score_50pct
 
-    def test_alpha_floor_at_10_percent(self):
-        """Alpha penalty should floor at 0.1 (not 0)."""
+    def test_alpha_floor_at_30_percent(self):
+        """Alpha penalty should floor at 0.3 (not 0) for normal markets."""
         score, details = compute_composite_score(
             profit_factor=2.0,
             sortino=1.5,
@@ -237,9 +287,9 @@ class TestAlphaPenalty:
             max_drawdown=0.10,
             total_trades=20,
             initial_capital=10000,
-            buyhold_return=1.00,  # 100%
+            buyhold_return=0.20,  # 20% (normal market, not mega-trend)
         )
-        assert "penalty 0.10" in str(details)
+        assert "penalty 0.30" in str(details)
         assert score > 0  # Should not be zero
 
 
@@ -284,8 +334,8 @@ class TestEdgeCases:
         assert "PF: 10.00" in str(details)
         assert 0 < score < 1
 
-    def test_negative_pnl_treated_as_zero(self):
-        """Negative P&L should be treated as 0 for scoring."""
+    def test_negative_pnl_gives_zero_cagr(self):
+        """Negative P&L without bars gives CAGR 0."""
         score, details = compute_composite_score(
             profit_factor=0.5,
             sortino=0.5,
@@ -294,7 +344,8 @@ class TestEdgeCases:
             max_drawdown=0.25,
             total_trades=20,
         )
-        assert "P&L: $0" in str(details)
+        # Without bars, CAGR = 0 (no period info)
+        assert "CAGR: 0.0%" in str(details)
 
     def test_win_rate_clamped(self):
         """Win rate should be clamped to [0, 1]."""
@@ -333,92 +384,23 @@ class TestEdgeCases:
         assert "Alpha" not in str(details)
 
 
-class TestScorePermutations:
-    """Permutations showing score behavior across metric ranges.
+class TestScoreWithoutBars:
+    """Test scoring behavior without bar data (CAGR/Calmar = 0)."""
 
-    These tests document expected scores for various metric combinations
-    to help understand the scoring function's behavior.
-    """
-
-    @pytest.mark.parametrize(
-        "pf,sortino,pnl,wr,trades,dd,expected_min,expected_max,description",
-        [
-            # Baseline scenarios
-            (1.5, 1.0, 1000, 0.40, 10, 0.10, 0.45, 0.55, "All at target (score ~0.5)"),
-            (3.0, 2.0, 5000, 0.60, 30, 0.10, 0.65, 0.80, "Good metrics"),
-            (5.0, 3.0, 10000, 0.70, 50, 0.05, 0.75, 0.90, "Excellent metrics"),
-
-            # Single metric variations (geometric mean pulls down quickly)
-            (0.5, 1.0, 1000, 0.40, 10, 0.10, 0.35, 0.50, "Poor PF only"),
-            (1.5, 0.2, 1000, 0.40, 10, 0.10, 0.30, 0.45, "Poor Sortino only"),
-            (1.5, 1.0, 100, 0.40, 10, 0.10, 0.30, 0.45, "Poor P&L only"),
-            (1.5, 1.0, 1000, 0.20, 10, 0.10, 0.35, 0.50, "Poor WR only"),
-            (1.5, 1.0, 1000, 0.40, 2, 0.10, 0.30, 0.45, "Few trades only"),
-
-            # Drawdown impact
-            (2.0, 1.5, 2000, 0.50, 20, 0.15, 0.50, 0.65, "DD 15% (no penalty)"),
-            (2.0, 1.5, 2000, 0.50, 20, 0.25, 0.30, 0.45, "DD 25% (penalized)"),
-            (2.0, 1.5, 2000, 0.50, 20, 0.35, 0.10, 0.25, "DD 35% (heavy penalty)"),
-
-            # Extreme cases
-            (10.0, 5.0, 50000, 0.80, 100, 0.05, 0.80, 0.95, "Exceptional metrics"),
-            (0.8, 0.5, 500, 0.35, 5, 0.30, 0.05, 0.15, "Poor across the board"),
-        ],
-    )
-    def test_score_ranges(
-        self, pf, sortino, pnl, wr, trades, dd, expected_min, expected_max, description
-    ):
-        """Verify scores fall within expected ranges for various metric combinations."""
-        score, _ = compute_composite_score(
-            profit_factor=pf,
-            sortino=sortino,
-            pnl=pnl,
-            win_rate=wr,
-            max_drawdown=dd,
-            total_trades=trades,
-        )
-        assert expected_min <= score <= expected_max, (
-            f"{description}: score {score:.3f} not in [{expected_min}, {expected_max}]"
-        )
-
-    @pytest.mark.parametrize(
-        "strategy_return_pct,buyhold_return_pct,expected_penalty_min,expected_penalty_max",
-        [
-            (150, 100, 1.0, 1.0),    # 1.5x buy-hold → no penalty
-            (100, 100, 1.0, 1.0),    # 1.0x buy-hold → no penalty
-            (80, 100, 0.75, 0.85),   # 0.8x buy-hold → ~0.8 penalty
-            (50, 100, 0.45, 0.55),   # 0.5x buy-hold → ~0.5 penalty
-            (20, 100, 0.15, 0.25),   # 0.2x buy-hold → ~0.2 penalty
-            (5, 100, 0.10, 0.10),    # 0.05x buy-hold → floor at 0.1
-        ],
-    )
-    def test_alpha_penalty_ranges(
-        self, strategy_return_pct, buyhold_return_pct, expected_penalty_min, expected_penalty_max
-    ):
-        """Verify alpha penalty scales correctly with underperformance."""
-        initial_capital = 10000
-        pnl = initial_capital * (strategy_return_pct / 100)
-        buyhold_return = buyhold_return_pct / 100
-
-        _, details = compute_composite_score(
+    def test_secondary_metrics_only(self):
+        """Without bars, only secondary metrics (40%) contribute."""
+        score, details = compute_composite_score(
             profit_factor=2.0,
-            sortino=1.5,
-            pnl=pnl,
+            sortino=2.0,
+            pnl=2000,
             win_rate=0.50,
             max_drawdown=0.10,
-            total_trades=20,
-            initial_capital=initial_capital,
-            buyhold_return=buyhold_return,
+            total_trades=50,  # 50 trades, no period = uses raw value
         )
-
-        # Extract penalty from details
-        alpha_line = [d for d in details if "Alpha" in d][0]
-        penalty = float(alpha_line.split("penalty ")[1])
-
-        assert expected_penalty_min <= penalty <= expected_penalty_max, (
-            f"Strategy {strategy_return_pct}% vs buy-hold {buyhold_return_pct}%: "
-            f"penalty {penalty:.2f} not in [{expected_penalty_min}, {expected_penalty_max}]"
-        )
+        # CAGR and Calmar are 0 (60%), so max score is ~0.40
+        assert 0.15 < score < 0.40
+        assert "CAGR: 0.0%" in str(details)
+        assert "Calmar: 0.00" in str(details)
 
 
 class TestDetailsOutput:
@@ -435,13 +417,14 @@ class TestDetailsOutput:
             total_trades=20,
         )
         details_str = "\n".join(details)
-        assert "PF:" in details_str
+        assert "CAGR:" in details_str
+        assert "Calmar:" in details_str
         assert "Sortino:" in details_str
-        assert "P&L:" in details_str
+        assert "PF:" in details_str
         assert "WR:" in details_str
         assert "Trades:" in details_str
         assert "DD:" in details_str
-        assert "Composite:" in details_str
+        assert "Score:" in details_str
 
     def test_details_shows_alpha_when_provided(self):
         """Details should show alpha when buy-hold return provided."""

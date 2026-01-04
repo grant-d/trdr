@@ -19,7 +19,7 @@ def main() -> None:
     if active:
         config = SicaConfig.load(active)
         state = config.state
-        score = f"{state.last_score:.2f}" if state.last_score is not None else "N/A"
+        score = f"{state.last_score:.3f}" if state.last_score is not None else "N/A"
         effective_max = config.max_iterations + state.iterations_added
 
         # Substitute params in benchmark command
@@ -32,7 +32,7 @@ def main() -> None:
 
         # Recent scores trend
         if state.recent_scores:
-            trend = " → ".join(f"{s:.2f}" for s in state.recent_scores[-5:])
+            trend = " → ".join(f"{s:.3f}" for s in state.recent_scores[-5:])
             print(f"Trend: {trend}")
 
         print(f"Benchmark: {bench_cmd}")

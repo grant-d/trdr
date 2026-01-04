@@ -682,6 +682,7 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         profile = calculate_volume_profile(bars)
         atr = calculate_atr(bars)
         mss = calculate_mss(bars)
+        vol_regime = classify_volatility_regime(bars)
 
         current_bar = bars[-1]
         current_price = current_bar.close
@@ -791,8 +792,9 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         if is_daily:
             hma_filter = hma_bullish and hma_trending_up
         elif is_15m:
-            # 15m: Disable VAH breakout (lower Sharpe) - focus on HMA-filtered VAL bounces
-            hma_filter = False  # Force vah_breakout = False
+            # 15m: Disable VAH breakout - VAL bounces only for optimal trade frequency
+            # Iter 29 showed VAH adds too many trades (218/yr vs optimal 100/yr)
+            hma_filter = False
         elif is_4h:
             # 4h: VAH breakout requires price > HMA for uptrend confirmation
             # This filters out fake breakouts in downtrends, improves quality
@@ -812,12 +814,12 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         elif is_15m:
             # 15m: Mean reversion for high frequency
             # Test: Tighter proximity (0.55 ATR) to catch bounces closer to VAL level
-            near_val = abs(current_price - profile.val) < atr * 0.55  # Tighter from 0.60
+            near_val = abs(current_price - profile.val) < atr * 0.55  # Optimal proximity
             hma_filter_15m = current_price > hma
             # Confluence filter: require HVN strength OR positive OFI (flexible)
             # Strong HVN alone OR active buying (OFI) alone both valid entry signals
-            hvn_ok = hvn_strength > 0.16  # Tested support level
-            ofi_ok = ofi > 0.08  # Weak buying pressure (relaxed threshold)
+            hvn_ok = hvn_strength > 0.18  # Tighter for quality - reduce trades toward 126/yr optimal
+            ofi_ok = ofi > 0.10  # Lower OFI to catch more valid buying pressure signals
             val_bounce = near_val and hma_filter_15m and mss > -50 and (hvn_ok or ofi_ok)
             poc_pullback = False
         elif is_4h:
@@ -868,19 +870,25 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         else:  # val_bounce
             # VAL bounce: mean reversion to POC (research: 55-65% win rate)
             # Take profit at POC (defined by volume, not arbitrary)
+            signal_type = "VAL_bounce"
+            confidence_base = 0.52  # Slightly higher base from 0.50
+
             if is_15m:
-                # 15m: Test tighter TP at POC - current_price for faster exits, improve WR
-                # Theory: quicker TP = higher WR (catch moves faster before reversals)
-                take_profit = profile.poc
-                stop_loss = current_price - atr * 0.045  # Slightly wider from 0.035 to reduce noise stops
+                # 15m: Extended TP to capture more upside with quality signals
+                take_profit = profile.poc + atr * 0.40
+                # Volatility-adaptive stop: wider in high vol, tight in low vol
+                if vol_regime == "high":
+                    stop_loss = current_price - atr * 0.05
+                elif vol_regime == "low":
+                    stop_loss = current_price - atr * 0.035
+                else:
+                    stop_loss = current_price - atr * 0.038
             else:
                 take_profit = profile.poc
                 if is_4h:
                     stop_loss = current_price - atr * 1.5  # Tighter from 1.6 to improve WR
                 else:
                     stop_loss = current_price - atr * 2.0
-            signal_type = "VAL_bounce"
-            confidence_base = 0.52  # Slightly higher base from 0.50
 
         confidence = confidence_base
 
@@ -935,7 +943,7 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         if is_daily:
             min_confidence_threshold = 0.55
         elif is_15m:
-            min_confidence_threshold = 0.40  # Much lower - let bonuses drive signals
+            min_confidence_threshold = 0.50  # Higher threshold to reduce trades toward 126/yr
         elif is_4h:
             min_confidence_threshold = 0.45  # Tighter from 0.40 to improve WR without killing volume
         else:
@@ -952,13 +960,23 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         # Position sizing: Scale with confidence and profit/loss ratio
         # For 15m, use higher position sizes on high-confidence setups
         if is_15m:
-            # Risk-reward ratio + confidence scaling
+            # Test: Even more aggressive confidence scaling to maximize CAGR
+            # Threshold 0.40 → 0.1x, confidence 0.65+ → 1.0x
             risk = abs(current_price - stop_loss)
             reward = abs(take_profit - current_price)
             if risk > 0:
                 rr_ratio = reward / risk
-                # Aggressive sizing: base 0.8 + rr_ratio bonus + confidence bonus
-                position_size_pct = min(1.0, 0.8 + rr_ratio * 0.2 + (confidence - 0.5) * 0.2)
+                # Ultra-steep scaling: maximize CAGR on high-confidence trades
+                # Confidence 0.40→0.15x, 0.60→0.5x, 0.80→1.0x (exponential curve)
+                if confidence >= 0.75:
+                    conf_multiplier = 1.0
+                elif confidence >= 0.65:
+                    conf_multiplier = 0.8
+                elif confidence >= 0.55:
+                    conf_multiplier = 0.5
+                else:
+                    conf_multiplier = max(0.15, (confidence - 0.35) / 1.5)
+                position_size_pct = min(1.0, conf_multiplier * (0.8 + rr_ratio * 0.3))
             else:
                 position_size_pct = 1.0
         else:

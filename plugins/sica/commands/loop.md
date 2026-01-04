@@ -1,7 +1,7 @@
 ---
 description: "Start SICA self-improving coding loop"
 argument-hint: "CONFIG_NAME [-f] [-l]"
-model: haiku
+model: sonnet
 ---
 
 # SICA Loop Command

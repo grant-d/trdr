@@ -68,7 +68,7 @@ def main() -> None:
 
     # Build context to re-inject
     context_files = config.context_files or []
-    score_str = f"{state.last_score:.2f}" if state.last_score is not None else "N/A"
+    score_str = f"{state.last_score:.3f}" if state.last_score is not None else "N/A"
     run_dir = state.run_dir
     effective_max = config.max_iterations + state.iterations_added
 

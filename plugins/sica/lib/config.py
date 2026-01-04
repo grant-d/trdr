@@ -36,10 +36,12 @@ import shlex
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     pass
+
+ThinkLevel = Literal["Think", "Think hard", "Think harder", "Ultrathink", ""]
 
 
 @dataclass
@@ -238,8 +240,6 @@ class SicaConfig:
             result = result.replace(f"{{{key}}}", val)
         return result
 
-    def interpolate_prompt(self) -> str:
+    def interpolate_prompt(self, think: ThinkLevel = "") -> str:
         """Replace {key} placeholders in prompt with param values."""
-        return self.interpolate(self.prompt)
-
-
+        return self.interpolate(self.prompt) + ("\n" + think if think else "")

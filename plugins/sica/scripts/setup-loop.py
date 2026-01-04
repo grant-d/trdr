@@ -136,7 +136,7 @@ Examples:
     journal_path.write_text("# SICA Journal\n\n")
 
     # Create state and attach to config
-    config.state = SicaState.create(run_id, run_dir, config.interpolate_prompt())
+    config.state = SicaState.create(run_id, run_dir, config.interpolate_prompt("Think"))
     config.save()
     dbg(f"Created run {run_id} for {config_name}")
 
@@ -146,7 +146,7 @@ Examples:
         params_lines = [f"  {k}: {v}" for k, v in config.params.items()]
         params_info = "\nParams:\n" + "\n".join(params_lines)
 
-    prompt = config.interpolate_prompt()
+    prompt = config.state.interpolated_prompt
 
     # Runtime marker for session detection (checked by stop hook)
     marker = make_runtime_marker(config_name, run_id)

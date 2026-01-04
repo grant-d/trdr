@@ -32,6 +32,30 @@ def log(msg: str) -> None:
     """Log to stderr (visible to user)."""
     print(msg, file=sys.stderr)
 
+# https://code.claude.com/docs/en/hooks#stop%2Fsubagentstop-decision-control
+# https://code.claude.com/docs/en/hooks#common-json-fields
+def hook_exit(msg: str, warning: str = "", block: bool = False) -> None:
+    """Exit hook with proper JSON output.
+
+    Args:
+        msg: Message shown to user (stopReason) or Claude (reason if blocking)
+        warning: Optional system warning shown to user
+        block: If True, blocks Claude from stopping and forces continuation.
+               If False (default), stops Claude and shows msg to user.
+    """
+    if block:
+        # Block stopping, force Claude to continue with reason
+        data: dict = {"decision": "block", "reason": msg}
+    else:
+        # Stop Claude, show stopReason to user
+        data = {"continue": False, "stopReason": msg}
+
+    if warning:
+        data["systemMessage"] = warning
+
+    print(json.dumps(data))
+    sys.exit(0)
+
 
 def read_config() -> SicaConfig | None:
     """Read active SICA config if exists."""
@@ -252,7 +276,7 @@ def get_archive_summary(config: SicaConfig, top_n: int = 10) -> str:
     entries = entries[:top_n]
     rows = ["#,score,pass,fail,err"]
     for score, i, p, f, e in entries:
-        rows.append(f"{i},{score:.2f},{p},{f},{e}")
+        rows.append(f"{i},{score:.3f},{p},{f},{e}")
 
     return "\n".join(rows)
 
@@ -411,12 +435,11 @@ def main() -> None:
     # Check max iterations
     if state.iteration >= effective_max:
         dbg(f"Max iter reached: {state.iteration} >= {effective_max}")
-        log(f"SICA COMPLETE: Max iterations ({effective_max}) reached")
-        log(f"  Config: {config.name} | Run: {state.run_id}")
-        log(f"  Last score: {state.last_score} | Target: {config.target_score}")
-        log(f"  Run dir: {state.run_dir}")
         complete_run(config)
-        sys.exit(0)
+        hook_exit(
+            f"SICA COMPLETE: Max iterations ({effective_max}) reached. "
+            f"Last score: {state.last_score} | Target: {config.target_score}"
+        )
 
     # Check transcript for promise
     promise_detected = False
@@ -445,32 +468,30 @@ def main() -> None:
     errors = benchmark_result.get("errors", 0)
 
     dbg(f"Benchmark done: score={score}, p={passed}, f={failed}")
-    log(f"SICA: Score={score:.2f} (passed={passed}, failed={failed}, errors={errors})")
+    log(f"SICA: Score={score:.3f} (passed={passed}, failed={failed}, errors={errors})")
 
     # Archive results
     iter_dir = archive_iteration(config, benchmark_result, transcript_path)
 
     # Track recent scores for convergence
-    state.recent_scores.append(round(float(score), 4))
+    state.recent_scores.append(round(float(score), 3))
     state.recent_scores = state.recent_scores[-10:]
 
     # Check convergence (5 consecutive identical scores)
     if len(state.recent_scores) >= 5 and len(set(state.recent_scores[-5:])) == 1:
-        log(f"SICA COMPLETE: Converged at score {state.recent_scores[0]:.2f}")
-        log(f"  Config: {config.name} | Run: {state.run_id}")
-        log(f"  Iterations: {state.iteration} | Target: {config.target_score}")
-        log(f"  Run dir: {state.run_dir}")
+        converged_score = state.recent_scores[-1]
         complete_run(config)
-        sys.exit(0)
+        hook_exit(
+            f"SICA COMPLETE: Converged at score {converged_score:.3f} "
+            f"(target: {config.target_score})"
+        )
 
     # Check target reached
     if float(score) >= config.target_score:
-        log(f"SICA COMPLETE: Target score reached! ({score:.2f} >= {config.target_score})")
-        log(f"  Config: {config.name} | Run: {state.run_id}")
-        log(f"  Iterations: {state.iteration}")
-        log(f"  Run dir: {state.run_dir}")
         complete_run(config)
-        sys.exit(0)
+        hook_exit(
+            f"SICA COMPLETE: Target score reached! ({score:.3f} >= {config.target_score})"
+        )
 
     # Promise detected but tests failing
     if promise_detected:
@@ -478,7 +499,7 @@ def main() -> None:
 
     # Update state
     state.iteration += 1
-    state.last_score = float(score)
+    state.last_score = round(float(score), 3)
     config.save()
 
     # Generate improvement prompt
@@ -490,24 +511,14 @@ def main() -> None:
     marker = make_runtime_marker(config.name, state.run_id)
     system_msg = (
         f"SICA iter {state.iteration} | "
-        f"Score: {score:.2f}/{config.target_score} | "
+        f"Score: {score:.3f}/{config.target_score} | "
         f"NEXT: ONE fix then EXIT (benchmark auto-runs). NO test changes. "
         f"Update {run_dir}/journal.md. Done: <promise>{promise}</promise> "
         f"{marker}"
     )
 
-    # Block exit and continue
-    # https://code.claude.com/docs/en/hooks#stop%2Fsubagentstop-decision-control
-    # https://code.claude.com/docs/en/hooks#common-json-fields
-    print(
-        json.dumps(
-            {
-                "decision": "block",
-                "reason": improvement_prompt,
-                "systemMessage": system_msg,
-            }
-        )
-    )
+    # Block exit and continue improving
+    hook_exit(improvement_prompt, warning=system_msg, block=True)
 
 
 if __name__ == "__main__":
