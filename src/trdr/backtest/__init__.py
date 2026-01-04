@@ -10,7 +10,7 @@ from .paper_exchange import (
     Trade,
 )
 from .portfolio import Portfolio, Position, PositionEntry
-from .utils import parse_timeframe
+from .timeframe import align_feeds, get_interval_seconds, parse_timeframe
 from .walk_forward import (
     Fold,
     WalkForwardConfig,
@@ -46,5 +46,7 @@ __all__ = [
     "filter_trading_bars",
     "get_trading_days_in_year",
     # Utils
+    "align_feeds",
+    "get_interval_seconds",
     "parse_timeframe",
 ]

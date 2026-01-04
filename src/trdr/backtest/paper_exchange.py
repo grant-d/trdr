@@ -62,6 +62,7 @@ class PaperExchangeConfig:
 
     Args:
         symbol: Asset symbol (e.g., "crypto:ETH/USD", "stock:AAPL")
+        primary_feed: Key for primary data feed (e.g., "crypto:ETH/USD:15m")
         warmup_bars: Bars to skip before generating signals
         transaction_cost_pct: Cost per trade as decimal (0.0025 = 0.25%)
         slippage_pct: Slippage as % of price (0.001 = 0.1%)
@@ -70,6 +71,7 @@ class PaperExchangeConfig:
     """
 
     symbol: str
+    primary_feed: str = ""
     warmup_bars: int = 65
     transaction_cost_pct: float = 0.0025
     slippage_pct: float = 0.001
@@ -517,17 +519,24 @@ class PaperExchange:
         self.config = config
         self.strategy = strategy
 
-    def run(self, bars: list[Bar]) -> PaperExchangeResult:
+    def run(self, bars: dict[str, list[Bar]]) -> PaperExchangeResult:
         """Run strategy over bar data.
 
         Args:
-            bars: Historical bars (oldest first)
+            bars: Dict of bars keyed by "symbol:timeframe" (e.g., "crypto:ETH/USD:15m")
 
         Returns:
             PaperExchangeResult with trades and metrics
         """
-        # Filter to trading days
-        filtered_bars = filter_trading_bars(bars, self.config.asset_type)
+        # Extract primary bars using primary_feed
+        primary_feed = self.config.primary_feed
+        if not primary_feed:
+            # Fallback: use first key (for backwards compat with single-feed)
+            primary_feed = next(iter(bars.keys()))
+        primary_bars = bars[primary_feed]
+
+        # Filter primary bars to trading days
+        filtered_bars = filter_trading_bars(primary_bars, self.config.asset_type)
 
         if len(filtered_bars) < self.config.warmup_bars + 1:
             return PaperExchangeResult(
@@ -638,7 +647,15 @@ class PaperExchange:
 
             # 4. Generate signal (skip on last bar)
             if i < len(filtered_bars) - 1:
-                visible_bars = filtered_bars[: i + 1]
+                # Build dict of visible bars for all feeds
+                # Primary uses filtered bars; informative feeds are pre-aligned
+                visible_bars: dict[str, list[Bar]] = {}
+                for key, feed_bars in bars.items():
+                    if key == primary_feed:
+                        visible_bars[key] = filtered_bars[: i + 1]
+                    else:
+                        # Informative feeds aligned to primary, slice same length
+                        visible_bars[key] = feed_bars[: i + 1]
 
                 # Set runtime context for strategy
                 self.strategy.context = RuntimeContext(

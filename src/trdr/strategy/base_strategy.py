@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from ..data.market import Bar
-from .types import Position, Signal
+from .types import DataRequirement, Position, Signal
 
 if TYPE_CHECKING:
     from ..backtest.paper_exchange import RuntimeContext
@@ -35,12 +35,15 @@ class BaseStrategy(ABC):
 
     Example:
         class MyStrategy(BaseStrategy):
+            def get_data_requirements(self) -> list[DataRequirement]:
+                return [
+                    DataRequirement(self.config.symbol, "15m", 3000, role="primary"),
+                    DataRequirement(self.config.symbol, "1h", 500),  # MTF context
+                ]
+
             def generate_signal(self, bars, position):
-                # Access live portfolio state
-                if self.context.drawdown > 0.1:
-                    return Signal(action=SignalAction.HOLD, ...)
-                if self.context.total_trades > 10 and self.context.win_rate < 0.4:
-                    return Signal(..., position_size_pct=0.5)
+                primary = bars[f"{self.config.symbol}:15m"]
+                htf = bars.get(f"{self.config.symbol}:1h", [])
                 ...
     """
 
@@ -62,9 +65,26 @@ class BaseStrategy(ABC):
         return self._name if self._name else self.__class__.__name__
 
     @abstractmethod
+    def get_data_requirements(self) -> list[DataRequirement]:
+        """Declare all data feeds this strategy needs.
+
+        Returns:
+            List of DataRequirement. Exactly one must have role="primary".
+            The primary feed determines bar iteration and trading symbol.
+
+        Example:
+            return [
+                DataRequirement(self.config.symbol, "15m", 3000, role="primary"),
+                DataRequirement(self.config.symbol, "1h", 500),
+                DataRequirement("crypto:BTC/USD", "1h", 500),  # Cross-asset
+            ]
+        """
+        ...
+
+    @abstractmethod
     def generate_signal(
         self,
-        bars: list[Bar],
+        bars: dict[str, list[Bar]],
         position: Position | None,
     ) -> Signal:
         """Generate trading signal for current bar.
@@ -72,13 +92,13 @@ class BaseStrategy(ABC):
         Called once per bar with point-in-time data (no lookahead).
 
         Args:
-            bars: Historical bars up to current bar (oldest first)
+            bars: Dict of bars keyed by "symbol:timeframe" (e.g., "crypto:ETH/USD:15m")
             position: Current open position or None
 
         Returns:
             Signal with action (BUY/SELL/HOLD/CLOSE), stops, targets
         """
-        pass
+        ...
 
     def on_trade_complete(self, pnl: float, reason: str) -> None:
         """Called when a trade completes. Override to adapt parameters.

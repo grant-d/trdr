@@ -14,6 +14,7 @@ import numpy as np
 
 from ...data.market import Bar
 from ..base_strategy import BaseStrategy, StrategyConfig
+from ..types import DataRequirement, Position, Signal, SignalAction
 from ...indicators import (
     atr,
     bollinger_bands,
@@ -28,7 +29,6 @@ from ...indicators import (
     volume_profile,
     volume_trend,
 )
-from ..types import Position, Signal, SignalAction
 
 
 @dataclass
@@ -70,20 +70,35 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         super().__init__(config, name="VolumeAreaBreakout")  # Custom name for display
         self.config: VolumeAreaBreakoutConfig = config
 
+    def get_data_requirements(self) -> list[DataRequirement]:
+        """Declare data feeds for this strategy."""
+        return [
+            DataRequirement(
+                symbol=self.config.symbol,
+                timeframe=self.config.timeframe,
+                lookback=3000,
+                role="primary",
+            ),
+        ]
+
     def generate_signal(
         self,
-        bars: list[Bar],
+        bars: dict[str, list[Bar]],
         position: Position | None,
     ) -> Signal:
         """Generate trading signal based on Volume Profile analysis.
 
         Args:
-            bars: Historical bars (oldest first)
+            bars: Dict of bars keyed by "symbol:timeframe"
             position: Current position or None
 
         Returns:
             Trading signal with action, stops, and targets
         """
+        # Extract primary bars from dict
+        primary_key = f"{self.config.symbol}:{self.config.timeframe}"
+        bars = bars[primary_key]
+
         # Minimal bar requirement for volume profile calculation
         if len(bars) < 50:
             return Signal(

@@ -5,6 +5,34 @@ from datetime import datetime
 from enum import Enum
 
 
+@dataclass
+class DataRequirement:
+    """Specification for a data feed.
+
+    Args:
+        symbol: Trading symbol (e.g., "crypto:ETH/USD", "crypto:BTC/USD")
+        timeframe: Bar timeframe (e.g., "15m", "1h", "4h")
+        lookback: Number of bars to fetch
+        role: "primary" (trading feed) or "informative" (reference data)
+    """
+
+    symbol: str
+    timeframe: str
+    lookback: int
+    role: str = "informative"
+
+    @property
+    def key(self) -> str:
+        """Unique key for this data feed."""
+        return f"{self.symbol}:{self.timeframe}"
+
+    def __post_init__(self) -> None:
+        if self.role not in ("primary", "informative"):
+            raise ValueError(
+                f"role must be 'primary' or 'informative', got '{self.role}'"
+            )
+
+
 class SignalAction(Enum):
     """Trading signal actions."""
 

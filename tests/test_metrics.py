@@ -13,7 +13,7 @@ from trdr.backtest.paper_exchange import (
 from trdr.backtest.portfolio import Portfolio
 from trdr.data.market import Bar
 from trdr.strategy.base_strategy import BaseStrategy, StrategyConfig
-from trdr.strategy.types import Position, Signal, SignalAction
+from trdr.strategy.types import DataRequirement, Position, Signal, SignalAction
 
 
 def make_trade(
@@ -319,6 +319,17 @@ class SimpleConfig(StrategyConfig):
     pass
 
 
+def _get_primary_bars(bars: dict[str, list[Bar]], config: StrategyConfig) -> list[Bar]:
+    """Extract primary bars from dict for test strategies."""
+    key = f"{config.symbol}:{config.timeframe}"
+    return bars[key]
+
+
+def _wrap_bars(bars: list[Bar], symbol: str, timeframe: str = "1h") -> dict[str, list[Bar]]:
+    """Wrap bars list in dict for PaperExchange.run()."""
+    return {f"{symbol}:{timeframe}": bars}
+
+
 class ContextAwareStrategy(BaseStrategy):
     """Strategy that uses context for adaptive sizing."""
 
@@ -326,10 +337,14 @@ class ContextAwareStrategy(BaseStrategy):
         super().__init__(config, name=name)
         self.context_checks: list[tuple[float, float]] = []
 
-    def generate_signal(self, bars: list[Bar], position: Position | None) -> Signal:
+    def get_data_requirements(self) -> list[DataRequirement]:
+        return [DataRequirement(self.config.symbol, self.config.timeframe, 100, role="primary")]
+
+    def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
+        primary = _get_primary_bars(bars, self.config)
         # Record context values for testing
         self.context_checks.append((self.context.drawdown, self.context.total_return))
-        return Signal(action=SignalAction.HOLD, price=bars[-1].close, confidence=0, reason="")
+        return Signal(action=SignalAction.HOLD, price=primary[-1].close, confidence=0, reason="")
 
 
 class TestStrategyAccessesContext:
@@ -343,7 +358,7 @@ class TestStrategyAccessesContext:
         bars = [make_bar(price=100 + i, ts=f"2024-01-01T{10+i}:00:00Z") for i in range(5)]
 
         engine = PaperExchange(config, strategy)
-        engine.run(bars)
+        engine.run(_wrap_bars(bars, "crypto:ETH/USD"))
 
         # Strategy should have recorded context checks
         assert len(strategy.context_checks) > 0
@@ -375,7 +390,7 @@ class TestStrategyName:
 
         bars = [make_bar(price=100 + i, ts=f"2024-01-01T{10+i}:00:00Z") for i in range(5)]
         engine = PaperExchange(config, strategy)
-        engine.run(bars)
+        engine.run(_wrap_bars(bars, "crypto:ETH/USD"))
 
         # Context should have strategy name
         assert strategy.context.strategy_name == "TestStrategy"

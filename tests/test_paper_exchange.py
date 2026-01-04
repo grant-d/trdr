@@ -7,7 +7,7 @@ import pytest
 from trdr.backtest.paper_exchange import PaperExchange, PaperExchangeConfig
 from trdr.data.market import Bar
 from trdr.strategy.base_strategy import BaseStrategy, StrategyConfig
-from trdr.strategy.types import Position, Signal, SignalAction
+from trdr.strategy.types import DataRequirement, Position, Signal, SignalAction
 
 
 def make_bars(prices: list[float], start_ts: str = "2024-01-01T10:00:00Z") -> list[Bar]:
@@ -34,6 +34,17 @@ class SimpleConfig(StrategyConfig):
     pass
 
 
+def _get_primary_bars(bars: dict[str, list[Bar]], config: StrategyConfig) -> list[Bar]:
+    """Extract primary bars from dict for test strategies."""
+    key = f"{config.symbol}:{config.timeframe}"
+    return bars[key]
+
+
+def _wrap_bars(bars: list[Bar], symbol: str, timeframe: str = "1h") -> dict[str, list[Bar]]:
+    """Wrap bars list in dict for PaperExchange.run()."""
+    return {f"{symbol}:{timeframe}": bars}
+
+
 class AlwaysBuyStrategy(BaseStrategy):
     """Buy on first signal, hold forever."""
 
@@ -41,16 +52,20 @@ class AlwaysBuyStrategy(BaseStrategy):
         super().__init__(config)
         self.bought = False
 
-    def generate_signal(self, bars: list[Bar], position: Position | None) -> Signal:
+    def get_data_requirements(self) -> list[DataRequirement]:
+        return [DataRequirement(self.config.symbol, self.config.timeframe, 100, role="primary")]
+
+    def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
+        primary = _get_primary_bars(bars, self.config)
         if not position and not self.bought:
             self.bought = True
             return Signal(
                 action=SignalAction.BUY,
-                price=bars[-1].close,
+                price=primary[-1].close,
                 confidence=1.0,
                 reason="test_buy",
             )
-        return Signal(action=SignalAction.HOLD, price=bars[-1].close, confidence=0.0, reason="")
+        return Signal(action=SignalAction.HOLD, price=primary[-1].close, confidence=0.0, reason="")
 
     def reset(self) -> None:
         self.bought = False
@@ -63,12 +78,16 @@ class BuyThenSellStrategy(BaseStrategy):
         super().__init__(config)
         self.bars_held = 0
 
-    def generate_signal(self, bars: list[Bar], position: Position | None) -> Signal:
+    def get_data_requirements(self) -> list[DataRequirement]:
+        return [DataRequirement(self.config.symbol, self.config.timeframe, 100, role="primary")]
+
+    def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
+        primary = _get_primary_bars(bars, self.config)
         if not position:
             self.bars_held = 0
             return Signal(
                 action=SignalAction.BUY,
-                price=bars[-1].close,
+                price=primary[-1].close,
                 confidence=1.0,
                 reason="test_buy",
             )
@@ -77,11 +96,11 @@ class BuyThenSellStrategy(BaseStrategy):
             if self.bars_held >= 3:
                 return Signal(
                     action=SignalAction.CLOSE,
-                    price=bars[-1].close,
+                    price=primary[-1].close,
                     confidence=1.0,
                     reason="test_close",
                 )
-        return Signal(action=SignalAction.HOLD, price=bars[-1].close, confidence=0.0, reason="")
+        return Signal(action=SignalAction.HOLD, price=primary[-1].close, confidence=0.0, reason="")
 
     def reset(self) -> None:
         self.bars_held = 0
@@ -94,17 +113,21 @@ class TrailingStopStrategy(BaseStrategy):
         super().__init__(config)
         self.bought = False
 
-    def generate_signal(self, bars: list[Bar], position: Position | None) -> Signal:
+    def get_data_requirements(self) -> list[DataRequirement]:
+        return [DataRequirement(self.config.symbol, self.config.timeframe, 100, role="primary")]
+
+    def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
+        primary = _get_primary_bars(bars, self.config)
         if not position and not self.bought:
             self.bought = True
             return Signal(
                 action=SignalAction.BUY,
-                price=bars[-1].close,
+                price=primary[-1].close,
                 confidence=1.0,
                 reason="buy_with_tsl",
                 trailing_stop=0.05,  # 5% trailing stop
             )
-        return Signal(action=SignalAction.HOLD, price=bars[-1].close, confidence=0.0, reason="")
+        return Signal(action=SignalAction.HOLD, price=primary[-1].close, confidence=0.0, reason="")
 
     def reset(self) -> None:
         self.bought = False
@@ -118,10 +141,14 @@ class TakeProfitStrategy(BaseStrategy):
         self.bought = False
         self.trade_callbacks: list[tuple[float, str]] = []
 
-    def generate_signal(self, bars: list[Bar], position: Position | None) -> Signal:
+    def get_data_requirements(self) -> list[DataRequirement]:
+        return [DataRequirement(self.config.symbol, self.config.timeframe, 100, role="primary")]
+
+    def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
+        primary = _get_primary_bars(bars, self.config)
         if not position and not self.bought:
             self.bought = True
-            price = bars[-1].close
+            price = primary[-1].close
             return Signal(
                 action=SignalAction.BUY,
                 price=price,
@@ -130,7 +157,7 @@ class TakeProfitStrategy(BaseStrategy):
                 take_profit=price * 1.10,  # 10% take profit
                 stop_loss=price * 0.95,  # 5% stop loss
             )
-        return Signal(action=SignalAction.HOLD, price=bars[-1].close, confidence=0.0, reason="")
+        return Signal(action=SignalAction.HOLD, price=primary[-1].close, confidence=0.0, reason="")
 
     def on_trade_complete(self, pnl: float, reason: str) -> None:
         self.trade_callbacks.append((pnl, reason))
@@ -148,10 +175,14 @@ class LimitOrderStrategy(BaseStrategy):
         self.bought = False
         self.limit_pct = limit_pct
 
-    def generate_signal(self, bars: list[Bar], position: Position | None) -> Signal:
+    def get_data_requirements(self) -> list[DataRequirement]:
+        return [DataRequirement(self.config.symbol, self.config.timeframe, 100, role="primary")]
+
+    def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
+        primary = _get_primary_bars(bars, self.config)
         if not position and not self.bought:
             self.bought = True
-            price = bars[-1].close
+            price = primary[-1].close
             return Signal(
                 action=SignalAction.BUY,
                 price=price,
@@ -159,7 +190,7 @@ class LimitOrderStrategy(BaseStrategy):
                 reason="limit_buy",
                 limit_price=price * self.limit_pct,  # Buy below current price
             )
-        return Signal(action=SignalAction.HOLD, price=bars[-1].close, confidence=0.0, reason="")
+        return Signal(action=SignalAction.HOLD, price=primary[-1].close, confidence=0.0, reason="")
 
     def reset(self) -> None:
         self.bought = False
@@ -172,10 +203,14 @@ class StopLimitStrategy(BaseStrategy):
         super().__init__(config)
         self.bought = False
 
-    def generate_signal(self, bars: list[Bar], position: Position | None) -> Signal:
+    def get_data_requirements(self) -> list[DataRequirement]:
+        return [DataRequirement(self.config.symbol, self.config.timeframe, 100, role="primary")]
+
+    def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
+        primary = _get_primary_bars(bars, self.config)
         if not position and not self.bought:
             self.bought = True
-            price = bars[-1].close
+            price = primary[-1].close
             return Signal(
                 action=SignalAction.BUY,
                 price=price,
@@ -184,7 +219,7 @@ class StopLimitStrategy(BaseStrategy):
                 stop_price=price * 1.05,  # Trigger on 5% breakout
                 limit_price=price * 1.06,  # Fill at 6% above or better
             )
-        return Signal(action=SignalAction.HOLD, price=bars[-1].close, confidence=0.0, reason="")
+        return Signal(action=SignalAction.HOLD, price=primary[-1].close, confidence=0.0, reason="")
 
     def reset(self) -> None:
         self.bought = False
@@ -197,17 +232,21 @@ class MultipleEntriesStrategy(BaseStrategy):
         super().__init__(config)
         self.buys = 0
 
-    def generate_signal(self, bars: list[Bar], position: Position | None) -> Signal:
+    def get_data_requirements(self) -> list[DataRequirement]:
+        return [DataRequirement(self.config.symbol, self.config.timeframe, 100, role="primary")]
+
+    def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
+        primary = _get_primary_bars(bars, self.config)
         if self.buys < 3:
             self.buys += 1
             return Signal(
                 action=SignalAction.BUY,
-                price=bars[-1].close,
+                price=primary[-1].close,
                 confidence=1.0,
                 reason=f"buy_{self.buys}",
                 quantity=10.0,  # Explicit quantity
             )
-        return Signal(action=SignalAction.HOLD, price=bars[-1].close, confidence=0.0, reason="")
+        return Signal(action=SignalAction.HOLD, price=primary[-1].close, confidence=0.0, reason="")
 
     def reset(self) -> None:
         self.buys = 0
@@ -230,7 +269,7 @@ class TestPaperExchange:
 
         # Prices go up
         bars = make_bars([100, 100, 100, 110, 120])
-        result = engine.run(bars)
+        result = engine.run(_wrap_bars(bars, "crypto:TEST"))
 
         assert result.total_trades == 1
         assert result.total_pnl > 0  # Should profit
@@ -248,7 +287,7 @@ class TestPaperExchange:
         engine = PaperExchange(config, strategy)
 
         bars = make_bars([100, 100, 100, 105, 110, 115, 120])
-        result = engine.run(bars)
+        result = engine.run(_wrap_bars(bars, "crypto:TEST"))
 
         # Should have at least one completed trade
         assert result.total_trades >= 1
@@ -270,7 +309,7 @@ class TestPaperExchange:
 
         # Price goes up then crashes
         bars = make_bars([100, 100, 100, 110, 120, 130, 100])
-        result = engine.run(bars)
+        result = engine.run(_wrap_bars(bars, "crypto:TEST"))
 
         assert result.total_trades == 1
         # Should have exited before the crash to 100
@@ -291,13 +330,14 @@ class TestPaperExchange:
         )
 
         bars = make_bars([100, 100, 100, 110, 120])
+        bars_dict = _wrap_bars(bars, "crypto:TEST")
 
         result_no_cost = PaperExchange(
             config_no_cost, AlwaysBuyStrategy(SimpleConfig(symbol="crypto:TEST"))
-        ).run(bars)
+        ).run(bars_dict)
         result_with_cost = PaperExchange(
             config_with_cost, AlwaysBuyStrategy(SimpleConfig(symbol="crypto:TEST"))
-        ).run(bars)
+        ).run(bars_dict)
 
         # With costs should have lower P&L
         assert result_with_cost.total_pnl < result_no_cost.total_pnl
@@ -313,7 +353,7 @@ class TestPaperExchange:
         engine = PaperExchange(config, strategy)
 
         bars = make_bars([100, 100, 100, 110, 120])
-        result = engine.run(bars)
+        result = engine.run(_wrap_bars(bars, "crypto:TEST"))
 
         assert len(result.equity_curve) > 0
         assert result.equity_curve[0] > 0
@@ -330,7 +370,7 @@ class TestPaperExchange:
 
         # Price goes up then down
         bars = make_bars([100, 100, 100, 120, 110])
-        result = engine.run(bars)
+        result = engine.run(_wrap_bars(bars, "crypto:TEST"))
 
         assert result.max_drawdown >= 0
         assert result.max_drawdown <= 1
@@ -346,7 +386,7 @@ class TestPaperExchange:
         engine = PaperExchange(config, strategy)
 
         bars = make_bars([100, 100, 100])  # Only 3 bars, need 10 warmup
-        result = engine.run(bars)
+        result = engine.run(_wrap_bars(bars, "crypto:TEST"))
 
         assert result.total_trades == 0
 
@@ -363,7 +403,7 @@ class TestPaperExchange:
 
         # Price up = winning trade
         bars = make_bars([100, 100, 100, 105, 110, 115, 120])
-        result = engine.run(bars)
+        result = engine.run(_wrap_bars(bars, "crypto:TEST"))
 
         if result.total_trades > 0:
             assert result.win_rate >= 0
@@ -386,7 +426,7 @@ class TestMultipleEntries:
         engine = PaperExchange(config, strategy)
 
         bars = make_bars([100] * 10)  # Flat price
-        result = engine.run(bars)
+        result = engine.run(_wrap_bars(bars, "crypto:TEST"))
 
         # Should have one trade closed at end with multiple entries
         assert result.total_trades == 1
@@ -412,7 +452,7 @@ class TestTakeProfitIntegration:
         # Price rises to hit 10% take profit
         # Entry at 100, TP at 110. Bar with close=110 has range [107.8, 111.1]
         bars = make_bars([100, 100, 100, 105, 110])
-        result = engine.run(bars)
+        result = engine.run(_wrap_bars(bars, "crypto:TEST"))
 
         assert result.total_trades == 1
         assert result.trades[0].net_pnl > 0  # Should profit
@@ -432,7 +472,7 @@ class TestTakeProfitIntegration:
         # Entry at 100, then price drops to hit 5% stop loss (95)
         # Bar with close=95 has range [93.1, 95.95] which includes 95
         bars = make_bars([100, 100, 100, 100, 95])
-        result = engine.run(bars)
+        result = engine.run(_wrap_bars(bars, "crypto:TEST"))
 
         assert result.total_trades == 1
         assert result.trades[0].net_pnl < 0  # Should lose from entry ~100 to exit at 95
@@ -452,7 +492,7 @@ class TestTakeProfitIntegration:
         # Price rises to hit take profit (110)
         # Bar with close=110 has range [107.8, 111.1] which includes 110
         bars = make_bars([100, 100, 100, 105, 110])
-        engine.run(bars)
+        engine.run(_wrap_bars(bars, "crypto:TEST"))
 
         assert len(strategy.trade_callbacks) == 1
         pnl, reason = strategy.trade_callbacks[0]
@@ -477,7 +517,7 @@ class TestLimitOrderIntegration:
 
         # Price dips below limit then recovers
         bars = make_bars([100, 100, 100, 95, 110])  # 95 < 98 (limit), then 110
-        result = engine.run(bars)
+        result = engine.run(_wrap_bars(bars, "crypto:TEST"))
 
         assert result.total_trades == 1
         assert result.trades[0].net_pnl > 0  # Should profit from 98 entry to 110
@@ -497,7 +537,7 @@ class TestLimitOrderIntegration:
 
         # Price stays above limit
         bars = make_bars([100, 100, 100, 105, 110])  # Never below 90
-        result = engine.run(bars)
+        result = engine.run(_wrap_bars(bars, "crypto:TEST"))
 
         # No trade executed (limit never filled)
         assert result.total_trades == 0
@@ -515,7 +555,7 @@ class TestLimitOrderIntegration:
         engine = PaperExchange(config, strategy)
 
         bars = make_bars([100, 100, 100, 95, 110])
-        result = engine.run(bars)
+        result = engine.run(_wrap_bars(bars, "crypto:TEST"))
 
         # Should have entered at limit price (98), not 98 + 5% slippage
         assert result.total_trades == 1
@@ -542,7 +582,7 @@ class TestStopLimitIntegration:
         # make_bars creates: open=99%, high=101%, low=98%, close=price
         # Bar 3 (close=107): high=108.07 > 105 (triggers), low=104.86 < 106 (fills)
         bars = make_bars([100, 100, 100, 107, 115])
-        result = engine.run(bars)
+        result = engine.run(_wrap_bars(bars, "crypto:TEST"))
 
         assert result.total_trades == 1
         assert result.trades[0].entry_price <= 106.0  # Filled at limit or better
@@ -561,7 +601,7 @@ class TestStopLimitIntegration:
 
         # Signal at price=100, stop=105, but price never reaches 105
         bars = make_bars([100, 100, 100, 102, 103])
-        result = engine.run(bars)
+        result = engine.run(_wrap_bars(bars, "crypto:TEST"))
 
         # No trade - stop never triggered
         assert result.total_trades == 0
@@ -589,7 +629,7 @@ class TestStockCalendar:
             Bar("2024-01-09T10:00:00Z", 99, 101, 98, 100, 1000),  # Tue
             Bar("2024-01-10T10:00:00Z", 99, 101, 98, 105, 1000),  # Wed
         ]
-        result = engine.run(bars)
+        result = engine.run(_wrap_bars(bars, "stock:TEST"))
 
         # Should have processed only weekday bars
         # Equity curve length = total bars - warmup - weekend bars
@@ -613,7 +653,7 @@ class TestTradeFields:
 
         # Entry at 100, TP=110 (10%), SL=95 (5%)
         bars = make_bars([100, 100, 100, 105, 110])
-        result = engine.run(bars)
+        result = engine.run(_wrap_bars(bars, "crypto:TEST"))
 
         assert result.total_trades == 1
         trade = result.trades[0]
@@ -638,7 +678,7 @@ class TestTradeFields:
         engine = PaperExchange(config, strategy)
 
         bars = make_bars([100, 100, 100, 110, 120])
-        result = engine.run(bars)
+        result = engine.run(_wrap_bars(bars, "crypto:TEST"))
 
         assert result.total_trades == 1
         trade = result.trades[0]
@@ -659,7 +699,7 @@ class TestTradeFields:
 
         # Price goes up = winning trade
         bars = make_bars([100, 100, 100, 110, 120])
-        result = engine.run(bars)
+        result = engine.run(_wrap_bars(bars, "crypto:TEST"))
 
         assert result.total_trades == 1
         assert result.trades[0].is_winner is True
@@ -677,7 +717,7 @@ class TestTradeFields:
         engine = PaperExchange(config, strategy)
 
         bars = make_bars([100, 100, 100, 110, 120])
-        result = engine.run(bars)
+        result = engine.run(_wrap_bars(bars, "crypto:TEST"))
 
         assert result.total_trades == 1
         # Bars are 1 hour apart, entry at bar 2, exit at bar 4 = 2 hours
@@ -699,7 +739,7 @@ class TestPrintTrades:
 
         # Only 3 bars, need 10 warmup = no trades
         bars = make_bars([100, 100, 100])
-        result = engine.run(bars)
+        result = engine.run(_wrap_bars(bars, "crypto:TEST"))
 
         result.print_trades()
         captured = capsys.readouterr()
@@ -718,7 +758,7 @@ class TestPrintTrades:
         engine = PaperExchange(config, strategy)
 
         bars = make_bars([100, 100, 100, 105, 110])
-        result = engine.run(bars)
+        result = engine.run(_wrap_bars(bars, "crypto:TEST"))
 
         result.print_trades()
         captured = capsys.readouterr()
@@ -746,7 +786,7 @@ class TestPrintTrades:
 
         # Price rises to hit take profit = WIN
         bars = make_bars([100, 100, 100, 105, 110])
-        result = engine.run(bars)
+        result = engine.run(_wrap_bars(bars, "crypto:TEST"))
 
         result.print_trades()
         captured = capsys.readouterr()
@@ -760,23 +800,27 @@ class TestOrderDirectionValidation:
         """Stop loss above current price is rejected."""
 
         class BadStopLossStrategy(BaseStrategy):
+            def get_data_requirements(self) -> list[DataRequirement]:
+                return [DataRequirement(self.config.symbol, self.config.timeframe, 100, role="primary")]
+
             def generate_signal(
-                self, bars: list[Bar], position: Position | None
+                self, bars: dict[str, list[Bar]], position: Position | None
             ) -> Signal:
-                if len(bars) < 3:
+                primary = _get_primary_bars(bars, self.config)
+                if len(primary) < 3:
                     return Signal(
-                        action=SignalAction.HOLD, price=bars[-1].close, confidence=0.0
+                        action=SignalAction.HOLD, price=primary[-1].close, confidence=0.0
                     )
                 if position is None:
                     return Signal(
                         action=SignalAction.BUY,
-                        price=bars[-1].close,
+                        price=primary[-1].close,
                         confidence=0.8,
                         reason="buy",
-                        stop_loss=bars[-1].close * 1.05,  # WRONG: above price
+                        stop_loss=primary[-1].close * 1.05,  # WRONG: above price
                     )
                 return Signal(
-                    action=SignalAction.HOLD, price=bars[-1].close, confidence=0.5
+                    action=SignalAction.HOLD, price=primary[-1].close, confidence=0.5
                 )
 
         config = PaperExchangeConfig(symbol="crypto:TEST", warmup_bars=2)
@@ -785,29 +829,33 @@ class TestOrderDirectionValidation:
         bars = make_bars([100, 100, 100, 100])
 
         with pytest.raises(ValueError, match="Sell stop must be below price"):
-            engine.run(bars)
+            engine.run(_wrap_bars(bars, "crypto:TEST"))
 
     def test_take_profit_below_price_rejected(self) -> None:
         """Take profit below current price is rejected."""
 
         class BadTakeProfitStrategy(BaseStrategy):
+            def get_data_requirements(self) -> list[DataRequirement]:
+                return [DataRequirement(self.config.symbol, self.config.timeframe, 100, role="primary")]
+
             def generate_signal(
-                self, bars: list[Bar], position: Position | None
+                self, bars: dict[str, list[Bar]], position: Position | None
             ) -> Signal:
-                if len(bars) < 3:
+                primary = _get_primary_bars(bars, self.config)
+                if len(primary) < 3:
                     return Signal(
-                        action=SignalAction.HOLD, price=bars[-1].close, confidence=0.0
+                        action=SignalAction.HOLD, price=primary[-1].close, confidence=0.0
                     )
                 if position is None:
                     return Signal(
                         action=SignalAction.BUY,
-                        price=bars[-1].close,
+                        price=primary[-1].close,
                         confidence=0.8,
                         reason="buy",
-                        take_profit=bars[-1].close * 0.95,  # WRONG: below price
+                        take_profit=primary[-1].close * 0.95,  # WRONG: below price
                     )
                 return Signal(
-                    action=SignalAction.HOLD, price=bars[-1].close, confidence=0.5
+                    action=SignalAction.HOLD, price=primary[-1].close, confidence=0.5
                 )
 
         config = PaperExchangeConfig(symbol="crypto:TEST", warmup_bars=2)
@@ -816,29 +864,33 @@ class TestOrderDirectionValidation:
         bars = make_bars([100, 100, 100, 100])
 
         with pytest.raises(ValueError, match="Sell limit must be above price"):
-            engine.run(bars)
+            engine.run(_wrap_bars(bars, "crypto:TEST"))
 
     def test_buy_limit_above_price_rejected(self) -> None:
         """Buy limit above current price is rejected."""
 
         class BadBuyLimitStrategy(BaseStrategy):
+            def get_data_requirements(self) -> list[DataRequirement]:
+                return [DataRequirement(self.config.symbol, self.config.timeframe, 100, role="primary")]
+
             def generate_signal(
-                self, bars: list[Bar], position: Position | None
+                self, bars: dict[str, list[Bar]], position: Position | None
             ) -> Signal:
-                if len(bars) < 3:
+                primary = _get_primary_bars(bars, self.config)
+                if len(primary) < 3:
                     return Signal(
-                        action=SignalAction.HOLD, price=bars[-1].close, confidence=0.0
+                        action=SignalAction.HOLD, price=primary[-1].close, confidence=0.0
                     )
                 if position is None:
                     return Signal(
                         action=SignalAction.BUY,
-                        price=bars[-1].close,
+                        price=primary[-1].close,
                         confidence=0.8,
                         reason="buy",
-                        limit_price=bars[-1].close * 1.05,  # WRONG: above price
+                        limit_price=primary[-1].close * 1.05,  # WRONG: above price
                     )
                 return Signal(
-                    action=SignalAction.HOLD, price=bars[-1].close, confidence=0.5
+                    action=SignalAction.HOLD, price=primary[-1].close, confidence=0.5
                 )
 
         config = PaperExchangeConfig(symbol="crypto:TEST", warmup_bars=2)
@@ -847,4 +899,4 @@ class TestOrderDirectionValidation:
         bars = make_bars([100, 100, 100, 100])
 
         with pytest.raises(ValueError, match="Buy limit must be below price"):
-            engine.run(bars)
+            engine.run(_wrap_bars(bars, "crypto:TEST"))

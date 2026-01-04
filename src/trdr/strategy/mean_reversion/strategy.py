@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 from ...data.market import Bar
 from ...indicators import atr, ema, sma
 from ..base_strategy import BaseStrategy, StrategyConfig
-from ..types import Position, Signal, SignalAction
+from ..types import DataRequirement, Position, Signal, SignalAction
 
 if TYPE_CHECKING:
     pass
@@ -116,20 +116,35 @@ class MeanReversionStrategy(BaseStrategy):
         self._entry_zscore = 0.0
         self._current_regime = "unknown"
 
+    def get_data_requirements(self) -> list[DataRequirement]:
+        """Declare data feeds for this strategy."""
+        return [
+            DataRequirement(
+                symbol=self.config.symbol,
+                timeframe=self.config.timeframe,
+                lookback=1000,
+                role="primary",
+            ),
+        ]
+
     def generate_signal(
         self,
-        bars: list[Bar],
+        bars: dict[str, list[Bar]],
         position: Position | None,
     ) -> Signal:
         """Generate trading signal based on adaptive regime logic.
 
         Args:
-            bars: Historical bars (oldest first)
+            bars: Dict of bars keyed by "symbol:timeframe"
             position: Current open position or None
 
         Returns:
             Signal with action, stops, and targets
         """
+        # Extract primary bars from dict
+        primary_key = f"{self.config.symbol}:{self.config.timeframe}"
+        bars = bars[primary_key]
+
         if len(bars) < self.config._min_bars:
             return Signal(
                 action=SignalAction.HOLD,

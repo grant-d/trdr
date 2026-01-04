@@ -19,25 +19,69 @@ import os
 import sys
 from pathlib import Path
 
+from .types import DataRequirement
+
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root / "src"))
 
 from trdr.strategy.targets import score_result
 
 
-async def _get_bars(symbol: str, timeframe: str, lookback: int):
-    """Fetch bars from market data client."""
-    from trdr.backtest import parse_timeframe
+def get_primary_requirement(requirements: list[DataRequirement]) -> DataRequirement:
+    """Find the primary requirement. Raises if not exactly one."""
+    primaries = [r for r in requirements if r.role == "primary"]
+    if len(primaries) != 1:
+        raise ValueError(f"Expected exactly 1 primary requirement, got {len(primaries)}")
+    return primaries[0]
+
+
+async def _get_bars(
+    strategy,
+    default_lookback: int,
+) -> tuple[dict[str, list], DataRequirement]:
+    """Fetch bars based on strategy requirements.
+
+    Args:
+        strategy: Strategy instance with get_data_requirements()
+        default_lookback: Fallback lookback if not specified
+
+    Returns:
+        Tuple of (bars dict keyed by "symbol:tf", primary requirement)
+    """
+    from trdr.backtest import align_feeds
     from trdr.core import load_config
     from trdr.data import MarketDataClient
-    from trdr.data.market import Symbol
 
     config = load_config()
     client = MarketDataClient(config.alpaca, Path(project_root / "data/cache"))
-    sym = Symbol.parse(symbol)
-    tf = parse_timeframe(timeframe)
 
-    return await client.get_bars(sym, lookback, tf)
+    # Get requirements from strategy
+    requirements = strategy.get_data_requirements()
+    primary = get_primary_requirement(requirements)
+
+    # Apply BACKTEST_TIMEFRAME override if specified
+    timeframe_override = os.environ.get("BACKTEST_TIMEFRAME")
+    if timeframe_override:
+        # Replace primary's timeframe
+        requirements = [
+            DataRequirement(r.symbol, timeframe_override, r.lookback, r.role)
+            if r.role == "primary"
+            else r
+            for r in requirements
+        ]
+        primary = get_primary_requirement(requirements)
+
+    # Fetch all feeds
+    bars_dict = await client.get_bars_multi(requirements)
+    primary_bars = bars_dict[primary.key]
+
+    # Align informative feeds to primary
+    aligned = {primary.key: primary_bars}
+    for req in requirements:
+        if req.role != "primary":
+            aligned[req.key] = align_feeds(primary_bars, bars_dict[req.key])
+
+    return aligned, primary
 
 
 def _reload_strategy(module_name: str, config_class: str, strategy_class: str):
@@ -81,29 +125,30 @@ def run_sica_benchmark(
     # Get params from environment or defaults
     symbol = os.environ.get("BACKTEST_SYMBOL", default_symbol)
     timeframe = os.environ.get("BACKTEST_TIMEFRAME", default_timeframe)
-    lookback = int(os.environ.get("BACKTEST_LOOKBACK", str(default_lookback)))
 
     # Load strategy
     Config, Strategy = _reload_strategy(strategy_module, config_class, strategy_class)
 
-    # Get bars
-    bars = asyncio.run(_get_bars(symbol, timeframe, lookback))
-
-    # Calculate buy-hold return
-    initial_capital = 10000
-    if bars and len(bars) >= 2:
-        buyhold_return = (bars[-1].close / bars[0].close) - 1
-    else:
-        buyhold_return = 0.0
-
-    # Create and run strategy
+    # Create strategy instance (needed to get data requirements)
     config = Config(symbol=symbol, timeframe=timeframe)
     strategy = Strategy(config)
 
+    # Get bars using strategy's data requirements
+    bars, primary = asyncio.run(_get_bars(strategy, default_lookback))
+
+    # Calculate buy-hold return using primary bars
+    initial_capital = 10000
+    primary_bars = bars[primary.key]
+    if primary_bars and len(primary_bars) >= 2:
+        buyhold_return = (primary_bars[-1].close / primary_bars[0].close) - 1
+    else:
+        buyhold_return = 0.0
+
     bt_config = PaperExchangeConfig(
-        symbol=symbol,
+        symbol=primary.symbol,
         initial_capital=initial_capital,
         default_position_pct=default_position_pct,
+        primary_feed=primary.key,
     )
     engine = PaperExchange(bt_config, strategy)
     result = engine.run(bars)
@@ -115,7 +160,8 @@ def run_sica_benchmark(
     print("=" * 50)
     print("BACKTEST SUMMARY")
     print("=" * 50)
-    print(f"Symbol: {symbol}")
+    print(f"Symbol: {primary.symbol}")
+    print(f"Timeframe: {primary.timeframe}")
     print(f"Trades: {result.total_trades} ({result.trades_per_year:.0f}/yr)")
     print(f"Win Rate: {result.win_rate:.1%}")
     print(f"Profit Factor: {result.profit_factor:.2f}")

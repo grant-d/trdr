@@ -226,6 +226,26 @@ class MarketDataClient:
 
         return all_bars[-lookback:] if len(all_bars) > lookback else all_bars
 
+    async def get_bars_multi(
+        self,
+        requirements: list,  # list[DataRequirement] - avoid circular import
+    ) -> dict[str, list[Bar]]:
+        """Fetch bars for multiple symbol/timeframe combinations.
+
+        Args:
+            requirements: List of DataRequirement specifying each feed
+
+        Returns:
+            Dict mapping "symbol:timeframe" to list of bars
+        """
+        from ..backtest import parse_timeframe
+
+        result = {}
+        for req in requirements:
+            bars = await self.get_bars(req.symbol, req.lookback, parse_timeframe(req.timeframe))
+            result[req.key] = bars
+        return result
+
     async def get_current_price(self, symbol: str) -> Quote:
         """Get current price quote.
 

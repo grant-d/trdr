@@ -18,9 +18,9 @@
   "state": {
     "run_id": "20260104_064608",
     "run_dir": ".sica/configs/ethusd-15m/runs/run_20260104_064608",
-    "status": "active",
-    "iteration": 143,
-    "last_score": 0.931,
+    "status": "complete",
+    "iteration": 152,
+    "last_score": 0.93,
     "recent_scores": [
       0.77,
       0.82,
@@ -154,11 +154,23 @@
       0.931,
       0.931,
       0.93,
-      0.931
+      0.931,
+      0.0,
+      0.931,
+      0.931,
+      0.931,
+      0.931,
+      0.931,
+      0.93,
+      0.93,
+      0.93,
+      0.93,
+      0.93,
+      0.93
     ],
     "started_at": "2026-01-04T06:46:08.505541+00:00",
-    "completed_at": "2026-01-04T18:52:25.516199+00:00",
-    "iterations_added": 140,
+    "completed_at": "2026-01-04T19:52:17.596533+00:00",
+    "iterations_added": 180,
     "interpolated_prompt": "Optimize ETH/USD 15m strategy\nThink"
   }
 }
