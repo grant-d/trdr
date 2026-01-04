@@ -477,14 +477,15 @@ def main() -> None:
     state.recent_scores.append(round(float(score), 3))
     state.recent_scores = state.recent_scores[-10:]
 
-    # Check convergence (5 consecutive identical scores)
+    # Check convergence (5 consecutive identical scores, but not 0s which are failures)
     if len(state.recent_scores) >= 5 and len(set(state.recent_scores[-5:])) == 1:
         converged_score = state.recent_scores[-1]
-        complete_run(config)
-        hook_exit(
-            f"SICA COMPLETE: Converged at score {converged_score:.3f} "
-            f"(target: {config.target_score})"
-        )
+        if converged_score > 0:
+            complete_run(config)
+            hook_exit(
+                f"SICA COMPLETE: Converged at score {converged_score:.3f} "
+                f"(target: {config.target_score})"
+            )
 
     # Check target reached
     if float(score) >= config.target_score:

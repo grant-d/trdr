@@ -3,7 +3,6 @@
 Usage:
     python -m trdr.backtest --symbol crypto:BTC/USD --lookback 500
     python -m trdr.backtest --symbol AAPL --lookback 1000 --folds 5
-    python -m trdr.backtest --symbol crypto:BTC/USD --output results.json
 """
 
 import argparse
@@ -15,21 +14,15 @@ from pathlib import Path
 
 from ..core import load_config
 from ..data import MarketDataClient
-from .backtest_engine import BacktestConfig, BacktestEngine
+from ..strategy.macd_template.strategy import MACDConfig, MACDStrategy
+from .paper_exchange import PaperExchange, PaperExchangeConfig
 from .walk_forward import WalkForwardConfig, run_walk_forward
 
 
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Backtest trading strategies",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python -m trdr.backtest --symbol crypto:BTC/USD --lookback 500
-  python -m trdr.backtest --symbol AAPL --lookback 1000 --folds 5
-  python -m trdr.backtest --symbol crypto:BTC/USD --output results.json
-        """,
+        description="Backtest trading strategies (uses MACD strategy)",
     )
 
     parser.add_argument(
@@ -49,36 +42,6 @@ Examples:
         type=int,
         default=0,
         help="Number of walk-forward folds. 0 = single backtest (default: 0)",
-    )
-    parser.add_argument(
-        "--train-pct",
-        type=float,
-        default=0.70,
-        help="Training data percentage for walk-forward (default: 0.70)",
-    )
-    parser.add_argument(
-        "--warmup",
-        type=int,
-        default=65,
-        help="Warmup bars before signals (default: 65)",
-    )
-    parser.add_argument(
-        "--position-size",
-        type=float,
-        default=1.0,
-        help="Position size per trade (default: 1.0)",
-    )
-    parser.add_argument(
-        "--atr-threshold",
-        type=float,
-        default=2.0,
-        help="ATR threshold for signals (default: 2.0)",
-    )
-    parser.add_argument(
-        "--stop-loss-mult",
-        type=float,
-        default=1.75,
-        help="Stop loss ATR multiplier (default: 1.75)",
     )
     parser.add_argument(
         "--output",
@@ -126,12 +89,17 @@ def get_transaction_cost(symbol: str) -> float:
     return 0.0  # 0% for stocks
 
 
-def run_single_backtest(bars: list, config: BacktestConfig, verbose: bool) -> dict:
+def run_single_backtest(
+    bars: list,
+    config: PaperExchangeConfig,
+    strategy: MACDStrategy,
+    verbose: bool,
+) -> dict:
     """Run single backtest and return results dict."""
     if verbose:
         print(f"Running backtest with {len(bars)} bars...", file=sys.stderr)
 
-    engine = BacktestEngine(config)
+    engine = PaperExchange(config, strategy)
     result = engine.run(bars)
 
     if verbose:
@@ -139,12 +107,32 @@ def run_single_backtest(bars: list, config: BacktestConfig, verbose: bool) -> di
         print(f"  Win rate: {result.win_rate:.1%}", file=sys.stderr)
         print(f"  P&L: ${result.total_pnl:.2f}", file=sys.stderr)
 
-    return result.to_dict()
+    return {
+        "config": {
+            "symbol": config.symbol,
+            "warmup_bars": config.warmup_bars,
+            "transaction_cost_pct": config.transaction_cost_pct,
+            "initial_capital": config.initial_capital,
+        },
+        "metrics": {
+            "total_trades": result.total_trades,
+            "win_rate": round(result.win_rate, 4),
+            "total_pnl": round(result.total_pnl, 2),
+            "profit_factor": round(result.profit_factor, 4) if result.profit_factor != float("inf") else "inf",
+            "max_drawdown": round(result.max_drawdown, 4),
+            "sortino_ratio": round(result.sortino_ratio, 4) if result.sortino_ratio else None,
+        },
+        "period": {
+            "start": result.start_time,
+            "end": result.end_time,
+        },
+    }
 
 
 def run_walkforward(
     bars: list,
-    config: BacktestConfig,
+    config: PaperExchangeConfig,
+    strategy: MACDStrategy,
     wf_config: WalkForwardConfig,
     verbose: bool,
 ) -> dict:
@@ -153,15 +141,13 @@ def run_walkforward(
         msg = f"Running {wf_config.n_folds}-fold walk-forward with {len(bars)} bars..."
         print(msg, file=sys.stderr)
 
-    result = run_walk_forward(bars, config, wf_config)
+    result = run_walk_forward(bars, strategy, config, wf_config)
 
     if verbose:
         print(f"  Folds completed: {len(result.folds)}", file=sys.stderr)
         print(f"  Total trades: {result.total_trades}", file=sys.stderr)
         print(f"  Win rate: {result.win_rate:.1%}", file=sys.stderr)
         print(f"  Total P&L: ${result.total_pnl:.2f}", file=sys.stderr)
-        if result.avg_sharpe:
-            print(f"  Avg Sharpe: {result.avg_sharpe:.2f}", file=sys.stderr)
 
     return result.to_dict()
 
@@ -173,36 +159,36 @@ async def main() -> None:
     # Fetch data
     bars = await fetch_bars(args.symbol, args.lookback, args.verbose)
 
-    if len(bars) < args.warmup + 20:
-        min_bars = args.warmup + 20
+    warmup_bars = 65
+    if len(bars) < warmup_bars + 20:
+        min_bars = warmup_bars + 20
         print(f"Error: Not enough bars. Need at least {min_bars}, got {len(bars)}", file=sys.stderr)
         sys.exit(1)
 
-    # Create config
+    # Create config and strategy
     transaction_cost = get_transaction_cost(args.symbol)
-    backtest_config = BacktestConfig(
+    exchange_config = PaperExchangeConfig(
         symbol=args.symbol,
-        warmup_bars=args.warmup,
+        warmup_bars=warmup_bars,
         transaction_cost_pct=transaction_cost,
-        position_size=args.position_size,
-        atr_threshold=args.atr_threshold,
-        stop_loss_multiplier=args.stop_loss_mult,
+        initial_capital=10000.0,
     )
+
+    strategy_config = MACDConfig(symbol=args.symbol)
+    strategy = MACDStrategy(strategy_config)
 
     # Run backtest
     if args.folds > 0:
-        wf_config = WalkForwardConfig(
-            n_folds=args.folds,
-            train_pct=args.train_pct,
-        )
-        result = run_walkforward(bars, backtest_config, wf_config, args.verbose)
+        wf_config = WalkForwardConfig(n_folds=args.folds)
+        result = run_walkforward(bars, exchange_config, strategy, wf_config, args.verbose)
     else:
-        result = run_single_backtest(bars, backtest_config, args.verbose)
+        result = run_single_backtest(bars, exchange_config, strategy, args.verbose)
 
     # Add metadata
     result["meta"] = {
         "run_time": datetime.now().isoformat(),
         "bars_fetched": len(bars),
+        "strategy": "MACD",
         "mode": "walk_forward" if args.folds > 0 else "single",
     }
 

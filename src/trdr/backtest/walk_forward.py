@@ -1,9 +1,13 @@
 """Walk-forward K-fold validation for backtesting."""
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from ..data.market import Bar
-from .backtest_engine import BacktestConfig, BacktestEngine, BacktestResult, Trade
+from .paper_exchange import PaperExchange, PaperExchangeConfig, PaperExchangeResult, Trade
+
+if TYPE_CHECKING:
+    from ..strategy import BaseStrategy
 
 
 @dataclass(frozen=True)
@@ -60,13 +64,13 @@ class WalkForwardResult:
     Args:
         folds: Individual fold results
         config: Walk-forward config used
-        backtest_config: Backtest config used
+        exchange_config: PaperExchange config used
     """
 
-    folds: list[BacktestResult]
+    folds: list[PaperExchangeResult]
     fold_info: list[Fold]
     config: WalkForwardConfig
-    backtest_config: BacktestConfig
+    exchange_config: PaperExchangeConfig
 
     @property
     def all_trades(self) -> list[Trade]:
@@ -99,14 +103,6 @@ class WalkForwardResult:
         return sum(t.net_pnl for t in self.all_trades)
 
     @property
-    def avg_sharpe(self) -> float | None:
-        """Average Sharpe ratio across folds (excluding None)."""
-        sharpes = [f.sharpe_ratio for f in self.folds if f.sharpe_ratio is not None]
-        if not sharpes:
-            return None
-        return sum(sharpes) / len(sharpes)
-
-    @property
     def avg_sortino(self) -> float | None:
         """Average Sortino ratio across folds (excluding None)."""
         sortinos = [f.sortino_ratio for f in self.folds if f.sortino_ratio is not None]
@@ -122,11 +118,6 @@ class WalkForwardResult:
             return 0.0
         return sum(pfs) / len(pfs)
 
-    @property
-    def max_consecutive_losses(self) -> int:
-        """Maximum consecutive losses across all folds."""
-        return max((f.max_consecutive_losses for f in self.folds), default=0)
-
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
         return {
@@ -135,23 +126,21 @@ class WalkForwardResult:
                 "train_pct": self.config.train_pct,
                 "min_test_bars": self.config.min_test_bars,
             },
-            "backtest_config": {
-                "symbol": self.backtest_config.symbol,
-                "warmup_bars": self.backtest_config.warmup_bars,
-                "transaction_cost_pct": self.backtest_config.transaction_cost_pct,
-                "position_size": self.backtest_config.position_size,
-                "atr_threshold": self.backtest_config.atr_threshold,
-                "stop_loss_multiplier": self.backtest_config.stop_loss_multiplier,
+            "exchange_config": {
+                "symbol": self.exchange_config.symbol,
+                "warmup_bars": self.exchange_config.warmup_bars,
+                "transaction_cost_pct": self.exchange_config.transaction_cost_pct,
+                "slippage_pct": self.exchange_config.slippage_pct,
+                "default_position_pct": self.exchange_config.default_position_pct,
+                "initial_capital": self.exchange_config.initial_capital,
             },
             "aggregate_metrics": {
                 "total_trades": self.total_trades,
                 "winning_trades": self.winning_trades,
                 "win_rate": round(self.win_rate, 4),
                 "total_pnl": round(self.total_pnl, 2),
-                "avg_sharpe_ratio": round(self.avg_sharpe, 4) if self.avg_sharpe else None,
                 "avg_sortino_ratio": round(self.avg_sortino, 4) if self.avg_sortino else None,
                 "avg_profit_factor": round(self.avg_profit_factor, 4),
-                "max_consecutive_losses": self.max_consecutive_losses,
             },
             "folds": [
                 {
@@ -166,11 +155,10 @@ class WalkForwardResult:
                         "total_trades": result.total_trades,
                         "win_rate": round(result.win_rate, 4),
                         "total_pnl": round(result.total_pnl, 2),
-                        "sharpe_ratio": (
-                            round(result.sharpe_ratio, 4) if result.sharpe_ratio else None
+                        "sortino_ratio": (
+                            round(result.sortino_ratio, 4) if result.sortino_ratio else None
                         ),
                         "max_drawdown": round(result.max_drawdown, 4),
-                        "max_drawdown_abs": round(result.max_drawdown_abs, 2),
                     },
                 }
                 for fold_info, result in zip(self.fold_info, self.folds)
@@ -256,14 +244,16 @@ def generate_folds(
 
 def run_walk_forward(
     bars: list[Bar],
-    backtest_config: BacktestConfig,
+    strategy: "BaseStrategy",
+    exchange_config: PaperExchangeConfig,
     wf_config: WalkForwardConfig | None = None,
 ) -> WalkForwardResult:
     """Run walk-forward validation on bar data.
 
     Args:
         bars: Historical bars (oldest first)
-        backtest_config: Backtest configuration
+        strategy: Strategy instance to test
+        exchange_config: PaperExchange configuration
         wf_config: Walk-forward configuration (default 5 folds, 70% train)
 
     Returns:
@@ -275,7 +265,7 @@ def run_walk_forward(
     folds = generate_folds(
         total_bars=len(bars),
         wf_config=wf_config,
-        warmup_bars=backtest_config.warmup_bars,
+        warmup_bars=exchange_config.warmup_bars,
     )
 
     if not folds:
@@ -283,15 +273,15 @@ def run_walk_forward(
             folds=[],
             fold_info=[],
             config=wf_config,
-            backtest_config=backtest_config,
+            exchange_config=exchange_config,
         )
 
-    engine = BacktestEngine(backtest_config)
     results = []
-
     for fold in folds:
         # Run backtest on test set only (train set would be for optimization)
         test_bars = bars[fold.test_start : fold.test_end]
+        engine = PaperExchange(exchange_config, strategy)
+        strategy.reset()  # Reset strategy state between folds
         result = engine.run(test_bars)
         results.append(result)
 
@@ -299,5 +289,5 @@ def run_walk_forward(
         folds=results,
         fold_info=folds,
         config=wf_config,
-        backtest_config=backtest_config,
+        exchange_config=exchange_config,
     )

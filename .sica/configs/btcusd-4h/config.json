@@ -5,7 +5,10 @@
   "benchmark_timeout": 120,
   "completion_promise": "TESTS PASSING",
   "prompt": "Optimize {symbol} {timeframe} strategy",
-  "context_files": ["thoughts/grantdickinson/2026-01-01-research-combined-trading-algorithms.md"],
+  "context_files": [
+    "src/trdr/backtest/README.md",
+    "thoughts/grantdickinson/2026-01-01-research-combined-trading-algorithms.md"
+  ],
   "params": {
     "symbol": "crypto:BTC/USD",
     "timeframe": "4h"

@@ -2,6 +2,13 @@
 
 Enhance the backtest/forward engine to act more like a paper exchange with advanced order types, position management, and portfolio tracking.
 
+## Design Principles
+
+1. **Simple Strategy Interface** - LLM writes `generate_signal(bars, position) → Signal`. Nothing else.
+2. **Data External** - Engine receives bars, doesn't fetch. Same engine for backtest + paper trading.
+3. **Complexity Hidden** - Orders, portfolio, calendar handled by engine internals.
+4. **Backward Compatible** - Existing strategies work unchanged.
+
 ## Current State
 
 `src/trdr/backtest/backtest_engine.py`:
@@ -122,17 +129,31 @@ class PositionConfig:
     max_position_pct: float = 1.0  # Max % of capital in position
 ```
 
-#### 2.3 Strategy Signal Extension
+#### 2.3 Strategy Signal (LLM-facing API)
+
+Strategy just returns a Signal. Engine handles the rest.
 
 ```python
 @dataclass
 class Signal:
-    action: SignalAction
+    action: SignalAction  # BUY, SELL, CLOSE, HOLD
     reason: str = ""
-    stop_loss: float | None = None
-    take_profit: float | None = None
-    trailing_stop: float | None = None  # Trail amount or %
-    quantity: float | None = None  # Buy/sell amount (partial ok)
+    # Optional - engine uses defaults if not set:
+    stop_loss: float | None = None      # Fixed stop price
+    take_profit: float | None = None    # Fixed TP price
+    trailing_stop: float | None = None  # Trail % (e.g., 0.02 = 2%)
+    quantity: float | None = None       # Units to buy/sell (None = use default sizing)
+```
+
+**LLM Strategy Example:**
+```python
+class SimpleStrategy(BaseStrategy):
+    def generate_signal(self, bars: list[Bar], position: Position | None) -> Signal:
+        if not position and bars[-1].close > bars[-2].close:
+            return Signal(action=SignalAction.BUY, trailing_stop=0.02)
+        if position and bars[-1].close < bars[-2].close:
+            return Signal(action=SignalAction.CLOSE)
+        return Signal(action=SignalAction.HOLD)
 ```
 
 ### Phase 3: Portfolio Tracking

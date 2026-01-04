@@ -40,6 +40,9 @@ class Signal:
     take_profit: float | None = None
     timestamp: str = ""
     position_size_pct: float = 1.0  # 0.0-1.0, proportion of max position
+    # Paper exchange extensions:
+    trailing_stop: float | None = None  # Trail % (0.02 = 2%) or $ amount
+    quantity: float | None = None  # Explicit quantity (overrides position_size_pct)
 
     def __post_init__(self):
         if not self.timestamp:

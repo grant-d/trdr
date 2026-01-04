@@ -3,6 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import csv
 
 from trdr.data.market import Bar, MarketDataClient, Quote, Symbol
 
@@ -95,6 +96,15 @@ def make_fake_bar(hour_offset: int, price: float) -> FakeBar:
     return FakeBar(ts, price, price + 1, price - 1, price, 100)
 
 
+def write_cache_csv(cache_file: Path, bars: list[Bar]) -> None:
+    """Write bars to cache file in CSV format."""
+    with open(cache_file, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["timestamp", "open", "high", "low", "close", "volume"])
+        for bar in bars:
+            writer.writerow([bar.timestamp, bar.open, bar.high, bar.low, bar.close, bar.volume])
+
+
 @pytest.mark.asyncio
 async def test_cache_append_preserves_order_no_duplicates(tmp_path: Path):
     """Cache append merges correctly: no duplicates, maintains chronological order."""
@@ -102,10 +112,8 @@ async def test_cache_append_preserves_order_no_duplicates(tmp_path: Path):
 
     # Create initial cache with 20 bars (hours 0-19)
     initial_bars = [make_bar(i, 100.0 + i) for i in range(20)]
-    cache_file = tmp_path / "crypto:btc_usd:1hour.jsonl"
-    with open(cache_file, "w") as f:
-        for bar in initial_bars:
-            f.write(f'{{"timestamp": "{bar.timestamp}", "open": {bar.open}, "high": {bar.high}, "low": {bar.low}, "close": {bar.close}, "volume": {bar.volume}}}\n')
+    cache_file = tmp_path / "crypto:btc_usd:1hour.csv"
+    write_cache_csv(cache_file, initial_bars)
 
     # Fake API returns bars for hours 10-25 (overlapping last 10, plus 6 new)
     # Hours 10-19 have UPDATED prices (150 instead of 110-119)
@@ -127,9 +135,7 @@ async def test_cache_append_preserves_order_no_duplicates(tmp_path: Path):
         close=119.0,
         volume=100,
     )
-    with open(cache_file, "w") as f:
-        for bar in stale_bars:
-            f.write(f'{{"timestamp": "{bar.timestamp}", "open": {bar.open}, "high": {bar.high}, "low": {bar.low}, "close": {bar.close}, "volume": {bar.volume}}}\n')
+    write_cache_csv(cache_file, stale_bars)
 
     # Call get_bars - should merge cache with API response
     result = await client.get_bars("crypto:BTC/USD", lookback=50, timeframe=TimeFrame.Hour)
@@ -162,10 +168,8 @@ async def test_cache_gap_behavior(tmp_path: Path):
     all_bars = [make_bar(i, 100.0 + i) for i in range(20)]
     bars_with_gap = all_bars[:17] + all_bars[18:]  # Skip hour 17
 
-    cache_file = tmp_path / "crypto:btc_usd:1hour.jsonl"
-    with open(cache_file, "w") as f:
-        for bar in bars_with_gap:
-            f.write(f'{{"timestamp": "{bar.timestamp}", "open": {bar.open}, "high": {bar.high}, "low": {bar.low}, "close": {bar.close}, "volume": {bar.volume}}}\n')
+    cache_file = tmp_path / "crypto:btc_usd:1hour.csv"
+    write_cache_csv(cache_file, bars_with_gap)
 
     # Verify gap exists in cache
     assert len(bars_with_gap) == 19, "Should have 19 bars (20 - 1 deleted)"
@@ -180,9 +184,7 @@ async def test_cache_gap_behavior(tmp_path: Path):
         timestamp=old_ts.isoformat(),
         open=119.0, high=120.0, low=118.0, close=119.0, volume=100,
     )
-    with open(cache_file, "w") as f:
-        for bar in stale_bars:
-            f.write(f'{{"timestamp": "{bar.timestamp}", "open": {bar.open}, "high": {bar.high}, "low": {bar.low}, "close": {bar.close}, "volume": {bar.volume}}}\n')
+    write_cache_csv(cache_file, stale_bars)
 
     client = MarketDataClient.__new__(MarketDataClient)
     client.cache_dir = tmp_path

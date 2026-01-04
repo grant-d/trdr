@@ -63,7 +63,7 @@ def run_backtest(symbol: str, timeframe: str):
     # Force reimport to pick up code changes
     Config, Strategy = reload_strategy()
 
-    from trdr.backtest.backtest_engine import BacktestConfig, BacktestEngine
+    from trdr.backtest import PaperExchange, PaperExchangeConfig
 
     # Get bars
     bars = asyncio.run(get_bars(symbol, timeframe))
@@ -79,13 +79,13 @@ def run_backtest(symbol: str, timeframe: str):
     config = Config(symbol=symbol, timeframe=timeframe)
     strategy = Strategy(config)
 
-    # Run backtest
-    bt_config = BacktestConfig(
+    # Run backtest with PaperExchange
+    bt_config = PaperExchangeConfig(
         symbol=symbol,
         initial_capital=initial_capital,
-        position_size_pct=1.0,  # 100% of capital per trade
+        default_position_pct=1.0,  # 100% of capital per trade
     )
-    engine = BacktestEngine(bt_config, strategy)
+    engine = PaperExchange(bt_config, strategy)
     result = engine.run(bars)
 
     return result, initial_capital, buyhold_return, bars

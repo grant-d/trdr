@@ -812,15 +812,10 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             near_vah = abs(current_price - profile.vah) < atr * 0.5
             poc_pullback = near_vah and hma_bullish and hma_trending_up and mss > 5
         elif is_15m:
-            # 15m: Mean reversion for high frequency
-            # Test: Tighter proximity (0.55 ATR) to catch bounces closer to VAL level
-            near_val = abs(current_price - profile.val) < atr * 0.55  # Optimal proximity
-            hma_filter_15m = current_price > hma
-            # Confluence filter: require HVN strength OR positive OFI (flexible)
-            # Strong HVN alone OR active buying (OFI) alone both valid entry signals
-            hvn_ok = hvn_strength > 0.18  # Tighter for quality - reduce trades toward 126/yr optimal
-            ofi_ok = ofi > 0.10  # Lower OFI to catch more valid buying pressure signals
-            val_bounce = near_val and hma_filter_15m and mss > -50 and (hvn_ok or ofi_ok)
+            # 15m: Mean reversion (iter 3 best: 0.650 score)
+            # Simple logic: near VAL + permissive regime
+            near_val = abs(current_price - profile.val) < atr * 0.8
+            val_bounce = near_val and mss > -70
             poc_pullback = False
         elif is_4h:
             # 4h: Mean reversion on VAL - tighter to improve WR without losing P&L
@@ -874,15 +869,9 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             confidence_base = 0.52  # Slightly higher base from 0.50
 
             if is_15m:
-                # 15m: Extended TP to capture more upside with quality signals
-                take_profit = profile.poc + atr * 0.40
-                # Volatility-adaptive stop: wider in high vol, tight in low vol
-                if vol_regime == "high":
-                    stop_loss = current_price - atr * 0.05
-                elif vol_regime == "low":
-                    stop_loss = current_price - atr * 0.035
-                else:
-                    stop_loss = current_price - atr * 0.038
+                # 15m: POC target, tight stop (iter 3 best: 0.650)
+                take_profit = profile.poc
+                stop_loss = current_price - atr * 0.06
             else:
                 take_profit = profile.poc
                 if is_4h:
@@ -898,9 +887,9 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
 
         # Strong declining volume bonus for bounces (critical signal)
         # This filter is crucial for filtering out momentum trades that look like bounces
-        # Test: increase bonus back to 0.35 - declining volume + weak price = institutional accumulation signal
+        # Iter 3: 0.45 bonus was optimal for filtering
         if val_bounce and volume_trend == "declining":
-            confidence += 0.35  # Increased from 0.30 - stronger signal for institutional buying
+            confidence += 0.45  # Iter 3 best: maximum bonus for volume-declining bounces
 
         # Order Flow Imbalance bonus for bounces (positive OFI = buying pressure = bounce support)
         # Positive OFI near VAL indicates institutional buyers catching the dip
@@ -939,11 +928,12 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         confidence = min(confidence, 1.0)
 
         # Confidence threshold: balance signal volume with quality
-        # Daily: 0.55, 4h: 0.45, 15m: 0.40 (test much lower), 1h: 0.65
+        # Daily: 0.55, 4h: 0.45, 15m: 0.58 (iter 3 best), 1h: 0.65
         if is_daily:
             min_confidence_threshold = 0.55
         elif is_15m:
-            min_confidence_threshold = 0.50  # Higher threshold to reduce trades toward 126/yr
+            # Iter 3 best: 0.58 threshold with 0.45 volume bonus → 120 trades, 0.650 score
+            min_confidence_threshold = 0.58
         elif is_4h:
             min_confidence_threshold = 0.45  # Tighter from 0.40 to improve WR without killing volume
         else:

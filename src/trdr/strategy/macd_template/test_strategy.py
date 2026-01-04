@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from trdr.backtest.backtest_engine import BacktestConfig, BacktestEngine, BacktestResult
+from trdr.backtest import PaperExchange, PaperExchangeConfig, PaperExchangeResult
 from trdr.core import load_config
 from trdr.data import MarketDataClient
 from trdr.strategy import MACDConfig, MACDStrategy
@@ -98,27 +98,27 @@ def strategy():
 
 @pytest.fixture(scope="module")
 def backtest_config():
-    """Backtest engine configuration.
+    """Paper exchange configuration.
 
-    These are engine-level settings (not strategy settings):
+    Engine-level settings (not strategy settings):
     - warmup_bars: Bars before strategy can generate signals
     - transaction_cost_pct: Simulated trading costs
-    - slippage_atr: Simulated slippage
-    - position_size: Fixed position size for backtesting
+    - slippage_pct: Simulated slippage as % of price
+    - default_position_pct: Position size as % of equity
     """
-    return BacktestConfig(
+    return PaperExchangeConfig(
         symbol=SYMBOL,
         warmup_bars=35,  # slow_period + signal_period = 26 + 9 = 35
         transaction_cost_pct=0.001,
-        slippage_atr=0.005,
-        position_size=1.0,
+        slippage_pct=0.005,
+        default_position_pct=1.0,
     )
 
 
-@pytest.fixture(scope="module")
-def backtest_result(bars, backtest_config, strategy) -> BacktestResult:
+@pytest.fixture(scope="function")
+def backtest_result(bars, backtest_config, strategy) -> PaperExchangeResult:
     """Run backtest and return results."""
-    engine = BacktestEngine(backtest_config, strategy)
+    engine = PaperExchange(backtest_config, strategy)
     result = engine.run(bars)
 
     # Print summary for visibility
