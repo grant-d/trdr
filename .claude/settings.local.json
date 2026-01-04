@@ -79,7 +79,8 @@
       "Skill(compound-engineering:workflows:work)",
       "Bash(git commit:*)",
       "Bash(git -C /Users/grantdickinson/repos/trdr diff --cached src/trdr/indicators/__init__.py)",
-      "Bash(git -C /Users/grantdickinson/repos/trdr diff --cached src/trdr/strategy/volume_area_breakout/strategy.py)"
+      "Bash(git -C /Users/grantdickinson/repos/trdr diff --cached src/trdr/strategy/volume_area_breakout/strategy.py)",
+      "Bash(BACKTEST_SYMBOL=\"crypto:ETH/USD\" BACKTEST_TIMEFRAME=\"15m\" BACKTEST_LOOKBACK=3000 python:*)"
     ],
     "deny": []
   }

@@ -98,6 +98,8 @@ class Trade:
         net_pnl: P&L after costs
         entry_reason: Why we entered
         exit_reason: Why we exited
+        stop_loss: Stop loss price at entry
+        take_profit: Take profit price at entry
     """
 
     entry_time: str
@@ -111,6 +113,8 @@ class Trade:
     net_pnl: float
     entry_reason: str
     exit_reason: str
+    stop_loss: float | None = None
+    take_profit: float | None = None
 
     @property
     def duration_hours(self) -> float:
@@ -247,6 +251,47 @@ class PaperExchangeResult:
     @property
     def total_costs(self) -> float:
         return self._metrics.total_costs
+
+    def print_trades(self) -> None:
+        """Print detailed trade log to stdout.
+
+        Shows entry/exit times, prices, SL/TP levels, P&L, and reasons.
+        Useful for debugging strategy behavior.
+        """
+        if not self.trades:
+            print("No trades")
+            return
+
+        print(f"\n{'='*80}")
+        print(f"TRADE LOG ({len(self.trades)} trades)")
+        print(f"{'='*80}")
+
+        for i, t in enumerate(self.trades, 1):
+            # Parse dates for cleaner display
+            entry_dt = t.entry_time[:16].replace("T", " ")
+            exit_dt = t.exit_time[:16].replace("T", " ")
+
+            result = "WIN" if t.is_winner else "LOSS"
+            pnl_sign = "+" if t.net_pnl >= 0 else ""
+
+            print(f"\n#{i} [{result}] {pnl_sign}${t.net_pnl:.2f}")
+            print(f"  Entry: {entry_dt} @ ${t.entry_price:.2f}")
+            print(f"  Exit:  {exit_dt} @ ${t.exit_price:.2f}")
+
+            if t.stop_loss is not None or t.take_profit is not None:
+                sl_str = f"${t.stop_loss:.2f}" if t.stop_loss else "—"
+                tp_str = f"${t.take_profit:.2f}" if t.take_profit else "—"
+                print(f"  SL: {sl_str}  |  TP: {tp_str}")
+
+            print(f"  Reason: {t.entry_reason}")
+            print(f"  Exit:   {t.exit_reason}")
+            print(f"  Duration: {t.duration_hours:.1f}h  |  Qty: {t.quantity:.4f}")
+
+        print(f"\n{'='*80}")
+        winners = [t for t in self.trades if t.is_winner]
+        losers = [t for t in self.trades if not t.is_winner]
+        print(f"Summary: {len(winners)}W / {len(losers)}L  |  WR: {self.win_rate:.1%}")
+        print(f"{'='*80}\n")
 
 
 class RuntimeContext:
@@ -502,6 +547,8 @@ class PaperExchange:
         entry_time: str = ""
         entry_reason: str = ""
         entry_cost: float = 0.0
+        entry_stop_loss: float | None = None
+        entry_take_profit: float | None = None
 
         for i in range(self.config.warmup_bars, len(filtered_bars)):
             bar = filtered_bars[i]
@@ -561,11 +608,15 @@ class PaperExchange:
                             net_pnl=pnl,
                             entry_reason=entry_reason,
                             exit_reason=exit_reason,
+                            stop_loss=entry_stop_loss,
+                            take_profit=entry_take_profit,
                         )
                         trades.append(trade)
                         self.strategy.on_trade_complete(trade.net_pnl, trade.exit_reason)
                         entry_time = ""
                         entry_cost = 0.0
+                        entry_stop_loss = None
+                        entry_take_profit = None
                         position_closed = True
 
             # Pseudo-OCO: cancel remaining orders when position closes
@@ -609,6 +660,8 @@ class PaperExchange:
                 self._process_signal(signal, portfolio, order_manager, bar, strategy_position)
                 if signal.action == SignalAction.BUY and not strategy_position:
                     entry_reason = signal.reason
+                    entry_stop_loss = signal.stop_loss
+                    entry_take_profit = signal.take_profit
 
             # 6. Record equity
             prices = {self.config.symbol: bar.close}
@@ -639,6 +692,8 @@ class PaperExchange:
                 net_pnl=pnl,
                 entry_reason=entry_reason,
                 exit_reason="end_of_data",
+                stop_loss=entry_stop_loss,
+                take_profit=entry_take_profit,
             ))
             if equity_curve:
                 equity_curve[-1] = portfolio.equity({self.config.symbol: final_bar.close})

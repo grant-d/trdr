@@ -596,6 +596,163 @@ class TestStockCalendar:
         assert len(result.equity_curve) == 2  # Mon, Tue, Wed after warmup (Fri, Mon)
 
 
+class TestTradeFields:
+    """Tests for Trade dataclass fields including stop_loss and take_profit."""
+
+    def test_trade_captures_stop_loss_and_take_profit(self) -> None:
+        """Trade record includes stop_loss and take_profit from entry signal."""
+        config = PaperExchangeConfig(
+            symbol="crypto:TEST",
+            warmup_bars=2,
+            initial_capital=10000.0,
+            transaction_cost_pct=0.0,
+            slippage_pct=0.0,
+        )
+        strategy = TakeProfitStrategy(SimpleConfig(symbol="crypto:TEST"))
+        engine = PaperExchange(config, strategy)
+
+        # Entry at 100, TP=110 (10%), SL=95 (5%)
+        bars = make_bars([100, 100, 100, 105, 110])
+        result = engine.run(bars)
+
+        assert result.total_trades == 1
+        trade = result.trades[0]
+        # Stop loss should be ~95 (5% below entry ~100)
+        assert trade.stop_loss is not None
+        assert trade.stop_loss == pytest.approx(95.0, rel=0.05)
+        # Take profit should be ~110 (10% above entry ~100)
+        assert trade.take_profit is not None
+        assert trade.take_profit == pytest.approx(110.0, rel=0.05)
+
+    def test_trade_none_when_no_sl_tp(self) -> None:
+        """Trade has None for stop_loss/take_profit when not set."""
+        config = PaperExchangeConfig(
+            symbol="crypto:TEST",
+            warmup_bars=2,
+            initial_capital=10000.0,
+            transaction_cost_pct=0.0,
+            slippage_pct=0.0,
+        )
+        # AlwaysBuyStrategy doesn't set stop_loss or take_profit
+        strategy = AlwaysBuyStrategy(SimpleConfig(symbol="crypto:TEST"))
+        engine = PaperExchange(config, strategy)
+
+        bars = make_bars([100, 100, 100, 110, 120])
+        result = engine.run(bars)
+
+        assert result.total_trades == 1
+        trade = result.trades[0]
+        assert trade.stop_loss is None
+        assert trade.take_profit is None
+
+    def test_trade_is_winner_property(self) -> None:
+        """Trade.is_winner returns True for profitable trades."""
+        config = PaperExchangeConfig(
+            symbol="crypto:TEST",
+            warmup_bars=2,
+            initial_capital=10000.0,
+            transaction_cost_pct=0.0,
+            slippage_pct=0.0,
+        )
+        strategy = AlwaysBuyStrategy(SimpleConfig(symbol="crypto:TEST"))
+        engine = PaperExchange(config, strategy)
+
+        # Price goes up = winning trade
+        bars = make_bars([100, 100, 100, 110, 120])
+        result = engine.run(bars)
+
+        assert result.total_trades == 1
+        assert result.trades[0].is_winner is True
+
+    def test_trade_duration_hours(self) -> None:
+        """Trade.duration_hours calculates correctly."""
+        config = PaperExchangeConfig(
+            symbol="crypto:TEST",
+            warmup_bars=2,
+            initial_capital=10000.0,
+            transaction_cost_pct=0.0,
+            slippage_pct=0.0,
+        )
+        strategy = AlwaysBuyStrategy(SimpleConfig(symbol="crypto:TEST"))
+        engine = PaperExchange(config, strategy)
+
+        bars = make_bars([100, 100, 100, 110, 120])
+        result = engine.run(bars)
+
+        assert result.total_trades == 1
+        # Bars are 1 hour apart, entry at bar 2, exit at bar 4 = 2 hours
+        assert result.trades[0].duration_hours > 0
+
+
+class TestPrintTrades:
+    """Tests for PaperExchangeResult.print_trades() method."""
+
+    def test_print_trades_no_trades(self, capsys) -> None:
+        """print_trades handles empty trade list."""
+        config = PaperExchangeConfig(
+            symbol="crypto:TEST",
+            warmup_bars=10,
+            initial_capital=10000.0,
+        )
+        strategy = AlwaysBuyStrategy(SimpleConfig(symbol="crypto:TEST"))
+        engine = PaperExchange(config, strategy)
+
+        # Only 3 bars, need 10 warmup = no trades
+        bars = make_bars([100, 100, 100])
+        result = engine.run(bars)
+
+        result.print_trades()
+        captured = capsys.readouterr()
+        assert "No trades" in captured.out
+
+    def test_print_trades_with_trades(self, capsys) -> None:
+        """print_trades outputs trade log."""
+        config = PaperExchangeConfig(
+            symbol="crypto:TEST",
+            warmup_bars=2,
+            initial_capital=10000.0,
+            transaction_cost_pct=0.0,
+            slippage_pct=0.0,
+        )
+        strategy = TakeProfitStrategy(SimpleConfig(symbol="crypto:TEST"))
+        engine = PaperExchange(config, strategy)
+
+        bars = make_bars([100, 100, 100, 105, 110])
+        result = engine.run(bars)
+
+        result.print_trades()
+        captured = capsys.readouterr()
+
+        # Check output contains expected sections
+        assert "TRADE LOG" in captured.out
+        assert "#1" in captured.out
+        assert "Entry:" in captured.out
+        assert "Exit:" in captured.out
+        assert "SL:" in captured.out
+        assert "TP:" in captured.out
+        assert "Summary:" in captured.out
+
+    def test_print_trades_shows_win_loss(self, capsys) -> None:
+        """print_trades shows WIN/LOSS status."""
+        config = PaperExchangeConfig(
+            symbol="crypto:TEST",
+            warmup_bars=2,
+            initial_capital=10000.0,
+            transaction_cost_pct=0.0,
+            slippage_pct=0.0,
+        )
+        strategy = TakeProfitStrategy(SimpleConfig(symbol="crypto:TEST"))
+        engine = PaperExchange(config, strategy)
+
+        # Price rises to hit take profit = WIN
+        bars = make_bars([100, 100, 100, 105, 110])
+        result = engine.run(bars)
+
+        result.print_trades()
+        captured = capsys.readouterr()
+        assert "[WIN]" in captured.out
+
+
 class TestOrderDirectionValidation:
     """Tests for exchange-style order direction enforcement."""
 

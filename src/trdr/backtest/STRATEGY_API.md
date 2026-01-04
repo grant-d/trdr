@@ -199,3 +199,51 @@ PaperExchangeConfig(
 | `expectancy` | `float` | Expected value per trade |
 | `trades` | `list[Trade]` | Trade records |
 | `equity_curve` | `list[float]` | Equity at each bar |
+
+### Result Methods
+
+```python
+# Print detailed trade log for debugging
+result.print_trades()
+```
+
+Output:
+
+```text
+================================================================================
+TRADE LOG (4 trades)
+================================================================================
+
+#1 [WIN] +$500.00
+  Entry: 2025-12-15 10:30 @ $3200.50
+  Exit:  2025-12-16 14:45 @ $3350.00
+  SL: $3150.00  |  TP: $3400.00
+  Reason: LVN breakout: volume surge 2.1x, trend 8.2%
+  Exit:   OrderType.STOP
+  Duration: 28.2h  |  Qty: 3.1250
+
+...
+================================================================================
+Summary: 2W / 2L  |  WR: 50.0%
+================================================================================
+```
+
+## Trade Fields
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `entry_time` | `str` | Entry timestamp |
+| `exit_time` | `str` | Exit timestamp |
+| `entry_price` | `float` | Average entry price |
+| `exit_price` | `float` | Exit price |
+| `quantity` | `float` | Position size |
+| `side` | `str` | "long" or "short" |
+| `gross_pnl` | `float` | P&L before costs |
+| `costs` | `float` | Transaction costs |
+| `net_pnl` | `float` | P&L after costs |
+| `entry_reason` | `str` | Signal reason at entry |
+| `exit_reason` | `str` | Why trade closed |
+| `stop_loss` | `float?` | Stop loss price at entry |
+| `take_profit` | `float?` | Take profit price at entry |
+| `duration_hours` | `float` | Trade duration (property) |
+| `is_winner` | `bool` | net_pnl > 0 (property) |

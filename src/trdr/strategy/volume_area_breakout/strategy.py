@@ -112,14 +112,14 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             recent_volumes = [b.volume for b in bars[-20:]]
             avg_volume = np.mean(recent_volumes) if recent_volumes else 1
 
-            # PATH 1: LVN Breakout - iter 111: relax volume surge 1.5x → 1.4x
-            # Slightly lower threshold to add signals
-            volume_surge = (current_bar.volume / avg_volume) >= 1.4 if avg_volume > 0 else False
+            # PATH 1: LVN Breakout - iter 138: tighten 1.4x → 1.6x to remove loser
+            # Higher threshold filters weaker setups
+            volume_surge = (current_bar.volume / avg_volume) >= 1.6 if avg_volume > 0 else False
 
-            # Require STRONG trend: 5%+ gain in 30 bars (iter 109: relaxed from 6%)
+            # Iter 139: Tighten from 5% → 7% to filter weaker trend setups
             if len(bars) >= 30:
                 trend_gain = (bars[-1].close - bars[-30].close) / bars[-30].close
-                trend_bullish = trend_gain > 0.05  # 5% gain required
+                trend_bullish = trend_gain > 0.07  # 7% gain required
             else:
                 trend_bullish = False
 
@@ -127,7 +127,7 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             away_from_poc = abs(current_price - profile.poc) > atr_val * 0.5
             lvn_signal = in_value_area and away_from_poc and volume_surge and trend_bullish
 
-            # PATH 2: POC Mean Reversion - iter 111: revert to 2.0 ATR
+            # PATH 2: POC Mean Reversion - iter 142: revert to 2.0 ATR baseline
             # Require clearly declining volume (0.8x vs 1.0x)
             volume_declining = (current_bar.volume / avg_volume) < 0.8 if avg_volume > 0 else False
             # Require extreme oversold (2.0 ATR below VAL)
