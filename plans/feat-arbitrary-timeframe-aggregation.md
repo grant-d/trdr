@@ -242,7 +242,7 @@ def get_aggregation_config(tf: str) -> AggregationConfig | None:
 
 async def get_bars(
     self,
-    symbol: str,
+    symbol: Symbol,
     lookback: int,
     timeframe: TimeFrame | str,  # Accept string for convenience
 ) -> list[Bar]:

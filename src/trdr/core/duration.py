@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from .symbol import Symbol
     from .timeframe import Timeframe
 
 
@@ -79,23 +80,23 @@ class Duration:
             return self.amount * 365 * 24
         return 0
 
-    def to_bars(self, timeframe: "Timeframe", symbol: str) -> int:
+    def to_bars(self, timeframe: "Timeframe", symbol: "Symbol") -> int:
         """Convert to bar count for given timeframe and symbol.
 
         Args:
             timeframe: Timeframe
-            symbol: Trading symbol (e.g., "crypto:BTC/USD", "stock:AAPL")
+            symbol: Symbol object
 
         Returns:
             Number of bars
 
         Examples:
-            Duration.parse("30d").to_bars(Timeframe.parse("15m"), "crypto:BTC/USD")
-            Duration.parse("30d").to_bars(Timeframe.parse("15m"), "stock:AAPL")
+            Duration.parse("30d").to_bars(Timeframe.parse("15m"), Symbol.parse("crypto:BTC/USD"))
+            Duration.parse("30d").to_bars(Timeframe.parse("15m"), Symbol.parse("stock:AAPL"))
         """
         tf = timeframe
         tf_minutes = tf.seconds // 60
-        is_crypto = symbol.lower().startswith("crypto:")
+        is_crypto = symbol.is_crypto
 
         # Convert to calendar days first
         if self.unit == "h":

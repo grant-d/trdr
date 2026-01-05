@@ -1,7 +1,6 @@
 """Trading calendar for market hours filtering."""
 
-from datetime import datetime, date
-
+from datetime import datetime
 
 # US market holidays (fixed dates - doesn't handle observed days)
 US_HOLIDAYS = {

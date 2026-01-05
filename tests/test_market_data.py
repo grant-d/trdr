@@ -8,6 +8,8 @@ import pytest
 from trdr.core import Symbol, Timeframe
 from trdr.data import AlpacaDataClient, Bar, Quote
 
+_TEST_SYMBOL = Symbol.parse("crypto:BTC/USD")
+
 
 class FakeQuote:
     def __init__(self, bid_price: float, ask_price: float, timestamp: datetime) -> None:
@@ -29,8 +31,7 @@ class FakeClient:
 
 def test_symbol_cache_key_format():
     """Cache key includes asset type and is lowercase."""
-    crypto = Symbol.parse("crypto:BTC/USD")
-    assert crypto.cache_key == "crypto:btc_usd"
+    assert _TEST_SYMBOL.cache_key == "crypto:btc_usd"
 
     stock = Symbol.parse("AAPL")
     assert stock.cache_key == "stock:aapl"
@@ -55,7 +56,7 @@ def test_symbol_equality_case_insensitive_type():
 
 def test_symbol_hash():
     """Symbols are hashable and usable in sets."""
-    s = {Symbol.parse("crypto:BTC/USD"), Symbol.parse("crypto:BTC/USD")}
+    s = {_TEST_SYMBOL, Symbol.parse("crypto:BTC/USD")}
     assert len(s) == 1
 
     # Case-insensitive type hashing
@@ -71,7 +72,7 @@ async def test_get_current_price_handles_data_wrapper():
     client._crypto_client = FakeClient(quote)
     client._stock_client = FakeClient(quote)
 
-    result = await AlpacaDataClient.get_current_price(client, Symbol.parse("crypto:BTC/USD"))
+    result = await AlpacaDataClient.get_current_price(client, _TEST_SYMBOL)
     assert isinstance(result, Quote)
     assert result.price == 101.0
     assert result.bid == 100.0
@@ -165,7 +166,7 @@ async def test_cache_append_preserves_order_no_duplicates(tmp_path: Path):
 
     # Call get_bars with lookback <= cache size to test overlap behavior
     # (lookback > cache triggers full fetch instead of overlap)
-    result = await client.get_bars("crypto:BTC/USD", lookback=20, timeframe=Timeframe.parse("1h"))
+    result = await client.get_bars(_TEST_SYMBOL, lookback=20, timeframe=Timeframe.parse("1h"))
 
     # Cache has 20 bars, API provides 16 bars (hours 10-25)
     # Overlap removes last 10 from cache, keeping bars 0-9
@@ -212,7 +213,11 @@ async def test_cache_gap_behavior(tmp_path: Path):
     old_ts = datetime(2020, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
     stale_bars[-1] = Bar(
         timestamp=old_ts.isoformat(),
-        open=129.0, high=130.0, low=128.0, close=129.0, volume=100,
+        open=129.0,
+        high=130.0,
+        low=128.0,
+        close=129.0,
+        volume=100,
     )
     write_cache_csv(cache_file, stale_bars)
 
@@ -221,7 +226,7 @@ async def test_cache_gap_behavior(tmp_path: Path):
     client._crypto_client = FakeBarsClient(api_bars)
 
     # Request 25 bars (less than 29 cached to use overlap logic)
-    result = await client.get_bars("crypto:BTC/USD", lookback=25, timeframe=Timeframe.parse("1h"))
+    result = await client.get_bars(_TEST_SYMBOL, lookback=25, timeframe=Timeframe.parse("1h"))
 
     timestamps = [bar.timestamp for bar in result]
 
@@ -253,7 +258,7 @@ async def test_cache_backfill_when_lookback_exceeds_cache(tmp_path: Path):
 
     # Request 50 bars - more than the 20 cached
     # Should trigger full fetch, not overlap fetch
-    result = await client.get_bars("crypto:BTC/USD", lookback=50, timeframe=Timeframe.parse("1h"))
+    result = await client.get_bars(_TEST_SYMBOL, lookback=50, timeframe=Timeframe.parse("1h"))
 
     # Should get 50 bars from the API (full fetch replaces cache)
     assert len(result) == 50, f"Expected 50 bars, got {len(result)}"
@@ -275,14 +280,16 @@ async def test_cache_fresh_returns_cached_bars(tmp_path: Path):
     for i in range(30):
         # Last bar is 30 minutes ago (clearly fresh)
         ts = now - timedelta(minutes=30) - timedelta(hours=29 - i)
-        fresh_bars.append(Bar(
-            timestamp=ts.isoformat(),
-            open=100.0 + i,
-            high=101.0 + i,
-            low=99.0 + i,
-            close=100.0 + i,
-            volume=100,
-        ))
+        fresh_bars.append(
+            Bar(
+                timestamp=ts.isoformat(),
+                open=100.0 + i,
+                high=101.0 + i,
+                low=99.0 + i,
+                close=100.0 + i,
+                volume=100,
+            )
+        )
 
     cache_file = tmp_path / "crypto:btc_usd:1hour.csv"
     write_cache_csv(cache_file, fresh_bars)
@@ -293,7 +300,7 @@ async def test_cache_fresh_returns_cached_bars(tmp_path: Path):
     client._crypto_client = None  # Would error if called
 
     # Request 20 bars - cache has 30 fresh bars, should return from cache
-    result = await client.get_bars("crypto:BTC/USD", lookback=20, timeframe=Timeframe.parse("1h"))
+    result = await client.get_bars(_TEST_SYMBOL, lookback=20, timeframe=Timeframe.parse("1h"))
 
     assert len(result) == 20, f"Expected 20 bars, got {len(result)}"
     # Should be last 20 bars from cache

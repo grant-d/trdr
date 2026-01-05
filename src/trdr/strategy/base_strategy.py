@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from ..core.duration import Duration
+from ..core.symbol import Symbol
 from ..core.timeframe import Timeframe
 from ..data import Bar
 from .types import DataRequirement, Position, Signal
@@ -20,7 +21,7 @@ class StrategyConfig:
     Subclass to add strategy-specific parameters.
 
     Args:
-        symbol: Trading symbol (e.g., "crypto:ETH/USD", "stock:AAPL")
+        symbol: Symbol object (e.g., Symbol.parse("crypto:ETH/USD"))
         timeframe: Timeframe (e.g., Timeframe.parse("15m"))
         lookback: Duration (e.g., Duration.parse("1M"))
 
@@ -31,13 +32,13 @@ class StrategyConfig:
             slow_period: int = 26
 
         config = MyConfig(
-            symbol="crypto:ETH/USD",
+            symbol=Symbol.parse("crypto:ETH/USD"),
             timeframe=Timeframe.parse("15m"),
             lookback=Duration.parse("1M"),
         )
     """
 
-    symbol: str
+    symbol: Symbol
     timeframe: Timeframe
     lookback: Duration
 

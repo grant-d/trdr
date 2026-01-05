@@ -59,7 +59,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-async def fetch_bars(symbol: str, lookback: int, verbose: bool) -> list:
+async def fetch_bars(symbol: Symbol, lookback: int, verbose: bool) -> list:
     """Fetch historical bars from Alpaca."""
     try:
         config = load_config()
@@ -82,9 +82,9 @@ async def fetch_bars(symbol: str, lookback: int, verbose: bool) -> list:
     return bars
 
 
-def get_transaction_cost(symbol: str) -> float:
+def get_transaction_cost(symbol: Symbol) -> float:
     """Get transaction cost for symbol type."""
-    if symbol.startswith("crypto:"):
+    if symbol.is_crypto:
         return 0.0025  # 0.25% for crypto
     return 0.0  # 0% for stocks
 
@@ -118,7 +118,9 @@ def run_single_backtest(
             "total_trades": result.total_trades,
             "win_rate": round(result.win_rate, 4),
             "total_pnl": round(result.total_pnl, 2),
-            "profit_factor": round(result.profit_factor, 4) if result.profit_factor != float("inf") else "inf",
+            "profit_factor": (
+                round(result.profit_factor, 4) if result.profit_factor != float("inf") else "inf"
+            ),
             "max_drawdown": round(result.max_drawdown, 4),
             "sortino_ratio": round(result.sortino_ratio, 4) if result.sortino_ratio else None,
         },
@@ -155,9 +157,10 @@ def run_walkforward(
 async def main() -> None:
     """Main entry point."""
     args = parse_args()
+    symbol = Symbol.parse(args.symbol)
 
     # Fetch data
-    bars = await fetch_bars(args.symbol, args.lookback, args.verbose)
+    bars = await fetch_bars(symbol, args.lookback, args.verbose)
 
     warmup_bars = 65
     if len(bars) < warmup_bars + 20:
@@ -166,15 +169,15 @@ async def main() -> None:
         sys.exit(1)
 
     # Create config and strategy
-    transaction_cost = get_transaction_cost(args.symbol)
+    transaction_cost = get_transaction_cost(symbol)
     exchange_config = PaperExchangeConfig(
-        symbol=args.symbol,
+        symbol=symbol,
         warmup_bars=warmup_bars,
         transaction_cost_pct=transaction_cost,
         initial_capital=10000.0,
     )
 
-    strategy_config = MACDConfig(symbol=args.symbol)
+    strategy_config = MACDConfig(symbol=symbol)
     strategy = MACDStrategy(strategy_config)
 
     # Run backtest

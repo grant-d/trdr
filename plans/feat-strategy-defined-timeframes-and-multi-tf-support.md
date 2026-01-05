@@ -40,7 +40,7 @@ FreqTrade's `informative_pairs()` supports multi-symbol + multi-timeframe. This 
 @dataclass
 class DataRequirement:
     """Specification for a data feed."""
-    symbol: str          # e.g., "crypto:ETH/USD", "crypto:BTC/USD"
+    symbol: Symbol       # e.g., "crypto:ETH/USD", "crypto:BTC/USD"
     timeframe: str       # e.g., "15m", "1h", "4h"
     lookback: int        # Number of bars to fetch
     role: str = "informative"  # "primary" or "informative"
@@ -195,7 +195,7 @@ def align_timeframes(
 @dataclass
 class DataRequirement:
     """Specification for a data feed."""
-    symbol: str
+    symbol: Symbol
     timeframe: str
     lookback: int
     role: str = "informative"  # "primary" or "informative"
@@ -391,7 +391,7 @@ async def run_sica_benchmark(strategy: BaseStrategy) -> dict:
 
 @dataclass
 class PaperExchangeConfig:
-    symbol: str  # Primary trading symbol
+    symbol: Symbol  # Primary trading symbol
     bars: dict[str, list[Bar]]  # Keyed by "symbol:timeframe"
     primary_key: str  # Key for primary feed (e.g., "crypto:ETH/USD:15m")
     # ... other existing fields ...

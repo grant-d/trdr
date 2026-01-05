@@ -4,9 +4,10 @@ All functions accept bars: list[Bar] as first parameter.
 Returns float for single values, tuple for multiple.
 """
 
-import numpy as np
 from dataclasses import dataclass
 from typing import NamedTuple
+
+import numpy as np
 
 from ..data import Bar
 

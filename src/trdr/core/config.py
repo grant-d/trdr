@@ -3,8 +3,12 @@
 from dataclasses import dataclass
 from os import environ
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
+
+if TYPE_CHECKING:
+    from .symbol import Symbol
 
 
 @dataclass(frozen=True)
@@ -25,7 +29,7 @@ class AlpacaConfig:
 class StrategyConfig:
     """Volume Profile strategy parameters."""
 
-    symbol: str
+    symbol: "Symbol"
     lookback: int = 50  # Bars for volume profile calculation
     price_levels: int = 40  # Number of price buckets
     value_area_pct: float = 0.70  # 70% of volume

@@ -3,7 +3,7 @@
 from alpaca.data.timeframe import TimeFrame as AlpacaTimeFrame
 from alpaca.data.timeframe import TimeFrameUnit
 
-from ..core import Timeframe
+from ..core import Symbol, Timeframe
 
 
 class TimeframeAdapter:
@@ -13,8 +13,9 @@ class TimeframeAdapter:
     Non-native timeframes require fetching base bars and aggregating.
     """
 
-    def __init__(self, timeframe: Timeframe):
+    def __init__(self, timeframe: Timeframe, symbol: Symbol) -> None:
         self.timeframe = timeframe
+        self._symbol = symbol
 
     @property
     def needs_aggregation(self) -> bool:
@@ -54,10 +55,14 @@ class TimeframeAdapter:
         c = self.timeframe.canonical
         if c.unit in ("m", "h", "d"):
             return c.amount
+
+        # Crypto trades 24/7, stocks trade 5 days/week
         if c.unit == "w":
-            return c.amount * 5  # 5 trading days per week
+            days_per_week = 7 if self._symbol.is_crypto else 5
+            return c.amount * days_per_week
         if c.unit == "mo":
-            return c.amount * 21  # ~21 trading days per month
+            days_per_month = 30 if self._symbol.is_crypto else 21
+            return c.amount * days_per_month
         return 1
 
     def to_alpaca(self) -> AlpacaTimeFrame:

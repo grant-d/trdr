@@ -151,7 +151,7 @@ class Portfolio:
         """
         return max(0.0, self.cash)
 
-    def get_position(self, symbol: str) -> Position | None:
+    def get_position(self, symbol: "Symbol") -> Position | None:
         """Get position for symbol.
 
         Args:
@@ -160,14 +160,14 @@ class Portfolio:
         Returns:
             Position or None if no position
         """
-        pos = self.positions.get(symbol)
+        pos = self.positions.get(str(symbol))  # eg, crypto:BTC/USD
         if pos and pos.total_quantity > 0:
             return pos
         return None
 
     def open_position(
         self,
-        symbol: str,
+        symbol: "Symbol",
         side: Literal["long", "short"],
         price: float,
         quantity: float,
@@ -195,14 +195,15 @@ class Portfolio:
 
         self.cash -= total_cost
 
-        if symbol not in self.positions:
-            self.positions[symbol] = Position(symbol=symbol, side=side)
+        symbol_str = str(symbol)  # eg, crypto:BTC/USD
+        if symbol_str not in self.positions:
+            self.positions[symbol_str] = Position(symbol=symbol_str, side=side)
 
-        self.positions[symbol].add_entry(price, quantity, timestamp)
+        self.positions[symbol_str].add_entry(price, quantity, timestamp)
 
     def close_position(
         self,
-        symbol: str,
+        symbol: "Symbol",
         price: float,
         quantity: float | None = None,
         cost: float = 0.0,
@@ -218,7 +219,7 @@ class Portfolio:
         Returns:
             Realized P&L
         """
-        position = self.positions.get(symbol)
+        position = self.positions.get(str(symbol))  # eg, crypto:BTC/USD
         if not position:
             return 0.0
 
@@ -241,7 +242,7 @@ class Portfolio:
 
         # Clean up empty positions
         if position.total_quantity <= 0:
-            del self.positions[symbol]
+            del self.positions[str(symbol)]  # eg, crypto:BTC/USD
 
         return pnl
 

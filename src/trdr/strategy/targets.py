@@ -35,7 +35,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from trdr.backtest import PaperExchangeResult
-    from trdr.data import Bar
 
 # === SCORING TARGETS ===
 # Asymptotic targets: score = 0.5 at target value
@@ -201,20 +200,21 @@ def score_result(
                 )
                 if alpha > 0:
                     alpha_penalty = max(
-                        floor, math.sqrt(alpha) if buyhold_return > ALPHA_MEGATREND_THRESHOLD else alpha
+                        floor,
+                        math.sqrt(alpha) if buyhold_return > ALPHA_MEGATREND_THRESHOLD else alpha,
                     )
                 else:
                     alpha_penalty = floor
             details.append(f"Alpha: {alpha:.2f}x buy-hold → penalty {alpha_penalty:.2f}")
         else:
             # Negative market: show excess return (ratio is meaningless)
-            details.append(f"Alpha: +{excess_return:.1%} vs buy-hold ({buyhold_return:.1%}) → no penalty")
+            details.append(
+                f"Alpha: +{excess_return:.1%} vs buy-hold ({buyhold_return:.1%}) → no penalty"
+            )
 
     # Final composite
     composite = weighted_score * dd_penalty * alpha_penalty
-    penalty_str = f"{dd_penalty:.2f}" + (
-        f" × {alpha_penalty:.2f}" if alpha_penalty != 1.0 else ""
-    )
+    penalty_str = f"{dd_penalty:.2f}" + (f" × {alpha_penalty:.2f}" if alpha_penalty != 1.0 else "")
     details.append(f"Score: {weighted_score:.3f} × {penalty_str} = {composite:.3f}")
 
     return composite, details

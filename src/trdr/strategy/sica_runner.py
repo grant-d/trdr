@@ -18,8 +18,12 @@ import importlib
 import os
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .types import DataRequirement
+
+if TYPE_CHECKING:
+    from ..core import Symbol
 
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root / "src"))
@@ -102,7 +106,7 @@ def run_sica_benchmark(
     strategy_module: str,
     config_class: str,
     strategy_class: str,
-    symbol: str,
+    symbol: "Symbol",
     timeframe: "Timeframe",
     lookback: "Duration",
     position_pct: float,
@@ -113,16 +117,18 @@ def run_sica_benchmark(
         strategy_module: Full module path (e.g., "trdr.strategy.volume_area_breakout.strategy")
         config_class: Config class name (e.g., "VolumeAreaBreakoutConfig")
         strategy_class: Strategy class name (e.g., "VolumeAreaBreakoutStrategy")
-        symbol: Trading symbol (can be overridden by BACKTEST_SYMBOL env var)
+        symbol: Symbol object (can be overridden by BACKTEST_SYMBOL env var)
         timeframe: Timeframe (can be overridden by BACKTEST_TIMEFRAME env var)
         lookback: Duration
         position_pct: Position size as fraction of capital (1.0 = 100%)
     """
     from trdr.backtest import PaperExchange, PaperExchangeConfig
-    from trdr.core import Timeframe
+    from trdr.core import Symbol, Timeframe
 
     # Env vars can override specific code-driven values
-    symbol = os.environ.get("BACKTEST_SYMBOL", symbol)
+    env_symbol = os.environ.get("BACKTEST_SYMBOL")
+    if env_symbol:
+        symbol = Symbol.parse(env_symbol)
     tf_override = os.environ.get("BACKTEST_TIMEFRAME")
     if tf_override:
         timeframe = Timeframe.parse(tf_override)

@@ -19,9 +19,7 @@ class BarAggregator:
     - Timestamp: last bar's timestamp
     """
 
-    def aggregate(
-        self, bars: list[Bar], n: int, drop_incomplete: bool = True
-    ) -> list[Bar]:
+    def aggregate(self, bars: list[Bar], n: int, drop_incomplete: bool = True) -> list[Bar]:
         """Aggregate n consecutive bars into single bars.
 
         Args:
@@ -40,9 +38,7 @@ class BarAggregator:
             result.append(self._aggregate_group(group))
         return result
 
-    def _group_bars(
-        self, bars: list[Bar], n: int, drop_incomplete: bool
-    ) -> Iterator[list[Bar]]:
+    def _group_bars(self, bars: list[Bar], n: int, drop_incomplete: bool) -> Iterator[list[Bar]]:
         """Yield groups of n bars for aggregation.
 
         Groups from end to ensure last period is complete.

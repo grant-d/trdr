@@ -2,8 +2,11 @@
 
 import pytest
 
-from trdr.core import Duration, Timeframe
+from trdr.core import Duration, Symbol, Timeframe
 from trdr.strategy.types import DataRequirement
+
+crypto = Symbol.parse("crypto:BTC/USD")
+stock = Symbol.parse("stock:AAPL")
 
 
 class TestDurationParsing:
@@ -112,14 +115,14 @@ class TestDurationToBars:
     def test_crypto_15m_30d(self) -> None:
         """30 days of 15m bars for crypto (24/7)."""
         d = Duration.parse("30d")
-        bars = d.to_bars(Timeframe.parse("15m"), "crypto:BTC/USD")
+        bars = d.to_bars(Timeframe.parse("15m"), crypto)
         # 30 days * 24 hours * 4 bars/hour = 2880
         assert bars == 2880
 
     def test_stock_15m_30d(self) -> None:
         """30 days of 15m bars for stock (6.5h/day, 252 days/yr)."""
         d = Duration.parse("30d")
-        bars = d.to_bars(Timeframe.parse("15m"), "stock:AAPL")
+        bars = d.to_bars(Timeframe.parse("15m"), stock)
         # 30 * 252/365 = ~20.7 trading days
         # 6.5h = 390min, 390/15 = 26 bars/day
         # ~20.7 * 26 = ~538
@@ -128,35 +131,35 @@ class TestDurationToBars:
     def test_crypto_1h_1M(self) -> None:
         """1 month of 1h bars for crypto."""
         d = Duration.parse("1M")
-        bars = d.to_bars(Timeframe.parse("1h"), "crypto:ETH/USD")
+        bars = d.to_bars(Timeframe.parse("1h"), Symbol.parse("crypto:ETH/USD"))
         # 30 days * 24 hours = 720
         assert bars == 720
 
     def test_crypto_1d_1y(self) -> None:
         """1 year of daily bars for crypto."""
         d = Duration.parse("1y")
-        bars = d.to_bars(Timeframe.parse("1d"), "crypto:BTC/USD")
+        bars = d.to_bars(Timeframe.parse("1d"), crypto)
         # 365 days
         assert bars == 365
 
     def test_stock_1d_1y(self) -> None:
         """1 year of daily bars for stock."""
         d = Duration.parse("1y")
-        bars = d.to_bars(Timeframe.parse("1d"), "stock:AAPL")
+        bars = d.to_bars(Timeframe.parse("1d"), stock)
         # 252 trading days
         assert bars == 252
 
     def test_hours_duration(self) -> None:
         """Hour-based duration."""
         d = Duration.parse("48h")
-        bars = d.to_bars(Timeframe.parse("15m"), "crypto:BTC/USD")
+        bars = d.to_bars(Timeframe.parse("15m"), crypto)
         # 48 hours * 4 bars/hour = 192
         assert bars == 192
 
     def test_weeks_duration(self) -> None:
         """Week-based duration."""
         d = Duration.parse("2w")
-        bars = d.to_bars(Timeframe.parse("1d"), "crypto:BTC/USD")
+        bars = d.to_bars(Timeframe.parse("1d"), crypto)
         # 14 days
         assert bars == 14
 
@@ -167,7 +170,7 @@ class TestDataRequirementDuration:
     def test_duration_lookback(self) -> None:
         """Duration lookback resolves to bars."""
         req = DataRequirement(
-            "crypto:BTC/USD",
+            crypto,
             Timeframe.parse("15m"),
             Duration.parse("1M"),
         )
@@ -176,12 +179,12 @@ class TestDataRequirementDuration:
     def test_duration_respects_symbol(self) -> None:
         """Duration resolution accounts for market type."""
         crypto_req = DataRequirement(
-            "crypto:BTC/USD",
+            crypto,
             Timeframe.parse("15m"),
             Duration.parse("30d"),
         )
         stock_req = DataRequirement(
-            "stock:AAPL",
+            Symbol.parse("stock:AAPL"),
             Timeframe.parse("15m"),
             Duration.parse("30d"),
         )
@@ -191,12 +194,12 @@ class TestDataRequirementDuration:
     def test_duration_respects_timeframe(self) -> None:
         """Duration resolution accounts for timeframe."""
         req_15m = DataRequirement(
-            "crypto:BTC/USD",
+            crypto,
             Timeframe.parse("15m"),
             Duration.parse("1d"),
         )
         req_1h = DataRequirement(
-            "crypto:BTC/USD",
+            crypto,
             Timeframe.parse("1h"),
             Duration.parse("1d"),
         )
@@ -206,7 +209,7 @@ class TestDataRequirementDuration:
     def test_key_property(self) -> None:
         """Key property uses timeframe string."""
         req = DataRequirement(
-            "crypto:ETH/USD",
+            Symbol.parse("crypto:ETH/USD"),
             Timeframe.parse("15m"),
             Duration.parse("1M"),
         )
@@ -216,7 +219,7 @@ class TestDataRequirementDuration:
         """Role validation still works."""
         with pytest.raises(ValueError):
             DataRequirement(
-                "crypto:BTC/USD",
+                crypto,
                 Timeframe.parse("15m"),
                 Duration.parse("1M"),
                 role="invalid",

@@ -14,16 +14,17 @@ from pathlib import Path
 import pytest
 
 from trdr.backtest import PaperExchange, PaperExchangeConfig, PaperExchangeResult
-from trdr.core import load_config
+from trdr.core import Duration, Symbol, Timeframe, load_config
 from trdr.data import AlpacaDataClient
 from trdr.strategy import get_backtest_env
 from trdr.strategy.mean_reversion import MeanReversionConfig, MeanReversionStrategy
 from trdr.strategy.targets import score_result
 
 # Read env vars once at module load
-SYMBOL, TIMEFRAME_STR, TIMEFRAME, _ = get_backtest_env(
-    default_symbol="crypto:BTC/USD",
-    default_timeframe="1d",
+SYMBOL, TIMEFRAME, LOOKBACK = get_backtest_env(
+    default_symbol=Symbol.parse("crypto:BTC/USD"),
+    default_timeframe=Timeframe.parse("1d"),
+    default_lookback=Duration.parse("300d"),
 )
 
 
@@ -42,8 +43,7 @@ def bars(event_loop):
     async def fetch():
         config = load_config()
         client = AlpacaDataClient(config.alpaca, Path("data/cache"))
-        # Use TIMEFRAME_STR - get_bars handles aggregation for arbitrary timeframes
-        bars = await client.get_bars(SYMBOL, lookback=3000, timeframe=TIMEFRAME_STR)
+        bars = await client.get_bars(SYMBOL, lookback=3000, timeframe=TIMEFRAME)
         return bars
 
     return event_loop.run_until_complete(fetch())
@@ -54,7 +54,8 @@ def strategy():
     """Create strategy instance with config."""
     config = MeanReversionConfig(
         symbol=SYMBOL,
-        timeframe=TIMEFRAME_STR,
+        timeframe=TIMEFRAME,
+        lookback=Duration.parse("3y"),
         lookback_period=20,
         zscore_entry=1.0,
         zscore_exit=0.0,
@@ -71,6 +72,7 @@ def backtest_config():
     """Paper exchange configuration."""
     return PaperExchangeConfig(
         symbol=SYMBOL,
+        primary_feed=f"{SYMBOL}:{TIMEFRAME}",
         warmup_bars=30,
         transaction_cost_pct=0.0025,
         slippage_pct=0.01,
@@ -159,11 +161,12 @@ def print_results():
     async def run():
         config = load_config()
         client = AlpacaDataClient(config.alpaca, Path("data/cache"))
-        bars = await client.get_bars(SYMBOL, lookback=3000, timeframe=TIMEFRAME_STR)
+        bars = await client.get_bars(SYMBOL, lookback=3000, timeframe=TIMEFRAME)
 
         strategy_config = MeanReversionConfig(
             symbol=SYMBOL,
-            timeframe=TIMEFRAME_STR,
+            timeframe=TIMEFRAME,
+            lookback=Duration.parse("3y"),
             lookback_period=20,
             zscore_entry=1.0,
             consecutive_down_days=2,
@@ -172,6 +175,7 @@ def print_results():
 
         bt_config = PaperExchangeConfig(
             symbol=SYMBOL,
+            primary_feed=f"{SYMBOL}:{TIMEFRAME}",
             warmup_bars=30,
             transaction_cost_pct=0.0025,
             default_position_pct=0.5,

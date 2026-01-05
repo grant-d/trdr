@@ -1,10 +1,11 @@
 """VolumeAreaBreakout strategy."""
 
+from ...indicators import atr as calculate_atr
+from ...indicators import volume_profile as calculate_volume_profile
 from .strategy import (
     VolumeAreaBreakoutConfig,
     VolumeAreaBreakoutStrategy,
 )
-from ...indicators import atr as calculate_atr, volume_profile as calculate_volume_profile
 
 
 # Re-export generate_signal as standalone function for backwards compatibility

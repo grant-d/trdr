@@ -2,8 +2,11 @@
 
 import pytest
 
-from trdr.core import parse_timeframe, Timeframe
+from trdr.core import parse_timeframe, Symbol, Timeframe
 from trdr.data import Bar, BarAggregator, TimeframeAdapter
+
+_TEST_STOCK = Symbol.parse("stock:AAPL")
+_TEST_CRYPTO = Symbol.parse("crypto:ETH/USD")
 
 
 class TestBarAggregator:
@@ -177,174 +180,228 @@ class TestTimeframeAdapter:
 
     def test_native_minute_timeframes(self):
         """Minutes 1-59 use native Alpaca - no aggregation."""
-        assert not TimeframeAdapter(parse_timeframe("1m")).needs_aggregation
-        assert not TimeframeAdapter(parse_timeframe("15m")).needs_aggregation
-        assert not TimeframeAdapter(parse_timeframe("30m")).needs_aggregation
-        assert not TimeframeAdapter(parse_timeframe("59m")).needs_aggregation
+        assert not TimeframeAdapter(parse_timeframe("1m"), _TEST_STOCK).needs_aggregation
+        assert not TimeframeAdapter(parse_timeframe("15m"), _TEST_STOCK).needs_aggregation
+        assert not TimeframeAdapter(parse_timeframe("30m"), _TEST_STOCK).needs_aggregation
+        assert not TimeframeAdapter(parse_timeframe("59m"), _TEST_STOCK).needs_aggregation
 
     def test_aggregated_minute_timeframes(self):
         """Non-canonical minutes need aggregation from 1m."""
         # 60m = 1h (native), 120m = 2h (native) - no aggregation
-        assert not TimeframeAdapter(parse_timeframe("60m")).needs_aggregation  # -> 1h
-        assert not TimeframeAdapter(parse_timeframe("120m")).needs_aggregation  # -> 2h
+        assert not TimeframeAdapter(parse_timeframe("60m"), _TEST_STOCK).needs_aggregation  # -> 1h
+        assert not TimeframeAdapter(parse_timeframe("120m"), _TEST_STOCK).needs_aggregation  # -> 2h
 
         # 90m cannot be expressed as hours - needs aggregation
-        adapter = TimeframeAdapter(parse_timeframe("90m"))
+        adapter = TimeframeAdapter(parse_timeframe("90m"), _TEST_STOCK)
         assert adapter.needs_aggregation
         assert adapter.base_timeframe == Timeframe(1, "m")
         assert adapter.aggregation_factor == 90
 
         # 61m needs aggregation (not divisible by 60)
-        adapter = TimeframeAdapter(parse_timeframe("61m"))
+        adapter = TimeframeAdapter(parse_timeframe("61m"), _TEST_STOCK)
         assert adapter.needs_aggregation
         assert adapter.base_timeframe == Timeframe(1, "m")
         assert adapter.aggregation_factor == 61
 
     def test_native_hour_timeframes(self):
         """Hours 1-23 use native Alpaca - no aggregation."""
-        assert not TimeframeAdapter(parse_timeframe("1h")).needs_aggregation
-        assert not TimeframeAdapter(parse_timeframe("4h")).needs_aggregation
-        assert not TimeframeAdapter(parse_timeframe("23h")).needs_aggregation
+        assert not TimeframeAdapter(parse_timeframe("1h"), _TEST_STOCK).needs_aggregation
+        assert not TimeframeAdapter(parse_timeframe("4h"), _TEST_STOCK).needs_aggregation
+        assert not TimeframeAdapter(parse_timeframe("23h"), _TEST_STOCK).needs_aggregation
 
     def test_aggregated_hour_timeframes(self):
         """Non-canonical hours need aggregation from 1h."""
         # 24h = 1d (native), 48h = 2d (needs aggregation from 1d)
-        assert not TimeframeAdapter(parse_timeframe("24h")).needs_aggregation  # -> 1d
+        assert not TimeframeAdapter(parse_timeframe("24h"), _TEST_STOCK).needs_aggregation  # -> 1d
 
         # 48h = 2d, but 2d needs aggregation
-        adapter = TimeframeAdapter(parse_timeframe("48h"))
+        adapter = TimeframeAdapter(parse_timeframe("48h"), _TEST_STOCK)
         assert adapter.needs_aggregation
         assert adapter.base_timeframe == Timeframe(1, "d")
         assert adapter.aggregation_factor == 2
 
         # 25h needs aggregation (not divisible by 24)
-        adapter = TimeframeAdapter(parse_timeframe("25h"))
+        adapter = TimeframeAdapter(parse_timeframe("25h"), _TEST_STOCK)
         assert adapter.needs_aggregation
         assert adapter.base_timeframe == Timeframe(1, "h")
         assert adapter.aggregation_factor == 25
 
     def test_native_day_timeframe(self):
         """1d uses native Alpaca - no aggregation."""
-        assert not TimeframeAdapter(parse_timeframe("1d")).needs_aggregation
+        assert not TimeframeAdapter(parse_timeframe("1d"), _TEST_STOCK).needs_aggregation
 
     def test_aggregated_day_timeframes(self):
         """Days 2+ need aggregation from 1d."""
-        adapter = TimeframeAdapter(parse_timeframe("2d"))
+        adapter = TimeframeAdapter(parse_timeframe("2d"), _TEST_STOCK)
         assert adapter.needs_aggregation
         assert adapter.base_timeframe == Timeframe(1, "d")
         assert adapter.aggregation_factor == 2
 
-        adapter = TimeframeAdapter(parse_timeframe("3d"))
+        adapter = TimeframeAdapter(parse_timeframe("3d"), _TEST_STOCK)
         assert adapter.needs_aggregation
         assert adapter.base_timeframe == Timeframe(1, "d")
         assert adapter.aggregation_factor == 3
 
-        adapter = TimeframeAdapter(parse_timeframe("5d"))
+        adapter = TimeframeAdapter(parse_timeframe("5d"), _TEST_STOCK)
         assert adapter.needs_aggregation
         assert adapter.base_timeframe == Timeframe(1, "d")
         assert adapter.aggregation_factor == 5
 
     def test_native_week_timeframe(self):
         """1w uses native Alpaca - no aggregation."""
-        assert not TimeframeAdapter(parse_timeframe("1w")).needs_aggregation
-        assert not TimeframeAdapter(parse_timeframe("1week")).needs_aggregation
+        assert not TimeframeAdapter(parse_timeframe("1w"), _TEST_STOCK).needs_aggregation
+        assert not TimeframeAdapter(parse_timeframe("1week"), _TEST_STOCK).needs_aggregation
 
     def test_aggregated_week_timeframes(self):
         """Weeks 2+ need aggregation from 1d (5 trading days/week)."""
-        adapter = TimeframeAdapter(parse_timeframe("2w"))
+        adapter = TimeframeAdapter(parse_timeframe("2w"), _TEST_STOCK)
         assert adapter.needs_aggregation
         assert adapter.base_timeframe == Timeframe(1, "d")
         assert adapter.aggregation_factor == 10  # 2 weeks * 5 trading days
 
-        adapter = TimeframeAdapter(parse_timeframe("4w"))
+        adapter = TimeframeAdapter(parse_timeframe("4w"), _TEST_STOCK)
         assert adapter.needs_aggregation
         assert adapter.base_timeframe == Timeframe(1, "d")
         assert adapter.aggregation_factor == 20
 
     def test_native_month_timeframes(self):
         """Months 1, 2, 3, 6, 12 use native Alpaca."""
-        assert not TimeframeAdapter(parse_timeframe("1mo")).needs_aggregation
-        assert not TimeframeAdapter(parse_timeframe("2mo")).needs_aggregation
-        assert not TimeframeAdapter(parse_timeframe("3mo")).needs_aggregation
-        assert not TimeframeAdapter(parse_timeframe("6mo")).needs_aggregation
-        assert not TimeframeAdapter(parse_timeframe("12mo")).needs_aggregation
+        assert not TimeframeAdapter(parse_timeframe("1mo"), _TEST_STOCK).needs_aggregation
+        assert not TimeframeAdapter(parse_timeframe("2mo"), _TEST_STOCK).needs_aggregation
+        assert not TimeframeAdapter(parse_timeframe("3mo"), _TEST_STOCK).needs_aggregation
+        assert not TimeframeAdapter(parse_timeframe("6mo"), _TEST_STOCK).needs_aggregation
+        assert not TimeframeAdapter(parse_timeframe("12mo"), _TEST_STOCK).needs_aggregation
 
     def test_aggregated_month_timeframes(self):
         """Non-standard months need aggregation from 1d."""
-        adapter = TimeframeAdapter(parse_timeframe("4mo"))
+        adapter = TimeframeAdapter(parse_timeframe("4mo"), _TEST_STOCK)
         assert adapter.needs_aggregation
         assert adapter.base_timeframe == Timeframe(1, "d")
         assert adapter.aggregation_factor == 84  # 4 * 21 trading days
 
-        adapter = TimeframeAdapter(parse_timeframe("5mo"))
+        adapter = TimeframeAdapter(parse_timeframe("5mo"), _TEST_STOCK)
         assert adapter.needs_aggregation
         assert adapter.base_timeframe == Timeframe(1, "d")
         assert adapter.aggregation_factor == 105
 
     def test_base_timeframe_native(self):
         """Native timeframes return themselves as base."""
-        adapter = TimeframeAdapter(parse_timeframe("15m"))
+        adapter = TimeframeAdapter(parse_timeframe("15m"), _TEST_STOCK)
         assert not adapter.needs_aggregation
         assert adapter.base_timeframe == Timeframe(15, "m")
 
-        adapter = TimeframeAdapter(parse_timeframe("4h"))
+        adapter = TimeframeAdapter(parse_timeframe("4h"), _TEST_STOCK)
         assert not adapter.needs_aggregation
         assert adapter.base_timeframe == Timeframe(4, "h")
 
-        adapter = TimeframeAdapter(parse_timeframe("1d"))
+        adapter = TimeframeAdapter(parse_timeframe("1d"), _TEST_STOCK)
         assert not adapter.needs_aggregation
         assert adapter.base_timeframe == Timeframe(1, "d")
 
     def test_base_timeframe_aggregated(self):
         """Aggregated timeframes return canonical base unit."""
         # 90m uses 1m base
-        assert TimeframeAdapter(parse_timeframe("90m")).base_timeframe == Timeframe(1, "m")
+        assert TimeframeAdapter(parse_timeframe("90m"), _TEST_STOCK).base_timeframe == Timeframe(
+            1, "m"
+        )
         # 25h uses 1h base
-        assert TimeframeAdapter(parse_timeframe("25h")).base_timeframe == Timeframe(1, "h")
+        assert TimeframeAdapter(parse_timeframe("25h"), _TEST_STOCK).base_timeframe == Timeframe(
+            1, "h"
+        )
         # 3d uses 1d base
-        assert TimeframeAdapter(parse_timeframe("3d")).base_timeframe == Timeframe(1, "d")
+        assert TimeframeAdapter(parse_timeframe("3d"), _TEST_STOCK).base_timeframe == Timeframe(
+            1, "d"
+        )
         # 2w uses 1d base (weeks aggregate from days)
-        assert TimeframeAdapter(parse_timeframe("2w")).base_timeframe == Timeframe(1, "d")
+        assert TimeframeAdapter(parse_timeframe("2w"), _TEST_STOCK).base_timeframe == Timeframe(
+            1, "d"
+        )
         # 48h -> 2d uses 1d base (canonicalizes then aggregates)
-        assert TimeframeAdapter(parse_timeframe("48h")).base_timeframe == Timeframe(1, "d")
+        assert TimeframeAdapter(parse_timeframe("48h"), _TEST_STOCK).base_timeframe == Timeframe(
+            1, "d"
+        )
 
     def test_aggregation_factor_native(self):
         """Native timeframes have factor 1."""
-        assert TimeframeAdapter(parse_timeframe("15m")).aggregation_factor == 1
-        assert TimeframeAdapter(parse_timeframe("1h")).aggregation_factor == 1
-        assert TimeframeAdapter(parse_timeframe("1d")).aggregation_factor == 1
-        assert TimeframeAdapter(parse_timeframe("1w")).aggregation_factor == 1
+        assert TimeframeAdapter(parse_timeframe("15m"), _TEST_STOCK).aggregation_factor == 1
+        assert TimeframeAdapter(parse_timeframe("1h"), _TEST_STOCK).aggregation_factor == 1
+        assert TimeframeAdapter(parse_timeframe("1d"), _TEST_STOCK).aggregation_factor == 1
+        assert TimeframeAdapter(parse_timeframe("1w"), _TEST_STOCK).aggregation_factor == 1
 
     def test_aggregation_factor_aggregated(self):
         """Aggregated timeframes use canonical form factor."""
-        assert TimeframeAdapter(parse_timeframe("90m")).aggregation_factor == 90
-        assert TimeframeAdapter(parse_timeframe("25h")).aggregation_factor == 25
-        assert TimeframeAdapter(parse_timeframe("3d")).aggregation_factor == 3
-        assert TimeframeAdapter(parse_timeframe("2w")).aggregation_factor == 10  # 2 * 5 trading days
+        assert TimeframeAdapter(parse_timeframe("90m"), _TEST_STOCK).aggregation_factor == 90
+        assert TimeframeAdapter(parse_timeframe("25h"), _TEST_STOCK).aggregation_factor == 25
+        assert TimeframeAdapter(parse_timeframe("3d"), _TEST_STOCK).aggregation_factor == 3
+        assert (
+            TimeframeAdapter(parse_timeframe("2w"), _TEST_STOCK).aggregation_factor == 10
+        )  # 2 * 5 trading days
         # 48h -> 2d has factor 2, not 48
-        assert TimeframeAdapter(parse_timeframe("48h")).aggregation_factor == 2
+        assert TimeframeAdapter(parse_timeframe("48h"), _TEST_STOCK).aggregation_factor == 2
 
     def test_to_alpaca(self):
         """Convert to Alpaca TimeFrame."""
         from alpaca.data.timeframe import TimeFrame as AlpacaTimeFrame, TimeFrameUnit
 
         # Native - returns canonical Alpaca timeframe
-        adapter = TimeframeAdapter(parse_timeframe("15m"))
+        adapter = TimeframeAdapter(parse_timeframe("15m"), _TEST_STOCK)
         alpaca_tf = adapter.to_alpaca()
         assert alpaca_tf.amount == 15
         assert alpaca_tf.unit == TimeFrameUnit.Minute
 
         # Canonicalized
-        adapter = TimeframeAdapter(parse_timeframe("60m"))
+        adapter = TimeframeAdapter(parse_timeframe("60m"), _TEST_STOCK)
         alpaca_tf = adapter.to_alpaca()
         assert alpaca_tf.amount == 1
         assert alpaca_tf.unit == TimeFrameUnit.Hour
 
         # Needs aggregation - returns base timeframe
-        adapter = TimeframeAdapter(parse_timeframe("90m"))
+        adapter = TimeframeAdapter(parse_timeframe("90m"), _TEST_STOCK)
         alpaca_tf = adapter.to_alpaca()
         assert alpaca_tf.amount == 1  # Base is 1m
         assert alpaca_tf.unit == TimeFrameUnit.Minute
+
+    def test_crypto_weekly_aggregation_24x7(self):
+        """Crypto uses 7 days/week (24/7 trading) vs stock 5 days/week."""
+        # Stock: 2 weeks = 10 days (5 trading days/week)
+        stock_adapter = TimeframeAdapter(parse_timeframe("2w"), _TEST_STOCK)
+        assert stock_adapter.aggregation_factor == 10
+
+        # Crypto: 2 weeks = 14 days (7 days/week)
+        crypto_adapter = TimeframeAdapter(parse_timeframe("2w"), _TEST_CRYPTO)
+        assert crypto_adapter.aggregation_factor == 14
+
+        # 4 weeks
+        assert TimeframeAdapter(parse_timeframe("4w"), _TEST_STOCK).aggregation_factor == 20
+        assert TimeframeAdapter(parse_timeframe("4w"), _TEST_CRYPTO).aggregation_factor == 28
+
+    def test_crypto_monthly_aggregation_24x7(self):
+        """Crypto uses 30 days/month vs stock 21 trading days/month."""
+        # Stock: 4 months = 84 days (21 trading days/month)
+        stock_adapter = TimeframeAdapter(parse_timeframe("4mo"), _TEST_STOCK)
+        assert stock_adapter.aggregation_factor == 84
+
+        # Crypto: 4 months = 120 days (30 days/month)
+        crypto_adapter = TimeframeAdapter(parse_timeframe("4mo"), _TEST_CRYPTO)
+        assert crypto_adapter.aggregation_factor == 120
+
+        # 5 months
+        assert TimeframeAdapter(parse_timeframe("5mo"), _TEST_STOCK).aggregation_factor == 105
+        assert TimeframeAdapter(parse_timeframe("5mo"), _TEST_CRYPTO).aggregation_factor == 150
+
+    def test_crypto_intraday_same_as_stock(self):
+        """Intraday timeframes (m, h, d) work the same for crypto and stocks."""
+        # Minutes
+        assert TimeframeAdapter(parse_timeframe("90m"), _TEST_STOCK).aggregation_factor == 90
+        assert TimeframeAdapter(parse_timeframe("90m"), _TEST_CRYPTO).aggregation_factor == 90
+
+        # Hours
+        assert TimeframeAdapter(parse_timeframe("25h"), _TEST_STOCK).aggregation_factor == 25
+        assert TimeframeAdapter(parse_timeframe("25h"), _TEST_CRYPTO).aggregation_factor == 25
+
+        # Days
+        assert TimeframeAdapter(parse_timeframe("3d"), _TEST_STOCK).aggregation_factor == 3
+        assert TimeframeAdapter(parse_timeframe("3d"), _TEST_CRYPTO).aggregation_factor == 3
 
 
 class TestTimeframe:

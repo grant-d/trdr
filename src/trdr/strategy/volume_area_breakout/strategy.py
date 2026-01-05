@@ -14,8 +14,6 @@ import numpy as np
 
 from ...core import Timeframe
 from ...data import Bar
-from ..base_strategy import BaseStrategy, StrategyConfig
-from ..types import DataRequirement, Position, Signal, SignalAction
 from ...indicators import (
     atr,
     bollinger_bands,
@@ -30,6 +28,8 @@ from ...indicators import (
     volume_profile,
     volume_trend,
 )
+from ..base_strategy import BaseStrategy, StrategyConfig
+from ..types import DataRequirement, Position, Signal, SignalAction
 
 
 @dataclass
@@ -151,7 +151,9 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             # PATH 3: VAH Breakout - new iter 92
             # Price crosses above VAH with volume surge = momentum continuation
             prev_close = bars[-2].close if len(bars) > 1 else current_price
-            vah_breakout = (prev_close <= profile.vah) and (current_price > profile.vah) and volume_surge
+            vah_breakout = (
+                (prev_close <= profile.vah) and (current_price > profile.vah) and volume_surge
+            )
 
             # Take any signal (prioritize LVN > VAH > POC MR)
             if lvn_signal:

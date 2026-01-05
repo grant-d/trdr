@@ -3,12 +3,16 @@
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import OrderSide, TimeInForce
 from alpaca.trading.requests import MarketOrderRequest
 
 from ..core.config import AlpacaConfig
+
+if TYPE_CHECKING:
+    from ..core import Symbol
 
 
 class OrderStatus(Enum):
@@ -90,19 +94,19 @@ class OrderExecutor:
             portfolio_value=float(account.portfolio_value),
         )
 
-    async def get_position(self, symbol: str) -> PositionInfo | None:
+    async def get_position(self, symbol: "Symbol") -> PositionInfo | None:
         """Get position for symbol.
 
         Args:
-            symbol: Stock symbol
+            symbol: Symbol object
 
         Returns:
             Position info or None if no position
         """
         try:
-            pos = self._client.get_open_position(symbol)
+            pos = self._client.get_open_position(symbol.raw)  # eg, "BTC/USD"
             return PositionInfo(
-                symbol=symbol,
+                symbol=str(symbol),  # eg, crypto:BTC/USD
                 qty=float(pos.qty),
                 side="long" if float(pos.qty) > 0 else "short",
                 avg_entry_price=float(pos.avg_entry_price),
@@ -135,14 +139,14 @@ class OrderExecutor:
 
     async def submit_market_order(
         self,
-        symbol: str,
+        symbol: "Symbol",
         qty: float,
         side: str,
     ) -> Order:
         """Submit a market order.
 
         Args:
-            symbol: Stock symbol
+            symbol: Symbol object
             qty: Quantity to trade
             side: "buy" or "sell"
 
@@ -152,7 +156,7 @@ class OrderExecutor:
         order_side = OrderSide.BUY if side == "buy" else OrderSide.SELL
 
         request = MarketOrderRequest(
-            symbol=symbol,
+            symbol=symbol.raw,  # eg, "BTC/USD"
             qty=Decimal(str(qty)),
             side=order_side,
             time_in_force=TimeInForce.DAY,
@@ -222,17 +226,17 @@ class OrderExecutor:
         except Exception:
             return False
 
-    async def close_position(self, symbol: str) -> Order | None:
+    async def close_position(self, symbol: "Symbol") -> Order | None:
         """Close entire position for symbol.
 
         Args:
-            symbol: Stock symbol
+            symbol: Symbol object
 
         Returns:
             Closing order or None if no position
         """
         try:
-            order = self._client.close_position(symbol)
+            order = self._client.close_position(symbol.raw)  # eg, "BTC/USD"
             return Order(
                 id=str(order.id),
                 symbol=order.symbol,

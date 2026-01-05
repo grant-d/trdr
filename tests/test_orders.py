@@ -49,7 +49,6 @@ class TestOrder:
                 quantity=10.0,
             )
 
-
     def test_trailing_stop_requires_trail(self) -> None:
         """Trailing stop requires trail_percent or trail_amount."""
         with pytest.raises(ValueError, match="trail_percent or trail_amount"):
@@ -168,13 +167,15 @@ class TestOrderManager:
     def test_stop_order_triggers(self) -> None:
         """Stop buy triggers when price rises above stop."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="buy",
-            order_type=OrderType.STOP,
-            quantity=10,
-            stop_price=103.0,
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="buy",
+                order_type=OrderType.STOP,
+                quantity=10,
+                stop_price=103.0,
+            )
+        )
 
         # Bar with high above stop
         bar = make_bar(open=100.0, high=105.0, low=99.0, close=104.0)
@@ -186,13 +187,15 @@ class TestOrderManager:
     def test_stop_order_not_triggered(self) -> None:
         """Stop buy doesn't trigger if price stays below."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="buy",
-            order_type=OrderType.STOP,
-            quantity=10,
-            stop_price=110.0,
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="buy",
+                order_type=OrderType.STOP,
+                quantity=10,
+                stop_price=110.0,
+            )
+        )
 
         bar = make_bar(open=100.0, high=105.0, low=99.0, close=102.0)
         fills = manager.process_bar(bar)
@@ -203,13 +206,15 @@ class TestOrderManager:
     def test_sell_stop_triggers_on_drop(self) -> None:
         """Sell stop triggers when price drops to stop."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="sell",
-            order_type=OrderType.STOP,
-            quantity=10,
-            stop_price=97.0,
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="sell",
+                order_type=OrderType.STOP,
+                quantity=10,
+                stop_price=97.0,
+            )
+        )
 
         bar = make_bar(open=100.0, high=101.0, low=95.0, close=96.0)
         fills = manager.process_bar(bar)
@@ -220,13 +225,15 @@ class TestOrderManager:
     def test_sell_stop_triggers_on_rise(self) -> None:
         """Sell stop (take profit) triggers when price rises to stop."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="sell",
-            order_type=OrderType.STOP,
-            quantity=10,
-            stop_price=108.0,
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="sell",
+                order_type=OrderType.STOP,
+                quantity=10,
+                stop_price=108.0,
+            )
+        )
 
         bar = make_bar(open=100.0, high=110.0, low=99.0, close=109.0)
         fills = manager.process_bar(bar)
@@ -237,13 +244,15 @@ class TestOrderManager:
     def test_stop_fills_at_stop_price(self) -> None:
         """Stop fills at stop price when touched during bar."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="sell",
-            order_type=OrderType.STOP,
-            quantity=10,
-            stop_price=95.0,
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="sell",
+                order_type=OrderType.STOP,
+                quantity=10,
+                stop_price=95.0,
+            )
+        )
 
         # Bar range includes stop price
         bar = make_bar(open=100.0, high=101.0, low=94.0, close=96.0)
@@ -255,13 +264,15 @@ class TestOrderManager:
     def test_stop_not_triggered_outside_range(self) -> None:
         """Stop doesn't trigger if price never touches stop."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="sell",
-            order_type=OrderType.STOP,
-            quantity=10,
-            stop_price=90.0,
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="sell",
+                order_type=OrderType.STOP,
+                quantity=10,
+                stop_price=90.0,
+            )
+        )
 
         # Bar range doesn't include stop price
         bar = make_bar(open=100.0, high=105.0, low=95.0, close=102.0)
@@ -277,13 +288,15 @@ class TestTrailingStop:
     def test_tsl_moves_up_with_price(self) -> None:
         """Long TSL moves up as price rises."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="sell",
-            order_type=OrderType.TRAILING_STOP,
-            quantity=10,
-            trail_percent=0.02,  # 2% trail
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="sell",
+                order_type=OrderType.TRAILING_STOP,
+                quantity=10,
+                trail_percent=0.02,  # 2% trail
+            )
+        )
 
         # First bar - set initial stop
         bar1 = make_bar(high=100.0)
@@ -298,13 +311,15 @@ class TestTrailingStop:
     def test_tsl_never_moves_down(self) -> None:
         """Long TSL never moves down."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="sell",
-            order_type=OrderType.TRAILING_STOP,
-            quantity=10,
-            trail_percent=0.02,
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="sell",
+                order_type=OrderType.TRAILING_STOP,
+                quantity=10,
+                trail_percent=0.02,
+            )
+        )
 
         bar1 = make_bar(high=100.0)
         manager.update_trailing_stops(bar1)
@@ -318,13 +333,15 @@ class TestTrailingStop:
     def test_tsl_triggers_on_reversal(self) -> None:
         """TSL triggers when price drops to stop."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="sell",
-            order_type=OrderType.TRAILING_STOP,
-            quantity=10,
-            trail_amount=5.0,  # $5 trail
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="sell",
+                order_type=OrderType.TRAILING_STOP,
+                quantity=10,
+                trail_amount=5.0,  # $5 trail
+            )
+        )
 
         # Set initial stop
         bar1 = make_bar(high=100.0)
@@ -342,13 +359,15 @@ class TestTrailingStop:
     def test_short_tsl_moves_down(self) -> None:
         """Short TSL moves down as price drops."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="buy",  # Buy to cover short
-            order_type=OrderType.TRAILING_STOP,
-            quantity=10,
-            trail_percent=0.02,
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="buy",  # Buy to cover short
+                order_type=OrderType.TRAILING_STOP,
+                quantity=10,
+                trail_percent=0.02,
+            )
+        )
 
         bar1 = make_bar(low=100.0)
         manager.update_trailing_stops(bar1)
@@ -366,13 +385,15 @@ class TestStopAbovePrice:
     def test_sell_stop_above_triggers_on_rise(self) -> None:
         """Sell stop above price triggers when price rises to target."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="sell",
-            order_type=OrderType.STOP,
-            quantity=10,
-            stop_price=108.0,
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="sell",
+                order_type=OrderType.STOP,
+                quantity=10,
+                stop_price=108.0,
+            )
+        )
 
         # Bar with high above target
         bar = make_bar(open=100.0, high=110.0, low=99.0, close=109.0)
@@ -384,13 +405,15 @@ class TestStopAbovePrice:
     def test_sell_stop_above_not_triggered_below(self) -> None:
         """Sell stop above price doesn't trigger if price stays below."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="sell",
-            order_type=OrderType.STOP,
-            quantity=10,
-            stop_price=120.0,
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="sell",
+                order_type=OrderType.STOP,
+                quantity=10,
+                stop_price=120.0,
+            )
+        )
 
         bar = make_bar(open=100.0, high=110.0, low=99.0, close=108.0)
         fills = manager.process_bar(bar)
@@ -401,13 +424,15 @@ class TestStopAbovePrice:
     def test_sell_stop_above_fills_at_stop(self) -> None:
         """Sell stop above price fills at stop when touched."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="sell",
-            order_type=OrderType.STOP,
-            quantity=10,
-            stop_price=112.0,
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="sell",
+                order_type=OrderType.STOP,
+                quantity=10,
+                stop_price=112.0,
+            )
+        )
 
         # Bar range includes stop
         bar = make_bar(open=110.0, high=115.0, low=108.0, close=114.0)
@@ -419,13 +444,15 @@ class TestStopAbovePrice:
     def test_buy_stop_below_triggers_on_drop(self) -> None:
         """Buy stop below price (short cover) triggers when price drops."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="buy",
-            order_type=OrderType.STOP,
-            quantity=10,
-            stop_price=90.0,
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="buy",
+                order_type=OrderType.STOP,
+                quantity=10,
+                stop_price=90.0,
+            )
+        )
 
         bar = make_bar(open=100.0, high=101.0, low=88.0, close=89.0)
         fills = manager.process_bar(bar)
@@ -473,14 +500,16 @@ class TestTrailingStopLimit:
     def test_tsl_limit_trails_then_fills_at_limit(self) -> None:
         """TSL-limit trails stop, then fills at limit price when triggered."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="sell",
-            order_type=OrderType.TRAILING_STOP_LIMIT,
-            quantity=10,
-            trail_percent=0.02,  # 2% trail
-            limit_price=105.0,  # Fill at 105 or better
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="sell",
+                order_type=OrderType.TRAILING_STOP_LIMIT,
+                quantity=10,
+                trail_percent=0.02,  # 2% trail
+                limit_price=105.0,  # Fill at 105 or better
+            )
+        )
 
         # Bar 1: Set initial trailing stop at 98 (100 * 0.98)
         bar1 = make_bar(open=100.0, high=100.0, low=99.0, close=100.0)
@@ -507,14 +536,16 @@ class TestTrailingStopLimit:
     def test_tsl_limit_triggered_but_limit_not_filled(self) -> None:
         """TSL-limit can trigger but not fill if limit not reached."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="sell",
-            order_type=OrderType.TRAILING_STOP_LIMIT,
-            quantity=10,
-            trail_percent=0.02,
-            limit_price=110.0,  # High limit price
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="sell",
+                order_type=OrderType.TRAILING_STOP_LIMIT,
+                quantity=10,
+                trail_percent=0.02,
+                limit_price=110.0,  # High limit price
+            )
+        )
 
         # Set initial stop
         bar1 = make_bar(high=100.0)
@@ -532,14 +563,16 @@ class TestTrailingStopLimit:
     def test_tsl_limit_triggered_fills_on_later_bar(self) -> None:
         """TSL-limit triggers, hangs around, then fills on later bar."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="sell",
-            order_type=OrderType.TRAILING_STOP_LIMIT,
-            quantity=10,
-            trail_percent=0.02,
-            limit_price=105.0,  # Need price to rise to 105 to fill
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="sell",
+                order_type=OrderType.TRAILING_STOP_LIMIT,
+                quantity=10,
+                trail_percent=0.02,
+                limit_price=105.0,  # Need price to rise to 105 to fill
+            )
+        )
 
         # Bar 1: Set initial stop at 98 (100 * 0.98)
         bar1 = make_bar(open=100.0, high=100.0, low=99.0, close=100.0)
@@ -594,13 +627,15 @@ class TestLimitOrders:
     def test_buy_limit_triggers_on_price_drop(self) -> None:
         """Buy limit triggers when price drops to limit."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="buy",
-            order_type=OrderType.LIMIT,
-            quantity=10,
-            limit_price=97.0,
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="buy",
+                order_type=OrderType.LIMIT,
+                quantity=10,
+                limit_price=97.0,
+            )
+        )
 
         # Bar with low at/below limit
         bar = make_bar(open=100.0, high=101.0, low=95.0, close=96.0)
@@ -612,13 +647,15 @@ class TestLimitOrders:
     def test_buy_limit_not_triggered_above_limit(self) -> None:
         """Buy limit doesn't trigger if price stays above limit."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="buy",
-            order_type=OrderType.LIMIT,
-            quantity=10,
-            limit_price=90.0,
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="buy",
+                order_type=OrderType.LIMIT,
+                quantity=10,
+                limit_price=90.0,
+            )
+        )
 
         bar = make_bar(open=100.0, high=105.0, low=98.0, close=102.0)
         fills = manager.process_bar(bar)
@@ -629,13 +666,15 @@ class TestLimitOrders:
     def test_buy_limit_gap_down(self) -> None:
         """Buy limit fills at open if price gaps through limit."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="buy",
-            order_type=OrderType.LIMIT,
-            quantity=10,
-            limit_price=98.0,
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="buy",
+                order_type=OrderType.LIMIT,
+                quantity=10,
+                limit_price=98.0,
+            )
+        )
 
         # Gap down - open below limit (better price)
         bar = make_bar(open=95.0, high=96.0, low=94.0, close=95.0)
@@ -647,13 +686,15 @@ class TestLimitOrders:
     def test_sell_limit_triggers_on_price_rise(self) -> None:
         """Sell limit triggers when price rises to limit."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="sell",
-            order_type=OrderType.LIMIT,
-            quantity=10,
-            limit_price=108.0,
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="sell",
+                order_type=OrderType.LIMIT,
+                quantity=10,
+                limit_price=108.0,
+            )
+        )
 
         bar = make_bar(open=100.0, high=110.0, low=99.0, close=109.0)
         fills = manager.process_bar(bar)
@@ -664,13 +705,15 @@ class TestLimitOrders:
     def test_limit_order_no_slippage(self) -> None:
         """Limit orders have no slippage applied."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="buy",
-            order_type=OrderType.LIMIT,
-            quantity=10,
-            limit_price=97.0,
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="buy",
+                order_type=OrderType.LIMIT,
+                quantity=10,
+                limit_price=97.0,
+            )
+        )
 
         bar = make_bar(open=100.0, high=101.0, low=95.0, close=96.0)
         fills = manager.process_bar(bar, slippage=0.5)  # Slippage should be ignored
@@ -721,14 +764,16 @@ class TestStopLimitOrders:
     def test_buy_stop_limit_triggers_then_fills(self) -> None:
         """Buy stop-limit triggers on breakout, fills at limit."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="buy",
-            order_type=OrderType.STOP_LIMIT,
-            quantity=10,
-            stop_price=105.0,  # Trigger when price rises to 105
-            limit_price=106.0,  # Fill at 106 or better
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="buy",
+                order_type=OrderType.STOP_LIMIT,
+                quantity=10,
+                stop_price=105.0,  # Trigger when price rises to 105
+                limit_price=106.0,  # Fill at 106 or better
+            )
+        )
 
         # Bar 1: Price below stop - not triggered
         bar1 = make_bar(open=100.0, high=103.0, low=99.0, close=102.0)
@@ -745,14 +790,16 @@ class TestStopLimitOrders:
     def test_buy_stop_limit_triggers_but_no_fill(self) -> None:
         """Buy stop-limit triggers but limit never fills."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="buy",
-            order_type=OrderType.STOP_LIMIT,
-            quantity=10,
-            stop_price=105.0,
-            limit_price=103.0,  # Want to buy at 103 or lower
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="buy",
+                order_type=OrderType.STOP_LIMIT,
+                quantity=10,
+                stop_price=105.0,
+                limit_price=103.0,  # Want to buy at 103 or lower
+            )
+        )
 
         # Bar 1: Triggers stop (high=107) but never hits limit (low=104)
         bar1 = make_bar(open=106.0, high=110.0, low=104.0, close=108.0)
@@ -774,14 +821,16 @@ class TestStopLimitOrders:
     def test_sell_stop_limit_triggers_then_fills(self) -> None:
         """Sell stop-limit triggers on breakdown, fills at limit."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="sell",
-            order_type=OrderType.STOP_LIMIT,
-            quantity=10,
-            stop_price=95.0,  # Trigger when price drops to 95
-            limit_price=94.0,  # Fill at 94 or better
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="sell",
+                order_type=OrderType.STOP_LIMIT,
+                quantity=10,
+                stop_price=95.0,  # Trigger when price drops to 95
+                limit_price=94.0,  # Fill at 94 or better
+            )
+        )
 
         # Bar 1: Price above stop - not triggered
         bar1 = make_bar(open=100.0, high=102.0, low=97.0, close=98.0)
@@ -797,14 +846,16 @@ class TestStopLimitOrders:
     def test_stop_limit_no_slippage(self) -> None:
         """Stop-limit orders have no slippage."""
         manager = OrderManager()
-        manager.submit(Order(
-            symbol="TEST",
-            side="buy",
-            order_type=OrderType.STOP_LIMIT,
-            quantity=10,
-            stop_price=105.0,
-            limit_price=106.0,
-        ))
+        manager.submit(
+            Order(
+                symbol="TEST",
+                side="buy",
+                order_type=OrderType.STOP_LIMIT,
+                quantity=10,
+                stop_price=105.0,
+                limit_price=106.0,
+            )
+        )
 
         # Triggers and fills with slippage param - should be ignored
         bar = make_bar(open=104.0, high=107.0, low=103.0, close=106.0)

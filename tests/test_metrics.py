@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 
-from trdr.core import Duration, Timeframe
+from trdr.core import Duration, Symbol, Timeframe
 from trdr.backtest.metrics import TradeMetrics
 from trdr.backtest.orders import OrderManager
 from trdr.backtest.paper_exchange import (
@@ -17,6 +17,7 @@ from trdr.strategy.base_strategy import BaseStrategy, StrategyConfig
 from trdr.strategy.types import DataRequirement, Position, Signal, SignalAction
 
 # Test defaults
+_TEST_SYMBOL = Symbol.parse("crypto:TEST")
 _TEST_TF = Timeframe.parse("1h")
 _TEST_LOOKBACK = Duration.parse("30d")
 
@@ -165,7 +166,7 @@ class TestRuntimeContextRunParams:
     """Test RuntimeContext run parameters."""
 
     def test_symbol(self) -> None:
-        config = PaperExchangeConfig(symbol="crypto:ETH/USD")
+        config = PaperExchangeConfig(symbol=_TEST_SYMBOL)
         ctx = RuntimeContext(
             portfolio=Portfolio(cash=10000),
             order_manager=OrderManager(),
@@ -177,10 +178,10 @@ class TestRuntimeContextRunParams:
             total_bars=100,
             start_time="2024-01-01T10:00:00Z",
         )
-        assert ctx.symbol == "crypto:ETH/USD"
+        assert ctx.symbol == _TEST_SYMBOL
 
     def test_bar_index(self) -> None:
-        config = PaperExchangeConfig(symbol="crypto:ETH/USD")
+        config = PaperExchangeConfig(symbol=_TEST_SYMBOL)
         ctx = RuntimeContext(
             portfolio=Portfolio(cash=10000),
             order_manager=OrderManager(),
@@ -201,7 +202,7 @@ class TestRuntimeContextPortfolioState:
     """Test RuntimeContext portfolio state access."""
 
     def test_equity_cash_only(self) -> None:
-        config = PaperExchangeConfig(symbol="crypto:ETH/USD")
+        config = PaperExchangeConfig(symbol=_TEST_SYMBOL)
         ctx = RuntimeContext(
             portfolio=Portfolio(cash=10000),
             order_manager=OrderManager(),
@@ -217,10 +218,10 @@ class TestRuntimeContextPortfolioState:
         assert ctx.equity == 10000
 
     def test_equity_with_position(self) -> None:
-        config = PaperExchangeConfig(symbol="crypto:ETH/USD")
+        config = PaperExchangeConfig(symbol=_TEST_SYMBOL)
         portfolio = Portfolio(cash=10000)
         # open_position deducts from cash: 10000 - (100 * 10) = 9000
-        portfolio.open_position("crypto:ETH/USD", "long", 100.0, 10.0, "2024-01-01T10:00:00Z")
+        portfolio.open_position(str(_TEST_SYMBOL), "long", 100.0, 10.0, "2024-01-01T10:00:00Z")
         ctx = RuntimeContext(
             portfolio=portfolio,
             order_manager=OrderManager(),
@@ -245,7 +246,7 @@ class TestRuntimeContextLiveMetrics:
             make_trade(entry_price=100, exit_price=110),  # win
             make_trade(entry_price=100, exit_price=90),  # loss
         ]
-        config = PaperExchangeConfig(symbol="crypto:ETH/USD")
+        config = PaperExchangeConfig(symbol=_TEST_SYMBOL)
         ctx = RuntimeContext(
             portfolio=Portfolio(cash=10000),
             order_manager=OrderManager(),
@@ -261,7 +262,7 @@ class TestRuntimeContextLiveMetrics:
         assert ctx.total_trades == 2
 
     def test_drawdown_live(self) -> None:
-        config = PaperExchangeConfig(symbol="crypto:ETH/USD")
+        config = PaperExchangeConfig(symbol=_TEST_SYMBOL)
         ctx = RuntimeContext(
             portfolio=Portfolio(cash=9000),  # 10% drawdown from 10000
             order_manager=OrderManager(),
@@ -288,7 +289,7 @@ class TestPaperExchangeResultDelegates:
             make_trade(entry_price=100, exit_price=110),
             make_trade(entry_price=100, exit_price=90),
         ]
-        config = PaperExchangeConfig(symbol="crypto:ETH/USD")
+        config = PaperExchangeConfig(symbol=_TEST_SYMBOL)
         result = PaperExchangeResult(
             trades=trades,
             config=config,
@@ -306,7 +307,7 @@ class TestPaperExchangeResultDelegates:
             make_trade(costs=5.0),
             make_trade(costs=10.0),
         ]
-        config = PaperExchangeConfig(symbol="crypto:ETH/USD")
+        config = PaperExchangeConfig(symbol=_TEST_SYMBOL)
         result = PaperExchangeResult(
             trades=trades,
             config=config,
@@ -321,7 +322,7 @@ class TestPaperExchangeResultDelegates:
 class SimpleConfig(StrategyConfig):
     """Simple strategy config with test defaults."""
 
-    symbol: str = "crypto:TEST"
+    symbol: Symbol = field(default_factory=lambda: _TEST_SYMBOL)
     timeframe: Timeframe = field(default_factory=lambda: _TEST_TF)
     lookback: Duration = field(default_factory=lambda: _TEST_LOOKBACK)
 
@@ -332,11 +333,6 @@ def _get_primary_bars(bars: dict[str, list[Bar]], config: StrategyConfig) -> lis
     return bars[key]
 
 
-def _wrap_bars(bars: list[Bar], symbol: str, timeframe: str = "1h") -> dict[str, list[Bar]]:
-    """Wrap bars list in dict for PaperExchange.run()."""
-    return {f"{symbol}:{timeframe}": bars}
-
-
 class ContextAwareStrategy(BaseStrategy):
     """Strategy that uses context for adaptive sizing."""
 
@@ -345,7 +341,11 @@ class ContextAwareStrategy(BaseStrategy):
         self.context_checks: list[tuple[float, float]] = []
 
     def get_data_requirements(self) -> list[DataRequirement]:
-        return [DataRequirement(self.config.symbol, self.config.timeframe, self.config.lookback, role="primary")]
+        return [
+            DataRequirement(
+                self.config.symbol, self.config.timeframe, self.config.lookback, role="primary"
+            )
+        ]
 
     def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
         primary = _get_primary_bars(bars, self.config)
@@ -358,14 +358,18 @@ class TestStrategyAccessesContext:
     """Test that strategy can access self.context."""
 
     def test_context_available_in_generate_signal(self) -> None:
-        config = PaperExchangeConfig(symbol="crypto:ETH/USD", warmup_bars=2)
-        strategy = ContextAwareStrategy(SimpleConfig(symbol="crypto:ETH/USD"))
+        config = PaperExchangeConfig(
+            symbol=_TEST_SYMBOL,
+            primary_feed=f"{_TEST_SYMBOL}:{_TEST_TF}",
+            warmup_bars=2,
+        )
+        strategy = ContextAwareStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
 
         # Create 5 bars
         bars = [make_bar(price=100 + i, ts=f"2024-01-01T{10+i}:00:00Z") for i in range(5)]
 
         engine = PaperExchange(config, strategy)
-        engine.run(_wrap_bars(bars, "crypto:ETH/USD"))
+        engine.run(bars)
 
         # Strategy should have recorded context checks
         assert len(strategy.context_checks) > 0
@@ -378,26 +382,30 @@ class TestStrategyName:
     """Test strategy name feature."""
 
     def test_default_name_is_class_name(self) -> None:
-        strategy = ContextAwareStrategy(SimpleConfig(symbol="crypto:ETH/USD"))
+        strategy = ContextAwareStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         assert strategy.name == "ContextAwareStrategy"
 
     def test_custom_name_overrides_class_name(self) -> None:
         strategy = ContextAwareStrategy(
-            SimpleConfig(symbol="crypto:ETH/USD"),
+            SimpleConfig(symbol=_TEST_SYMBOL),
             name="MyCustomName",
         )
         assert strategy.name == "MyCustomName"
 
     def test_context_has_strategy_name(self) -> None:
-        config = PaperExchangeConfig(symbol="crypto:ETH/USD", warmup_bars=2)
+        config = PaperExchangeConfig(
+            symbol=_TEST_SYMBOL,
+            primary_feed=f"{_TEST_SYMBOL}:{_TEST_TF}",
+            warmup_bars=2,
+        )
         strategy = ContextAwareStrategy(
-            SimpleConfig(symbol="crypto:ETH/USD"),
+            SimpleConfig(symbol=_TEST_SYMBOL),
             name="TestStrategy",
         )
 
         bars = [make_bar(price=100 + i, ts=f"2024-01-01T{10+i}:00:00Z") for i in range(5)]
         engine = PaperExchange(config, strategy)
-        engine.run(_wrap_bars(bars, "crypto:ETH/USD"))
+        engine.run(bars)
 
         # Context should have strategy name
         assert strategy.context.strategy_name == "TestStrategy"

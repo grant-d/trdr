@@ -5,12 +5,13 @@ from dataclasses import dataclass, field
 import pytest
 
 from trdr.backtest import align_feeds
-from trdr.core import Duration, Timeframe, get_interval_seconds, parse_timeframe
+from trdr.core import Duration, Symbol, Timeframe, get_interval_seconds, parse_timeframe
 from trdr.data import Bar
 from trdr.strategy.sica_runner import get_primary_requirement
 from trdr.strategy.types import DataRequirement
 
 # Test defaults
+_TEST_SYMBOL = Symbol.parse("crypto:ETH/USD")
 _TEST_TF = Timeframe.parse("15m")
 _TEST_LOOKBACK = Duration.parse("30d")
 
@@ -258,9 +259,18 @@ class TestMultiFeedIntegration:
 
             def get_data_requirements(self) -> list[DataRequirement]:
                 return [
-                    DataRequirement("crypto:ETH/USD", Timeframe.parse("15m"), Duration.parse("7d"), role="primary"),
-                    DataRequirement("crypto:ETH/USD", Timeframe.parse("1h"), Duration.parse("2d")),  # HTF same symbol
-                    DataRequirement("crypto:BTC/USD", Timeframe.parse("1h"), Duration.parse("2d")),  # Cross-symbol
+                    DataRequirement(
+                        "crypto:ETH/USD",
+                        Timeframe.parse("15m"),
+                        Duration.parse("7d"),
+                        role="primary",
+                    ),
+                    DataRequirement(
+                        "crypto:ETH/USD", Timeframe.parse("1h"), Duration.parse("2d")
+                    ),  # HTF same symbol
+                    DataRequirement(
+                        "crypto:BTC/USD", Timeframe.parse("1h"), Duration.parse("2d")
+                    ),  # Cross-symbol
                 ]
 
             def generate_signal(
@@ -314,11 +324,11 @@ class TestMultiFeedIntegration:
             "crypto:BTC/USD:1h": btc_1h_aligned,
         }
 
-        config = MTFConfig(symbol="crypto:ETH/USD", timeframe="15m")
+        config = MTFConfig(symbol=_TEST_SYMBOL, timeframe="15m")
         strategy = MTFStrategy(config)
 
         exchange_config = PaperExchangeConfig(
-            symbol="crypto:ETH/USD",
+            symbol=_TEST_SYMBOL,
             primary_feed="crypto:ETH/USD:15m",
             warmup_bars=0,  # No warmup for test
         )

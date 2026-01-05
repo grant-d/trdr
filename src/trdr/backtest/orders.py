@@ -2,10 +2,13 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 from uuid import uuid4
 
 from ..data import Bar
+
+if TYPE_CHECKING:
+    pass
 
 
 class OrderType(Enum):
@@ -24,7 +27,7 @@ class Order:
     """Single order to be executed by the engine.
 
     Args:
-        symbol: Asset symbol
+        symbol: Symbol object
         side: "buy" or "sell"
         order_type: Type of order
         quantity: Number of units

@@ -84,7 +84,13 @@
       "WebFetch(domain:docs.alpaca.markets)",
       "WebFetch(domain:alpaca.markets)",
       "WebFetch(domain:forum.alpaca.markets)",
-      "Bash(git -C /Users/grantdickinson/repos/trdr status --short)"
+      "Bash(git -C /Users/grantdickinson/repos/trdr status --short)",
+      "Bash(for i in .sica/configs/ethusd-grid/iterations/*/benchmark.json)",
+      "Bash(sort:*)",
+      "Bash(for f in */test_strategy.py)",
+      "Bash(do sed -i '' 's/Symbol\\\\.parse\\(SYMBOL\\)/SYMBOL/g' \"$f\")",
+      "Bash(.venv/bin/black src/ tests/)",
+      "Bash(.venv/bin/black src/trdr/backtest/paper_exchange.py tests/test_metrics.py)"
     ],
     "deny": []
   }

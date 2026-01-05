@@ -4,13 +4,14 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from trdr.core import Duration, Timeframe
+from trdr.core import Duration, Symbol, Timeframe
 from trdr.backtest.paper_exchange import PaperExchange, PaperExchangeConfig
 from trdr.data import Bar
 from trdr.strategy.base_strategy import BaseStrategy, StrategyConfig
 from trdr.strategy.types import DataRequirement, Position, Signal, SignalAction
 
 # Test defaults
+_TEST_SYMBOL = Symbol.parse("crypto:TEST")
 _TEST_TF = Timeframe.parse("1h")
 _TEST_LOOKBACK = Duration.parse("30d")
 
@@ -21,14 +22,16 @@ def make_bars(prices: list[float], start_ts: str = "2024-01-01T10:00:00Z") -> li
     for i, price in enumerate(prices):
         hour = 10 + i
         ts = f"2024-01-0{1 + i // 24}T{hour % 24:02d}:00:00Z"
-        bars.append(Bar(
-            timestamp=ts,
-            open=price * 0.99,
-            high=price * 1.01,
-            low=price * 0.98,
-            close=price,
-            volume=1000,
-        ))
+        bars.append(
+            Bar(
+                timestamp=ts,
+                open=price * 0.99,
+                high=price * 1.01,
+                low=price * 0.98,
+                close=price,
+                volume=1000,
+            )
+        )
     return bars
 
 
@@ -36,7 +39,7 @@ def make_bars(prices: list[float], start_ts: str = "2024-01-01T10:00:00Z") -> li
 class SimpleConfig(StrategyConfig):
     """Simple strategy config with test defaults."""
 
-    symbol: str = "crypto:TEST"
+    symbol: Symbol = field(default_factory=lambda: _TEST_SYMBOL)
     timeframe: Timeframe = field(default_factory=lambda: _TEST_TF)
     lookback: Duration = field(default_factory=lambda: _TEST_LOOKBACK)
 
@@ -60,7 +63,11 @@ class AlwaysBuyStrategy(BaseStrategy):
         self.bought = False
 
     def get_data_requirements(self) -> list[DataRequirement]:
-        return [DataRequirement(self.config.symbol, self.config.timeframe, self.config.lookback, role="primary")]
+        return [
+            DataRequirement(
+                self.config.symbol, self.config.timeframe, self.config.lookback, role="primary"
+            )
+        ]
 
     def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
         primary = _get_primary_bars(bars, self.config)
@@ -86,7 +93,11 @@ class BuyThenSellStrategy(BaseStrategy):
         self.bars_held = 0
 
     def get_data_requirements(self) -> list[DataRequirement]:
-        return [DataRequirement(self.config.symbol, self.config.timeframe, self.config.lookback, role="primary")]
+        return [
+            DataRequirement(
+                self.config.symbol, self.config.timeframe, self.config.lookback, role="primary"
+            )
+        ]
 
     def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
         primary = _get_primary_bars(bars, self.config)
@@ -121,7 +132,11 @@ class TrailingStopStrategy(BaseStrategy):
         self.bought = False
 
     def get_data_requirements(self) -> list[DataRequirement]:
-        return [DataRequirement(self.config.symbol, self.config.timeframe, self.config.lookback, role="primary")]
+        return [
+            DataRequirement(
+                self.config.symbol, self.config.timeframe, self.config.lookback, role="primary"
+            )
+        ]
 
     def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
         primary = _get_primary_bars(bars, self.config)
@@ -149,7 +164,11 @@ class TakeProfitStrategy(BaseStrategy):
         self.trade_callbacks: list[tuple[float, str]] = []
 
     def get_data_requirements(self) -> list[DataRequirement]:
-        return [DataRequirement(self.config.symbol, self.config.timeframe, self.config.lookback, role="primary")]
+        return [
+            DataRequirement(
+                self.config.symbol, self.config.timeframe, self.config.lookback, role="primary"
+            )
+        ]
 
     def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
         primary = _get_primary_bars(bars, self.config)
@@ -183,7 +202,11 @@ class LimitOrderStrategy(BaseStrategy):
         self.limit_pct = limit_pct
 
     def get_data_requirements(self) -> list[DataRequirement]:
-        return [DataRequirement(self.config.symbol, self.config.timeframe, self.config.lookback, role="primary")]
+        return [
+            DataRequirement(
+                self.config.symbol, self.config.timeframe, self.config.lookback, role="primary"
+            )
+        ]
 
     def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
         primary = _get_primary_bars(bars, self.config)
@@ -211,7 +234,11 @@ class StopLimitStrategy(BaseStrategy):
         self.bought = False
 
     def get_data_requirements(self) -> list[DataRequirement]:
-        return [DataRequirement(self.config.symbol, self.config.timeframe, self.config.lookback, role="primary")]
+        return [
+            DataRequirement(
+                self.config.symbol, self.config.timeframe, self.config.lookback, role="primary"
+            )
+        ]
 
     def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
         primary = _get_primary_bars(bars, self.config)
@@ -240,7 +267,11 @@ class MultipleEntriesStrategy(BaseStrategy):
         self.buys = 0
 
     def get_data_requirements(self) -> list[DataRequirement]:
-        return [DataRequirement(self.config.symbol, self.config.timeframe, self.config.lookback, role="primary")]
+        return [
+            DataRequirement(
+                self.config.symbol, self.config.timeframe, self.config.lookback, role="primary"
+            )
+        ]
 
     def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
         primary = _get_primary_bars(bars, self.config)
@@ -265,13 +296,13 @@ class TestPaperExchange:
     def test_simple_buy_and_hold(self) -> None:
         """Buy and hold to end of data."""
         config = PaperExchangeConfig(
-            symbol="crypto:TEST",
+            symbol=_TEST_SYMBOL,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
             slippage_pct=0.0,
         )
-        strategy = AlwaysBuyStrategy(SimpleConfig(symbol="crypto:TEST"))
+        strategy = AlwaysBuyStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
 
         # Prices go up
@@ -284,13 +315,13 @@ class TestPaperExchange:
     def test_buy_then_sell(self) -> None:
         """Complete round trip trade."""
         config = PaperExchangeConfig(
-            symbol="crypto:TEST",
+            symbol=_TEST_SYMBOL,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
             slippage_pct=0.0,
         )
-        strategy = BuyThenSellStrategy(SimpleConfig(symbol="crypto:TEST"))
+        strategy = BuyThenSellStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
 
         bars = make_bars([100, 100, 100, 105, 110, 115, 120])
@@ -305,13 +336,13 @@ class TestPaperExchange:
     def test_trailing_stop_triggers(self) -> None:
         """Trailing stop exits on reversal."""
         config = PaperExchangeConfig(
-            symbol="crypto:TEST",
+            symbol=_TEST_SYMBOL,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
             slippage_pct=0.0,
         )
-        strategy = TrailingStopStrategy(SimpleConfig(symbol="crypto:TEST"))
+        strategy = TrailingStopStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
 
         # Price goes up then crashes
@@ -324,13 +355,13 @@ class TestPaperExchange:
     def test_transaction_costs(self) -> None:
         """Transaction costs reduce P&L."""
         config_no_cost = PaperExchangeConfig(
-            symbol="crypto:TEST",
+            symbol=_TEST_SYMBOL,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
         )
         config_with_cost = PaperExchangeConfig(
-            symbol="crypto:TEST",
+            symbol=_TEST_SYMBOL,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.01,  # 1%
@@ -340,10 +371,10 @@ class TestPaperExchange:
         bars_dict = _wrap_bars(bars, "crypto:TEST")
 
         result_no_cost = PaperExchange(
-            config_no_cost, AlwaysBuyStrategy(SimpleConfig(symbol="crypto:TEST"))
+            config_no_cost, AlwaysBuyStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         ).run(bars_dict)
         result_with_cost = PaperExchange(
-            config_with_cost, AlwaysBuyStrategy(SimpleConfig(symbol="crypto:TEST"))
+            config_with_cost, AlwaysBuyStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         ).run(bars_dict)
 
         # With costs should have lower P&L
@@ -352,11 +383,11 @@ class TestPaperExchange:
     def test_equity_curve_generated(self) -> None:
         """Equity curve is generated."""
         config = PaperExchangeConfig(
-            symbol="crypto:TEST",
+            symbol=_TEST_SYMBOL,
             warmup_bars=2,
             initial_capital=10000.0,
         )
-        strategy = AlwaysBuyStrategy(SimpleConfig(symbol="crypto:TEST"))
+        strategy = AlwaysBuyStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
 
         bars = make_bars([100, 100, 100, 110, 120])
@@ -368,11 +399,11 @@ class TestPaperExchange:
     def test_max_drawdown_calculated(self) -> None:
         """Max drawdown is calculated."""
         config = PaperExchangeConfig(
-            symbol="crypto:TEST",
+            symbol=_TEST_SYMBOL,
             warmup_bars=2,
             initial_capital=10000.0,
         )
-        strategy = AlwaysBuyStrategy(SimpleConfig(symbol="crypto:TEST"))
+        strategy = AlwaysBuyStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
 
         # Price goes up then down
@@ -385,11 +416,11 @@ class TestPaperExchange:
     def test_insufficient_bars(self) -> None:
         """Returns empty result for insufficient bars."""
         config = PaperExchangeConfig(
-            symbol="crypto:TEST",
+            symbol=_TEST_SYMBOL,
             warmup_bars=10,
             initial_capital=10000.0,
         )
-        strategy = AlwaysBuyStrategy(SimpleConfig(symbol="crypto:TEST"))
+        strategy = AlwaysBuyStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
 
         bars = make_bars([100, 100, 100])  # Only 3 bars, need 10 warmup
@@ -400,12 +431,12 @@ class TestPaperExchange:
     def test_win_rate_calculated(self) -> None:
         """Win rate is calculated correctly."""
         config = PaperExchangeConfig(
-            symbol="crypto:TEST",
+            symbol=_TEST_SYMBOL,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
         )
-        strategy = BuyThenSellStrategy(SimpleConfig(symbol="crypto:TEST"))
+        strategy = BuyThenSellStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
 
         # Price up = winning trade
@@ -423,13 +454,13 @@ class TestMultipleEntries:
     def test_multiple_buys_accumulate(self) -> None:
         """Multiple buy signals accumulate position."""
         config = PaperExchangeConfig(
-            symbol="crypto:TEST",
+            symbol=_TEST_SYMBOL,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
             slippage_pct=0.0,
         )
-        strategy = MultipleEntriesStrategy(SimpleConfig(symbol="crypto:TEST"))
+        strategy = MultipleEntriesStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
 
         bars = make_bars([100] * 10)  # Flat price
@@ -447,13 +478,13 @@ class TestTakeProfitIntegration:
     def test_take_profit_triggers(self) -> None:
         """Take profit exits when price reaches target."""
         config = PaperExchangeConfig(
-            symbol="crypto:TEST",
+            symbol=_TEST_SYMBOL,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
             slippage_pct=0.0,
         )
-        strategy = TakeProfitStrategy(SimpleConfig(symbol="crypto:TEST"))
+        strategy = TakeProfitStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
 
         # Price rises to hit 10% take profit
@@ -467,13 +498,13 @@ class TestTakeProfitIntegration:
     def test_stop_loss_cancels_take_profit(self) -> None:
         """Stop loss triggers and cancels take profit (pseudo-OCO)."""
         config = PaperExchangeConfig(
-            symbol="crypto:TEST",
+            symbol=_TEST_SYMBOL,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
             slippage_pct=0.0,
         )
-        strategy = TakeProfitStrategy(SimpleConfig(symbol="crypto:TEST"))
+        strategy = TakeProfitStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
 
         # Entry at 100, then price drops to hit 5% stop loss (95)
@@ -487,13 +518,13 @@ class TestTakeProfitIntegration:
     def test_on_trade_complete_called(self) -> None:
         """on_trade_complete callback is called after trade closes."""
         config = PaperExchangeConfig(
-            symbol="crypto:TEST",
+            symbol=_TEST_SYMBOL,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
             slippage_pct=0.0,
         )
-        strategy = TakeProfitStrategy(SimpleConfig(symbol="crypto:TEST"))
+        strategy = TakeProfitStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
 
         # Price rises to hit take profit (110)
@@ -512,14 +543,14 @@ class TestLimitOrderIntegration:
     def test_limit_order_fills_on_dip(self) -> None:
         """Limit order fills when price dips to limit."""
         config = PaperExchangeConfig(
-            symbol="crypto:TEST",
+            symbol=_TEST_SYMBOL,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
             slippage_pct=0.0,
         )
         # Limit at 98% of current price
-        strategy = LimitOrderStrategy(SimpleConfig(symbol="crypto:TEST"), limit_pct=0.98)
+        strategy = LimitOrderStrategy(SimpleConfig(symbol=_TEST_SYMBOL), limit_pct=0.98)
         engine = PaperExchange(config, strategy)
 
         # Price dips below limit then recovers
@@ -532,14 +563,14 @@ class TestLimitOrderIntegration:
     def test_limit_order_never_fills(self) -> None:
         """Limit order stays pending if never touched."""
         config = PaperExchangeConfig(
-            symbol="crypto:TEST",
+            symbol=_TEST_SYMBOL,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
             slippage_pct=0.0,
         )
         # Limit at 90% - price never gets there
-        strategy = LimitOrderStrategy(SimpleConfig(symbol="crypto:TEST"), limit_pct=0.90)
+        strategy = LimitOrderStrategy(SimpleConfig(symbol=_TEST_SYMBOL), limit_pct=0.90)
         engine = PaperExchange(config, strategy)
 
         # Price stays above limit
@@ -552,13 +583,13 @@ class TestLimitOrderIntegration:
     def test_limit_order_no_slippage(self) -> None:
         """Limit orders have no slippage."""
         config = PaperExchangeConfig(
-            symbol="crypto:TEST",
+            symbol=_TEST_SYMBOL,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
             slippage_pct=0.05,  # 5% slippage - should be ignored for limit
         )
-        strategy = LimitOrderStrategy(SimpleConfig(symbol="crypto:TEST"), limit_pct=0.98)
+        strategy = LimitOrderStrategy(SimpleConfig(symbol=_TEST_SYMBOL), limit_pct=0.98)
         engine = PaperExchange(config, strategy)
 
         bars = make_bars([100, 100, 100, 95, 110])
@@ -576,13 +607,13 @@ class TestStopLimitIntegration:
     def test_stop_limit_triggers_and_fills(self) -> None:
         """Stop-limit triggers on breakout and fills at limit."""
         config = PaperExchangeConfig(
-            symbol="crypto:TEST",
+            symbol=_TEST_SYMBOL,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
             slippage_pct=0.0,
         )
-        strategy = StopLimitStrategy(SimpleConfig(symbol="crypto:TEST"))
+        strategy = StopLimitStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
 
         # Signal at price=100, stop=105, limit=106
@@ -597,13 +628,13 @@ class TestStopLimitIntegration:
     def test_stop_limit_never_triggers(self) -> None:
         """Stop-limit stays pending if stop never hit."""
         config = PaperExchangeConfig(
-            symbol="crypto:TEST",
+            symbol=_TEST_SYMBOL,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
             slippage_pct=0.0,
         )
-        strategy = StopLimitStrategy(SimpleConfig(symbol="crypto:TEST"))
+        strategy = StopLimitStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
 
         # Signal at price=100, stop=105, but price never reaches 105
@@ -620,11 +651,11 @@ class TestStockCalendar:
     def test_stock_filters_weekends(self) -> None:
         """Stock trading skips weekend bars."""
         config = PaperExchangeConfig(
-            symbol="stock:TEST",  # Stock, not crypto
+            symbol=Symbol.parse("stock:TEST"),  # Stock, not crypto
             warmup_bars=2,
             initial_capital=10000.0,
         )
-        strategy = AlwaysBuyStrategy(SimpleConfig(symbol="stock:TEST"))
+        strategy = AlwaysBuyStrategy(SimpleConfig(symbol=Symbol.parse("stock:TEST")))
         engine = PaperExchange(config, strategy)
 
         # Create bars including weekend (Jan 6-7, 2024 were Sat/Sun)
@@ -649,13 +680,13 @@ class TestTradeFields:
     def test_trade_captures_stop_loss_and_take_profit(self) -> None:
         """Trade record includes stop_loss and take_profit from entry signal."""
         config = PaperExchangeConfig(
-            symbol="crypto:TEST",
+            symbol=_TEST_SYMBOL,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
             slippage_pct=0.0,
         )
-        strategy = TakeProfitStrategy(SimpleConfig(symbol="crypto:TEST"))
+        strategy = TakeProfitStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
 
         # Entry at 100, TP=110 (10%), SL=95 (5%)
@@ -674,14 +705,14 @@ class TestTradeFields:
     def test_trade_none_when_no_sl_tp(self) -> None:
         """Trade has None for stop_loss/take_profit when not set."""
         config = PaperExchangeConfig(
-            symbol="crypto:TEST",
+            symbol=_TEST_SYMBOL,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
             slippage_pct=0.0,
         )
         # AlwaysBuyStrategy doesn't set stop_loss or take_profit
-        strategy = AlwaysBuyStrategy(SimpleConfig(symbol="crypto:TEST"))
+        strategy = AlwaysBuyStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
 
         bars = make_bars([100, 100, 100, 110, 120])
@@ -695,13 +726,13 @@ class TestTradeFields:
     def test_trade_is_winner_property(self) -> None:
         """Trade.is_winner returns True for profitable trades."""
         config = PaperExchangeConfig(
-            symbol="crypto:TEST",
+            symbol=_TEST_SYMBOL,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
             slippage_pct=0.0,
         )
-        strategy = AlwaysBuyStrategy(SimpleConfig(symbol="crypto:TEST"))
+        strategy = AlwaysBuyStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
 
         # Price goes up = winning trade
@@ -714,13 +745,13 @@ class TestTradeFields:
     def test_trade_duration_hours(self) -> None:
         """Trade.duration_hours calculates correctly."""
         config = PaperExchangeConfig(
-            symbol="crypto:TEST",
+            symbol=_TEST_SYMBOL,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
             slippage_pct=0.0,
         )
-        strategy = AlwaysBuyStrategy(SimpleConfig(symbol="crypto:TEST"))
+        strategy = AlwaysBuyStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
 
         bars = make_bars([100, 100, 100, 110, 120])
@@ -737,11 +768,11 @@ class TestPrintTrades:
     def test_print_trades_no_trades(self, capsys) -> None:
         """print_trades handles empty trade list."""
         config = PaperExchangeConfig(
-            symbol="crypto:TEST",
+            symbol=_TEST_SYMBOL,
             warmup_bars=10,
             initial_capital=10000.0,
         )
-        strategy = AlwaysBuyStrategy(SimpleConfig(symbol="crypto:TEST"))
+        strategy = AlwaysBuyStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
 
         # Only 3 bars, need 10 warmup = no trades
@@ -755,13 +786,13 @@ class TestPrintTrades:
     def test_print_trades_with_trades(self, capsys) -> None:
         """print_trades outputs trade log."""
         config = PaperExchangeConfig(
-            symbol="crypto:TEST",
+            symbol=_TEST_SYMBOL,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
             slippage_pct=0.0,
         )
-        strategy = TakeProfitStrategy(SimpleConfig(symbol="crypto:TEST"))
+        strategy = TakeProfitStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
 
         bars = make_bars([100, 100, 100, 105, 110])
@@ -782,13 +813,13 @@ class TestPrintTrades:
     def test_print_trades_shows_win_loss(self, capsys) -> None:
         """print_trades shows WIN/LOSS status."""
         config = PaperExchangeConfig(
-            symbol="crypto:TEST",
+            symbol=_TEST_SYMBOL,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
             slippage_pct=0.0,
         )
-        strategy = TakeProfitStrategy(SimpleConfig(symbol="crypto:TEST"))
+        strategy = TakeProfitStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
 
         # Price rises to hit take profit = WIN
@@ -808,16 +839,21 @@ class TestOrderDirectionValidation:
 
         class BadStopLossStrategy(BaseStrategy):
             def get_data_requirements(self) -> list[DataRequirement]:
-                return [DataRequirement(self.config.symbol, self.config.timeframe, self.config.lookback, role="primary")]
+                return [
+                    DataRequirement(
+                        self.config.symbol,
+                        self.config.timeframe,
+                        self.config.lookback,
+                        role="primary",
+                    )
+                ]
 
             def generate_signal(
                 self, bars: dict[str, list[Bar]], position: Position | None
             ) -> Signal:
                 primary = _get_primary_bars(bars, self.config)
                 if len(primary) < 3:
-                    return Signal(
-                        action=SignalAction.HOLD, price=primary[-1].close, confidence=0.0
-                    )
+                    return Signal(action=SignalAction.HOLD, price=primary[-1].close, confidence=0.0)
                 if position is None:
                     return Signal(
                         action=SignalAction.BUY,
@@ -826,12 +862,10 @@ class TestOrderDirectionValidation:
                         reason="buy",
                         stop_loss=primary[-1].close * 1.05,  # WRONG: above price
                     )
-                return Signal(
-                    action=SignalAction.HOLD, price=primary[-1].close, confidence=0.5
-                )
+                return Signal(action=SignalAction.HOLD, price=primary[-1].close, confidence=0.5)
 
-        config = PaperExchangeConfig(symbol="crypto:TEST", warmup_bars=2)
-        strategy = BadStopLossStrategy(SimpleConfig(symbol="crypto:TEST"))
+        config = PaperExchangeConfig(symbol=_TEST_SYMBOL, warmup_bars=2)
+        strategy = BadStopLossStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
         bars = make_bars([100, 100, 100, 100])
 
@@ -843,16 +877,21 @@ class TestOrderDirectionValidation:
 
         class BadTakeProfitStrategy(BaseStrategy):
             def get_data_requirements(self) -> list[DataRequirement]:
-                return [DataRequirement(self.config.symbol, self.config.timeframe, self.config.lookback, role="primary")]
+                return [
+                    DataRequirement(
+                        self.config.symbol,
+                        self.config.timeframe,
+                        self.config.lookback,
+                        role="primary",
+                    )
+                ]
 
             def generate_signal(
                 self, bars: dict[str, list[Bar]], position: Position | None
             ) -> Signal:
                 primary = _get_primary_bars(bars, self.config)
                 if len(primary) < 3:
-                    return Signal(
-                        action=SignalAction.HOLD, price=primary[-1].close, confidence=0.0
-                    )
+                    return Signal(action=SignalAction.HOLD, price=primary[-1].close, confidence=0.0)
                 if position is None:
                     return Signal(
                         action=SignalAction.BUY,
@@ -861,12 +900,10 @@ class TestOrderDirectionValidation:
                         reason="buy",
                         take_profit=primary[-1].close * 0.95,  # WRONG: below price
                     )
-                return Signal(
-                    action=SignalAction.HOLD, price=primary[-1].close, confidence=0.5
-                )
+                return Signal(action=SignalAction.HOLD, price=primary[-1].close, confidence=0.5)
 
-        config = PaperExchangeConfig(symbol="crypto:TEST", warmup_bars=2)
-        strategy = BadTakeProfitStrategy(SimpleConfig(symbol="crypto:TEST"))
+        config = PaperExchangeConfig(symbol=_TEST_SYMBOL, warmup_bars=2)
+        strategy = BadTakeProfitStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
         bars = make_bars([100, 100, 100, 100])
 
@@ -878,16 +915,21 @@ class TestOrderDirectionValidation:
 
         class BadBuyLimitStrategy(BaseStrategy):
             def get_data_requirements(self) -> list[DataRequirement]:
-                return [DataRequirement(self.config.symbol, self.config.timeframe, self.config.lookback, role="primary")]
+                return [
+                    DataRequirement(
+                        self.config.symbol,
+                        self.config.timeframe,
+                        self.config.lookback,
+                        role="primary",
+                    )
+                ]
 
             def generate_signal(
                 self, bars: dict[str, list[Bar]], position: Position | None
             ) -> Signal:
                 primary = _get_primary_bars(bars, self.config)
                 if len(primary) < 3:
-                    return Signal(
-                        action=SignalAction.HOLD, price=primary[-1].close, confidence=0.0
-                    )
+                    return Signal(action=SignalAction.HOLD, price=primary[-1].close, confidence=0.0)
                 if position is None:
                     return Signal(
                         action=SignalAction.BUY,
@@ -896,12 +938,10 @@ class TestOrderDirectionValidation:
                         reason="buy",
                         limit_price=primary[-1].close * 1.05,  # WRONG: above price
                     )
-                return Signal(
-                    action=SignalAction.HOLD, price=primary[-1].close, confidence=0.5
-                )
+                return Signal(action=SignalAction.HOLD, price=primary[-1].close, confidence=0.5)
 
-        config = PaperExchangeConfig(symbol="crypto:TEST", warmup_bars=2)
-        strategy = BadBuyLimitStrategy(SimpleConfig(symbol="crypto:TEST"))
+        config = PaperExchangeConfig(symbol=_TEST_SYMBOL, warmup_bars=2)
+        strategy = BadBuyLimitStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
         bars = make_bars([100, 100, 100, 100])
 

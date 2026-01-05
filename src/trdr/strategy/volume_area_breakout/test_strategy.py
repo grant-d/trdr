@@ -17,21 +17,24 @@ from pathlib import Path
 import pytest
 
 from trdr.backtest import PaperExchange, PaperExchangeConfig, PaperExchangeResult
-from trdr.core import load_config
+from trdr.core import Duration, Symbol, Timeframe, load_config
 from trdr.data import AlpacaDataClient
 from trdr.strategy import VolumeAreaBreakoutConfig, VolumeAreaBreakoutStrategy, get_backtest_env
 from trdr.strategy.targets import score_result
 
 # Read env vars once at module load
-SYMBOL, TIMEFRAME_STR, TIMEFRAME, _ = get_backtest_env(
-    default_symbol="crypto:BTC/USD",
-    default_timeframe="1h",
+SYMBOL, TIMEFRAME, LOOKBACK = get_backtest_env(
+    default_symbol=Symbol.parse("crypto:BTC/USD"),
+    default_timeframe=Timeframe.parse("1h"),
+    default_lookback=Duration.parse("750h"),
 )
 
 
 # IMPORTANT: MUST use scope="function" NOT "module"!
 # "module" caches results and WON'T pick up strategy code changes.
 # This cost hours of debugging. Do NOT change it back.
+
+
 @pytest.fixture(scope="function")
 def event_loop():
     """Create event loop for async fixtures."""
@@ -51,8 +54,7 @@ def bars(event_loop):
     async def fetch():
         config = load_config()
         client = AlpacaDataClient(config.alpaca, Path("data/cache"))
-        # Use TIMEFRAME_STR - get_bars handles aggregation for arbitrary timeframes
-        bars = await client.get_bars(SYMBOL, lookback=3000, timeframe=TIMEFRAME_STR)
+        bars = await client.get_bars(SYMBOL, lookback=3000, timeframe=TIMEFRAME)
         return bars
 
     return event_loop.run_until_complete(fetch())
@@ -67,7 +69,8 @@ def strategy():
     """
     config = VolumeAreaBreakoutConfig(
         symbol=SYMBOL,
-        timeframe=TIMEFRAME_STR,
+        timeframe=TIMEFRAME,
+        lookback=Duration.parse("750h"),
         atr_threshold=2.0,
         stop_loss_multiplier=1.75,
     )
@@ -86,6 +89,7 @@ def backtest_config():
     """
     return PaperExchangeConfig(
         symbol=SYMBOL,
+        primary_feed=f"{SYMBOL}:{TIMEFRAME}",
         warmup_bars=65,
         transaction_cost_pct=0.0025,
         slippage_pct=0.01,
@@ -134,7 +138,7 @@ class TestAlgoPerformance:
     def test_has_trades(self, backtest_result):
         """Strategy generates trades."""
         total = backtest_result.total_trades
-        assert total >= 1, f"No trades generated"
+        assert total >= 1, "No trades generated"
 
     def test_win_rate_valid(self, backtest_result):
         """Win rate is valid (0-1 range)."""
@@ -173,7 +177,7 @@ class TestAlgoRobustness:
         if backtest_result.total_trades == 0:
             pytest.skip("No trades to evaluate")
         pnl = backtest_result.total_pnl
-        assert isinstance(pnl, (int, float)), f"P&L not computed"
+        assert isinstance(pnl, (int, float)), "P&L not computed"
 
 
 def print_results():
@@ -182,11 +186,12 @@ def print_results():
     async def run():
         config = load_config()
         client = AlpacaDataClient(config.alpaca, Path("data/cache"))
-        bars = await client.get_bars(SYMBOL, lookback=3000, timeframe=TIMEFRAME_STR)
+        bars = await client.get_bars(SYMBOL, lookback=3000, timeframe=TIMEFRAME)
 
         strategy_config = VolumeAreaBreakoutConfig(
             symbol=SYMBOL,
-            timeframe=TIMEFRAME_STR,
+            timeframe=TIMEFRAME,
+            lookback=Duration.parse("750h"),
             atr_threshold=2.0,
             stop_loss_multiplier=1.75,
         )
@@ -194,6 +199,7 @@ def print_results():
 
         bt_config = PaperExchangeConfig(
             symbol=SYMBOL,
+            primary_feed=f"{SYMBOL}:{TIMEFRAME}",
             warmup_bars=65,
             transaction_cost_pct=0.0025,
             default_position_pct=1.0,

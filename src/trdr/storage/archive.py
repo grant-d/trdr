@@ -4,7 +4,10 @@ import json
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ..core import Symbol
 
 
 @dataclass
@@ -44,7 +47,7 @@ class RunRecord:
     start_time: str
     end_time: str | None
     mode: str  # "paper" or "live"
-    symbol: str
+    symbol: "Symbol"
     config: dict[str, Any]  # Strategy parameters
     metrics: RunMetrics | None
     trades: list[TradeRecord]
@@ -56,7 +59,7 @@ class RunRecord:
             "start_time": self.start_time,
             "end_time": self.end_time,
             "mode": self.mode,
-            "symbol": self.symbol,
+            "symbol": str(self.symbol),
             "config": self.config,
             "metrics": asdict(self.metrics) if self.metrics else None,
             "trades": [asdict(t) for t in self.trades],
@@ -65,6 +68,8 @@ class RunRecord:
     @classmethod
     def from_dict(cls, data: dict) -> "RunRecord":
         """Create RunRecord from dictionary."""
+        from ..core import Symbol
+
         metrics = None
         if data.get("metrics"):
             metrics = RunMetrics(**data["metrics"])
@@ -76,7 +81,7 @@ class RunRecord:
             start_time=data["start_time"],
             end_time=data.get("end_time"),
             mode=data["mode"],
-            symbol=data["symbol"],
+            symbol=Symbol.parse(data["symbol"]),
             config=data.get("config", {}),
             metrics=metrics,
             trades=trades,
@@ -96,20 +101,18 @@ class RunArchive:
         self.runs_dir.mkdir(parents=True, exist_ok=True)
         self._current_run: RunRecord | None = None
 
-    def start_run(self, symbol: str, config: dict, mode: str = "paper") -> str:
+    def start_run(self, symbol: "Symbol", config: dict, mode: str = "paper") -> str:
         """Start a new run.
 
         Args:
-            symbol: Trading symbol
+            symbol: Symbol object
             config: Strategy configuration
             mode: Trading mode ("paper" or "live")
 
         Returns:
             Run ID
         """
-        # Sanitize symbol for filesystem safety (e.g., "crypto:BTC/USD" -> "crypto:btc_usd")
-        safe_symbol = symbol.replace("/", "_").lower()
-        run_id = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{safe_symbol}"
+        run_id = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{symbol.cache_key}"
 
         self._current_run = RunRecord(
             run_id=run_id,
@@ -127,7 +130,7 @@ class RunArchive:
     def record_trade(
         self,
         action: str,
-        symbol: str,
+        symbol: "Symbol",
         price: float,
         qty: float,
         reason: str,
@@ -140,7 +143,7 @@ class RunArchive:
 
         Args:
             action: Trade action ("buy" or "sell")
-            symbol: Stock symbol
+            symbol: Symbol object
             price: Execution price
             qty: Quantity
             reason: Signal reason
@@ -155,7 +158,7 @@ class RunArchive:
         trade = TradeRecord(
             timestamp=datetime.now().isoformat(),
             action=action,
-            symbol=symbol,
+            symbol=str(symbol),
             price=price,
             qty=qty,
             reason=reason,

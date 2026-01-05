@@ -30,7 +30,6 @@ from ...indicators import ema, ema_series
 from ..base_strategy import BaseStrategy, StrategyConfig
 from ..types import DataRequirement, Position, Signal, SignalAction
 
-
 # =============================================================================
 # STEP 1: Define your config
 # =============================================================================

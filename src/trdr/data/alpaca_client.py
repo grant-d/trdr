@@ -59,7 +59,7 @@ class AlpacaDataClient:
 
     async def get_bars(
         self,
-        symbol: str,
+        symbol: Symbol,
         lookback: int,
         timeframe: Timeframe,
     ) -> list[Bar]:
@@ -69,7 +69,7 @@ class AlpacaDataClient:
         When timeframe exceeds Alpaca limits, fetches base bars and aggregates.
 
         Args:
-            symbol: Symbol (e.g., "AAPL" for stocks, "BTC/USD" for crypto)
+            symbol: Symbol object (e.g., Symbol.parse("stock:AAPL"), Symbol.parse("crypto:BTC/USD"))
             lookback: Number of bars to fetch
             timeframe: Bar timeframe
 
@@ -79,7 +79,7 @@ class AlpacaDataClient:
         from .aggregator import BarAggregator
         from .timeframe_adapter import TimeframeAdapter
 
-        adapter = TimeframeAdapter(timeframe)
+        adapter = TimeframeAdapter(timeframe, symbol)
 
         if adapter.needs_aggregation:
             # Fetch base bars and aggregate
@@ -202,41 +202,41 @@ class AlpacaDataClient:
         """
         result = {}
         for req in requirements:
-            bars = await self.get_bars(req.symbol, req.lookback_bars, req.timeframe)
+            symbol = Symbol.parse(req.symbol) if isinstance(req.symbol, str) else req.symbol
+            bars = await self.get_bars(symbol, req.lookback_bars, req.timeframe)
             result[req.key] = bars
         return result
 
-    async def get_current_price(self, symbol: str) -> Quote:
+    async def get_current_price(self, symbol: Symbol) -> Quote:
         """Get current price quote.
 
         Args:
-            symbol: Symbol (e.g., "AAPL" for stocks, "BTC/USD" for crypto)
+            symbol: Symbol object
 
         Returns:
             Current quote with bid/ask
         """
-        sym = Symbol.parse(symbol) if isinstance(symbol, str) else symbol
 
-        if sym.is_crypto:
-            request = CryptoLatestQuoteRequest(symbol_or_symbols=sym.raw)
+        if symbol.is_crypto:
+            request = CryptoLatestQuoteRequest(symbol_or_symbols=symbol.raw)
             quotes = self._crypto_client.get_crypto_latest_quote(request)
         else:
-            request = StockLatestQuoteRequest(symbol_or_symbols=sym.raw)
+            request = StockLatestQuoteRequest(symbol_or_symbols=symbol.raw)
             quotes = self._stock_client.get_stock_latest_quote(request)
 
         # SDK returns object with .data dict, but may vary by version
         quotes_data = quotes.data if hasattr(quotes, "data") else quotes
-        if sym.raw in quotes_data:
-            quote = quotes_data[sym.raw]
+        if symbol.raw in quotes_data:
+            quote = quotes_data[symbol.raw]
             return Quote(
-                symbol=str(sym),
+                symbol=str(symbol),
                 price=(float(quote.bid_price) + float(quote.ask_price)) / 2,
                 bid=float(quote.bid_price),
                 ask=float(quote.ask_price),
                 timestamp=quote.timestamp.isoformat(),
             )
 
-        raise ValueError(f"No quote available for {sym.raw}")
+        raise ValueError(f"No quote available for {symbol.raw}")
 
     def _cache_path(self, symbol: Symbol, timeframe: TimeFrame) -> Path:
         """Get cache file path for symbol and timeframe."""

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..core.duration import Duration
+    from ..core.symbol import Symbol
     from ..core.timeframe import Timeframe
 
 
@@ -15,13 +16,13 @@ class DataRequirement:
     """Specification for a data feed.
 
     Args:
-        symbol: Trading symbol (e.g., "crypto:ETH/USD", "crypto:BTC/USD")
+        symbol: Symbol object (e.g., Symbol.parse("crypto:ETH/USD"))
         timeframe: Timeframe
         lookback: Duration
         role: "primary" (trading feed) or "informative" (reference data)
     """
 
-    symbol: str
+    symbol: "Symbol"
     timeframe: "Timeframe"
     lookback: "Duration"
     role: str = "informative"
@@ -29,7 +30,7 @@ class DataRequirement:
     @property
     def key(self) -> str:
         """Unique key for this data feed."""
-        return f"{self.symbol}:{self.timeframe}"
+        return f"{str(self.symbol)}:{self.timeframe}"
 
     @property
     def lookback_bars(self) -> int:
@@ -38,9 +39,7 @@ class DataRequirement:
 
     def __post_init__(self) -> None:
         if self.role not in ("primary", "informative"):
-            raise ValueError(
-                f"role must be 'primary' or 'informative', got '{self.role}'"
-            )
+            raise ValueError(f"role must be 'primary' or 'informative', got '{self.role}'")
 
 
 class SignalAction(Enum):

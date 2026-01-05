@@ -15,14 +15,13 @@ DCA:
 - Sell target ensures 1 grid_width profit across all positions
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 
 from ...data import Bar
 from ..base_strategy import BaseStrategy, StrategyConfig
 from ..types import DataRequirement, Position, Signal, SignalAction
-from ...indicators import atr
 
 
 @dataclass
@@ -113,6 +112,35 @@ class TrailingGridStrategy(BaseStrategy):
             if recent[i].high >= recent[i - 1].high:
                 return False
         return True
+
+    def _is_uptrend_pullback(self, bars: list[Bar]) -> bool:
+        """Check for uptrend with pullback (rising structure + current dip).
+
+        Detects when price is in uptrend structure but has pulled back,
+        creating a buy-the-dip opportunity.
+        """
+        if len(bars) < 10:
+            return False
+
+        # Check if recent trend is up: current price > price 5 bars ago
+        lookback = 5
+        past_close = bars[-lookback - 1].close
+        current = bars[-1]
+
+        # Must be in uptrend (at least 2% up over lookback period)
+        trend_pct = (current.close - past_close) / past_close
+        if trend_pct < 0.02:
+            return False
+
+        # Current bar should be red (pullback candle)
+        if current.close >= current.open:
+            return False  # Not a pullback candle
+
+        # Pullback size: 0.5% to 3% from recent high
+        recent_high = max(b.high for b in bars[-5:])
+        pullback_pct = (recent_high - current.close) / recent_high
+
+        return 0.005 <= pullback_pct <= 0.03
 
     def _next_dca_level(self) -> float | None:
         """Get price level for next DCA entry."""
@@ -208,7 +236,8 @@ class TrailingGridStrategy(BaseStrategy):
                     price=entry_price,
                     confidence=0.7,
                     reason=f"Trail buy triggered at {entry_price:.2f}",
-                    stop_loss=entry_price * (1 - self.config.grid_width_pct * self.config.stop_loss_multiplier),
+                    stop_loss=entry_price
+                    * (1 - self.config.grid_width_pct * self.config.stop_loss_multiplier),
                     take_profit=self._sell_target(),
                 )
 
@@ -254,7 +283,8 @@ class TrailingGridStrategy(BaseStrategy):
                     price=entry_price,
                     confidence=0.65,
                     reason=f"DCA #{len(self.entries)} at {entry_price:.2f}",
-                    stop_loss=self._avg_entry_price() * (1 - self.config.grid_width_pct * self.config.stop_loss_multiplier),
+                    stop_loss=self._avg_entry_price()
+                    * (1 - self.config.grid_width_pct * self.config.stop_loss_multiplier),
                     take_profit=self._sell_target(),
                 )
 

@@ -14,8 +14,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from ..data import Bar
 from ..core import Symbol
+from ..data import Bar
 from ..strategy.types import Position as StrategyPosition
 from ..strategy.types import Signal, SignalAction
 from .calendar import filter_trading_bars
@@ -62,7 +62,7 @@ class PaperExchangeConfig:
     """Configuration for paper exchange.
 
     Args:
-        symbol: Asset symbol (e.g., "crypto:ETH/USD", "stock:AAPL")
+        symbol: Symbol object (e.g., Symbol.parse("crypto:ETH/USD"))
         primary_feed: Key for primary data feed (e.g., "crypto:ETH/USD:15m")
         warmup_bars: Bars to skip before generating signals
         transaction_cost_pct: Cost per trade as decimal (0.0025 = 0.25%)
@@ -71,7 +71,7 @@ class PaperExchangeConfig:
         initial_capital: Starting capital
     """
 
-    symbol: str
+    symbol: Symbol
     primary_feed: str = ""
     warmup_bars: int = 65
     transaction_cost_pct: float = 0.0025
@@ -82,7 +82,7 @@ class PaperExchangeConfig:
     @property
     def asset_type(self) -> str:
         """Get asset type from symbol."""
-        return Symbol.parse(self.symbol).asset_type
+        return self.symbol.asset_type
 
 
 @dataclass
@@ -355,7 +355,7 @@ class RuntimeContext:
         return self._strategy_name
 
     @property
-    def symbol(self) -> str:
+    def symbol(self) -> Symbol:
         """Trading symbol."""
         return self._config.symbol
 
@@ -398,7 +398,7 @@ class RuntimeContext:
     @property
     def equity(self) -> float:
         """Current portfolio equity."""
-        return self._portfolio.equity({self._config.symbol: self._current_bar.close})
+        return self._portfolio.equity({str(self._config.symbol): self._current_bar.close})
 
     @property
     def cash(self) -> float:
@@ -524,15 +524,23 @@ class PaperExchange:
         self.config = config
         self.strategy = strategy
 
-    def run(self, bars: dict[str, list[Bar]]) -> PaperExchangeResult:
+    def run(self, bars: dict[str, list[Bar]] | list[Bar]) -> PaperExchangeResult:
         """Run strategy over bar data.
 
         Args:
             bars: Dict of bars keyed by "symbol:timeframe" (e.g., "crypto:ETH/USD:15m")
+                  OR single list of bars (auto-wrapped using primary_feed key)
 
         Returns:
             PaperExchangeResult with trades and metrics
         """
+        # Auto-wrap single feed if list provided
+        if isinstance(bars, list):
+            primary_feed = self.config.primary_feed
+            if not primary_feed:
+                raise ValueError("primary_feed required when passing list[Bar] to run()")
+            bars = {primary_feed: bars}
+
         # Extract primary bars using primary_feed
         primary_feed = self.config.primary_feed
         if not primary_feed:

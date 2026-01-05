@@ -1,6 +1,5 @@
 """Trading strategy implementations."""
 
-from .base_strategy import BaseStrategy, StrategyConfig
 from ..indicators import (
     VolumeProfile,
     atr,
@@ -24,6 +23,7 @@ from ..indicators import (
     volume_trend,
     wma,
 )
+from .base_strategy import BaseStrategy, StrategyConfig
 from .macd_template import MACDConfig, MACDStrategy
 from .mean_reversion import MeanReversionConfig, MeanReversionStrategy
 from .types import DataRequirement, Position, Signal, SignalAction

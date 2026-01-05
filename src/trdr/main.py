@@ -3,17 +3,13 @@
 import asyncio
 import signal
 import sys
-from pathlib import Path
 
 from .core import BotConfig, Symbol, load_config
 from .data import AlpacaDataClient
 from .storage import RunArchive
 from .strategy import (
     Position,
-    Signal,
     SignalAction,
-    VolumeAreaBreakoutConfig,
-    VolumeAreaBreakoutStrategy,
 )
 from .strategy.volume_area_breakout import (
     calculate_volume_profile,
@@ -72,7 +68,7 @@ class TradingBot:
 
         # Start archive run
         self.archive.start_run(
-            symbol=self.symbol.raw,
+            symbol=self.symbol,
             config={
                 "lookback": self.config.strategy.lookback,
                 "atr_threshold": self.config.strategy.atr_threshold,
@@ -216,7 +212,7 @@ class TradingBot:
             qty = self.config.strategy.position_size
 
             order = await self.executor.submit_market_order(
-                symbol=self.symbol.raw,
+                symbol=self.symbol,
                 qty=qty,
                 side="buy",
             )
@@ -241,7 +237,7 @@ class TradingBot:
             )
             self.archive.record_trade(
                 action="buy",
-                symbol=self.symbol.raw,
+                symbol=self.symbol,
                 price=signal.price,
                 qty=qty,
                 reason=signal.reason,
@@ -260,7 +256,7 @@ class TradingBot:
             return
 
         try:
-            order = await self.executor.close_position(self.symbol.raw)
+            order = await self.executor.close_position(self.symbol)
             if order:
                 self._pending_order_id = order.id
                 self._pending_order_side = "sell"
@@ -305,7 +301,7 @@ class TradingBot:
 
                     self.archive.record_trade(
                         action="sell",
-                        symbol=self.symbol.raw,
+                        symbol=self.symbol,
                         price=exit_price,
                         qty=self._position.size,
                         reason=self._pending_exit_reason or "order_filled",
