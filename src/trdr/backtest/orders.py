@@ -35,6 +35,7 @@ class Order:
         limit_price: Price for limit orders
         trail_percent: Trail % for TSL (e.g., 0.02 = 2%)
         trail_amount: Trail $ for TSL (alternative to %)
+        reason: Optional reason to attach to fills for attribution
     """
 
     symbol: str
@@ -45,6 +46,7 @@ class Order:
     limit_price: float | None = None
     trail_percent: float | None = None
     trail_amount: float | None = None
+    reason: str | None = None
     id: str = field(default_factory=lambda: str(uuid4())[:8])
     status: Literal["pending", "filled", "cancelled"] = "pending"
     triggered: bool = False  # For stop-limit: True after stop_price hit
@@ -84,6 +86,7 @@ class Fill:
         timestamp: Fill time
         side: "buy" or "sell"
         order_type: Type of order that was filled
+        reason: Optional reason propagated from order
     """
 
     order_id: str
@@ -92,6 +95,7 @@ class Fill:
     timestamp: str
     side: Literal["buy", "sell"]
     order_type: OrderType
+    reason: str | None = None
 
 
 class OrderManager:
@@ -273,6 +277,7 @@ class OrderManager:
                     timestamp=bar.timestamp,
                     side=order.side,
                     order_type=order.order_type,
+                    reason=order.reason,
                 )
             return None
 
@@ -309,6 +314,7 @@ class OrderManager:
                     timestamp=bar.timestamp,
                     side=order.side,
                     order_type=order.order_type,
+                    reason=order.reason,
                 )
             return None
 
@@ -343,6 +349,7 @@ class OrderManager:
                     timestamp=bar.timestamp,
                     side=order.side,
                     order_type=order.order_type,
+                    reason=order.reason,
                 )
             return None
 
@@ -366,4 +373,5 @@ class OrderManager:
             timestamp=bar.timestamp,
             side=order.side,
             order_type=order.order_type,
+            reason=order.reason,
         )

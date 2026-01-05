@@ -9,12 +9,21 @@ from trdr.indicators import (
     bollinger_bands,
     ema,
     ema_series,
+    heikin_ashi,
     hma,
     hma_slope,
+    hvn_support_strength,
+    kalman,
+    kalman_series,
     macd,
     mss,
+    multi_timeframe_poc,
+    order_flow_imbalance,
     rsi,
+    sax_bullish_reversal,
+    sax_pattern,
     sma,
+    volatility_regime,
     volume_profile,
     volume_trend,
     wma,
@@ -351,3 +360,215 @@ class TestVolumeTrend:
         bars = make_bars([100, 102])
         result = volume_trend(bars, 5)
         assert result == "neutral"
+
+
+class TestKalman:
+    """Tests for Kalman Filter."""
+
+    def test_basic(self):
+        bars = make_bars([100, 102, 104, 106, 108])
+        result = kalman(bars)
+        assert result > 100  # Should track price trend
+
+    def test_single_bar(self):
+        bars = make_bars([100])
+        result = kalman(bars)
+        assert result == 100.0
+
+    def test_empty_bars(self):
+        result = kalman([])
+        assert result == 0.0
+
+    def test_smoothing(self):
+        # Noisy data should be smoothed
+        bars = make_bars([100, 105, 95, 110, 90, 115])
+        result = kalman(bars, measurement_noise=1.0)
+        # Result should be less volatile than raw price
+        assert 90 < result < 115
+
+
+class TestKalmanSeries:
+    """Tests for Kalman Filter series."""
+
+    def test_returns_list(self):
+        bars = make_bars([100, 102, 104, 106, 108])
+        result = kalman_series(bars)
+        assert isinstance(result, list)
+        assert len(result) == 5
+
+    def test_empty_bars(self):
+        result = kalman_series([])
+        assert result == []
+
+    def test_first_value_preserved(self):
+        bars = make_bars([100, 102, 104])
+        result = kalman_series(bars)
+        assert result[0] == 100.0
+
+
+class TestVolatilityRegime:
+    """Tests for volatility regime detection."""
+
+    def test_returns_valid_regime(self):
+        bars = make_bars([100, 102, 101, 103, 100] * 10)
+        result = volatility_regime(bars, lookback=50)
+        assert result in ["low", "medium", "high"]
+
+    def test_insufficient_data(self):
+        bars = make_bars([100, 102])
+        result = volatility_regime(bars, lookback=50)
+        assert result == "medium"
+
+    def test_high_volatility(self):
+        # Very volatile prices
+        bars = make_bars([100, 120, 80, 130, 70, 140] * 10)
+        result = volatility_regime(bars, lookback=50)
+        assert result in ["medium", "high"]
+
+
+class TestOrderFlowImbalance:
+    """Tests for order flow imbalance."""
+
+    def test_buying_pressure(self):
+        # Steadily rising prices = buying pressure
+        bars = make_bars(list(range(100, 110)))
+        result = order_flow_imbalance(bars, lookback=5)
+        assert result > 0  # Positive = buying
+
+    def test_selling_pressure(self):
+        # Falling prices = selling pressure
+        bars = make_bars(list(range(110, 100, -1)))
+        result = order_flow_imbalance(bars, lookback=5)
+        assert result < 0  # Negative = selling
+
+    def test_insufficient_data(self):
+        bars = make_bars([100])
+        result = order_flow_imbalance(bars, lookback=5)
+        assert result == 0.0
+
+    def test_range_bound(self):
+        result = order_flow_imbalance(make_bars([100, 102, 101, 100, 102]), lookback=5)
+        assert -1.0 <= result <= 1.0
+
+
+class TestMultiTimeframePOC:
+    """Tests for multi-timeframe Point of Control."""
+
+    def test_returns_three_values(self):
+        bars = make_bars([100, 102, 101, 103, 100] * 5)
+        poc1, poc2, poc3 = multi_timeframe_poc(bars)
+        assert isinstance(poc1, float)
+        assert isinstance(poc2, float)
+        assert isinstance(poc3, float)
+
+    def test_insufficient_data(self):
+        bars = make_bars([100, 102])
+        poc1, poc2, poc3 = multi_timeframe_poc(bars)
+        # All should return same value when insufficient data
+        assert poc1 == poc2 == poc3
+
+
+class TestHVNSupportStrength:
+    """Tests for HVN support strength."""
+
+    def test_strong_support(self):
+        # Price repeatedly bounces from 100
+        bars = [
+            Bar(timestamp="2024-01-01", open=100, high=105, low=100, close=103, volume=1000)
+            for _ in range(10)
+        ]
+        result = hvn_support_strength(bars, val_level=100, lookback=10)
+        assert result > 0.5  # Strong support
+
+    def test_no_touches(self):
+        bars = make_bars([120, 121, 122, 123, 124] * 6)
+        result = hvn_support_strength(bars, val_level=100, lookback=30)
+        assert result == 0.0  # No support at that level
+
+    def test_insufficient_data(self):
+        bars = make_bars([100, 102])
+        result = hvn_support_strength(bars, val_level=100, lookback=30)
+        assert result == 0.0
+
+
+class TestSaxPattern:
+    """Tests for SAX pattern generation."""
+
+    def test_returns_string(self):
+        bars = make_bars([100, 102, 104, 106, 108] * 4)
+        result = sax_pattern(bars, window=20, segments=5)
+        assert isinstance(result, str)
+        assert len(result) == 5  # 5 segments
+
+    def test_alphabet_range(self):
+        bars = make_bars([100, 102, 104, 106, 108] * 4)
+        result = sax_pattern(bars, window=20, segments=5)
+        # Should only contain letters a-e
+        assert all(c in "abcde" for c in result)
+
+    def test_flat_market(self):
+        bars = make_bars([100] * 20)
+        result = sax_pattern(bars, window=20, segments=5)
+        assert result == "ccccc"  # All middle values
+
+    def test_insufficient_data(self):
+        bars = make_bars([100, 102])
+        result = sax_pattern(bars, window=20, segments=5)
+        assert result == ""
+
+
+class TestSaxBullishReversal:
+    """Tests for SAX bullish reversal detection."""
+
+    def test_bullish_pattern(self):
+        # Pattern: starts low, ends high
+        assert sax_bullish_reversal("aabde") is True
+        assert sax_bullish_reversal("abbde") is True
+
+    def test_bearish_pattern(self):
+        # Pattern: starts high, stays high
+        assert sax_bullish_reversal("ddddd") is False
+        assert sax_bullish_reversal("eeeee") is False
+
+    def test_insufficient_length(self):
+        assert sax_bullish_reversal("ab") is False
+        assert sax_bullish_reversal("") is False
+
+    def test_no_momentum(self):
+        # Has low and high but no momentum
+        assert sax_bullish_reversal("aabaa") is False
+
+
+class TestHeikinAshi:
+    """Tests for Heikin-Ashi transformation."""
+
+    def test_returns_list_of_dicts(self):
+        bars = make_bars([100, 102, 104, 106, 108])
+        result = heikin_ashi(bars)
+        assert isinstance(result, list)
+        assert len(result) == 5
+        assert all(isinstance(bar, dict) for bar in result)
+
+    def test_has_required_keys(self):
+        bars = make_bars([100, 102, 104])
+        result = heikin_ashi(bars)
+        for ha_bar in result:
+            assert "open" in ha_bar
+            assert "high" in ha_bar
+            assert "low" in ha_bar
+            assert "close" in ha_bar
+            assert "volume" in ha_bar
+
+    def test_empty_bars(self):
+        result = heikin_ashi([])
+        assert result == []
+
+    def test_smoothing(self):
+        # HA close is average of OHLC
+        bars = make_bars([100, 102, 104])
+        result = heikin_ashi(bars)
+        # HA close should be average of OHLC
+        for i, bar in enumerate(bars):
+            ha_close = result[i]["close"]
+            expected = (bar.open + bar.high + bar.low + bar.close) / 4.0
+            assert abs(ha_close - expected) < 0.01

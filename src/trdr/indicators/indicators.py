@@ -143,6 +143,89 @@ def hma(bars: list[Bar], period: int = 9) -> float:
     return float(ema_input)
 
 
+def kalman(
+    bars: list[Bar],
+    measurement_noise: float = 0.1,
+    process_noise: float = 0.01,
+) -> float:
+    """Calculate Kalman Filter for adaptive price smoothing.
+
+    Uses 1D Kalman filter to smooth price data while adapting to trends.
+    Lower measurement noise = more smoothing, higher = more responsive.
+
+    Args:
+        bars: List of OHLCV bars
+        measurement_noise: Measurement uncertainty (R). Higher = noisier data
+        process_noise: Process uncertainty (Q). Higher = more adaptive
+
+    Returns:
+        Current filtered price estimate
+    """
+    if not bars:
+        return 0.0
+
+    if len(bars) == 1:
+        return bars[0].close
+
+    # Initialize with first price
+    x_est = bars[0].close  # State estimate
+    p_est = 1.0  # Error covariance
+
+    # Run filter through all bars
+    for bar in bars[1:]:
+        # Prediction step
+        x_pred = x_est  # State prediction (assume constant)
+        p_pred = p_est + process_noise  # Error covariance prediction
+
+        # Update step (measurement = current close)
+        measurement = bar.close
+        kalman_gain = p_pred / (p_pred + measurement_noise)
+        x_est = x_pred + kalman_gain * (measurement - x_pred)
+        p_est = (1 - kalman_gain) * p_pred
+
+    return float(x_est)
+
+
+def kalman_series(
+    bars: list[Bar],
+    measurement_noise: float = 0.1,
+    process_noise: float = 0.01,
+) -> list[float]:
+    """Calculate Kalman Filter series for all bars.
+
+    Args:
+        bars: List of OHLCV bars
+        measurement_noise: Measurement uncertainty (R)
+        process_noise: Process uncertainty (Q)
+
+    Returns:
+        List of filtered price estimates
+    """
+    if not bars:
+        return []
+
+    filtered = []
+    x_est = bars[0].close
+    p_est = 1.0
+
+    filtered.append(x_est)
+
+    for bar in bars[1:]:
+        # Prediction
+        x_pred = x_est
+        p_pred = p_est + process_noise
+
+        # Update
+        measurement = bar.close
+        kalman_gain = p_pred / (p_pred + measurement_noise)
+        x_est = x_pred + kalman_gain * (measurement - x_pred)
+        p_est = (1 - kalman_gain) * p_pred
+
+        filtered.append(x_est)
+
+    return [float(x) for x in filtered]
+
+
 def hma_slope(bars: list[Bar], period: int = 9, lookback: int = 3) -> float:
     """Calculate HMA slope over lookback period.
 

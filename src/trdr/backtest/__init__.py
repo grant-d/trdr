@@ -3,14 +3,9 @@
 from .align import align_feeds
 from .calendar import filter_trading_bars, get_trading_days_in_year, is_trading_day
 from .orders import Fill, Order, OrderManager, OrderType
-from .paper_exchange import (
-    PaperExchange,
-    PaperExchangeConfig,
-    PaperExchangeResult,
-    RuntimeContext,
-    Trade,
-)
+from .paper_exchange import PaperExchange, RuntimeContext
 from .portfolio import Portfolio, Position, PositionEntry
+from .types import PaperExchangeConfig, PaperExchangeResult, Trade
 from .walk_forward import (
     Fold,
     WalkForwardConfig,

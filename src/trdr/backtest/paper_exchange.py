@@ -10,11 +10,9 @@ Example:
     result = engine.run(bars)
 """
 
-from dataclasses import dataclass, field
-from datetime import datetime
 from typing import TYPE_CHECKING
 
-from ..core import Feed, Symbol
+from ..core import Symbol
 from ..data import Bar
 from ..strategy.types import Position as StrategyPosition
 from ..strategy.types import Signal, SignalAction
@@ -22,6 +20,7 @@ from .calendar import filter_trading_bars
 from .metrics import TradeMetrics
 from .orders import Order, OrderManager, OrderType
 from .portfolio import Portfolio
+from .types import EntryPlan, PaperExchangeConfig, PaperExchangeResult, Trade
 
 if TYPE_CHECKING:
     from ..strategy import BaseStrategy
@@ -55,253 +54,6 @@ def _validate_order_direction(
             return f"Sell limit must be above price ({limit_price} <= {price})"
 
     return None
-
-
-@dataclass(frozen=True)
-class PaperExchangeConfig:
-    """Configuration for paper exchange.
-
-    Args:
-        primary_feed: Primary data feed (symbol + timeframe)
-        warmup_bars: Bars to skip before generating signals
-        transaction_cost_pct: Cost per trade as decimal (0.0025 = 0.25%)
-        slippage_pct: Slippage as % of price (0.001 = 0.1%)
-        default_position_pct: Default position size as % of equity
-        initial_capital: Starting capital
-    """
-
-    primary_feed: Feed
-    warmup_bars: int = 65
-    transaction_cost_pct: float = 0.0025
-    slippage_pct: float = 0.001
-    default_position_pct: float = 1.0
-    initial_capital: float = 10_000.0
-
-    @property
-    def symbol(self) -> Symbol:
-        """Get symbol from primary feed."""
-        return self.primary_feed.symbol
-
-    @property
-    def asset_type(self) -> str:
-        """Get asset type from symbol."""
-        return self.symbol.asset_type
-
-
-@dataclass(frozen=True)
-class Trade:
-    """Completed trade record.
-
-    Args:
-        entry_time: Entry timestamp
-        exit_time: Exit timestamp
-        entry_price: Average entry price
-        exit_price: Exit price
-        quantity: Position size
-        side: "long" or "short"
-        gross_pnl: P&L before costs
-        costs: Total transaction costs
-        net_pnl: P&L after costs
-        entry_reason: Why we entered
-        exit_reason: Why we exited
-        stop_loss: Stop loss price at entry
-        take_profit: Take profit price at entry
-    """
-
-    entry_time: str
-    exit_time: str
-    entry_price: float
-    exit_price: float
-    quantity: float
-    side: str
-    gross_pnl: float
-    costs: float
-    net_pnl: float
-    entry_reason: str
-    exit_reason: str
-    stop_loss: float | None = None
-    take_profit: float | None = None
-
-    @property
-    def duration_hours(self) -> float:
-        """Trade duration in hours."""
-        entry = datetime.fromisoformat(self.entry_time.replace("Z", "+00:00"))
-        exit_dt = datetime.fromisoformat(self.exit_time.replace("Z", "+00:00"))
-        return (exit_dt - entry).total_seconds() / 3600
-
-    @property
-    def is_winner(self) -> bool:
-        """True if trade was profitable."""
-        return self.net_pnl > 0
-
-
-@dataclass(frozen=True)
-class PaperExchangeResult:
-    """Results from paper exchange run.
-
-    Args:
-        trades: Completed trades
-        config: Configuration used
-        start_time: First bar timestamp
-        end_time: Last bar timestamp
-        equity_curve: Equity at each bar
-    """
-
-    trades: list[Trade]
-    config: PaperExchangeConfig
-    start_time: str
-    end_time: str
-    equity_curve: list[float] = field(default_factory=list)
-    _metrics: TradeMetrics = field(init=False, repr=False)
-
-    def __post_init__(self) -> None:
-        """Create metrics calculator."""
-        object.__setattr__(
-            self,
-            "_metrics",
-            TradeMetrics(
-                trades=self.trades,
-                equity_curve=self.equity_curve,
-                initial_capital=self.config.initial_capital,
-                asset_type=self.config.asset_type,
-                start_time=self.start_time,
-                end_time=self.end_time,
-            ),
-        )
-
-    # Delegate all metrics to TradeMetrics
-    @property
-    def total_trades(self) -> int:
-        return self._metrics.total_trades
-
-    @property
-    def winning_trades(self) -> int:
-        return self._metrics.winning_trades
-
-    @property
-    def losing_trades(self) -> int:
-        return self._metrics.losing_trades
-
-    @property
-    def win_rate(self) -> float:
-        return self._metrics.win_rate
-
-    @property
-    def total_pnl(self) -> float:
-        return self._metrics.total_pnl
-
-    @property
-    def profit_factor(self) -> float:
-        return self._metrics.profit_factor
-
-    @property
-    def max_drawdown(self) -> float:
-        return self._metrics.max_drawdown
-
-    @property
-    def sortino_ratio(self) -> float | None:
-        return self._metrics.sortino_ratio
-
-    @property
-    def sharpe_ratio(self) -> float | None:
-        return self._metrics.sharpe_ratio
-
-    @property
-    def calmar_ratio(self) -> float | None:
-        return self._metrics.calmar_ratio
-
-    @property
-    def total_return(self) -> float:
-        return self._metrics.total_return
-
-    @property
-    def cagr(self) -> float | None:
-        return self._metrics.cagr
-
-    @property
-    def avg_trade_pnl(self) -> float:
-        return self._metrics.avg_trade_pnl
-
-    @property
-    def avg_win(self) -> float:
-        return self._metrics.avg_win
-
-    @property
-    def avg_loss(self) -> float:
-        return self._metrics.avg_loss
-
-    @property
-    def largest_win(self) -> float:
-        return self._metrics.largest_win
-
-    @property
-    def largest_loss(self) -> float:
-        return self._metrics.largest_loss
-
-    @property
-    def avg_trade_duration_hours(self) -> float:
-        return self._metrics.avg_trade_duration_hours
-
-    @property
-    def max_consecutive_wins(self) -> int:
-        return self._metrics.max_consecutive_wins
-
-    @property
-    def max_consecutive_losses(self) -> int:
-        return self._metrics.max_consecutive_losses
-
-    @property
-    def expectancy(self) -> float:
-        return self._metrics.expectancy
-
-    @property
-    def trades_per_year(self) -> float:
-        return self._metrics.trades_per_year
-
-    @property
-    def total_costs(self) -> float:
-        return self._metrics.total_costs
-
-    def print_trades(self) -> None:
-        """Print detailed trade log to stdout.
-
-        Shows entry/exit times, prices, SL/TP levels, P&L, and reasons.
-        Useful for debugging strategy behavior.
-        """
-        if not self.trades:
-            print("No trades")
-            return
-
-        print(f"\n{'='*80}")
-        print(f"TRADE LOG ({len(self.trades)} trades)")
-        print(f"{'='*80}")
-
-        for i, t in enumerate(self.trades, 1):
-            # Parse dates for cleaner display
-            entry_dt = t.entry_time[:16].replace("T", " ")
-            exit_dt = t.exit_time[:16].replace("T", " ")
-
-            result = "WIN" if t.is_winner else "LOSS"
-            pnl_sign = "+" if t.net_pnl >= 0 else ""
-
-            print(f"\n#{i} [{result}] {pnl_sign}${t.net_pnl:.2f}")
-            print(f"  Entry: {entry_dt} @ ${t.entry_price:.2f}")
-            print(f"  Exit:  {exit_dt} @ ${t.exit_price:.2f}")
-
-            if t.stop_loss is not None or t.take_profit is not None:
-                sl_str = f"${t.stop_loss:.2f}" if t.stop_loss else "—"
-                tp_str = f"${t.take_profit:.2f}" if t.take_profit else "—"
-                print(f"  SL: {sl_str}  |  TP: {tp_str}")
-
-            print(f"  Reason: {t.entry_reason}")
-            print(f"  Exit:   {t.exit_reason}")
-            print(f"  Duration: {t.duration_hours:.1f}h  |  Qty: {t.quantity:.4f}")
-
-        print(f"\n{'='*80}")
-        winners = [t for t in self.trades if t.is_winner]
-        losers = [t for t in self.trades if not t.is_winner]
-        print(f"Summary: {len(winners)}W / {len(losers)}L  |  WR: {self.win_rate:.1%}")
-        print(f"{'='*80}\n")
 
 
 class RuntimeContext:
@@ -563,9 +315,8 @@ class PaperExchange:
         trades: list[Trade] = []
         equity_curve: list[float] = []
 
-        # Extract symbol and asset type from primary feed
+        # Extract symbol string from primary feed
         symbol_str = str(self.config.primary_feed.symbol)
-        asset_type = self.config.primary_feed.symbol.asset_type
 
         # Track open trade info
         entry_time: str = ""
@@ -573,6 +324,8 @@ class PaperExchange:
         entry_cost: float = 0.0
         entry_stop_loss: float | None = None
         entry_take_profit: float | None = None
+        # OCO: Map order_id -> EntryPlan to submit exits only after entry fills
+        pending_entry_plans: dict[str, EntryPlan] = {}
 
         for i in range(self.config.warmup_bars, len(filtered_bars)):
             bar = filtered_bars[i]
@@ -597,9 +350,30 @@ class PaperExchange:
                         timestamp=fill.timestamp,
                         cost=cost,
                     )
-                    if not entry_time:
+                    # OCO: Check if this fill has a pending entry plan (limit/stop-limit)
+                    # If yes, NOW submit the exit orders since entry actually filled
+                    plan = pending_entry_plans.pop(fill.order_id, None)
+                    if plan:
+                        self._submit_exit_orders(
+                            qty=plan.quantity,
+                            stop_loss=plan.stop_loss,
+                            take_profit=plan.take_profit,
+                            trailing_stop=plan.trailing_stop,
+                            order_manager=order_manager,
+                            price=fill.price,
+                            timestamp=fill.timestamp,
+                        )
+                        if not entry_time:
+                            entry_time = fill.timestamp
+                            entry_cost = cost
+                            entry_reason = plan.reason
+                            entry_stop_loss = plan.stop_loss
+                            entry_take_profit = plan.take_profit
+                    elif not entry_time:
+                        # Fallback for direct order_manager usage (no plan)
                         entry_time = fill.timestamp
                         entry_cost = cost
+                        entry_reason = "direct_order"
                 else:
                     # Closing position
                     position = portfolio.get_position(self.config.symbol)
@@ -613,8 +387,8 @@ class PaperExchange:
                             cost=cost,
                         )
 
-                        # Capture order type from fill
-                        exit_reason = str(fill.order_type.value)
+                        # Capture order reason (fallback to order type)
+                        exit_reason = fill.reason or str(fill.order_type.value)
 
                         trade = Trade(
                             entry_time=entry_time,
@@ -642,6 +416,8 @@ class PaperExchange:
             # Pseudo-OCO: cancel remaining orders when position closes
             if position_closed:
                 order_manager.cancel_all()
+                # Clear any pending entry plans (entry never filled or was cancelled)
+                pending_entry_plans.clear()
 
             # 3. Get current position for strategy
             pos = portfolio.get_position(self.config.symbol)
@@ -685,11 +461,16 @@ class PaperExchange:
                 signal = self.strategy.generate_signal(visible_bars, strategy_position)
 
                 # 5. Convert signal to orders
-                self._process_signal(signal, portfolio, order_manager, bar, strategy_position)
-                if signal.action == SignalAction.BUY and not strategy_position:
-                    entry_reason = signal.reason
-                    entry_stop_loss = signal.stop_loss
-                    entry_take_profit = signal.take_profit
+                # OCO: _process_signal returns entry plans instead of submitting exits
+                entry_plan = self._process_signal(
+                    signal, portfolio, order_manager, bar, strategy_position
+                )
+                if entry_plan:
+                    # Store the plan - exits will be submitted when entry fills
+                    pending_entry_plans.update(entry_plan)
+                if signal.action == SignalAction.CLOSE:
+                    # Manual close: abandon any pending entry plans
+                    pending_entry_plans.clear()
 
             # 6. Record equity
             equity_curve.append(portfolio.equity({symbol_str: bar.close}))
@@ -742,7 +523,7 @@ class PaperExchange:
         order_manager: OrderManager,
         bar: Bar,
         position: StrategyPosition | None,
-    ) -> None:
+    ) -> dict[str, EntryPlan]:
         """Convert signal to orders.
 
         Args:
@@ -751,9 +532,12 @@ class PaperExchange:
             order_manager: Order manager
             bar: Current bar
             position: Current position
+
+        Returns:
+            Mapping of entry order IDs to EntryPlan for delayed exit orders.
         """
         if signal.action == SignalAction.HOLD:
-            return
+            return {}
 
         if signal.action == SignalAction.BUY:
             # Calculate quantity
@@ -764,7 +548,7 @@ class PaperExchange:
                 qty = (portfolio.buying_power() * size_pct) / bar.close
 
             if qty <= 0:
-                return
+                return {}
 
             # Submit entry order (stop-limit, limit, or market)
             if signal.stop_price and signal.limit_price:
@@ -778,7 +562,7 @@ class PaperExchange:
                 )
                 if err:
                     raise ValueError(f"Invalid buy stop-limit: {err}")
-                order_manager.submit(
+                order_id = order_manager.submit(
                     Order(
                         symbol=self.config.symbol,
                         side="buy",
@@ -799,7 +583,7 @@ class PaperExchange:
                 )
                 if err:
                     raise ValueError(f"Invalid buy limit: {err}")
-                order_manager.submit(
+                order_id = order_manager.submit(
                     Order(
                         symbol=self.config.symbol,
                         side="buy",
@@ -810,7 +594,7 @@ class PaperExchange:
                     )
                 )
             else:
-                order_manager.submit(
+                order_id = order_manager.submit(
                     Order(
                         symbol=self.config.symbol,
                         side="buy",
@@ -820,7 +604,7 @@ class PaperExchange:
                     )
                 )
 
-            # Submit stop loss if specified (sell stop below price)
+            # Validate exit parameters against signal price
             if signal.stop_loss:
                 err = _validate_order_direction(
                     "sell",
@@ -831,46 +615,7 @@ class PaperExchange:
                 )
                 if err:
                     raise ValueError(f"Invalid stop loss: {err}")
-                order_manager.submit(
-                    Order(
-                        symbol=self.config.symbol,
-                        side="sell",
-                        order_type=OrderType.STOP,
-                        quantity=qty,
-                        stop_price=signal.stop_loss,
-                        created_at=bar.timestamp,
-                    )
-                )
 
-            # Submit trailing stop if specified
-            if signal.trailing_stop:
-                # Determine if it's a percent or absolute amount
-                if signal.trailing_stop < 1:
-                    # Treat as percent
-                    order_manager.submit(
-                        Order(
-                            symbol=self.config.symbol,
-                            side="sell",
-                            order_type=OrderType.TRAILING_STOP,
-                            quantity=qty,
-                            trail_percent=signal.trailing_stop,
-                            created_at=bar.timestamp,
-                        )
-                    )
-                else:
-                    # Treat as absolute amount
-                    order_manager.submit(
-                        Order(
-                            symbol=self.config.symbol,
-                            side="sell",
-                            order_type=OrderType.TRAILING_STOP,
-                            quantity=qty,
-                            trail_amount=signal.trailing_stop,
-                            created_at=bar.timestamp,
-                        )
-                    )
-
-            # Submit take profit if specified (sell limit above price)
             if signal.take_profit:
                 err = _validate_order_direction(
                     "sell",
@@ -881,16 +626,16 @@ class PaperExchange:
                 )
                 if err:
                     raise ValueError(f"Invalid take profit: {err}")
-                order_manager.submit(
-                    Order(
-                        symbol=self.config.symbol,
-                        side="sell",
-                        order_type=OrderType.LIMIT,
-                        quantity=qty,
-                        limit_price=signal.take_profit,
-                        created_at=bar.timestamp,
-                    )
+
+            return {
+                order_id: EntryPlan(
+                    quantity=qty,
+                    reason=signal.reason,
+                    stop_loss=signal.stop_loss,
+                    take_profit=signal.take_profit,
+                    trailing_stop=signal.trailing_stop,
                 )
+            }
 
         elif signal.action == SignalAction.CLOSE and position:
             # Cancel any pending stop orders
@@ -918,5 +663,114 @@ class PaperExchange:
                     order_type=OrderType.MARKET,
                     quantity=qty,
                     created_at=bar.timestamp,
+                )
+            )
+
+        return {}
+
+    def _submit_exit_orders(
+        self,
+        qty: float,
+        stop_loss: float | None,
+        take_profit: float | None,
+        trailing_stop: float | None,
+        order_manager: OrderManager,
+        price: float,
+        timestamp: str,
+    ) -> None:
+        """Submit exit orders after entry fills."""
+        if stop_loss:
+            # Gap-through detection: Entry filled at/below stop loss
+            # Submit immediate market exit instead of raising
+            if price <= stop_loss:
+                order_manager.submit(
+                    Order(
+                        symbol=self.config.symbol,
+                        side="sell",
+                        order_type=OrderType.MARKET,
+                        quantity=qty,
+                        created_at=timestamp,
+                        reason="stop_loss_gap",
+                    )
+                )
+                return
+            else:
+                err = _validate_order_direction(
+                    "sell",
+                    OrderType.STOP,
+                    price,
+                    stop_loss,
+                    None,
+                )
+                if err:
+                    raise ValueError(f"Invalid stop loss: {err}")
+                order_manager.submit(
+                    Order(
+                        symbol=self.config.symbol,
+                        side="sell",
+                        order_type=OrderType.STOP,
+                        quantity=qty,
+                        stop_price=stop_loss,
+                        created_at=timestamp,
+                    )
+                )
+
+        if trailing_stop:
+            if trailing_stop < 1:
+                order_manager.submit(
+                    Order(
+                        symbol=self.config.symbol,
+                        side="sell",
+                        order_type=OrderType.TRAILING_STOP,
+                        quantity=qty,
+                        trail_percent=trailing_stop,
+                        created_at=timestamp,
+                    )
+                )
+            else:
+                order_manager.submit(
+                    Order(
+                        symbol=self.config.symbol,
+                        side="sell",
+                        order_type=OrderType.TRAILING_STOP,
+                        quantity=qty,
+                        trail_amount=trailing_stop,
+                        created_at=timestamp,
+                    )
+                )
+
+        if take_profit:
+            # Gap-through detection: Entry filled at/above take profit
+            # Submit immediate market exit instead of raising
+            if price >= take_profit:
+                order_manager.submit(
+                    Order(
+                        symbol=self.config.symbol,
+                        side="sell",
+                        order_type=OrderType.MARKET,
+                        quantity=qty,
+                        created_at=timestamp,
+                        reason="take_profit_gap",
+                    )
+                )
+                return
+            else:
+                err = _validate_order_direction(
+                    "sell",
+                    OrderType.LIMIT,
+                    price,
+                    None,
+                    take_profit,
+                )
+                if err:
+                    raise ValueError(f"Invalid take profit: {err}")
+                order_manager.submit(
+                    Order(
+                        symbol=self.config.symbol,
+                        side="sell",
+                        order_type=OrderType.LIMIT,
+                        quantity=qty,
+                        limit_price=take_profit,
+                    created_at=timestamp,
                 )
             )

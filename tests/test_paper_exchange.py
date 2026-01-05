@@ -227,6 +227,41 @@ class LimitOrderStrategy(BaseStrategy):
         self.bought = False
 
 
+class LimitOrderWithStopLossStrategy(BaseStrategy):
+    """Buy with limit order entry and stop loss."""
+
+    def __init__(self, config: SimpleConfig, limit_pct: float = 0.98, stop_pct: float = 0.95):
+        super().__init__(config)
+        self.bought = False
+        self.limit_pct = limit_pct
+        self.stop_pct = stop_pct
+
+    def get_data_requirements(self) -> list[DataRequirement]:
+        return [
+            DataRequirement(
+                self.config.symbol, self.config.timeframe, self.config.lookback, role="primary"
+            )
+        ]
+
+    def generate_signal(self, bars: dict[str, list[Bar]], position: Position | None) -> Signal:
+        primary = _get_primary_bars(bars, self.config)
+        if not position and not self.bought:
+            self.bought = True
+            price = primary[-1].close
+            return Signal(
+                action=SignalAction.BUY,
+                price=price,
+                confidence=1.0,
+                reason="limit_buy_with_stop",
+                limit_price=price * self.limit_pct,
+                stop_loss=price * self.stop_pct,
+            )
+        return Signal(action=SignalAction.HOLD, price=primary[-1].close, confidence=0.0, reason="")
+
+    def reset(self) -> None:
+        self.bought = False
+
+
 class StopLimitStrategy(BaseStrategy):
     """Buy with stop-limit order (breakout with limit)."""
 
@@ -600,6 +635,28 @@ class TestLimitOrderIntegration:
         assert result.total_trades == 1
         # Entry price should be 98 or the gap-down open (whichever is lower)
         assert result.trades[0].entry_price <= 98.0
+
+    def test_limit_entry_does_not_exit_same_bar(self) -> None:
+        """Stop loss should not trigger on the same bar as a limit entry fill."""
+        config = PaperExchangeConfig(
+            primary_feed=_TEST_FEED,
+            warmup_bars=2,
+            initial_capital=10000.0,
+            transaction_cost_pct=0.0,
+            slippage_pct=0.0,
+        )
+        strategy = LimitOrderWithStopLossStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
+        engine = PaperExchange(config, strategy)
+
+        # Limit at 98 (from 100), stop at 95. The 96 bar would hit both if stop
+        # were placed immediately; it should only place after the entry fills.
+        bars = make_bars([100, 100, 100, 96, 100])
+        result = engine.run(_wrap_bars(bars, "crypto:TEST"))
+
+        assert result.total_trades == 1
+        trade = result.trades[0]
+        assert trade.entry_time != trade.exit_time
+        assert trade.exit_reason == "end_of_data"
 
 
 class TestStopLimitIntegration:
