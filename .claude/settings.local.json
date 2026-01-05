@@ -90,7 +90,8 @@
       "Bash(for f in */test_strategy.py)",
       "Bash(do sed -i '' 's/Symbol\\\\.parse\\(SYMBOL\\)/SYMBOL/g' \"$f\")",
       "Bash(.venv/bin/black src/ tests/)",
-      "Bash(.venv/bin/black src/trdr/backtest/paper_exchange.py tests/test_metrics.py)"
+      "Bash(.venv/bin/black src/trdr/backtest/paper_exchange.py tests/test_metrics.py)",
+      "Skill(sica:continue)"
     ],
     "deny": []
   }
