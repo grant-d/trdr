@@ -49,7 +49,7 @@ async def _get_bars(strategy) -> tuple[dict[str, list], DataRequirement]:
         Tuple of (bars dict keyed by "symbol:tf", primary requirement)
     """
     from trdr.backtest import align_feeds
-    from trdr.core import load_config
+    from trdr.core import load_config, Feed
     from trdr.data import AlpacaDataClient
 
     config = load_config()
@@ -123,7 +123,7 @@ def run_sica_benchmark(
         position_pct: Position size as fraction of capital (1.0 = 100%)
     """
     from trdr.backtest import PaperExchange, PaperExchangeConfig
-    from trdr.core import Symbol, Timeframe
+    from trdr.core import Symbol, Timeframe, Feed
 
     # Env vars can override specific code-driven values
     env_symbol = os.environ.get("BACKTEST_SYMBOL")

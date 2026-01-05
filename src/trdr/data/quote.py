@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     pass
 
 
-@dataclass
+@dataclass(frozen=True)
 class Quote:
     """Current price quote."""
 

@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from ..core import Symbol
+from ..core import Feed, Symbol
 from ..data import Bar
 from ..strategy.types import Position as StrategyPosition
 from ..strategy.types import Signal, SignalAction
@@ -62,8 +62,7 @@ class PaperExchangeConfig:
     """Configuration for paper exchange.
 
     Args:
-        symbol: Symbol object (e.g., Symbol.parse("crypto:ETH/USD"))
-        primary_feed: Key for primary data feed (e.g., "crypto:ETH/USD:15m")
+        primary_feed: Primary data feed (symbol + timeframe)
         warmup_bars: Bars to skip before generating signals
         transaction_cost_pct: Cost per trade as decimal (0.0025 = 0.25%)
         slippage_pct: Slippage as % of price (0.001 = 0.1%)
@@ -71,8 +70,7 @@ class PaperExchangeConfig:
         initial_capital: Starting capital
     """
 
-    symbol: Symbol
-    primary_feed: str = ""
+    primary_feed: Feed
     warmup_bars: int = 65
     transaction_cost_pct: float = 0.0025
     slippage_pct: float = 0.001
@@ -80,12 +78,17 @@ class PaperExchangeConfig:
     initial_capital: float = 10_000.0
 
     @property
+    def symbol(self) -> Symbol:
+        """Get symbol from primary feed."""
+        return self.primary_feed.symbol
+
+    @property
     def asset_type(self) -> str:
         """Get asset type from symbol."""
         return self.symbol.asset_type
 
 
-@dataclass
+@dataclass(frozen=True)
 class Trade:
     """Completed trade record.
 
@@ -132,7 +135,7 @@ class Trade:
         return self.net_pnl > 0
 
 
-@dataclass
+@dataclass(frozen=True)
 class PaperExchangeResult:
     """Results from paper exchange run.
 
@@ -537,16 +540,11 @@ class PaperExchange:
         # Auto-wrap single feed if list provided
         if isinstance(bars, list):
             primary_feed = self.config.primary_feed
-            if not primary_feed:
-                raise ValueError("primary_feed required when passing list[Bar] to run()")
-            bars = {primary_feed: bars}
+            bars = {str(primary_feed): bars}
 
         # Extract primary bars using primary_feed
-        primary_feed = self.config.primary_feed
-        if not primary_feed:
-            # Fallback: use first key (for backwards compat with single-feed)
-            primary_feed = next(iter(bars.keys()))
-        primary_bars = bars[primary_feed]
+        primary_feed_key = str(self.config.primary_feed)
+        primary_bars = bars[primary_feed_key]
 
         # Filter primary bars to trading days
         filtered_bars = filter_trading_bars(primary_bars, self.config.asset_type)
@@ -660,7 +658,7 @@ class PaperExchange:
                 # Primary uses filtered bars; informative feeds are pre-aligned
                 visible_bars: dict[str, list[Bar]] = {}
                 for key, feed_bars in bars.items():
-                    if key == primary_feed:
+                    if key == primary_feed_key:
                         visible_bars[key] = filtered_bars[: i + 1]
                     else:
                         # Informative feeds aligned to primary, slice same length

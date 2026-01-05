@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from trdr.backtest import PaperExchange, PaperExchangeConfig, PaperExchangeResult
-from trdr.core import Duration, Symbol, Timeframe, load_config
+from trdr.core import Duration, Symbol, Timeframe, load_config, Feed
 from trdr.data import AlpacaDataClient
 from trdr.strategy import VolumeAreaBreakoutConfig, VolumeAreaBreakoutStrategy, get_backtest_env
 from trdr.strategy.targets import score_result
@@ -88,8 +88,7 @@ def backtest_config():
     - default_position_pct: Position size as % of equity
     """
     return PaperExchangeConfig(
-        symbol=SYMBOL,
-        primary_feed=f"{SYMBOL}:{TIMEFRAME}",
+        primary_feed=Feed(SYMBOL, TIMEFRAME),
         warmup_bars=65,
         transaction_cost_pct=0.0025,
         slippage_pct=0.01,
@@ -198,8 +197,7 @@ def print_results():
         strategy = VolumeAreaBreakoutStrategy(strategy_config)
 
         bt_config = PaperExchangeConfig(
-            symbol=SYMBOL,
-            primary_feed=f"{SYMBOL}:{TIMEFRAME}",
+            primary_feed=Feed(SYMBOL, TIMEFRAME),
             warmup_bars=65,
             transaction_cost_pct=0.0025,
             default_position_pct=1.0,

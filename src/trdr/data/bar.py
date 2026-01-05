@@ -3,7 +3,7 @@
 from dataclasses import asdict, dataclass
 
 
-@dataclass
+@dataclass(frozen=True)
 class Bar:
     """Single OHLCV bar."""
 

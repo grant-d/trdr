@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from trdr.backtest import PaperExchange, PaperExchangeConfig, PaperExchangeResult
-from trdr.core import Duration, Symbol, Timeframe, load_config
+from trdr.core import Duration, Symbol, Timeframe, load_config, Feed
 from trdr.data import AlpacaDataClient
 from trdr.strategy import get_backtest_env
 from trdr.strategy.mean_reversion import MeanReversionConfig, MeanReversionStrategy
@@ -71,8 +71,7 @@ def strategy():
 def backtest_config():
     """Paper exchange configuration."""
     return PaperExchangeConfig(
-        symbol=SYMBOL,
-        primary_feed=f"{SYMBOL}:{TIMEFRAME}",
+        primary_feed=Feed(SYMBOL, TIMEFRAME),
         warmup_bars=30,
         transaction_cost_pct=0.0025,
         slippage_pct=0.01,
@@ -174,8 +173,7 @@ def print_results():
         strategy = MeanReversionStrategy(strategy_config)
 
         bt_config = PaperExchangeConfig(
-            symbol=SYMBOL,
-            primary_feed=f"{SYMBOL}:{TIMEFRAME}",
+            primary_feed=Feed(SYMBOL, TIMEFRAME),
             warmup_bars=30,
             transaction_cost_pct=0.0025,
             default_position_pct=0.5,

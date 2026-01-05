@@ -28,7 +28,7 @@ class WalkForwardConfig:
     min_test_bars: int = 100
 
 
-@dataclass
+@dataclass(frozen=True)
 class Fold:
     """Single train/test fold.
 

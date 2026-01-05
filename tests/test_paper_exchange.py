@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from trdr.core import Duration, Symbol, Timeframe
+from trdr.core import Duration, Symbol, Timeframe, Feed
 from trdr.backtest.paper_exchange import PaperExchange, PaperExchangeConfig
 from trdr.data import Bar
 from trdr.strategy.base_strategy import BaseStrategy, StrategyConfig
@@ -14,6 +14,7 @@ from trdr.strategy.types import DataRequirement, Position, Signal, SignalAction
 _TEST_SYMBOL = Symbol.parse("crypto:TEST")
 _TEST_TF = Timeframe.parse("1h")
 _TEST_LOOKBACK = Duration.parse("30d")
+_TEST_FEED = Feed(_TEST_SYMBOL, _TEST_TF)
 
 
 def make_bars(prices: list[float], start_ts: str = "2024-01-01T10:00:00Z") -> list[Bar]:
@@ -296,7 +297,7 @@ class TestPaperExchange:
     def test_simple_buy_and_hold(self) -> None:
         """Buy and hold to end of data."""
         config = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
+            primary_feed=_TEST_FEED,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
@@ -315,7 +316,7 @@ class TestPaperExchange:
     def test_buy_then_sell(self) -> None:
         """Complete round trip trade."""
         config = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
+            primary_feed=_TEST_FEED,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
@@ -336,7 +337,7 @@ class TestPaperExchange:
     def test_trailing_stop_triggers(self) -> None:
         """Trailing stop exits on reversal."""
         config = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
+            primary_feed=_TEST_FEED,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
@@ -355,13 +356,13 @@ class TestPaperExchange:
     def test_transaction_costs(self) -> None:
         """Transaction costs reduce P&L."""
         config_no_cost = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
+            primary_feed=_TEST_FEED,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
         )
         config_with_cost = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
+            primary_feed=_TEST_FEED,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.01,  # 1%
@@ -383,7 +384,7 @@ class TestPaperExchange:
     def test_equity_curve_generated(self) -> None:
         """Equity curve is generated."""
         config = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
+            primary_feed=_TEST_FEED,
             warmup_bars=2,
             initial_capital=10000.0,
         )
@@ -399,7 +400,7 @@ class TestPaperExchange:
     def test_max_drawdown_calculated(self) -> None:
         """Max drawdown is calculated."""
         config = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
+            primary_feed=_TEST_FEED,
             warmup_bars=2,
             initial_capital=10000.0,
         )
@@ -416,7 +417,7 @@ class TestPaperExchange:
     def test_insufficient_bars(self) -> None:
         """Returns empty result for insufficient bars."""
         config = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
+            primary_feed=_TEST_FEED,
             warmup_bars=10,
             initial_capital=10000.0,
         )
@@ -431,7 +432,7 @@ class TestPaperExchange:
     def test_win_rate_calculated(self) -> None:
         """Win rate is calculated correctly."""
         config = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
+            primary_feed=_TEST_FEED,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
@@ -454,7 +455,7 @@ class TestMultipleEntries:
     def test_multiple_buys_accumulate(self) -> None:
         """Multiple buy signals accumulate position."""
         config = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
+            primary_feed=_TEST_FEED,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
@@ -478,7 +479,7 @@ class TestTakeProfitIntegration:
     def test_take_profit_triggers(self) -> None:
         """Take profit exits when price reaches target."""
         config = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
+            primary_feed=_TEST_FEED,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
@@ -498,7 +499,7 @@ class TestTakeProfitIntegration:
     def test_stop_loss_cancels_take_profit(self) -> None:
         """Stop loss triggers and cancels take profit (pseudo-OCO)."""
         config = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
+            primary_feed=_TEST_FEED,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
@@ -518,7 +519,7 @@ class TestTakeProfitIntegration:
     def test_on_trade_complete_called(self) -> None:
         """on_trade_complete callback is called after trade closes."""
         config = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
+            primary_feed=_TEST_FEED,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
@@ -543,7 +544,7 @@ class TestLimitOrderIntegration:
     def test_limit_order_fills_on_dip(self) -> None:
         """Limit order fills when price dips to limit."""
         config = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
+            primary_feed=_TEST_FEED,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
@@ -563,7 +564,7 @@ class TestLimitOrderIntegration:
     def test_limit_order_never_fills(self) -> None:
         """Limit order stays pending if never touched."""
         config = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
+            primary_feed=_TEST_FEED,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
@@ -583,7 +584,7 @@ class TestLimitOrderIntegration:
     def test_limit_order_no_slippage(self) -> None:
         """Limit orders have no slippage."""
         config = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
+            primary_feed=_TEST_FEED,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
@@ -607,7 +608,7 @@ class TestStopLimitIntegration:
     def test_stop_limit_triggers_and_fills(self) -> None:
         """Stop-limit triggers on breakout and fills at limit."""
         config = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
+            primary_feed=_TEST_FEED,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
@@ -628,7 +629,7 @@ class TestStopLimitIntegration:
     def test_stop_limit_never_triggers(self) -> None:
         """Stop-limit stays pending if stop never hit."""
         config = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
+            primary_feed=_TEST_FEED,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
@@ -651,7 +652,7 @@ class TestStockCalendar:
     def test_stock_filters_weekends(self) -> None:
         """Stock trading skips weekend bars."""
         config = PaperExchangeConfig(
-            symbol=Symbol.parse("stock:TEST"),  # Stock, not crypto
+            primary_feed=Feed.parse("stock:TEST:1h"),  # Stock, not crypto
             warmup_bars=2,
             initial_capital=10000.0,
         )
@@ -680,7 +681,7 @@ class TestTradeFields:
     def test_trade_captures_stop_loss_and_take_profit(self) -> None:
         """Trade record includes stop_loss and take_profit from entry signal."""
         config = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
+            primary_feed=_TEST_FEED,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
@@ -705,7 +706,7 @@ class TestTradeFields:
     def test_trade_none_when_no_sl_tp(self) -> None:
         """Trade has None for stop_loss/take_profit when not set."""
         config = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
+            primary_feed=_TEST_FEED,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
@@ -726,7 +727,7 @@ class TestTradeFields:
     def test_trade_is_winner_property(self) -> None:
         """Trade.is_winner returns True for profitable trades."""
         config = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
+            primary_feed=_TEST_FEED,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
@@ -745,7 +746,7 @@ class TestTradeFields:
     def test_trade_duration_hours(self) -> None:
         """Trade.duration_hours calculates correctly."""
         config = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
+            primary_feed=_TEST_FEED,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
@@ -768,7 +769,7 @@ class TestPrintTrades:
     def test_print_trades_no_trades(self, capsys) -> None:
         """print_trades handles empty trade list."""
         config = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
+            primary_feed=_TEST_FEED,
             warmup_bars=10,
             initial_capital=10000.0,
         )
@@ -786,7 +787,7 @@ class TestPrintTrades:
     def test_print_trades_with_trades(self, capsys) -> None:
         """print_trades outputs trade log."""
         config = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
+            primary_feed=_TEST_FEED,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
@@ -813,7 +814,7 @@ class TestPrintTrades:
     def test_print_trades_shows_win_loss(self, capsys) -> None:
         """print_trades shows WIN/LOSS status."""
         config = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
+            primary_feed=_TEST_FEED,
             warmup_bars=2,
             initial_capital=10000.0,
             transaction_cost_pct=0.0,
@@ -864,7 +865,7 @@ class TestOrderDirectionValidation:
                     )
                 return Signal(action=SignalAction.HOLD, price=primary[-1].close, confidence=0.5)
 
-        config = PaperExchangeConfig(symbol=_TEST_SYMBOL, warmup_bars=2)
+        config = PaperExchangeConfig(primary_feed=_TEST_FEED, warmup_bars=2)
         strategy = BadStopLossStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
         bars = make_bars([100, 100, 100, 100])
@@ -902,7 +903,7 @@ class TestOrderDirectionValidation:
                     )
                 return Signal(action=SignalAction.HOLD, price=primary[-1].close, confidence=0.5)
 
-        config = PaperExchangeConfig(symbol=_TEST_SYMBOL, warmup_bars=2)
+        config = PaperExchangeConfig(primary_feed=_TEST_FEED, warmup_bars=2)
         strategy = BadTakeProfitStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
         bars = make_bars([100, 100, 100, 100])
@@ -940,7 +941,7 @@ class TestOrderDirectionValidation:
                     )
                 return Signal(action=SignalAction.HOLD, price=primary[-1].close, confidence=0.5)
 
-        config = PaperExchangeConfig(symbol=_TEST_SYMBOL, warmup_bars=2)
+        config = PaperExchangeConfig(primary_feed=_TEST_FEED, warmup_bars=2)
         strategy = BadBuyLimitStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
         engine = PaperExchange(config, strategy)
         bars = make_bars([100, 100, 100, 100])

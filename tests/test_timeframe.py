@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 import pytest
 
 from trdr.backtest import align_feeds
-from trdr.core import Duration, Symbol, Timeframe, get_interval_seconds, parse_timeframe
+from trdr.core import Duration, Symbol, Timeframe, get_interval_seconds, parse_timeframe, Feed
 from trdr.data import Bar
 from trdr.strategy.sica_runner import get_primary_requirement
 from trdr.strategy.types import DataRequirement
@@ -328,8 +328,7 @@ class TestMultiFeedIntegration:
         strategy = MTFStrategy(config)
 
         exchange_config = PaperExchangeConfig(
-            symbol=_TEST_SYMBOL,
-            primary_feed="crypto:ETH/USD:15m",
+            primary_feed=Feed.parse("crypto:ETH/USD:15m"),
             warmup_bars=0,  # No warmup for test
         )
         exchange = PaperExchange(exchange_config, strategy)

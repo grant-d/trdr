@@ -385,7 +385,7 @@ def mss(bars: list[Bar], lookback: int = 20) -> float:
 # =============================================================================
 
 
-@dataclass
+@dataclass(frozen=True)
 class VolumeProfile:
     """Calculated volume profile with key levels."""
 
