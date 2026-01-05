@@ -23,6 +23,7 @@ from ..indicators import (
     volume_trend,
     wma,
 )
+from .duncan import DuncanConfig, DuncanStrategy
 from .base_strategy import BaseStrategy, StrategyConfig
 from .macd_template import MACDConfig, MACDStrategy
 from .mean_reversion import MeanReversionConfig, MeanReversionStrategy
@@ -60,6 +61,8 @@ __all__ = [
     "sax_bullish_reversal",
     "heikin_ashi",
     # Strategies
+    "DuncanConfig",
+    "DuncanStrategy",
     "MACDConfig",
     "MACDStrategy",
     "MeanReversionConfig",
