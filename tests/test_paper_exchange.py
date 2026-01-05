@@ -36,13 +36,13 @@ def make_bars(prices: list[float], start_ts: str = "2024-01-01T10:00:00Z") -> li
     return bars
 
 
-@dataclass
+@dataclass(frozen=True)
 class SimpleConfig(StrategyConfig):
     """Simple strategy config with test defaults."""
 
-    symbol: Symbol = field(default_factory=lambda: _TEST_SYMBOL)
-    timeframe: Timeframe = field(default_factory=lambda: _TEST_TF)
-    lookback: Duration = field(default_factory=lambda: _TEST_LOOKBACK)
+    symbol: Symbol = _TEST_SYMBOL
+    timeframe: Timeframe = _TEST_TF
+    lookback: Duration = _TEST_LOOKBACK
 
 
 def _get_primary_bars(bars: dict[str, list[Bar]], config: StrategyConfig) -> list[Bar]:

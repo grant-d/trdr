@@ -1,6 +1,6 @@
 """Core configuration, bot logic, and domain types."""
 
-from .config import AlpacaConfig, BotConfig, LoopConfig, StrategyConfig, load_config
+from .config import AlpacaConfig, BotConfig, LoopConfig, load_config
 from .duration import Duration, parse_duration
 from .feed import Feed
 from .symbol import Symbol
@@ -12,7 +12,6 @@ __all__ = [
     "Duration",
     "Feed",
     "LoopConfig",
-    "StrategyConfig",
     "Symbol",
     "Timeframe",
     "get_interval_seconds",

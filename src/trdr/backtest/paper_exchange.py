@@ -563,6 +563,10 @@ class PaperExchange:
         trades: list[Trade] = []
         equity_curve: list[float] = []
 
+        # Extract symbol and asset type from primary feed
+        symbol_str = str(self.config.primary_feed.symbol)
+        asset_type = self.config.primary_feed.symbol.asset_type
+
         # Track open trade info
         entry_time: str = ""
         entry_reason: str = ""
@@ -688,8 +692,7 @@ class PaperExchange:
                     entry_take_profit = signal.take_profit
 
             # 6. Record equity
-            prices = {self.config.symbol: bar.close}
-            equity_curve.append(portfolio.equity(prices))
+            equity_curve.append(portfolio.equity({symbol_str: bar.close}))
 
         # Force close any open position at end
         final_bar = filtered_bars[-1]
@@ -722,7 +725,7 @@ class PaperExchange:
                 )
             )
             if equity_curve:
-                equity_curve[-1] = portfolio.equity({self.config.symbol: final_bar.close})
+                equity_curve[-1] = portfolio.equity({symbol_str: final_bar.close})
 
         return PaperExchangeResult(
             trades=trades,

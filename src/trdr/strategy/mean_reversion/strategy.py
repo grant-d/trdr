@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     pass
 
 
-@dataclass
+@dataclass(frozen=True)
 class MeanReversionConfig(StrategyConfig):
     """Configuration for Adaptive Regime strategy.
 

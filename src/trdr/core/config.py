@@ -3,12 +3,11 @@
 from dataclasses import dataclass
 from os import environ
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
 
-if TYPE_CHECKING:
-    from .symbol import Symbol
+from .duration import Duration
+from .symbol import Symbol
 
 
 @dataclass(frozen=True)
@@ -25,18 +24,6 @@ class AlpacaConfig:
         return "paper" in self.base_url
 
 
-@dataclass(frozen=True)
-class StrategyConfig:
-    """Volume Profile strategy parameters."""
-
-    symbol: "Symbol"
-    lookback: int = 50  # Bars for volume profile calculation
-    price_levels: int = 40  # Number of price buckets
-    value_area_pct: float = 0.70  # 70% of volume
-    atr_period: int = 14
-    atr_threshold: float = 2.0  # Entry when price > 2 ATR from VA
-    stop_loss_multiplier: float = 1.75  # Stop at 1.75x VA width
-    position_size: float = 1.0  # Shares/units per trade
 
 
 @dataclass(frozen=True)
@@ -54,8 +41,9 @@ class BotConfig:
     """Complete bot configuration."""
 
     alpaca: AlpacaConfig
-    strategy: StrategyConfig
     loops: LoopConfig
+    symbol: Symbol
+    lookback: Duration
     data_dir: Path = Path("data")
 
     @property
@@ -76,7 +64,7 @@ def load_config(env_path: Path | None = None) -> BotConfig:
         env_path: Path to .env file, defaults to .env in current directory
 
     Returns:
-        Complete bot configuration
+        Bot configuration with Alpaca credentials
 
     Raises:
         ValueError: If required environment variables are missing
@@ -89,7 +77,8 @@ def load_config(env_path: Path | None = None) -> BotConfig:
     if not api_key or not secret_key:
         raise ValueError("ALPACA_API_KEY and ALPACA_SECRET_KEY must be set in environment")
 
-    symbol = environ.get("SYMBOL", "AAPL")
+    symbol_str = environ.get("SYMBOL", "stock:AAPL")
+    lookback_str = environ.get("LOOKBACK", "30d")
     base_url = environ.get("ALPACA_BASE_URL", "https://paper-api.alpaca.markets")
 
     return BotConfig(
@@ -98,6 +87,7 @@ def load_config(env_path: Path | None = None) -> BotConfig:
             secret_key=secret_key,
             base_url=base_url,
         ),
-        strategy=StrategyConfig(symbol=symbol),
         loops=LoopConfig(),
+        symbol=Symbol.parse(symbol_str),
+        lookback=Duration.parse(lookback_str),
     )

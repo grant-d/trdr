@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from ..backtest.paper_exchange import RuntimeContext
 
 
-@dataclass
+@dataclass(frozen=True)
 class StrategyConfig:
     """Base configuration for strategies.
 
@@ -26,7 +26,7 @@ class StrategyConfig:
         lookback: Duration (e.g., Duration.parse("1M"))
 
     Example:
-        @dataclass
+        @dataclass(frozen=True)
         class MyConfig(StrategyConfig):
             fast_period: int = 12
             slow_period: int = 26

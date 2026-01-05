@@ -4,7 +4,7 @@ import asyncio
 import signal
 import sys
 
-from .core import BotConfig, Symbol, load_config
+from .core import BotConfig, Symbol, Timeframe, load_config
 from .data import AlpacaDataClient
 from .storage import RunArchive
 from .strategy import (
@@ -39,7 +39,7 @@ class TradingBot:
             config: Bot configuration
         """
         self.config = config
-        self.symbol = Symbol.parse(config.strategy.symbol)
+        self.symbol = config.symbol
 
         # Components
         self.market = AlpacaDataClient(config.alpaca, config.cache_dir)
@@ -232,8 +232,10 @@ class TradingBot:
             )
 
             # Archive trade
+            timeframe = Timeframe.parse("1h")
+            lookback_bars = self.config.lookback.to_bars(timeframe, self.symbol)
             profile = calculate_volume_profile(
-                await self.market.get_bars(self.symbol, lookback=self.config.strategy.lookback)
+                await self.market.get_bars(self.symbol, lookback_bars, timeframe)
             )
             self.archive.record_trade(
                 action="buy",

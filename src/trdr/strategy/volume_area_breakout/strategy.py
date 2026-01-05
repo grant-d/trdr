@@ -32,7 +32,7 @@ from ..base_strategy import BaseStrategy, StrategyConfig
 from ..types import DataRequirement, Position, Signal, SignalAction
 
 
-@dataclass
+@dataclass(frozen=True)
 class VolumeAreaBreakoutConfig(StrategyConfig):
     """Configuration for VolumeAreaBreakout strategy.
 

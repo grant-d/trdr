@@ -25,6 +25,8 @@ from .types import DataRequirement
 if TYPE_CHECKING:
     from ..core import Symbol
 
+from trdr.core import Feed
+
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root / "src"))
 
@@ -154,11 +156,13 @@ def run_sica_benchmark(
     else:
         buyhold_return = 0.0
 
+    # Convert DataRequirement to Feed for PaperExchangeConfig
+    primary_feed = Feed(symbol=primary.symbol, timeframe=primary.timeframe)
+
     bt_config = PaperExchangeConfig(
-        symbol=primary.symbol,
+        primary_feed=primary_feed,
         initial_capital=initial_capital,
         default_position_pct=position_pct,
-        primary_feed=primary.key,
     )
     engine = PaperExchange(bt_config, strategy)
     result = engine.run(bars)

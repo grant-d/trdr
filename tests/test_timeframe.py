@@ -241,13 +241,13 @@ class TestMultiFeedIntegration:
         from trdr.strategy.base_strategy import BaseStrategy, StrategyConfig
         from trdr.strategy.types import Position, Signal, SignalAction
 
-        @dataclass
+        @dataclass(frozen=True)
         class MTFConfig(StrategyConfig):
             """Multi-TF config with defaults."""
 
-            symbol: str = "crypto:ETH/USD"
-            timeframe: Timeframe = field(default_factory=lambda: _TEST_TF)
-            lookback: Duration = field(default_factory=lambda: _TEST_LOOKBACK)
+            symbol: Symbol = _TEST_SYMBOL
+            timeframe: Timeframe = _TEST_TF
+            lookback: Duration = _TEST_LOOKBACK
 
         class MTFStrategy(BaseStrategy):
             """Test strategy using 3 feeds."""

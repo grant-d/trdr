@@ -37,7 +37,7 @@ from ..types import DataRequirement, Position, Signal, SignalAction
 # Add strategy-specific parameters with defaults
 
 
-@dataclass
+@dataclass(frozen=True)
 class MACDConfig(StrategyConfig):
     """Configuration for MACD crossover strategy.
 

@@ -24,7 +24,7 @@ from ..base_strategy import BaseStrategy, StrategyConfig
 from ..types import DataRequirement, Position, Signal, SignalAction
 
 
-@dataclass
+@dataclass(frozen=True)
 class TrailingGridConfig(StrategyConfig):
     """Configuration for Trailing Grid strategy.
 
