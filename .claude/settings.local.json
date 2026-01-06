@@ -92,7 +92,11 @@
       "Bash(.venv/bin/black src/ tests/)",
       "Bash(.venv/bin/black src/trdr/backtest/paper_exchange.py tests/test_metrics.py)",
       "Skill(sica:continue)",
-      "Bash(.venv/bin/black:*)"
+      "Bash(.venv/bin/black:*)",
+      "Bash(git -C /Users/grantdickinson/repos/trdr show feat/helios-1 --name-only)",
+      "Bash(git -C /Users/grantdickinson/repos/trdr diff main..feat/helios-1 --name-only)",
+      "Bash(git -C /Users/grantdickinson/repos/trdr show feat/helios-1:helios/live_trader.py)",
+      "Bash(git -C /Users/grantdickinson/repos/trdr show feat/helios-1:helios/alpaca_client.py)"
     ],
     "deny": []
   }

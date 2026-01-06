@@ -4,7 +4,8 @@
 
 ### Naming
 
-- camelCase acronyms: `getUserId()` not `getUserID()`, `RagSystem` not `RAGSystem`
+- camelCase acronyms: `getUserId()` not `getUserID()`
+- no run-on acronyms: `RagSystem` not `RAGSystem`, `MooConfig` not `MOOCOnfig`
 - Descriptive names, avoid abbreviations
 
 ### Errors

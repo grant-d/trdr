@@ -103,6 +103,7 @@ class EnsembleStrategy(BaseStrategy):
         self._ofi = OrderFlowImbalanceIndicator(lookback=5)
         self._atr = AtrIndicator(period=14)
         self._last_index = 0
+        self._last_features: np.ndarray | None = None
         self._feature_history: list[list[float]] = []
         self._label_history: list[int] = []
 
@@ -133,36 +134,25 @@ class EnsembleStrategy(BaseStrategy):
             with open(self._model_path, "wb") as f:
                 pickle.dump(self._model, f)
 
-    def _extract_features(self, bars: list[Bar]) -> np.ndarray:
-        """Extract feature vector from current indicators.
-
-        Returns:
-            Feature array: [lorentzian, smi, rsi, st_dir, adx, vol_numeric, mss, bb_dist, wvf, ast_dir, ofi, atr_norm]
-        """
-        if len(bars) < 1:
-            return np.zeros(12)
-
-        current_bar = bars[-1]
-
+    def _update_features(self, bar: Bar) -> np.ndarray:
+        """Update indicators for a single bar and return the feature vector."""
         # Update all indicators to current bar
-        lorentzian_val = self._lorentzian.update(current_bar)
-        smi_val = self._smi.update(current_bar)
-        rsi_val = self._rsi.update(current_bar)
-        st_result = self._supertrend.update(current_bar)
-        adx_val = self._adx.update(current_bar)
-        vol_regime = self._volatility.update(current_bar)
-        mss_val = self._mss.update(current_bar)
-        bb_result = self._bb.update(current_bar)
-        wvf_result = self._wvf.update(current_bar)
-        ast_result = self._ast.update(current_bar)
-        ofi_val = self._ofi.update(current_bar)
-        atr_val = self._atr.update(current_bar)
+        lorentzian_val = self._lorentzian.update(bar)
+        smi_val = self._smi.update(bar)
+        rsi_val = self._rsi.update(bar)
+        st_result = self._supertrend.update(bar)
+        adx_val = self._adx.update(bar)
+        vol_regime = self._volatility.update(bar)
+        mss_val = self._mss.update(bar)
+        bb_result = self._bb.update(bar)
+        wvf_result = self._wvf.update(bar)
+        ast_result = self._ast.update(bar)
+        ofi_val = self._ofi.update(bar)
+        atr_val = self._atr.update(bar)
 
         # WVF calculation (stateful inside the indicator now if implemented correctly, but let's use the instance)
         # Note: WilliamsVixFixIndicator.update returns (value, alert_state)
-        # We need to make sure _wvf is initialized. I'll add it to _reset_state in next step if missed.
-        # Checking previous step... I missed _wvf in _reset_state. I'll fix that.
-        
+
         # Supertrend direction: 1 = bullish, -1 = bearish
         st_dir = st_result[1] if isinstance(st_result, tuple) else 0.0
 
@@ -171,15 +161,15 @@ class EnsembleStrategy(BaseStrategy):
         vol_numeric = vol_map.get(vol_regime, 0.0)
 
         # Bollinger Band distance: (price - middle) / middle
-        bb_dist = (current_bar.close - bb_result[1]) / bb_result[1] if bb_result[1] != 0 else 0.0
+        bb_dist = (bar.close - bb_result[1]) / bb_result[1] if bb_result[1] != 0 else 0.0
 
         # AST direction
         ast_dir = ast_result[1] if isinstance(ast_result, tuple) else 0.0
 
         # ATR normalized by price
-        atr_norm = atr_val / current_bar.close if current_bar.close > 0 else 0.0
+        atr_norm = atr_val / bar.close if bar.close > 0 else 0.0
 
-        return np.array([
+        features = np.array([
             float(lorentzian_val),
             float(smi_val),
             float(rsi_val if rsi_val is not None else 50.0) / 100.0,
@@ -193,6 +183,8 @@ class EnsembleStrategy(BaseStrategy):
             float(ofi_val),
             float(atr_norm),
         ])
+        self._last_features = features
+        return features
 
     def _generate_labels(self, bars: list[Bar], lookahead: int = 12) -> list[int]:
         """Generate training labels: 1 = profitable long, 0 = no trade.
@@ -223,7 +215,7 @@ class EnsembleStrategy(BaseStrategy):
         self._reset_state()
         features = []
         for bar in bars:
-            feat = self._extract_features([bar])
+            feat = self._update_features(bar)
             features.append(feat)
 
         labels = self._generate_labels(bars)
@@ -243,7 +235,7 @@ class EnsembleStrategy(BaseStrategy):
 
         self._reset_state()
         for bar in bars:
-            self._extract_features([bar])
+            self._update_features(bar)
 
     def get_data_requirements(self) -> list[DataRequirement]:
         """Declare data feeds for this strategy."""
@@ -287,10 +279,13 @@ class EnsembleStrategy(BaseStrategy):
         if self._last_index > len(primary_bars):
             self._reset_state()
         for bar in primary_bars[self._last_index :]:
-            self._extract_features([bar])
+            self._update_features(bar)
         self._last_index = len(primary_bars)
 
-        features = self._extract_features([primary_bars[-1]])
+        if self._last_features is None:
+            features = self._update_features(primary_bars[-1])
+        else:
+            features = self._last_features
         st_dir = features[3]
         atr_val = self._atr.value
 
@@ -302,16 +297,16 @@ class EnsembleStrategy(BaseStrategy):
         if position and position.side == "long":
             # Emergency Confidence Exit or Trend Flip
             if confidence < 0.4 or st_dir == -1:
-                 return Signal(action=SignalAction.CLOSE, price=current_price, confidence=1.0, reason="Confidence exit")
+                return Signal(action=SignalAction.CLOSE, price=current_price, confidence=1.0, reason="Confidence exit")
 
             self._trailing_stop = max(self._trailing_stop, current_price - 2.5 * atr_val)
             profit_target = self._entry_price + 4.5 * atr_val
 
             if current_price < self._trailing_stop:
                 return Signal(action=SignalAction.CLOSE, price=current_price, confidence=1.0, reason="Stop loss")
-            
+
             if current_price > profit_target:
-                 return Signal(action=SignalAction.CLOSE, price=current_price, confidence=1.0, reason="Take profit")
+                return Signal(action=SignalAction.CLOSE, price=current_price, confidence=1.0, reason="Take profit")
 
             return Signal(action=SignalAction.HOLD, price=current_price, confidence=0.5, reason="Holding")
 
