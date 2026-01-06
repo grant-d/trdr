@@ -2,6 +2,6 @@
 
 __version__ = "0.1.0"
 
-from .main import TradingBot, main
+from .main import main
 
-__all__ = ["TradingBot", "main"]
+__all__ = ["main"]
