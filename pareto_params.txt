@@ -1,565 +1,165 @@
 PARETO FRONTIER PARAMETERS
 ============================================================
 
-Solution 0 (Score: 0.840)
+Solution 0 (Score: 0.171)
 ----------------------------------------
 Parameters:
-  grid_width_pct: 0.0236
-  trail_pct: 0.0127
-  max_dca: 1
-  downtrend_bars: 4
-  stop_loss_multiplier: 1.3535
-  sell_target_multiplier: 0.8837
-
-Objectives:
-  cagr: 812.91%
-  calmar: 136.60
-  sortino: 20.36
-  profit_factor: 2.72
-  win_rate: 79.17%
-  total_trades: 24
-  max_drawdown: 5.95%
-  alpha: 3.08x
-
-Solution 1 (Score: 0.833)
-----------------------------------------
-Parameters:
-  grid_width_pct: 0.0236
-  trail_pct: 0.0125
-  max_dca: 1
-  downtrend_bars: 4
-  stop_loss_multiplier: 1.3515
-  sell_target_multiplier: 0.8438
-
-Objectives:
-  cagr: 607.72%
-  calmar: 104.40
-  sortino: 18.55
-  profit_factor: 2.57
-  win_rate: 79.17%
-  total_trades: 24
-  max_drawdown: 5.82%
-  alpha: 2.69x
-
-Solution 2 (Score: 0.785)
-----------------------------------------
-Parameters:
-  grid_width_pct: 0.0257
-  trail_pct: 0.0110
-  max_dca: 1
-  downtrend_bars: 4
-  stop_loss_multiplier: 2.2132
-  sell_target_multiplier: 1.1624
-
-Objectives:
-  cagr: 149.88%
-  calmar: 12.80
-  sortino: 44166.06
-  profit_factor: 1.83
-  win_rate: 81.82%
-  total_trades: 11
-  max_drawdown: 11.71%
-  alpha: 1.21x
-
-Solution 3 (Score: 0.836)
-----------------------------------------
-Parameters:
-  grid_width_pct: 0.0364
-  trail_pct: 0.0127
-  max_dca: 2
-  downtrend_bars: 5
-  stop_loss_multiplier: 1.1055
-  sell_target_multiplier: 0.5676
-
-Objectives:
-  cagr: 585.29%
-  calmar: 107.84
-  sortino: 13.57
-  profit_factor: 3.21
-  win_rate: 80.00%
-  total_trades: 20
-  max_drawdown: 5.43%
-  alpha: 2.65x
-
-Solution 4 (Score: 0.819)
-----------------------------------------
-Parameters:
-  grid_width_pct: 0.0365
-  trail_pct: 0.0152
-  max_dca: 5
-  downtrend_bars: 4
-  stop_loss_multiplier: 1.8309
-  sell_target_multiplier: 0.5059
-
-Objectives:
-  cagr: 510.59%
-  calmar: 66.78
-  sortino: 5.00
-  profit_factor: 4.25
-  win_rate: 93.33%
-  total_trades: 15
-  max_drawdown: 7.65%
-  alpha: 2.47x
-
-Solution 5 (Score: 0.867)
-----------------------------------------
-Parameters:
-  grid_width_pct: 0.0224
-  trail_pct: 0.0217
-  max_dca: 1
-  downtrend_bars: 4
-  stop_loss_multiplier: 1.3540
-  sell_target_multiplier: 0.6160
-
-Objectives:
-  cagr: 362.35%
-  calmar: 84.59
-  sortino: 88.54
-  profit_factor: 6.58
-  win_rate: 88.89%
-  total_trades: 18
-  max_drawdown: 4.28%
-  alpha: 2.07x
-
-Solution 6 (Score: 0.849)
-----------------------------------------
-Parameters:
-  grid_width_pct: 0.0367
-  trail_pct: 0.0152
-  max_dca: 5
-  downtrend_bars: 4
-  stop_loss_multiplier: 3.3906
-  sell_target_multiplier: 0.5050
-
-Objectives:
-  cagr: 336.70%
-  calmar: 36.92
-  sortino: 5.00
-  profit_factor: 7.35
-  win_rate: 90.00%
-  total_trades: 10
-  max_drawdown: 9.12%
-  alpha: 1.99x
-
-Solution 7 (Score: 0.869)
-----------------------------------------
-Parameters:
-  grid_width_pct: 0.0223
-  trail_pct: 0.0217
-  max_dca: 1
-  downtrend_bars: 4
-  stop_loss_multiplier: 1.3516
-  sell_target_multiplier: 0.5811
-
-Objectives:
-  cagr: 375.64%
-  calmar: 86.68
-  sortino: 86.06
-  profit_factor: 6.82
-  win_rate: 89.47%
-  total_trades: 19
-  max_drawdown: 4.33%
-  alpha: 2.11x
-
-Solution 8 (Score: 0.824)
-----------------------------------------
-Parameters:
-  grid_width_pct: 0.0223
-  trail_pct: 0.0217
-  max_dca: 1
-  downtrend_bars: 4
-  stop_loss_multiplier: 1.2976
-  sell_target_multiplier: 0.5811
-
-Objectives:
-  cagr: 200.67%
-  calmar: 34.03
-  sortino: 42.12
-  profit_factor: 3.96
-  win_rate: 85.00%
-  total_trades: 20
-  max_drawdown: 5.90%
-  alpha: 1.46x
-
-Solution 9 (Score: 0.754)
-----------------------------------------
-Parameters:
-  grid_width_pct: 0.0364
-  trail_pct: 0.0107
-  max_dca: 1
-  downtrend_bars: 4
-  stop_loss_multiplier: 1.0985
-  sell_target_multiplier: 0.8389
-
-Objectives:
-  cagr: 150.99%
-  calmar: 10.21
-  sortino: 300.75
-  profit_factor: 1.64
-  win_rate: 73.33%
-  total_trades: 15
-  max_drawdown: 14.79%
-  alpha: 1.21x
-
-Solution 10 (Score: 0.771)
-----------------------------------------
-Parameters:
-  grid_width_pct: 0.0257
-  trail_pct: 0.0128
-  max_dca: 5
-  downtrend_bars: 4
-  stop_loss_multiplier: 1.2484
-  sell_target_multiplier: 0.5121
-
-Objectives:
-  cagr: 154.50%
-  calmar: 27.60
-  sortino: 10.76
-  profit_factor: 2.03
-  win_rate: 81.48%
-  total_trades: 27
-  max_drawdown: 5.60%
-  alpha: 1.23x
-
-Solution 11 (Score: 0.401)
-----------------------------------------
-Parameters:
-  grid_width_pct: 0.0209
-  trail_pct: 0.0110
-  max_dca: 5
-  downtrend_bars: 4
-  stop_loss_multiplier: 2.2070
-  sell_target_multiplier: 0.5043
-
-Objectives:
-  cagr: 59.97%
-  calmar: 8.31
-  sortino: 4.16
-  profit_factor: 1.95
-  win_rate: 89.29%
-  total_trades: 28
-  max_drawdown: 7.22%
-  alpha: 0.61x
-
-Solution 12 (Score: 0.804)
-----------------------------------------
-Parameters:
-  grid_width_pct: 0.0213
-  trail_pct: 0.0104
+  grid_width_pct: 0.0125
+  trail_pct: 0.0083
   max_dca: 2
   downtrend_bars: 4
-  stop_loss_multiplier: 1.4619
-  sell_target_multiplier: 0.7998
+  stop_loss_multiplier: 1.5043
+  sell_target_multiplier: 0.9233
 
 Objectives:
-  cagr: 280.40%
-  calmar: 49.88
-  sortino: 14.13
-  profit_factor: 2.18
-  win_rate: 79.17%
-  total_trades: 24
-  max_drawdown: 5.62%
-  alpha: 1.79x
-
-Solution 13 (Score: 0.591)
-----------------------------------------
-Parameters:
-  grid_width_pct: 0.0224
-  trail_pct: 0.0100
-  max_dca: 1
-  downtrend_bars: 4
-  stop_loss_multiplier: 1.3540
-  sell_target_multiplier: 0.6160
-
-Objectives:
-  cagr: 87.03%
-  calmar: 16.93
-  sortino: 9.44
-  profit_factor: 1.75
-  win_rate: 80.00%
-  total_trades: 25
-  max_drawdown: 5.14%
-  alpha: 0.81x
-
-Solution 14 (Score: 0.021)
-----------------------------------------
-Parameters:
-  grid_width_pct: 0.0203
-  trail_pct: 0.0115
-  max_dca: 5
-  downtrend_bars: 2
-  stop_loss_multiplier: 1.0017
-  sell_target_multiplier: 1.1333
-
-Objectives:
-  cagr: -72.88%
-  calmar: -3.55
-  sortino: -1.75
-  profit_factor: 0.91
-  win_rate: 48.48%
-  total_trades: 33
-  max_drawdown: 20.51%
-  alpha: -1.57x
-
-Solution 15 (Score: 0.055)
-----------------------------------------
-Parameters:
-  grid_width_pct: 0.0221
-  trail_pct: 0.0127
-  max_dca: 4
-  downtrend_bars: 3
-  stop_loss_multiplier: 1.4207
-  sell_target_multiplier: 0.6074
-
-Objectives:
-  cagr: -28.15%
-  calmar: -1.98
-  sortino: 3.60
-  profit_factor: 1.20
-  win_rate: 74.19%
-  total_trades: 31
-  max_drawdown: 14.24%
-  alpha: -0.41x
-
-Solution 16 (Score: 0.785)
-----------------------------------------
-Parameters:
-  grid_width_pct: 0.0216
-  trail_pct: 0.0100
-  max_dca: 1
-  downtrend_bars: 4
-  stop_loss_multiplier: 1.8209
-  sell_target_multiplier: 0.5812
-
-Objectives:
-  cagr: 197.72%
-  calmar: 32.55
-  sortino: 8.36
-  profit_factor: 2.53
-  win_rate: 87.50%
-  total_trades: 24
-  max_drawdown: 6.07%
-  alpha: 1.45x
-
-Solution 17 (Score: 0.807)
-----------------------------------------
-Parameters:
-  grid_width_pct: 0.0367
-  trail_pct: 0.0157
-  max_dca: 1
-  downtrend_bars: 4
-  stop_loss_multiplier: 1.8230
-  sell_target_multiplier: 0.5059
-
-Objectives:
-  cagr: 369.77%
-  calmar: 49.81
-  sortino: 5.00
-  profit_factor: 3.84
-  win_rate: 92.31%
-  total_trades: 13
-  max_drawdown: 7.42%
-  alpha: 2.09x
-
-Solution 18 (Score: 0.021)
-----------------------------------------
-Parameters:
-  grid_width_pct: 0.0203
-  trail_pct: 0.0115
-  max_dca: 5
-  downtrend_bars: 3
-  stop_loss_multiplier: 1.1676
-  sell_target_multiplier: 0.5009
-
-Objectives:
-  cagr: -86.70%
-  calmar: -4.47
-  sortino: -3.45
-  profit_factor: 0.78
-  win_rate: 70.45%
-  total_trades: 44
-  max_drawdown: 19.41%
-  alpha: -2.35x
-
-Solution 19 (Score: 0.168)
-----------------------------------------
-Parameters:
-  grid_width_pct: 0.0224
-  trail_pct: 0.0150
-  max_dca: 1
-  downtrend_bars: 3
-  stop_loss_multiplier: 3.2231
-  sell_target_multiplier: 0.7181
-
-Objectives:
-  cagr: 27.35%
-  calmar: 1.88
-  sortino: 339.79
-  profit_factor: 1.37
-  win_rate: 86.67%
-  total_trades: 15
-  max_drawdown: 14.52%
-  alpha: 0.31x
-
-Solution 20 (Score: 0.835)
-----------------------------------------
-Parameters:
-  grid_width_pct: 0.0364
-  trail_pct: 0.0127
-  max_dca: 1
-  downtrend_bars: 4
-  stop_loss_multiplier: 1.1076
-  sell_target_multiplier: 0.5676
-
-Objectives:
-  cagr: 733.50%
-  calmar: 108.04
-  sortino: 15.76
-  profit_factor: 2.73
-  win_rate: 81.82%
-  total_trades: 22
-  max_drawdown: 6.79%
-  alpha: 2.94x
-
-Solution 21 (Score: 0.809)
-----------------------------------------
-Parameters:
-  grid_width_pct: 0.0257
-  trail_pct: 0.0128
-  max_dca: 5
-  downtrend_bars: 4
-  stop_loss_multiplier: 1.2484
-  sell_target_multiplier: 0.6766
-
-Objectives:
-  cagr: 309.53%
-  calmar: 53.21
-  sortino: 14.78
-  profit_factor: 2.24
-  win_rate: 79.17%
-  total_trades: 24
-  max_drawdown: 5.82%
-  alpha: 1.90x
-
-Solution 22 (Score: 0.831)
-----------------------------------------
-Parameters:
-  grid_width_pct: 0.0256
-  trail_pct: 0.0110
-  max_dca: 4
-  downtrend_bars: 4
-  stop_loss_multiplier: 2.1993
-  sell_target_multiplier: 1.1129
-
-Objectives:
-  cagr: 522.63%
-  calmar: 51.16
-  sortino: 11.91
-  profit_factor: 3.56
-  win_rate: 83.33%
+  sharpe: 44.97
+  max_drawdown: 1.83%
+  profit_factor: 10.00
   total_trades: 12
-  max_drawdown: 10.22%
-  alpha: 2.50x
 
-Solution 23 (Score: 0.020)
+Solution 1 (Score: 0.116)
 ----------------------------------------
 Parameters:
-  grid_width_pct: 0.0204
-  trail_pct: 0.0115
-  max_dca: 5
-  downtrend_bars: 3
-  stop_loss_multiplier: 1.0094
-  sell_target_multiplier: 0.5009
-
-Objectives:
-  cagr: -89.87%
-  calmar: -4.23
-  sortino: -5.32
-  profit_factor: 0.71
-  win_rate: 65.91%
-  total_trades: 44
-  max_drawdown: 21.26%
-  alpha: -2.64x
-
-Solution 24 (Score: 0.818)
-----------------------------------------
-Parameters:
-  grid_width_pct: 0.0207
-  trail_pct: 0.0128
-  max_dca: 4
-  downtrend_bars: 4
-  stop_loss_multiplier: 1.2484
-  sell_target_multiplier: 1.0322
-
-Objectives:
-  cagr: 451.78%
-  calmar: 53.74
-  sortino: 22.22
-  profit_factor: 2.16
-  win_rate: 72.00%
-  total_trades: 25
-  max_drawdown: 8.41%
-  alpha: 2.33x
-
-Solution 25 (Score: 0.016)
-----------------------------------------
-Parameters:
-  grid_width_pct: 0.0204
-  trail_pct: 0.0118
-  max_dca: 5
-  downtrend_bars: 3
-  stop_loss_multiplier: 1.0058
-  sell_target_multiplier: 0.5795
-
-Objectives:
-  cagr: -95.05%
-  calmar: -3.47
-  sortino: -11.86
-  profit_factor: 0.55
-  win_rate: 57.50%
-  total_trades: 40
-  max_drawdown: 27.42%
-  alpha: -3.36x
-
-Solution 26 (Score: 0.839)
-----------------------------------------
-Parameters:
-  grid_width_pct: 0.0208
-  trail_pct: 0.0128
+  grid_width_pct: 0.0124
+  trail_pct: 0.0086
   max_dca: 3
-  downtrend_bars: 4
-  stop_loss_multiplier: 1.5519
-  sell_target_multiplier: 1.0306
+  downtrend_bars: 2
+  stop_loss_multiplier: 1.0038
+  sell_target_multiplier: 0.8083
 
 Objectives:
-  cagr: 787.57%
-  calmar: 133.34
-  sortino: 20.68
-  profit_factor: 2.69
-  win_rate: 78.26%
-  total_trades: 23
-  max_drawdown: 5.91%
-  alpha: 3.04x
+  sharpe: 4.03
+  max_drawdown: 4.39%
+  profit_factor: 1.62
+  total_trades: 19
 
-Solution 27 (Score: 0.839)
+Solution 2 (Score: 0.155)
 ----------------------------------------
 Parameters:
-  grid_width_pct: 0.0223
-  trail_pct: 0.0214
-  max_dca: 4
-  downtrend_bars: 4
-  stop_loss_multiplier: 1.3539
-  sell_target_multiplier: 0.5676
+  grid_width_pct: 0.0123
+  trail_pct: 0.0080
+  max_dca: 2
+  downtrend_bars: 1
+  stop_loss_multiplier: 1.2791
+  sell_target_multiplier: 1.1325
 
 Objectives:
-  cagr: 261.34%
-  calmar: 63.24
-  sortino: 22.00
-  profit_factor: 4.73
-  win_rate: 89.47%
-  total_trades: 19
-  max_drawdown: 4.13%
-  alpha: 1.72x
+  sharpe: 15.47
+  max_drawdown: 2.87%
+  profit_factor: 5.10
+  total_trades: 13
+
+Solution 3 (Score: 0.134)
+----------------------------------------
+Parameters:
+  grid_width_pct: 0.0123
+  trail_pct: 0.0080
+  max_dca: 1
+  downtrend_bars: 1
+  stop_loss_multiplier: 1.2765
+  sell_target_multiplier: 1.1314
+
+Objectives:
+  sharpe: 9.00
+  max_drawdown: 2.87%
+  profit_factor: 2.66
+  total_trades: 14
+
+Solution 4 (Score: 0.132)
+----------------------------------------
+Parameters:
+  grid_width_pct: 0.0126
+  trail_pct: 0.0080
+  max_dca: 1
+  downtrend_bars: 1
+  stop_loss_multiplier: 1.2498
+  sell_target_multiplier: 0.8478
+
+Objectives:
+  sharpe: 7.48
+  max_drawdown: 2.95%
+  profit_factor: 2.43
+  total_trades: 18
+
+Solution 5 (Score: 0.092)
+----------------------------------------
+Parameters:
+  grid_width_pct: 0.0125
+  trail_pct: 0.0080
+  max_dca: 2
+  downtrend_bars: 1
+  stop_loss_multiplier: 1.0002
+  sell_target_multiplier: 0.8510
+
+Objectives:
+  sharpe: -0.73
+  max_drawdown: 7.77%
+  profit_factor: 0.91
+  total_trades: 22
+
+Solution 6 (Score: 0.129)
+----------------------------------------
+Parameters:
+  grid_width_pct: 0.0128
+  trail_pct: 0.0109
+  max_dca: 2
+  downtrend_bars: 4
+  stop_loss_multiplier: 1.0462
+  sell_target_multiplier: 0.9804
+
+Objectives:
+  sharpe: 8.11
+  max_drawdown: 2.59%
+  profit_factor: 2.38
+  total_trades: 13
+
+Solution 7 (Score: 0.107)
+----------------------------------------
+Parameters:
+  grid_width_pct: 0.0121
+  trail_pct: 0.0084
+  max_dca: 1
+  downtrend_bars: 1
+  stop_loss_multiplier: 1.0006
+  sell_target_multiplier: 0.8475
+
+Objectives:
+  sharpe: 2.18
+  max_drawdown: 5.91%
+  profit_factor: 1.29
+  total_trades: 20
+
+Solution 8 (Score: 0.153)
+----------------------------------------
+Parameters:
+  grid_width_pct: 0.0126
+  trail_pct: 0.0081
+  max_dca: 1
+  downtrend_bars: 2
+  stop_loss_multiplier: 1.2495
+  sell_target_multiplier: 0.8536
+
+Objectives:
+  sharpe: 12.84
+  max_drawdown: 2.93%
+  profit_factor: 4.38
+  total_trades: 16
+
+Solution 9 (Score: 0.155)
+----------------------------------------
+Parameters:
+  grid_width_pct: 0.0124
+  trail_pct: 0.0081
+  max_dca: 2
+  downtrend_bars: 2
+  stop_loss_multiplier: 1.2728
+  sell_target_multiplier: 0.8567
+
+Objectives:
+  sharpe: 13.36
+  max_drawdown: 2.94%
+  profit_factor: 4.63
+  total_trades: 17
 
 ============================================================
-Total: 28 solutions
+Total: 10 solutions

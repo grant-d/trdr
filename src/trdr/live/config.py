@@ -65,7 +65,7 @@ class LiveConfig:
     max_retries: int = 3
     risk_limits: RiskLimits = field(default_factory=RiskLimits)
     symbol: str = ""
-    timeframe: str = "15m"
+    timeframe: str = "5m"
     enable_websocket: bool = True
     log_file: str = "live_trading.audit.log"
 
@@ -98,7 +98,7 @@ class LiveConfig:
             ALPACA_LIVE_API_SECRET: Live trading API secret
             LIVE_POLL_INTERVAL: Poll interval in seconds (default: 60)
             LIVE_SYMBOL: Trading symbol (default: "")
-            LIVE_TIMEFRAME: Trading timeframe (default: "15m")
+            LIVE_TIMEFRAME: Trading timeframe (default: "5m")
 
         Args:
             mode: Override mode from env var
@@ -125,7 +125,7 @@ class LiveConfig:
 
         poll_interval = float(os.getenv("LIVE_POLL_INTERVAL", "60"))
         symbol = os.getenv("LIVE_SYMBOL", "")
-        timeframe = os.getenv("LIVE_TIMEFRAME", "15m")
+        timeframe = os.getenv("LIVE_TIMEFRAME", "5m")
 
         return cls(
             mode=mode,

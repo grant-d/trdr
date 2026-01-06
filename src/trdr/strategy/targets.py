@@ -45,7 +45,7 @@ TARGET_PF = 2.0  # Profit Factor
 TARGET_WR = 0.51  # Win Rate
 
 # Quadratic target: score = 1.0 at target, 0.0 at 0 or 2*target
-TARGET_TRADES_PER_YEAR = 70  # Sweet spot; range is 0 to 140
+TARGET_TRADES_PER_YEAR = 360 * 1.5  # Sweet spot; range is 0 to 140
 
 # Weights (must sum to 1.0)
 WEIGHT_CAGR = 0.30

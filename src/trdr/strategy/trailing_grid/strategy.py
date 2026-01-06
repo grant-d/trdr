@@ -54,14 +54,14 @@ class TrailingGridConfig(StrategyConfig):
     # stop_loss_multiplier: float = 1.3516
     # sell_target_multiplier: float = 0.5811
 
-    # DCA 2 moderate profit
-    # Solution 3: 20 trades, score 0.816, CAGR 184.5%, alpha 1.38x, dca=2, pos=50%, $1187
-    grid_width_pct: float = 0.0364
-    trail_pct: float = 0.0127
-    max_dca: int = 2  # Up to 2 DCA entries
-    downtrend_bars: int = 5
-    stop_loss_multiplier: float = 1.1055
-    sell_target_multiplier: float = 0.5676
+    # MOO Solution 9 - High Frequency (~600/yr, PF 4.63, Sharpe 13.36)
+    # Pareto-optimal for testing: 17 trades in 250h
+    grid_width_pct: float = 0.0124
+    trail_pct: float = 0.0081
+    max_dca: int = 2
+    downtrend_bars: int = 2
+    stop_loss_multiplier: float = 1.2728
+    sell_target_multiplier: float = 0.8567
 
 
 class TrailingGridStrategy(BaseStrategy):
