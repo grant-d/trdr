@@ -45,13 +45,23 @@ class TrailingGridConfig(StrategyConfig):
     # stop_loss_multiplier: float = 3.0643  # Stop loss as multiple of grid_width (optimal)
     # sell_target_multiplier: float = 0.5268  # Sell target as multiple of grid_width
 
-    # Most trades but decent pareto - 0.813
-    grid_width_pct: float = 0.0202  # 2.5% grid (optimal)
-    trail_pct: float = 0.0131  # 2.0% trail distance (optimal)
-    max_dca: int = 1  # Maximum DCA entries
-    downtrend_bars: int = 4  # Bars to confirm downtrend
-    stop_loss_multiplier: float = 2.0517  # Stop loss as multiple of grid_width (optimal)
-    sell_target_multiplier: float = 0.5218  # Sell target as multiple of grid_width
+    # No DCA high profit
+    # Solution 7: 19 trades, score 0.869, CAGR 375.64%, alpha 2.11x, dca=1, pos=100%, $1914
+    # grid_width_pct: float = 0.0223
+    # trail_pct: float = 0.0217
+    # max_dca: int = 1  # No DCA
+    # downtrend_bars: int = 4
+    # stop_loss_multiplier: float = 1.3516
+    # sell_target_multiplier: float = 0.5811
+
+    # DCA 2 moderate profit
+    # Solution 3: 20 trades, score 0.816, CAGR 184.5%, alpha 1.38x, dca=2, pos=50%, $1187
+    grid_width_pct: float = 0.0364
+    trail_pct: float = 0.0127
+    max_dca: int = 2  # Up to 2 DCA entries
+    downtrend_bars: int = 5
+    stop_loss_multiplier: float = 1.1055
+    sell_target_multiplier: float = 0.5676
 
 
 class TrailingGridStrategy(BaseStrategy):

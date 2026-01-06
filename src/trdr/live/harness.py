@@ -232,8 +232,15 @@ class LiveHarness:
                 await app_task
             finally:
                 await self.stop()
+                # Wait for harness with timeout, then force cancel
                 try:
-                    await harness_task
+                    await asyncio.wait_for(harness_task, timeout=3.0)
+                except asyncio.TimeoutError:
+                    harness_task.cancel()
+                    try:
+                        await harness_task
+                    except asyncio.CancelledError:
+                        pass
                 except Exception:
                     pass
 
@@ -399,6 +406,7 @@ class LiveHarness:
             self._informative_indices[req.key] = last_idx
 
         logger.info(f"Loaded {len(primary_bars)} historical bars")
+        self._state.bars_processed = len(primary_bars)
 
     def _append_bar(self, bar: Bar) -> None:
         """Append a bar to the primary cache and align informative feeds."""

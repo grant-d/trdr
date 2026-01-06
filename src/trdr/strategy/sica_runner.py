@@ -190,4 +190,8 @@ def run_sica_benchmark(
     failed = 1000 - passed
     print(f"\n{passed} passed, {failed} failed")
 
+    # Print trade log if requested
+    if os.environ.get("SHOW_TRADES"):
+        result.print_trades()
+
     sys.exit(0 if score >= 0.95 else 1)

@@ -75,6 +75,8 @@ class Trade:
     @property
     def duration_hours(self) -> float:
         """Trade duration in hours."""
+        if not self.entry_time or not self.exit_time:
+            return 0.0
         entry = datetime.fromisoformat(self.entry_time.replace("Z", "+00:00"))
         exit_dt = datetime.fromisoformat(self.exit_time.replace("Z", "+00:00"))
         return (exit_dt - entry).total_seconds() / 3600
