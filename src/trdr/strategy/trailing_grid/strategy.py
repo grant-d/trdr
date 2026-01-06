@@ -15,14 +15,13 @@ DCA:
 - Sell target ensures 1 grid_width profit across all positions
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 
 from ...data import Bar
 from ..base_strategy import BaseStrategy, StrategyConfig
 from ..types import DataRequirement, Position, Signal, SignalAction
-from ...indicators import atr
 
 
 @dataclass(frozen=True)
@@ -237,7 +236,8 @@ class TrailingGridStrategy(BaseStrategy):
                     price=entry_price,
                     confidence=0.7,
                     reason=f"Trail buy triggered at {entry_price:.2f}",
-                    stop_loss=entry_price * (1 - self.config.grid_width_pct * self.config.stop_loss_multiplier),
+                    stop_loss=entry_price
+                    * (1 - self.config.grid_width_pct * self.config.stop_loss_multiplier),
                     take_profit=self._sell_target(),
                 )
 
@@ -283,7 +283,8 @@ class TrailingGridStrategy(BaseStrategy):
                     price=entry_price,
                     confidence=0.65,
                     reason=f"DCA #{len(self.entries)} at {entry_price:.2f}",
-                    stop_loss=self._avg_entry_price() * (1 - self.config.grid_width_pct * self.config.stop_loss_multiplier),
+                    stop_loss=self._avg_entry_price()
+                    * (1 - self.config.grid_width_pct * self.config.stop_loss_multiplier),
                     take_profit=self._sell_target(),
                 )
 

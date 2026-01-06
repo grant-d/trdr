@@ -5,19 +5,6 @@ import numpy as np
 from ..data import Bar
 
 
-def ema(bars: list[Bar], period: int) -> float:
-    """Calculate Exponential Moving Average (current value).
-
-    Args:
-        bars: List of OHLCV bars
-        period: EMA period
-
-    Returns:
-        Current EMA value
-    """
-    return EmaIndicator.calculate(bars, period)
-
-
 def ema_series(values: list[float], period: int) -> list[float]:
     """Calculate EMA series from raw values.
 
@@ -50,25 +37,24 @@ class EmaIndicator:
     def __init__(self, period: int) -> None:
         self.period = max(1, period)
         self.alpha = 2 / (self.period + 1)
-        self._seed: list[float] = []
         self._value: float | None = None
 
     def update(self, bar: Bar) -> float:
         close = bar.close
         if self._value is None:
-            self._seed.append(close)
-            if len(self._seed) < self.period:
-                return close
-            if len(self._seed) == self.period:
-                self._value = float(np.mean(self._seed))
-                return self._value
+            self._value = float(close)
+            return self._value
         self._value = self.alpha * close + (1 - self.alpha) * self._value
-        return self._value
+        return float(self._value)
 
     @staticmethod
     def calculate(bars: list[Bar], period: int) -> float:
         if not bars:
             return 0.0
+        if period <= 1:
+            return bars[-1].close
+        if len(bars) < period:
+            return bars[-1].close
         calc = EmaIndicator(period)
         for bar in bars:
             calc.update(bar)
@@ -78,4 +64,4 @@ class EmaIndicator:
     def value(self) -> float:
         if self._value is not None:
             return float(self._value)
-        return float(self._seed[-1]) if self._seed else 0.0
+        return 0.0

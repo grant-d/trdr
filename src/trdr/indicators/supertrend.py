@@ -4,40 +4,6 @@ from ..data import Bar
 from .volatility_regime import _atr_series, _sma_series, _true_ranges
 
 
-def supertrend(
-    bars: list[Bar],
-    period: int = 10,
-    multiplier: float = 3.0,
-    use_atr: bool = True,
-) -> tuple[float, int]:
-    """Calculate SuperTrend indicator (ATR-based trailing stop).
-
-    SuperTrend is a trend-following indicator that uses ATR to create
-    dynamic support/resistance levels. Generates buy signals when price
-    crosses above the indicator, sell signals when crossing below.
-
-    Original indicator by Olivier Seban, popularized by various traders.
-    This implementation based on common TradingView versions.
-
-    Args:
-        bars: List of OHLCV bars
-        period: ATR calculation period
-        multiplier: ATR multiplier for band width
-        use_atr: Use ATR (True) vs simple TR average (False)
-
-    Returns:
-        Tuple of (supertrend_value, trend_direction)
-        - supertrend_value: Current ST level (support in uptrend, resistance in downtrend)
-        - trend_direction: 1 for uptrend, -1 for downtrend
-    """
-    return SupertrendIndicator.calculate(
-        bars,
-        period=period,
-        multiplier=multiplier,
-        use_atr=use_atr,
-    )
-
-
 class SupertrendIndicator:
     """Streaming SuperTrend calculator."""
 

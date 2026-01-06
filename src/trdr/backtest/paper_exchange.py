@@ -327,6 +327,14 @@ class PaperExchange:
         # OCO: Map order_id -> EntryPlan to submit exits only after entry fills
         pending_entry_plans: dict[str, EntryPlan] = {}
 
+        # Build rolling views for each feed to avoid per-bar slicing.
+        visible_bars: dict[str, list[Bar]] = {}
+        for key, feed_bars in bars.items():
+            if key == primary_feed_key:
+                visible_bars[key] = filtered_bars[: self.config.warmup_bars]
+            else:
+                visible_bars[key] = feed_bars[: self.config.warmup_bars]
+
         for i in range(self.config.warmup_bars, len(filtered_bars)):
             bar = filtered_bars[i]
             slippage = bar.close * self.config.slippage_pct
@@ -434,15 +442,14 @@ class PaperExchange:
 
             # 4. Generate signal (skip on last bar)
             if i < len(filtered_bars) - 1:
-                # Build dict of visible bars for all feeds
-                # Primary uses filtered bars; informative feeds are pre-aligned
-                visible_bars: dict[str, list[Bar]] = {}
+                # Update visible bars for all feeds (primary uses filtered bars).
                 for key, feed_bars in bars.items():
                     if key == primary_feed_key:
-                        visible_bars[key] = filtered_bars[: i + 1]
+                        visible_bars[key].append(filtered_bars[i])
                     else:
                         # Informative feeds aligned to primary, slice same length
-                        visible_bars[key] = feed_bars[: i + 1]
+                        if i < len(feed_bars):
+                            visible_bars[key].append(feed_bars[i])
 
                 # Set runtime context for strategy
                 self.strategy.context = RuntimeContext(
@@ -771,6 +778,6 @@ class PaperExchange:
                         order_type=OrderType.LIMIT,
                         quantity=qty,
                         limit_price=take_profit,
-                    created_at=timestamp,
+                        created_at=timestamp,
+                    )
                 )
-            )

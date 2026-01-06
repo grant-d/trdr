@@ -11,25 +11,6 @@ from ..data import Bar
 _RviMode = str
 
 
-def rvi(bars: list[Bar], period: int = 10, mode: _RviMode = "ema") -> float:
-    """Calculate Relative Volatility Index.
-
-    Args:
-        bars: List of OHLCV bars
-        period: RVI period
-        mode: "ema" (TradingView-style) or "sma" smoothing
-
-    Returns:
-        RVI value (0-100)
-    """
-    if not bars:
-        return 50.0
-    calc = RviIndicator(period, mode=mode)
-    for bar in bars:
-        calc.update(bar)
-    return calc.value
-
-
 class _EmaValue:
     """EMA helper for scalar values."""
 
@@ -83,7 +64,12 @@ class RviIndicator:
 
     @staticmethod
     def calculate(bars: list[Bar], period: int = 10, mode: _RviMode = "ema") -> float:
-        return rvi(bars, period=period, mode=mode)
+        if not bars:
+            return 50.0
+        calc = RviIndicator(period, mode=mode)
+        for bar in bars:
+            calc.update(bar)
+        return calc.value
 
     def _update_sma(self, up_val: float, down_val: float) -> tuple[float, float]:
         if len(self._std_up) == self.period:

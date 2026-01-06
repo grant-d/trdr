@@ -155,10 +155,9 @@ def list_configs() -> list[str]:
         Sorted list of config folder names
     """
     configs_dir = get_configs_dir()
-    return sorted([
-        d.name for d in configs_dir.iterdir()
-        if d.is_dir() and (d / "config.json").exists()
-    ])
+    return sorted(
+        [d.name for d in configs_dir.iterdir() if d.is_dir() and (d / "config.json").exists()]
+    )
 
 
 def find_active_config() -> str | None:

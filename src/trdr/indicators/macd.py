@@ -4,23 +4,6 @@ from ..data import Bar
 from .ema import ema_series
 
 
-def macd(
-    bars: list[Bar], fast: int = 12, slow: int = 26, signal: int = 9
-) -> tuple[float, float, float]:
-    """Calculate MACD (Moving Average Convergence Divergence).
-
-    Args:
-        bars: List of OHLCV bars
-        fast: Fast EMA period
-        slow: Slow EMA period
-        signal: Signal line EMA period
-
-    Returns:
-        Tuple of (macd_line, signal_line, histogram)
-    """
-    return MacdIndicator.calculate(bars, fast=fast, slow=slow, signal=signal)
-
-
 class _EmaValue:
     """EMA helper for scalar values."""
 

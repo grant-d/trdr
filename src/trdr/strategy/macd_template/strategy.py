@@ -26,7 +26,7 @@ from dataclasses import dataclass
 
 from ...core import Duration, Timeframe
 from ...data import Bar
-from ...indicators import ema, ema_series
+from ...indicators import EmaIndicator, MacdIndicator
 from ..base_strategy import BaseStrategy, StrategyConfig
 from ..types import DataRequirement, Position, Signal, SignalAction
 
@@ -94,6 +94,20 @@ class MACDStrategy(BaseStrategy):
         """
         super().__init__(config, name="MACD")  # Custom name, or omit for class name
         self.config: MACDConfig = config  # Type hint for autocomplete
+        self._reset_state()
+
+    def _reset_state(self) -> None:
+        self._macd = MacdIndicator(
+            self.config.fast_period, self.config.slow_period, self.config.signal_period
+        )
+        self._macd_prev: tuple[float, float, float] = (0.0, 0.0, 0.0)
+        self._last_index = 0
+        self._htf_last_index = 0
+        self._htf_ema = EmaIndicator(20)
+
+    def reset(self) -> None:
+        """Reset strategy state for new run."""
+        self._reset_state()
 
     def get_data_requirements(self) -> list[DataRequirement]:
         """Declare data feeds for this strategy.
@@ -188,30 +202,33 @@ class MACDStrategy(BaseStrategy):
         # ---------------------------------------------------------------------
         # 3. Calculate indicators on PRIMARY timeframe
         # ---------------------------------------------------------------------
-        closes = [b.close for b in primary_bars]
-        current_price = closes[-1]
+        if self._last_index > len(primary_bars):
+            self._reset_state()
+        for bar in primary_bars[self._last_index :]:
+            self._macd_prev = self._macd.value
+            self._macd.update(bar)
+        self._last_index = len(primary_bars)
 
-        fast_ema = ema_series(closes, self.config.fast_period)
-        slow_ema = ema_series(closes, self.config.slow_period)
-
-        macd_line = [f - s for f, s in zip(fast_ema, slow_ema)]
-        signal_line = ema_series(macd_line, self.config.signal_period)
-
-        macd_current = macd_line[-1]
-        macd_prev = macd_line[-2]
-        signal_current = signal_line[-1]
-        signal_prev = signal_line[-2]
+        current_price = primary_bars[-1].close
+        macd_current, signal_current, _ = self._macd.value
+        macd_prev, signal_prev, _ = self._macd_prev
 
         # ---------------------------------------------------------------------
         # 3b. MTF: Calculate HTF trend filter (if configured)
         # ---------------------------------------------------------------------
         # HTF trend: only take longs when HTF EMA is trending up
         htf_trend_bullish = True  # Default: no filter
-        if htf_bars and len(htf_bars) >= 50:
+        if htf_bars:
             # Use most recent HTF bar (already aligned to primary)
-            htf_ema_val = ema(htf_bars, period=20)
-            htf_current_price = htf_bars[-1].close if htf_bars[-1] else current_price
-            htf_trend_bullish = htf_current_price > htf_ema_val
+            if self._htf_last_index > len(htf_bars):
+                self._htf_ema = EmaIndicator(20)
+                self._htf_last_index = 0
+            for bar in htf_bars[self._htf_last_index :]:
+                self._htf_ema.update(bar)
+            self._htf_last_index = len(htf_bars)
+            if len(htf_bars) >= 50:
+                htf_current_price = htf_bars[-1].close if htf_bars[-1] else current_price
+                htf_trend_bullish = htf_current_price > self._htf_ema.value
 
         # ---------------------------------------------------------------------
         # 4. Check exits first (if in position)

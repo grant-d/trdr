@@ -26,7 +26,8 @@ def main() -> None:
         help="Config name to reset (default: find active)",
     )
     parser.add_argument(
-        "--all", "-a",
+        "--all",
+        "-a",
         action="store_true",
         help="Reset all configs with state",
     )

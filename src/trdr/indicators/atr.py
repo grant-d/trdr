@@ -5,44 +5,52 @@ import numpy as np
 from ..data import Bar
 
 
-def atr(bars: list[Bar], period: int = 14) -> float:
-    """Calculate Average True Range.
-
-    Args:
-        bars: List of OHLCV bars
-        period: ATR period
-
-    Returns:
-        Current ATR value
-    """
-    if len(bars) < period + 1:
-        return 0.0
-
-    true_ranges = []
-    for i in range(1, len(bars)):
-        high = bars[i].high
-        low = bars[i].low
-        prev_close = bars[i - 1].close
-
-        tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
-        true_ranges.append(tr)
-
-    # Wilder's smoothed ATR
-    atr_val = np.mean(true_ranges[-period:])
-    return float(atr_val)
-
-
 class AtrIndicator:
     """Streaming ATR calculator."""
 
     def __init__(self, period: int = 14) -> None:
-        self.period = period
-        self._bars: list[Bar] = []
+        self.period = max(1, period)
+        self._prev_close: float | None = None
+        self._tr_values: list[float] = []
+        self._atr: float | None = None
 
     def update(self, bar: Bar) -> float:
-        self._bars.append(bar)
-        return atr(self._bars, self.period)
+        if self._prev_close is None:
+            tr = bar.high - bar.low
+            self._tr_values.append(tr)
+            self._prev_close = bar.close
+            self._atr = tr
+            return float(self._atr)
+
+        tr = max(
+            bar.high - bar.low,
+            abs(bar.high - self._prev_close),
+            abs(bar.low - self._prev_close),
+        )
+
+        if self._atr is None:
+            self._tr_values.append(tr)
+            if len(self._tr_values) < self.period:
+                self._atr = float(np.mean(self._tr_values))
+            else:
+                self._atr = float(np.mean(self._tr_values[-self.period :]))
+        else:
+            self._atr = (self._atr * (self.period - 1) + tr) / self.period
+
+        self._prev_close = bar.close
+        return float(self._atr)
+
+    @staticmethod
+    def calculate(bars: list[Bar], period: int = 14) -> float:
+        if not bars:
+            return 0.0
+        if len(bars) == 1:
+            return bars[0].close
+        calc = AtrIndicator(period)
+        for bar in bars:
+            calc.update(bar)
+        return calc.value
 
     @property
     def value(self) -> float:
-        return atr(self._bars, self.period) if self._bars else 0.0
+        return float(self._atr) if self._atr is not None else 0.0

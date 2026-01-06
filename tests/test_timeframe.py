@@ -1,11 +1,11 @@
 """Tests for timeframe utilities and multi-feed alignment."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import pytest
 
 from trdr.backtest import align_feeds
-from trdr.core import Duration, Symbol, Timeframe, get_interval_seconds, parse_timeframe, Feed
+from trdr.core import Duration, Feed, Symbol, Timeframe, get_interval_seconds, parse_timeframe
 from trdr.data import Bar
 from trdr.strategy.sica_runner import get_primary_requirement
 from trdr.strategy.types import DataRequirement

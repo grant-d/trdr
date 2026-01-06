@@ -3,20 +3,6 @@
 from ..data import Bar
 
 
-def smi(bars: list[Bar], k: int = 10, d: int = 3) -> float:
-    """Calculate Stochastic Momentum Index.
-
-    Args:
-        bars: List of OHLCV bars
-        k: Lookback period
-        d: EMA smoothing period
-
-    Returns:
-        SMI value
-    """
-    return SmiIndicator.calculate(bars, k=k, d=d)
-
-
 class SmiIndicator:
     """Streaming SMI calculator."""
 

@@ -24,8 +24,6 @@ class AlpacaConfig:
         return "paper" in self.base_url
 
 
-
-
 @dataclass(frozen=True)
 class LoopConfig:
     """Async loop timing configuration."""

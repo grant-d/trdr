@@ -5,9 +5,9 @@ Creates run directory and sets state within config.
 """
 
 import argparse
+import json
 import sys
 from datetime import datetime, timezone
-import json
 from pathlib import Path
 
 # Add lib to path
@@ -61,13 +61,15 @@ Examples:
         help="Config name from .sica/configs/<name>/",
     )
     parser.add_argument(
-        "--list", "-l",
+        "--list",
+        "-l",
         action="store_true",
         dest="list_configs",
         help="List available configs",
     )
     parser.add_argument(
-        "--force", "-f",
+        "--force",
+        "-f",
         action="store_true",
         help="Force start even if another config has active state",
     )
@@ -147,7 +149,8 @@ Examples:
     # Runtime marker for session detection (checked by stop hook)
     marker = make_runtime_marker(config_name, run_id)
 
-    print(f"""
+    print(
+        f"""
 SICA Loop Activated
 ===================
 Config: {config_name}
@@ -186,7 +189,8 @@ Stop: Press Esc or run /sica:reset
 {"Task: " + prompt if prompt else "Provide your task."} Then make changes and exit.
 
 {marker}
-""")
+"""
+    )
 
 
 if __name__ == "__main__":

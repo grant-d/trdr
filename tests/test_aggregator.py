@@ -2,7 +2,7 @@
 
 import pytest
 
-from trdr.core import parse_timeframe, Symbol, Timeframe
+from trdr.core import Symbol, Timeframe, parse_timeframe
 from trdr.data import Bar, BarAggregator, TimeframeAdapter
 
 _TEST_STOCK = Symbol.parse("stock:AAPL")
@@ -341,7 +341,7 @@ class TestTimeframeAdapter:
 
     def test_to_alpaca(self):
         """Convert to Alpaca TimeFrame."""
-        from alpaca.data.timeframe import TimeFrame as AlpacaTimeFrame, TimeFrameUnit
+        from alpaca.data.timeframe import TimeFrameUnit
 
         # Native - returns canonical Alpaca timeframe
         adapter = TimeframeAdapter(parse_timeframe("15m"), _TEST_STOCK)

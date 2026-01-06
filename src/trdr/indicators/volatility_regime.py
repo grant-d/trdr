@@ -46,22 +46,6 @@ def _sma_series(values: list[float], period: int) -> list[float]:
     return series
 
 
-def volatility_regime(bars: list[Bar], lookback: int = 50) -> str:
-    """Classify volatility regime using rolling realized volatility.
-
-    Uses three-regime classification: low-vol (mean reversion), med-vol (transition),
-    high-vol (momentum).
-
-    Args:
-        bars: List of OHLCV bars
-        lookback: Period for volatility calculation
-
-    Returns:
-        Regime string: "low", "medium", "high"
-    """
-    return VolatilityRegimeIndicator.calculate(bars, lookback=lookback)
-
-
 class VolatilityRegimeIndicator:
     """Streaming volatility regime classifier."""
 

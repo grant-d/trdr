@@ -128,7 +128,7 @@ class TestDurationToBars:
         # ~20.7 * 26 = ~538
         assert 500 <= bars <= 600
 
-    def test_crypto_1h_1M(self) -> None:
+    def test_crypto_1h_1_month(self) -> None:
         """1 month of 1h bars for crypto."""
         d = Duration.parse("1M")
         bars = d.to_bars(Timeframe.parse("1h"), Symbol.parse("crypto:ETH/USD"))

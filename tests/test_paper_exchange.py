@@ -1,11 +1,11 @@
 """Tests for paper exchange engine."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import pytest
 
-from trdr.core import Duration, Symbol, Timeframe, Feed
 from trdr.backtest.paper_exchange import PaperExchange, PaperExchangeConfig
+from trdr.core import Duration, Feed, Symbol, Timeframe
 from trdr.data import Bar
 from trdr.strategy.base_strategy import BaseStrategy, StrategyConfig
 from trdr.strategy.types import DataRequirement, Position, Signal, SignalAction

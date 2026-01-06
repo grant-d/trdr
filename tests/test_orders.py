@@ -2,7 +2,7 @@
 
 import pytest
 
-from trdr.backtest.orders import Fill, Order, OrderManager, OrderType
+from trdr.backtest.orders import Order, OrderManager, OrderType
 from trdr.data import Bar
 
 

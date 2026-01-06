@@ -35,6 +35,7 @@ def log(msg: str) -> None:
     """Log to stderr (visible to user)."""
     print(msg, file=sys.stderr)
 
+
 # https://code.claude.com/docs/en/hooks#stop%2Fsubagentstop-decision-control
 # https://code.claude.com/docs/en/hooks#common-json-fields
 def hook_exit(msg: str, warning: str = "", block: bool = False) -> None:
@@ -431,7 +432,12 @@ def main() -> None:
     stop_hook_active = hook_input.get("stop_hook_active", "")
     cwd = hook_input.get("cwd", "")
     transcript_path = hook_input.get("transcript_path", "")
-    dbg(f"hook event: {hook_event_name}, session_id: {session_id}, permission_mode: {permission_mode}, stop_hook_active: {stop_hook_active}, cwd: {cwd}, transcript: {transcript_path}")
+    dbg(
+        "hook event: "
+        f"{hook_event_name}, session_id: {session_id}, "
+        f"permission_mode: {permission_mode}, stop_hook_active: {stop_hook_active}, "
+        f"cwd: {cwd}, transcript: {transcript_path}"
+    )
 
     # Also constrained via "matcher" in hooks.json
     if hook_event_name != "Stop":
@@ -513,9 +519,7 @@ def main() -> None:
     # Check target reached
     if float(score) >= config.target_score:
         complete_run(config)
-        hook_exit(
-            f"SICA COMPLETE: Target score reached! ({score:.3f} >= {config.target_score})"
-        )
+        hook_exit(f"SICA COMPLETE: Target score reached! ({score:.3f} >= {config.target_score})")
 
     # Promise detected but tests failing
     if promise_detected:

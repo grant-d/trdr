@@ -1,11 +1,12 @@
 """VolumeAreaBreakout strategy."""
 
-from ...indicators import atr as calculate_atr
-from ...indicators import volume_profile as calculate_volume_profile
+from ...indicators import VolumeProfileIndicator
 from .strategy import (
     VolumeAreaBreakoutConfig,
     VolumeAreaBreakoutStrategy,
 )
+
+calculate_volume_profile = VolumeProfileIndicator.calculate
 
 
 # Re-export generate_signal as standalone function for backwards compatibility
@@ -14,8 +15,6 @@ def generate_volume_area_breakout_signal(
     bars, position, atr_threshold=2.0, stop_loss_multiplier=1.75
 ):
     """Backwards-compatible wrapper."""
-    from ..types import Signal, SignalAction
-
     strategy = VolumeAreaBreakoutStrategy(
         VolumeAreaBreakoutConfig(
             symbol="",
@@ -30,7 +29,6 @@ def generate_volume_area_breakout_signal(
 __all__ = [
     "VolumeAreaBreakoutConfig",
     "VolumeAreaBreakoutStrategy",
-    "calculate_atr",
     "calculate_volume_profile",
     "generate_volume_area_breakout_signal",
 ]

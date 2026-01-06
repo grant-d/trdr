@@ -3,31 +3,6 @@
 from ..data import Bar
 
 
-def kalman(
-    bars: list[Bar],
-    measurement_noise: float = 0.1,
-    process_noise: float = 0.01,
-) -> float:
-    """Calculate Kalman Filter for adaptive price smoothing.
-
-    Uses 1D Kalman filter to smooth price data while adapting to trends.
-    Lower measurement noise = more smoothing, higher = more responsive.
-
-    Args:
-        bars: List of OHLCV bars
-        measurement_noise: Measurement uncertainty (R). Higher = noisier data
-        process_noise: Process uncertainty (Q). Higher = more adaptive
-
-    Returns:
-        Current filtered price estimate
-    """
-    return KalmanIndicator.calculate(
-        bars,
-        measurement_noise=measurement_noise,
-        process_noise=process_noise,
-    )
-
-
 def kalman_series(
     bars: list[Bar],
     measurement_noise: float = 0.1,

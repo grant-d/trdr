@@ -5,24 +5,6 @@ import numpy as np
 from ..data import Bar
 
 
-def wma(bars: list[Bar], period: int) -> float:
-    """Calculate Weighted Moving Average.
-
-    Args:
-        bars: List of OHLCV bars
-        period: WMA period
-
-    Returns:
-        Current WMA value
-    """
-    if len(bars) < period:
-        return bars[-1].close if bars else 0.0
-
-    closes = np.array([b.close for b in bars[-period:]])
-    weights = np.arange(1, period + 1)
-    return float(np.sum(closes * weights) / np.sum(weights))
-
-
 def _wma_values(values: list[float], period: int) -> list[float]:
     """Calculate WMA series for raw values."""
     if period <= 0:
@@ -45,13 +27,22 @@ class WmaIndicator:
     """Streaming WMA calculator."""
 
     def __init__(self, period: int) -> None:
-        self.period = period
+        self.period = max(1, period)
         self._bars: list[Bar] = []
+
+    @staticmethod
+    def calculate(bars: list[Bar], period: int) -> float:
+        if len(bars) < period:
+            return bars[-1].close if bars else 0.0
+
+        closes = np.array([b.close for b in bars[-period:]])
+        weights = np.arange(1, period + 1)
+        return float(np.sum(closes * weights) / np.sum(weights))
 
     def update(self, bar: Bar) -> float:
         self._bars.append(bar)
-        return wma(self._bars, self.period)
+        return self.calculate(self._bars, self.period)
 
     @property
     def value(self) -> float:
-        return wma(self._bars, self.period) if self._bars else 0.0
+        return self.calculate(self._bars, self.period) if self._bars else 0.0

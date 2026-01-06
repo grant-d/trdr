@@ -5,22 +5,6 @@ import numpy as np
 from ..data import Bar
 
 
-def sma(bars: list[Bar], period: int) -> float:
-    """Calculate Simple Moving Average.
-
-    Args:
-        bars: List of OHLCV bars
-        period: SMA period
-
-    Returns:
-        Current SMA value
-    """
-    if len(bars) < period:
-        return bars[-1].close if bars else 0.0
-    closes = [b.close for b in bars[-period:]]
-    return float(np.mean(closes))
-
-
 class SmaIndicator:
     """Streaming SMA calculator."""
 
@@ -32,7 +16,8 @@ class SmaIndicator:
         self._values.append(bar.close)
         if len(self._values) < self.period:
             return self._values[-1]
-        return float(np.mean(self._values[-self.period:]))
+        window = self._values[-self.period :]
+        return float(np.mean(window))
 
     @property
     def value(self) -> float:
@@ -40,27 +25,36 @@ class SmaIndicator:
             return 0.0
         if len(self._values) < self.period:
             return self._values[-1]
-        return float(np.mean(self._values[-self.period:]))
+        window = self._values[-self.period :]
+        return float(np.mean(window))
+
+    @staticmethod
+    def calculate(bars: list[Bar], period: int) -> float:
+        if not bars:
+            return 0.0
+        period = max(1, period)
+        closes = [b.close for b in bars]
+        if len(closes) < period:
+            return closes[-1]
+        window = closes[-period:]
+        return float(np.mean(window))
 
 
-def sma_series(bars: list[Bar], period: int) -> list[float]:
-    """Calculate SMA series for all bars.
+def sma_series(values: list[float], period: int) -> list[float]:
+    """Calculate SMA series for values."""
+    if not values:
+        return []
+    period = max(1, period)
+    if len(values) < period:
+        return list(values)
 
-    Args:
-        bars: List of OHLCV bars
-        period: SMA period
-
-    Returns:
-        List of SMA values (0s for insufficient data)
-    """
-    if len(bars) < period:
-        return [0.0] * len(bars)
-
-    closes = [b.close for b in bars]
-    result = [0.0] * len(closes)
-
-    for i in range(period - 1, len(closes)):
-        result[i] = float(np.mean(closes[i - period + 1 : i + 1]))
+    result: list[float] = []
+    for i in range(len(values)):
+        if i < period - 1:
+            result.append(float(values[i]))
+            continue
+        window = values[i - period + 1 : i + 1]
+        result.append(float(np.mean(window)))
 
     return result
 
@@ -70,12 +64,16 @@ class SmaSeriesIndicator:
 
     def __init__(self, period: int) -> None:
         self.period = period
-        self._bars: list[Bar] = []
+        self._values: list[float] = []
 
     def update(self, bar: Bar) -> list[float]:
-        self._bars.append(bar)
-        return sma_series(self._bars, self.period)
+        self._values.append(bar.close)
+        return sma_series(self._values, self.period)
 
     @property
-    def series(self) -> list[float]:
-        return sma_series(self._bars, self.period)
+    def value(self) -> list[float]:
+        return sma_series(self._values, self.period)
+
+    @staticmethod
+    def calculate(values: list[float], period: int) -> list[float]:
+        return sma_series(values, period)

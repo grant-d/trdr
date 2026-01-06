@@ -1,1 +1,1 @@
-"""Test suite for technical indicators."""
+"""Indicator tests."""

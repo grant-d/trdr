@@ -1,6 +1,7 @@
 """Shared trade metrics calculations."""
 
 from datetime import datetime
+from functools import cached_property
 
 import numpy as np
 
@@ -37,10 +38,30 @@ class TradeMetrics:
         """Number of completed trades."""
         return len(self._trades)
 
+    @cached_property
+    def _net_pnls(self) -> list[float]:
+        return [t.net_pnl for t in self._trades]
+
+    @cached_property
+    def _wins(self) -> list[float]:
+        return [t.net_pnl for t in self._trades if t.net_pnl > 0]
+
+    @cached_property
+    def _losses(self) -> list[float]:
+        return [t.net_pnl for t in self._trades if t.net_pnl < 0]
+
+    @cached_property
+    def _trade_returns(self) -> list[float]:
+        return [t.net_pnl / (t.entry_price * t.quantity) for t in self._trades]
+
+    @cached_property
+    def _durations(self) -> list[float]:
+        return [t.duration_hours for t in self._trades]
+
     @property
     def winning_trades(self) -> int:
         """Number of winning trades."""
-        return sum(1 for t in self._trades if t.is_winner)
+        return len(self._wins)
 
     @property
     def losing_trades(self) -> int:
@@ -57,13 +78,13 @@ class TradeMetrics:
     @property
     def total_pnl(self) -> float:
         """Total net P&L."""
-        return sum(t.net_pnl for t in self._trades)
+        return sum(self._net_pnls)
 
     @property
     def profit_factor(self) -> float:
         """Net profits / net losses. >1 is profitable."""
-        profits = sum(t.net_pnl for t in self._trades if t.net_pnl > 0)
-        losses = abs(sum(t.net_pnl for t in self._trades if t.net_pnl < 0))
+        profits = sum(self._wins)
+        losses = abs(sum(self._losses))
         if losses == 0:
             return float("inf") if profits > 0 else 0.0
         return profits / losses
@@ -118,33 +139,29 @@ class TradeMetrics:
     @property
     def avg_win(self) -> float:
         """Average winning trade P&L."""
-        winners = [t.net_pnl for t in self._trades if t.net_pnl > 0]
-        return float(np.mean(winners)) if winners else 0.0
+        return float(np.mean(self._wins)) if self._wins else 0.0
 
     @property
     def avg_loss(self) -> float:
         """Average losing trade P&L (negative value)."""
-        losers = [t.net_pnl for t in self._trades if t.net_pnl < 0]
-        return float(np.mean(losers)) if losers else 0.0
+        return float(np.mean(self._losses)) if self._losses else 0.0
 
     @property
     def largest_win(self) -> float:
         """Largest single winning trade."""
-        winners = [t.net_pnl for t in self._trades if t.net_pnl > 0]
-        return max(winners) if winners else 0.0
+        return max(self._wins) if self._wins else 0.0
 
     @property
     def largest_loss(self) -> float:
         """Largest single losing trade (negative value)."""
-        losers = [t.net_pnl for t in self._trades if t.net_pnl < 0]
-        return min(losers) if losers else 0.0
+        return min(self._losses) if self._losses else 0.0
 
     @property
     def avg_trade_duration_hours(self) -> float:
         """Average trade duration in hours."""
         if not self._trades:
             return 0.0
-        return float(np.mean([t.duration_hours for t in self._trades]))
+        return float(np.mean(self._durations))
 
     @property
     def max_consecutive_wins(self) -> int:
@@ -186,27 +203,25 @@ class TradeMetrics:
         """Annualized Sharpe ratio (assumes 0 risk-free rate)."""
         if len(self._trades) < 2:
             return None
-        returns = [t.net_pnl / (t.entry_price * t.quantity) for t in self._trades]
-        std = np.std(returns)
+        std = np.std(self._trade_returns)
         if std == 0:
-            return float("inf") if np.mean(returns) > 0 else None
+            return float("inf") if np.mean(self._trade_returns) > 0 else None
         days = get_trading_days_in_year(self._asset_type)
-        return float(np.mean(returns) / std * np.sqrt(days))
+        return float(np.mean(self._trade_returns) / std * np.sqrt(days))
 
     @property
     def sortino_ratio(self) -> float | None:
         """Annualized Sortino ratio."""
         if len(self._trades) < 2:
             return None
-        returns = [t.net_pnl / (t.entry_price * t.quantity) for t in self._trades]
-        downside = [r for r in returns if r < 0]
+        downside = [r for r in self._trade_returns if r < 0]
         if not downside:
-            return float("inf") if np.mean(returns) > 0 else None
+            return float("inf") if np.mean(self._trade_returns) > 0 else None
         downside_std = np.std(downside)
         if downside_std == 0:
-            return None
+            return float("inf") if np.mean(self._trade_returns) > 0 else None
         days = get_trading_days_in_year(self._asset_type)
-        return float(np.mean(returns) / downside_std * np.sqrt(days))
+        return float(np.mean(self._trade_returns) / downside_std * np.sqrt(days))
 
     @property
     def cagr(self) -> float | None:

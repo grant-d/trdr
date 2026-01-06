@@ -23,14 +23,12 @@ from typing import TYPE_CHECKING
 from .types import DataRequirement
 
 if TYPE_CHECKING:
-    from ..core import Symbol
+    from ..core import Duration, Symbol, Timeframe
 
-from trdr.core import Feed
+from trdr.core import Timeframe
+from trdr.strategy.targets import score_result
 
 project_root = Path(__file__).parent.parent.parent.parent
-sys.path.insert(0, str(project_root / "src"))
-
-from trdr.strategy.targets import score_result
 
 
 def get_primary_requirement(requirements: list[DataRequirement]) -> DataRequirement:
@@ -51,7 +49,7 @@ async def _get_bars(strategy) -> tuple[dict[str, list], DataRequirement]:
         Tuple of (bars dict keyed by "symbol:tf", primary requirement)
     """
     from trdr.backtest import align_feeds
-    from trdr.core import load_config, Feed
+    from trdr.core import load_config
     from trdr.data import AlpacaDataClient
 
     config = load_config()
@@ -65,9 +63,10 @@ async def _get_bars(strategy) -> tuple[dict[str, list], DataRequirement]:
     timeframe_override = os.environ.get("BACKTEST_TIMEFRAME")
     if timeframe_override:
         # Replace primary's timeframe
+        timeframe = Timeframe.parse(timeframe_override)
         requirements = [
             (
-                DataRequirement(r.symbol, timeframe_override, r.lookback, r.role)
+                DataRequirement(r.symbol, timeframe, r.lookback, r.role)
                 if r.role == "primary"
                 else r
             )
@@ -125,7 +124,7 @@ def run_sica_benchmark(
         position_pct: Position size as fraction of capital (1.0 = 100%)
     """
     from trdr.backtest import PaperExchange, PaperExchangeConfig
-    from trdr.core import Symbol, Timeframe, Feed
+    from trdr.core import Feed, Symbol, Timeframe
 
     # Env vars can override specific code-driven values
     env_symbol = os.environ.get("BACKTEST_SYMBOL")
@@ -135,15 +134,12 @@ def run_sica_benchmark(
     if tf_override:
         timeframe = Timeframe.parse(tf_override)
 
-    # Resolve Duration to bar count
-    lookback_bars = lookback.to_bars(timeframe, symbol)
-
     # Load strategy
-    Config, Strategy = _reload_strategy(strategy_module, config_class, strategy_class)
+    config_cls, strategy_cls = _reload_strategy(strategy_module, config_class, strategy_class)
 
     # Create strategy instance (needed to get data requirements)
-    config = Config(symbol=symbol, timeframe=timeframe, lookback=lookback)
-    strategy = Strategy(config)
+    config = config_cls(symbol=symbol, timeframe=timeframe, lookback=lookback)
+    strategy = strategy_cls(config)
 
     # Get bars using strategy's data requirements
     bars, primary = asyncio.run(_get_bars(strategy))

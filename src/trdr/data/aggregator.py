@@ -43,15 +43,15 @@ class BarAggregator:
 
         Groups from end to ensure last period is complete.
         """
-        # Start from end to ensure last bar is in a complete period
-        groups = []
-        for i in range(len(bars), 0, -n):
-            start = max(0, i - n)
-            group = bars[start:i]
+        remainder = len(bars) % n
+        if not drop_incomplete and remainder:
+            yield bars[:remainder]
+
+        start = remainder if drop_incomplete else remainder
+        for i in range(start, len(bars), n):
+            group = bars[i : i + n]
             if len(group) == n or not drop_incomplete:
-                groups.append(group)
-        # Reverse to maintain chronological order
-        return reversed(groups)
+                yield group
 
     def _aggregate_group(self, group: list[Bar]) -> Bar:
         """Aggregate a group of bars into a single bar."""

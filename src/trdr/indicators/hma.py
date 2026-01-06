@@ -6,16 +6,7 @@ from ..data import Bar
 from .wma import _wma_values
 
 
-def hma(bars: list[Bar], period: int = 9) -> float:
-    """Calculate Hull Moving Average for trend confirmation.
-
-    Args:
-        bars: List of OHLCV bars
-        period: HMA period
-
-    Returns:
-        Current HMA value
-    """
+def _hma_calculate(bars: list[Bar], period: int = 9) -> float:
     if not bars:
         return 0.0
     if period <= 1:
@@ -42,31 +33,25 @@ class HmaIndicator:
         self.period = period
         self._bars: list[Bar] = []
 
+    @staticmethod
+    def calculate(bars: list[Bar], period: int = 9) -> float:
+        return _hma_calculate(bars, period)
+
     def update(self, bar: Bar) -> float:
         self._bars.append(bar)
-        return hma(self._bars, self.period)
+        return self.calculate(self._bars, self.period)
 
     @property
     def value(self) -> float:
-        return hma(self._bars, self.period) if self._bars else 0.0
+        return self.calculate(self._bars, self.period) if self._bars else 0.0
 
 
-def hma_slope(bars: list[Bar], period: int = 9, lookback: int = 3) -> float:
-    """Calculate HMA slope over lookback period.
-
-    Args:
-        bars: List of OHLCV bars
-        period: HMA period
-        lookback: Number of bars to measure slope
-
-    Returns:
-        HMA slope (positive = uptrend, negative = downtrend)
-    """
+def _hma_slope_calculate(bars: list[Bar], period: int = 9, lookback: int = 3) -> float:
     if len(bars) < period + lookback:
         return 0.0
 
-    hma_current = hma(bars, period)
-    hma_prev = hma(bars[:-lookback], period)
+    hma_current = _hma_calculate(bars, period)
+    hma_prev = _hma_calculate(bars[:-lookback], period)
 
     return hma_current - hma_prev
 
@@ -79,10 +64,14 @@ class HmaSlopeIndicator:
         self.lookback = lookback
         self._bars: list[Bar] = []
 
+    @staticmethod
+    def calculate(bars: list[Bar], period: int = 9, lookback: int = 3) -> float:
+        return _hma_slope_calculate(bars, period, lookback)
+
     def update(self, bar: Bar) -> float:
         self._bars.append(bar)
-        return hma_slope(self._bars, self.period, self.lookback)
+        return self.calculate(self._bars, self.period, self.lookback)
 
     @property
     def value(self) -> float:
-        return hma_slope(self._bars, self.period, self.lookback) if self._bars else 0.0
+        return self.calculate(self._bars, self.period, self.lookback) if self._bars else 0.0

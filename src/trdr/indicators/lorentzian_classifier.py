@@ -3,9 +3,9 @@
 import numpy as np
 
 from ..data import Bar
-from .adx import adx
-from .cci import cci
-from .rsi import rsi
+from .adx import AdxIndicator
+from .cci import CciIndicator
+from .rsi import RsiIndicator
 
 
 def _rsi_series(bars: list[Bar], period: int) -> list[float]:
@@ -121,40 +121,6 @@ def _adx_series(bars: list[Bar], period: int) -> list[float]:
     return adx_values
 
 
-def lorentzian_classifier(
-    bars: list[Bar],
-    neighbors: int = 8,
-    max_bars_back: int = 2000,
-    training_window: int = 4,
-) -> int:
-    """Calculate Lorentzian Distance Classifier for price direction prediction.
-
-    Simplified implementation of the Lorentzian Distance Classifier using
-    K-Nearest Neighbors with Lorentzian distance metric. More robust to
-    outliers than Euclidean distance for financial time series.
-
-    Core concept:
-    - Lorentzian distance: sum(log(1 + |feature_i - historical_feature_i|))
-    - More robust to market event distortions (FOMC, black swans)
-    - K-NN classification using 4-bar forward price movement as labels
-
-    Args:
-        bars: List of OHLCV bars
-        neighbors: Number of nearest neighbors (k in KNN)
-        max_bars_back: Maximum historical lookback
-        training_window: Forward bars to determine direction label
-
-    Returns:
-        Prediction: 1 for long, -1 for short, 0 for neutral
-    """
-    return LorentzianClassifierIndicator.calculate(
-        bars,
-        neighbors=neighbors,
-        max_bars_back=max_bars_back,
-        training_window=training_window,
-    )
-
-
 def _extract_features(bars: list[Bar]) -> np.ndarray:
     """Extract normalized features for Lorentzian classifier.
 
@@ -170,15 +136,15 @@ def _extract_features(bars: list[Bar]) -> np.ndarray:
         return np.array([0.5, 0.5, 0.5])
 
     # Feature 1: RSI (14) normalized to [0, 1]
-    rsi_val = rsi(bars, 14) / 100.0
+    rsi_val = RsiIndicator.calculate(bars, 14) / 100.0
 
     # Feature 2: CCI (20) normalized to [-1, 1] then to [0, 1]
-    cci_val = cci(bars, 20)
+    cci_val = CciIndicator.calculate(bars, 20)
     cci_norm = np.clip(cci_val / 200.0, -1, 1)  # Clip to [-1, 1]
     cci_norm = (cci_norm + 1) / 2.0  # Map to [0, 1]
 
     # Feature 3: ADX (14) normalized to [0, 1]
-    adx_val = adx(bars, 14) / 100.0
+    adx_val = AdxIndicator.calculate(bars, 14) / 100.0
 
     return np.array([rsi_val, cci_norm, adx_val])
 

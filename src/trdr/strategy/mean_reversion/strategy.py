@@ -19,7 +19,8 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from ...data import Bar
-from ...indicators import atr, ema
+from ...indicators.atr import AtrIndicator
+from ...indicators.macd import MacdIndicator
 from ..base_strategy import BaseStrategy, StrategyConfig
 from ..types import DataRequirement, Position, Signal, SignalAction
 
@@ -34,11 +35,11 @@ class MeanReversionConfig(StrategyConfig):
     Tunable parameters for regime detection, entry/exit, and risk management.
     """
 
-    # Regime detection
-    trend_ema_fast: int = 10
-    trend_ema_slow: int = 30
-    trend_slope_threshold: float = 0.025  # 2.5% slope = trending (conservative)
-    regime_lookback: int = 20
+    # MACD parameters
+    macd_fast: int = 12
+    macd_slow: int = 26
+    macd_signal: int = 9
+    use_macd_filter: bool = True  # Require MACD confirmation for entries
 
     # Breakout/momentum settings - ITERATION 1 OPTIMAL (FINAL)
     breakout_period: int = 10  # Proven optimal for AAPL
@@ -80,7 +81,11 @@ class MeanReversionConfig(StrategyConfig):
 
     def __post_init__(self) -> None:
         """Calculate derived values."""
-        self._min_bars = max(self.trend_ema_slow, self.lookback_period, self.atr_period) + 10
+        object.__setattr__(
+            self,
+            "_min_bars",
+            max(self.macd_slow + self.macd_signal, self.lookback_period, self.atr_period) + 10,
+        )
 
 
 class MeanReversionStrategy(BaseStrategy):
@@ -109,12 +114,22 @@ class MeanReversionStrategy(BaseStrategy):
         self._entry_bar_idx: int | None = None
         self._entry_zscore: float = 0.0
         self._current_regime: str = "unknown"
+        self._reset_indicators()
+
+    def _reset_indicators(self) -> None:
+        self._atr_calc = AtrIndicator(self.config.atr_period)
+        self._macd = MacdIndicator(
+            self.config.macd_fast, self.config.macd_slow, self.config.macd_signal
+        )
+        self._current_atr = 0.0
+        self._last_index = 0
 
     def reset(self) -> None:
         """Reset strategy state for new backtest run."""
         self._entry_bar_idx = None
         self._entry_zscore = 0.0
         self._current_regime = "unknown"
+        self._reset_indicators()
 
     def get_data_requirements(self) -> list[DataRequirement]:
         """Declare data feeds for this strategy."""
@@ -153,57 +168,33 @@ class MeanReversionStrategy(BaseStrategy):
                 reason="warmup",
             )
 
-        current_bar = bars[-1]
-        current_price = current_bar.close
-
-        # Calculate ATR for stops
-        current_atr = atr(bars, self.config.atr_period)
+        # Calculate indicators
+        if self._last_index > len(bars):
+            self._reset_indicators()
+        for bar in bars[self._last_index :]:
+            self._current_atr = self._atr_calc.update(bar)
+            self._macd.update(bar)
+        self._last_index = len(bars)
+        current_atr = self._current_atr
 
         # Track bar index for holding period
         bar_idx = len(bars) - 1
 
+        # Get MACD values
+        macd_line, macd_signal, _ = self._macd.value
+
         if position is not None:
             return self._handle_exit_breakout(bars, position, current_atr, bar_idx)
         else:
-            return self._handle_entry_breakout(bars, current_atr, bar_idx)
-
-    def _detect_regime(self, bars: list[Bar]) -> tuple[str, int]:
-        """Detect market regime: trending or ranging.
-
-        Returns:
-            Tuple of (regime: "trending" or "ranging", trend_direction: 1 or -1 or 0)
-        """
-        # Calculate EMAs (ema() expects Bar objects)
-        ema_fast = ema(bars, self.config.trend_ema_fast)
-        ema_slow = ema(bars, self.config.trend_ema_slow)
-
-        # Calculate slope of slow EMA (trend strength)
-        lookback = min(self.config.regime_lookback, len(bars) - 1)
-        if lookback < 5:
-            return "ranging", 0
-
-        ema_slow_start = ema(bars[:-lookback], self.config.trend_ema_slow)
-        slope = (ema_slow - ema_slow_start) / ema_slow_start if ema_slow_start > 0 else 0
-
-        # Determine trend direction
-        if ema_fast > ema_slow:
-            trend_direction = 1  # Uptrend
-        elif ema_fast < ema_slow:
-            trend_direction = -1  # Downtrend
-        else:
-            trend_direction = 0
-
-        # Determine regime based on slope magnitude
-        if abs(slope) > self.config.trend_slope_threshold:
-            return "trending", trend_direction
-        else:
-            return "ranging", trend_direction
+            return self._handle_entry_breakout(bars, current_atr, bar_idx, macd_line, macd_signal)
 
     def _handle_entry_breakout(
         self,
         bars: list[Bar],
         current_atr: float,
         bar_idx: int,
+        macd_line: float,
+        macd_signal: float,
     ) -> Signal:
         """Check breakout entry conditions.
 
@@ -244,6 +235,15 @@ class MeanReversionStrategy(BaseStrategy):
                 reason="low_volume",
             )
 
+        # MACD confirmation (bullish: MACD line > signal line)
+        if self.config.use_macd_filter and macd_line <= macd_signal:
+            return Signal(
+                action=SignalAction.HOLD,
+                price=current_price,
+                confidence=0.0,
+                reason="macd_bearish",
+            )
+
         # Strong breakout with volume - enter
         stop_loss = current_price - (current_atr * self.config.stop_loss_atr_mult)
 
@@ -260,6 +260,10 @@ class MeanReversionStrategy(BaseStrategy):
         breakout_pct = ((current_price - highest_close) / highest_close) * 100
         volume_ratio = current_bar.volume / avg_volume if avg_volume > 0 else 1.0
 
+        reason = f"breakout: +{breakout_pct:.1f}%, vol×{volume_ratio:.1f}"
+        if self.config.use_macd_filter:
+            reason += ", macd+"
+
         return Signal(
             action=SignalAction.BUY,
             price=current_price,
@@ -267,7 +271,7 @@ class MeanReversionStrategy(BaseStrategy):
             take_profit=None,  # Trail only
             position_size_pct=self.config.base_position_pct,
             confidence=0.8,
-            reason=f"breakout: +{breakout_pct:.1f}%, vol×{volume_ratio:.1f}",
+            reason=reason,
         )
 
     def _handle_exit_breakout(

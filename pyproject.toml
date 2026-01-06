@@ -36,3 +36,9 @@ select = ["E", "F", "I", "N", "W"]
 [tool.black]
 line-length = 100
 target-version = ["py312"]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselected by default)",
+]
+addopts = "-m 'not slow'"

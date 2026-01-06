@@ -3,44 +3,46 @@
 from ..data import Bar
 
 
-def hvn_support_strength(bars: list[Bar], val_level: float, lookback: int = 30) -> float:
-    """Detect strength of support at HVN levels using historical touches.
+class HvnSupportStrengthIndicator:
+    """Streaming HVN support strength calculator."""
 
-    Counts how many times price bounced from or consolidated at VAL level,
-    indicating accumulated liquidity and institutional interest.
+    def __init__(self, val_level: float, lookback: int = 30) -> None:
+        self.val_level = val_level
+        self.lookback = max(1, lookback)
+        self._bars: list[Bar] = []
 
-    Args:
-        bars: List of OHLCV bars
-        val_level: VAL price level to analyze
-        lookback: Historical bars to check
+    @staticmethod
+    def calculate(bars: list[Bar], val_level: float, lookback: int = 30) -> float:
+        if len(bars) < lookback:
+            return 0.0
 
-    Returns:
-        Support strength score (0.0 to 1.0)
-    """
-    if len(bars) < lookback:
-        return 0.0
+        recent_bars = bars[-lookback:]
+        touches = 0
+        bounces = 0
 
-    recent_bars = bars[-lookback:]
-    touches = 0
-    bounces = 0
+        for i in range(1, len(recent_bars)):
+            low = recent_bars[i].low
+            high = recent_bars[i].high
 
-    for i in range(1, len(recent_bars)):
-        low = recent_bars[i].low
-        high = recent_bars[i].high
+            if low <= val_level <= high:
+                touches += 1
+                if recent_bars[i].close > val_level:
+                    bounces += 1
 
-        # Bar touched the VAL level
-        if low <= val_level <= high:
-            touches += 1
-            # Bar bounced from VAL (closed above after touching)
-            if recent_bars[i].close > val_level:
-                bounces += 1
+        if touches == 0:
+            return 0.0
 
-    if touches == 0:
-        return 0.0
+        bounce_rate = bounces / touches if touches > 0 else 0
+        touch_frequency = touches / lookback
 
-    # Support strength = historical bounce rate at this level
-    bounce_rate = bounces / touches if touches > 0 else 0
-    # Also factor in frequency of touches (more touches = more tested level)
-    touch_frequency = touches / lookback
+        return float(min(bounce_rate * 0.6 + touch_frequency * 0.4, 1.0))
 
-    return float(min(bounce_rate * 0.6 + touch_frequency * 0.4, 1.0))
+    def update(self, bar: Bar) -> float:
+        self._bars.append(bar)
+        return self.calculate(self._bars, val_level=self.val_level, lookback=self.lookback)
+
+    @property
+    def value(self) -> float:
+        if not self._bars:
+            return 0.0
+        return self.calculate(self._bars, val_level=self.val_level, lookback=self.lookback)

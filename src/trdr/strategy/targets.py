@@ -135,7 +135,8 @@ def score_result(
         end = datetime.fromisoformat(result.end_time.replace("Z", "+00:00"))
         days_span = (end - start).days
         details.append(
-            f"Period: {days_span} days, {result.total_trades} trades ({result.trades_per_year:.0f}/yr)"
+            f"Period: {days_span} days, {result.total_trades} trades "
+            f"({result.trades_per_year:.0f}/yr)"
         )
 
     # Score components
@@ -147,13 +148,16 @@ def score_result(
     trades_score = quadratic(result.trades_per_year, TARGET_TRADES_PER_YEAR, TARGET_TRADES_PER_YEAR)
 
     details.append(
-        f"CAGR: {cagr:.1%} → {cagr_score:.2f} ({WEIGHT_CAGR:.0%}) [target: {TARGET_CAGR:.0%} for 0.50]"
+        f"CAGR: {cagr:.1%} → {cagr_score:.2f} ({WEIGHT_CAGR:.0%}) "
+        f"[target: {TARGET_CAGR:.0%} for 0.50]"
     )
     details.append(
-        f"Calmar: {calmar:.2f} → {calmar_score:.2f} ({WEIGHT_CALMAR:.0%}) [target: {TARGET_CALMAR} for 0.50]"
+        f"Calmar: {calmar:.2f} → {calmar_score:.2f} ({WEIGHT_CALMAR:.0%}) "
+        f"[target: {TARGET_CALMAR} for 0.50]"
     )
     details.append(
-        f"Sortino: {sortino:.2f} → {sortino_score:.2f} ({WEIGHT_SORTINO:.0%}) [target: {TARGET_SORTINO} for 0.50]"
+        f"Sortino: {sortino:.2f} → {sortino_score:.2f} ({WEIGHT_SORTINO:.0%}) "
+        f"[target: {TARGET_SORTINO} for 0.50]"
     )
     details.append(
         f"PF: {pf:.2f} → {pf_score:.2f} ({WEIGHT_PF:.0%}) [target: {TARGET_PF} for 0.50]"
@@ -162,7 +166,8 @@ def score_result(
         f"WR: {wr:.1%} → {wr_score:.2f} ({WEIGHT_WR:.0%}) [target: {TARGET_WR:.0%} for 0.50]"
     )
     details.append(
-        f"Trades: {result.trades_per_year:.0f}/yr → {trades_score:.2f} ({WEIGHT_TRADES:.0%}) [target: {TARGET_TRADES_PER_YEAR}/yr]"
+        f"Trades: {result.trades_per_year:.0f}/yr → {trades_score:.2f} "
+        f"({WEIGHT_TRADES:.0%}) [target: {TARGET_TRADES_PER_YEAR}/yr]"
     )
 
     # Weighted sum

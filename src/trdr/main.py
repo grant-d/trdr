@@ -4,7 +4,7 @@ import asyncio
 import signal
 import sys
 
-from .core import BotConfig, Symbol, Timeframe, load_config
+from .core import BotConfig, Timeframe, load_config
 from .data import AlpacaDataClient
 from .storage import RunArchive
 from .strategy import (

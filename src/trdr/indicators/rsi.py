@@ -5,19 +5,6 @@ from collections import deque
 from ..data import Bar
 
 
-def rsi(bars: list[Bar], period: int = 14) -> float:
-    """Calculate Relative Strength Index.
-
-    Args:
-        bars: List of OHLCV bars
-        period: RSI period
-
-    Returns:
-        RSI value (0-100)
-    """
-    return RsiIndicator.calculate(bars, period)
-
-
 class RsiIndicator:
     """Streaming RSI with rolling average of gains/losses."""
 
@@ -54,7 +41,9 @@ class RsiIndicator:
         else:
             avg_gain = self._sum_gain / self.period
             avg_loss = self._sum_loss / self.period
-            if avg_loss == 0:
+            if avg_gain == 0 and avg_loss == 0:
+                self._value = 50.0
+            elif avg_loss == 0:
                 self._value = 100.0
             else:
                 rs = avg_gain / avg_loss

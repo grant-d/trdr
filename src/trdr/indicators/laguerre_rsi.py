@@ -3,19 +3,6 @@
 from ..data import Bar
 
 
-def laguerre_rsi(bars: list[Bar], alpha: float = 0.2) -> float:
-    """Calculate Laguerre RSI for improved sensitivity.
-
-    Args:
-        bars: List of OHLCV bars
-        alpha: Smoothing factor (0-1, lower = more smoothing)
-
-    Returns:
-        Laguerre RSI value (0-100)
-    """
-    return LaguerreRsiIndicator.calculate(bars, alpha)
-
-
 class LaguerreRsiIndicator:
     """Streaming Laguerre RSI calculator."""
 
@@ -39,10 +26,10 @@ class LaguerreRsiIndicator:
             self._initialized = True
             return self._value
 
-        L0_new = (1 - self.gamma) * close + self.gamma * self._L0
-        L1_new = -self.gamma * L0_new + self._L0 + self.gamma * self._L1
-        L2_new = -self.gamma * L1_new + self._L1 + self.gamma * self._L2
-        L3_new = -self.gamma * L2_new + self._L2 + self.gamma * self._L3
+        L0_new = (1 - self.gamma) * close + self.gamma * self._L0  # noqa: N806
+        L1_new = -self.gamma * L0_new + self._L0 + self.gamma * self._L1  # noqa: N806
+        L2_new = -self.gamma * L1_new + self._L1 + self.gamma * self._L2  # noqa: N806
+        L3_new = -self.gamma * L2_new + self._L2 + self.gamma * self._L3  # noqa: N806
 
         self._L0, self._L1, self._L2, self._L3 = L0_new, L1_new, L2_new, L3_new
 

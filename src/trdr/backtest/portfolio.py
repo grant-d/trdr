@@ -1,9 +1,13 @@
 """Portfolio and position tracking for backtesting."""
 
+from collections import deque
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from .orders import Order, OrderType
+
+if TYPE_CHECKING:
+    from ..core import Symbol
 
 
 @dataclass
@@ -37,7 +41,7 @@ class Position:
 
     symbol: str
     side: Literal["long", "short"]
-    entries: list[PositionEntry] = field(default_factory=list)
+    entries: deque[PositionEntry] = field(default_factory=deque)
 
     @property
     def total_quantity(self) -> float:
@@ -105,7 +109,7 @@ class Position:
                 removed_cost += entry.price * entry.quantity
                 removed_qty += entry.quantity
                 remaining -= entry.quantity
-                self.entries.pop(0)
+                self.entries.popleft()
             else:
                 # Partial removal
                 removed_cost += entry.price * remaining

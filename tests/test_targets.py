@@ -9,8 +9,6 @@ Tests cover:
 
 from dataclasses import dataclass
 
-import pytest
-
 from trdr.strategy.targets import asymptotic, quadratic, score_result
 
 

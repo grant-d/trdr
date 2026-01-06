@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from trdr.backtest import PaperExchange, PaperExchangeConfig, PaperExchangeResult
-from trdr.core import Duration, Symbol, Timeframe, load_config, Feed
+from trdr.core import Duration, Feed, Symbol, Timeframe, load_config
 from trdr.data import AlpacaDataClient
 from trdr.strategy import get_backtest_env
 from trdr.strategy.mean_reversion import MeanReversionConfig, MeanReversionStrategy
@@ -110,6 +110,7 @@ def backtest_result(bars, backtest_config, strategy) -> PaperExchangeResult:
     return result
 
 
+@pytest.mark.slow
 class TestAlgoPerformance:
     """Sanity checks for Mean Reversion strategy."""
 
@@ -143,6 +144,7 @@ class TestAlgoPerformance:
         assert 0.0 <= max_dd <= 1.0, f"Max drawdown {max_dd:.1%} out of range"
 
 
+@pytest.mark.slow
 class TestAlgoRobustness:
     """Basic robustness checks."""
 

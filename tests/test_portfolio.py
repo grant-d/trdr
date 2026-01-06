@@ -1,7 +1,5 @@
 """Tests for portfolio and position tracking."""
 
-import pytest
-
 from trdr.backtest.portfolio import Portfolio, Position, PositionEntry
 
 

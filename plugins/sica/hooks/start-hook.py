@@ -44,7 +44,12 @@ def main() -> None:
     permission_mode = hook_input.get("permission_mode", "")
     cwd = hook_input.get("cwd", "")
     transcript_path = hook_input.get("transcript_path", "")
-    dbg(f"hook event: {hook_event_name}, source: {source}, session_id: {session_id}, permission_mode: {permission_mode}, cwd: {cwd}, transcript_path: {transcript_path}")
+    dbg(
+        "hook event: "
+        f"{hook_event_name}, source: {source}, session_id: {session_id}, "
+        f"permission_mode: {permission_mode}, cwd: {cwd}, "
+        f"transcript_path: {transcript_path}"
+    )
 
     # Also constrained via "matcher" in hooks.json. Only act on `compact`
     if hook_event_name != "SessionStart" or source != "compact":
@@ -91,7 +96,9 @@ def main() -> None:
         parts.append("")
 
     parts.append(f"Config: {config_name}")
-    parts.append(f"Iter {state.iteration}/{effective_max} | Score {score_str}/{config.target_score}")
+    parts.append(
+        f"Iter {state.iteration}/{effective_max} | " f"Score {score_str}/{config.target_score}"
+    )
     # if state.recent_scores:
     #     scores_str = "→".join(f"{s:.2f}" for s in state.recent_scores)
     #     parts.append(f"Score history: {scores_str}")
@@ -106,7 +113,9 @@ def main() -> None:
     parts.append("- ONE fix per iteration, then EXIT")
     parts.append("- NEVER run benchmark yourself. Hook does it.")
     parts.append("- NO test file changes. Only modify source code.")
-    parts.append(f"- MUST update {iterations_dir}/<current>/journal.md (BEFORE: plan, AFTER: results)")
+    parts.append(
+        f"- MUST update {iterations_dir}/<current>/journal.md " "(BEFORE: plan, AFTER: results)"
+    )
     parts.append(f"- Done: <promise>{config.completion_promise}</promise>")
 
     additional_context = "\n".join(parts)
@@ -114,12 +123,16 @@ def main() -> None:
     # Output JSON for Claude Code
     # https://code.claude.com/docs/en/hooks#sessionstart-decision-control
     # https://code.claude.com/docs/en/hooks#common-json-fields
-    print(json.dumps({
-        "hookSpecificOutput": {
-            "hookEventName": "SessionStart",
-            "additionalContext": additional_context,
-        }
-    }))
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "SessionStart",
+                    "additionalContext": additional_context,
+                }
+            }
+        )
+    )
 
 
 if __name__ == "__main__":

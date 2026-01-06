@@ -12,7 +12,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from ..core import load_config
+from ..core import Symbol, load_config
 from ..data import AlpacaDataClient
 from ..strategy.macd_template.strategy import MACDConfig, MACDStrategy
 from .paper_exchange import PaperExchange, PaperExchangeConfig

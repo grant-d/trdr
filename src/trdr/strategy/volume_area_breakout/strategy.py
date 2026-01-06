@@ -15,18 +15,16 @@ import numpy as np
 from ...core import Timeframe
 from ...data import Bar
 from ...indicators import (
-    atr,
-    bollinger_bands,
-    hma,
-    hma_slope,
-    hvn_support_strength,
-    mss,
-    multi_timeframe_poc,
-    order_flow_imbalance,
-    rsi,
-    volatility_regime,
-    volume_profile,
-    volume_trend,
+    AtrIndicator,
+    BollingerBandsIndicator,
+    HmaIndicator,
+    HvnSupportStrengthIndicator,
+    MssIndicator,
+    MultiTimeframePocIndicator,
+    OrderFlowImbalanceIndicator,
+    RsiIndicator,
+    VolumeProfileIndicator,
+    VolumeTrendIndicator,
 )
 from ..base_strategy import BaseStrategy, StrategyConfig
 from ..types import DataRequirement, Position, Signal, SignalAction
@@ -70,6 +68,34 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         """
         super().__init__(config, name="VolumeAreaBreakout")  # Custom name for display
         self.config: VolumeAreaBreakoutConfig = config
+        self._reset_indicators()
+
+    def _reset_indicators(self) -> None:
+        self._profile_calc = VolumeProfileIndicator()
+        self._atr_calc = AtrIndicator()
+        self._mss_calc = MssIndicator()
+        self._rsi_calc = RsiIndicator(period=14)
+        self._bb_calc = BollingerBandsIndicator(period=20)
+        self._vol_trend_calc = VolumeTrendIndicator()
+        self._ofi_calc = OrderFlowImbalanceIndicator(lookback=5)
+        self._hvn_strength_calc = HvnSupportStrengthIndicator(val_level=0.0, lookback=30)
+        self._poc_calc = MultiTimeframePocIndicator()
+        self._hma_calc = HmaIndicator(period=9)
+        self._profile = None
+        self._atr_val = 0.0
+        self._mss_val = 0.0
+        self._rsi_val = 0.0
+        self._bb_upper = 0.0
+        self._bb_middle = 0.0
+        self._bb_lower = 0.0
+        self._vol_trend = ""
+        self._ofi = 0.0
+        self._hvn_strength = 0.0
+        self._poc_tf1 = 0.0
+        self._poc_tf2 = 0.0
+        self._poc_tf3 = 0.0
+        self._hma_val = 0.0
+        self._last_index = 0
 
     def get_data_requirements(self) -> list[DataRequirement]:
         """Declare data feeds for this strategy."""
@@ -81,6 +107,10 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
                 role="primary",
             ),
         ]
+
+    def reset(self) -> None:
+        """Reset strategy state for new run."""
+        self._reset_indicators()
 
     def generate_signal(
         self,
@@ -109,6 +139,23 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
                 reason="Insufficient data for analysis",
             )
 
+        if self._last_index > len(bars):
+            self._reset_indicators()
+        for bar in bars[self._last_index :]:
+            self._profile = self._profile_calc.update(bar)
+            self._atr_val = self._atr_calc.update(bar)
+            self._mss_val = self._mss_calc.update(bar)
+            self._rsi_val = self._rsi_calc.update(bar)
+            self._bb_upper, self._bb_middle, self._bb_lower = self._bb_calc.update(bar)
+            self._vol_trend = self._vol_trend_calc.update(bar)
+            self._ofi = self._ofi_calc.update(bar)
+            self._poc_tf1, self._poc_tf2, self._poc_tf3 = self._poc_calc.update(bar)
+            self._hma_val = self._hma_calc.update(bar)
+            if self._profile is not None:
+                self._hvn_strength_calc.val_level = self._profile.val
+            self._hvn_strength = self._hvn_strength_calc.update(bar)
+        self._last_index = len(bars)
+
         # ITER 82: Fresh approach - LVN Breakout from research doc
         # Research Strategy 2: LVN areas = low liquidity → rapid price movement
         # Entry: Volume surge (>150% avg) + direction aligned with higher TF
@@ -120,8 +167,8 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
 
             current_bar = bars[-1]
             current_price = current_bar.close
-            profile = volume_profile(bars)
-            atr_val = atr(bars)
+            profile = self._profile
+            atr_val = self._atr_val
 
             recent_volumes = [b.volume for b in bars[-20:]]
             avg_volume = np.mean(recent_volumes) if recent_volumes else 1
@@ -203,7 +250,10 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
                     action=SignalAction.BUY,
                     price=current_price,
                     confidence=0.70,
-                    reason=f"POC mean reversion: oversold {(profile.val-current_price)/atr_val:.1f} ATR",
+                    reason=(
+                        "POC mean reversion: oversold "
+                        f"{(profile.val - current_price) / atr_val:.1f} ATR"
+                    ),
                     stop_loss=stop_loss,
                     take_profit=take_profit,
                 )
@@ -217,12 +267,10 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             )
 
         # Calculate indicators (using original bars for robustness)
-        profile = volume_profile(bars)
-        atr_val = atr(bars)
-        mss_val = mss(bars)
-        vol_regime = volatility_regime(bars)
-        rsi_val = rsi(bars, period=14)
-        bb_upper, bb_middle, bb_lower = bollinger_bands(bars, period=20)
+        profile = self._profile
+        atr_val = self._atr_val
+        mss_val = self._mss_val
+        rsi_val = self._rsi_val
 
         current_bar = bars[-1]
         current_price = current_bar.close
@@ -295,28 +343,18 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         recent_volumes = [b.volume for b in bars[-20:]]
         avg_recent_volume = np.mean(recent_volumes) if recent_volumes else 1
         volume_ratio = current_bar.volume / avg_recent_volume if avg_recent_volume > 0 else 0
-        vol_trend = volume_trend(bars)
+        vol_trend = self._vol_trend
 
         # Calculate order flow imbalance (buying vs selling pressure)
-        ofi = order_flow_imbalance(bars, lookback=5)
+        ofi = self._ofi
 
         # Calculate historical support strength at VAL level
-        hvn_strength = hvn_support_strength(bars, profile.val, lookback=30)
+        hvn_strength = self._hvn_strength
 
         # Calculate multi-timeframe PoC confluence
-        poc_tf1, poc_tf2, poc_tf3 = multi_timeframe_poc(bars)
-        # Multi-TF confluence: higher TF POCs cluster together = stronger support
-        poc_cluster_width = abs(poc_tf2 - poc_tf3)
-        poc_clustered = poc_cluster_width < (
-            atr_val * 0.5
-        )  # POCs within 0.5 ATR = strong confluence
-
         # HMA trend filter - price must be above HMA (uptrend)
-        hma_val = hma(bars, period=9)
+        hma_val = self._hma_val
         hma_bullish = current_price > hma_val and hma_val > 0
-        # For daily: require HMA slope positive (1-bar lookback for more signals)
-        hma_slope_val = hma_slope(bars, period=9, lookback=1)
-        hma_trending_up = hma_slope_val > 0
 
         # Path 1: VAH Breakout (thresholds vary by timeframe)
         above_vah = current_price > profile.vah
@@ -332,12 +370,10 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             vah_breakout = above_vah and above_vah_prev
         elif is_4h:
             volume_ok = volume_ratio >= 1.0
-            regime_bullish_plus = True
             hma_filter = hma_bullish
             vah_breakout = above_vah and above_vah_prev and volume_ok and hma_filter
         else:
             volume_ok = volume_ratio >= 1.0
-            regime_bullish_plus = mss_val > 5
             hma_filter = hma_bullish
             vah_breakout = above_vah and above_vah_prev and volume_ok and hma_filter
 
@@ -413,14 +449,6 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
             else:
                 take_profit = profile.vah + atr_val * 3.0
                 stop_loss = profile.vah - atr_val * 0.3
-            # Set signal_type for non-daily (daily already set above)
-            if not is_daily:
-                if vah_breakout:
-                    signal_type = "VAH_breakout"
-                elif poc_breakout:
-                    signal_type = "POC_breakout"
-                else:
-                    signal_type = "VAH_pullback"
             if is_15m:
                 confidence_base = 0.55  # Higher base for 15m breakouts
             else:
@@ -428,7 +456,6 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
         else:  # val_bounce
             # VAL bounce: mean reversion to POC (research: 55-65% win rate)
             # Take profit at POC (defined by volume, not arbitrary)
-            signal_type = "VAL_bounce"
 
             if is_daily:
                 # Daily: tighter stop to reduce DD below 25% threshold

@@ -7,19 +7,6 @@ import numpy as np
 from ..data import Bar
 
 
-def adx(bars: list[Bar], period: int = 14) -> float:
-    """Calculate Average Directional Index.
-
-    Args:
-        bars: List of OHLCV bars
-        period: ADX period
-
-    Returns:
-        ADX value (0-100)
-    """
-    return AdxIndicator.calculate(bars, period)
-
-
 class AdxIndicator:
     """Streaming ADX using Wilder smoothing."""
 

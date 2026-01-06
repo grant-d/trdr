@@ -1,8 +1,7 @@
 """Tests for TradeMetrics and RuntimeContext."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from trdr.core import Duration, Symbol, Timeframe, Feed
 from trdr.backtest.metrics import TradeMetrics
 from trdr.backtest.orders import OrderManager
 from trdr.backtest.paper_exchange import (
@@ -12,6 +11,7 @@ from trdr.backtest.paper_exchange import (
     Trade,
 )
 from trdr.backtest.portfolio import Portfolio
+from trdr.core import Duration, Feed, Symbol, Timeframe
 from trdr.data import Bar
 from trdr.strategy.base_strategy import BaseStrategy, StrategyConfig
 from trdr.strategy.types import DataRequirement, Position, Signal, SignalAction

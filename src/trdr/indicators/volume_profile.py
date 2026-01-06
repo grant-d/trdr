@@ -21,31 +21,26 @@ class VolumeProfile:
     total_volume: float
 
 
-def volume_profile(
+def _volume_profile_calculate(
     bars: list[Bar],
     num_levels: int = 40,
     value_area_pct: float = 0.70,
 ) -> VolumeProfile:
-    """Calculate Volume Profile from OHLCV bars.
-
-    Args:
-        bars: List of OHLCV bars
-        num_levels: Number of price buckets
-        value_area_pct: Percentage for Value Area (default 70%)
-
-    Returns:
-        VolumeProfile with PoC, VA, HVNs, LVNs
-    """
     if not bars:
         raise ValueError("No bars provided for volume profile calculation")
     if num_levels <= 0:
         raise ValueError("num_levels must be positive for volume profile calculation")
 
-    # Find price range
-    all_highs = [b.high for b in bars]
-    all_lows = [b.low for b in bars]
-    price_min = min(all_lows)
-    price_max = max(all_highs)
+    # Find price range and total volume in a single pass.
+    price_min = bars[0].low
+    price_max = bars[0].high
+    total_bar_volume = 0.0
+    for bar in bars:
+        if bar.low < price_min:
+            price_min = bar.low
+        if bar.high > price_max:
+            price_max = bar.high
+        total_bar_volume += bar.volume
 
     if price_max == price_min:
         # Flat market - return minimal profile
@@ -56,8 +51,8 @@ def volume_profile(
             hvns=[price_min],
             lvns=[],
             price_levels=[price_min],
-            volumes=[sum(b.volume for b in bars)],
-            total_volume=sum(b.volume for b in bars),
+            volumes=[total_bar_volume],
+            total_volume=total_bar_volume,
         )
 
     bucket_size = (price_max - price_min) / num_levels
@@ -135,3 +130,32 @@ def volume_profile(
         volumes=volumes,
         total_volume=total_volume,
     )
+
+
+class VolumeProfileIndicator:
+    """Streaming Volume Profile calculator."""
+
+    def __init__(self, num_levels: int = 40, value_area_pct: float = 0.70) -> None:
+        self.num_levels = num_levels
+        self.value_area_pct = value_area_pct
+        self._bars: list[Bar] = []
+
+    @staticmethod
+    def calculate(
+        bars: list[Bar], num_levels: int = 40, value_area_pct: float = 0.70
+    ) -> VolumeProfile:
+        return _volume_profile_calculate(bars, num_levels=num_levels, value_area_pct=value_area_pct)
+
+    def update(self, bar: Bar) -> VolumeProfile:
+        self._bars.append(bar)
+        return _volume_profile_calculate(
+            self._bars, num_levels=self.num_levels, value_area_pct=self.value_area_pct
+        )
+
+    @property
+    def value(self) -> VolumeProfile | None:
+        if not self._bars:
+            return None
+        return _volume_profile_calculate(
+            self._bars, num_levels=self.num_levels, value_area_pct=self.value_area_pct
+        )
