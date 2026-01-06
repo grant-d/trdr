@@ -4,6 +4,7 @@ Integrates NSGA-II/III with strategy backtesting for Pareto-optimal parameter se
 """
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import TYPE_CHECKING, Callable
 
 import numpy as np
@@ -80,6 +81,8 @@ class MooResult:
     objective_names: list[str]
     n_generations: int
     n_evaluations: int
+    period_days: float | None = None
+    buyhold_return: float | None = None
 
     @property
     def n_solutions(self) -> int:
@@ -143,6 +146,7 @@ class StrategyOptimizationProblem(ElementwiseProblem):
         self.exchange_config = exchange_config
         self.moo_config = moo_config
         self.param_names = [p.name for p in moo_config.param_bounds]
+        self._error_count = 0
 
         # Calculate buy-hold return for alpha
         self.buyhold_return = self._calculate_buyhold_return()
@@ -164,8 +168,9 @@ class StrategyOptimizationProblem(ElementwiseProblem):
 
     def _calculate_buyhold_return(self) -> float:
         """Calculate buy-and-hold return from bars."""
-        # Get first bar list (primary feed)
-        primary_bars = next(iter(self.bars.values()))
+        # Get primary feed if present; fall back to first bar list
+        primary_key = str(self.exchange_config.primary_feed)
+        primary_bars = self.bars.get(primary_key) or next(iter(self.bars.values()))
         if len(primary_bars) < 2:
             return 0.0
         return (primary_bars[-1].close / primary_bars[0].close) - 1
@@ -197,7 +202,10 @@ class StrategyOptimizationProblem(ElementwiseProblem):
             if self.moo_config.min_trades > 0:
                 out["G"] = [self.moo_config.min_trades - objectives.total_trades]
 
-        except Exception:
+        except Exception as exc:
+            self._error_count += 1
+            if self._error_count <= 3:
+                print(f"MOO backtest failed for params {params}: {exc}")
             # Failed backtest: return worst-case objectives
             out["F"] = [1e6] * len(self.moo_config.objectives)
             if self.moo_config.min_trades > 0:
@@ -258,6 +266,14 @@ def run_moo(
         verbose=verbose,
     )
 
+    primary_key = str(exchange_config.primary_feed)
+    primary_bars = bars.get(primary_key) or next(iter(bars.values()))
+    period_days = 0.0
+    if len(primary_bars) >= 2:
+        start = datetime.fromisoformat(primary_bars[0].timestamp.replace("Z", "+00:00"))
+        end = datetime.fromisoformat(primary_bars[-1].timestamp.replace("Z", "+00:00"))
+        period_days = max(0.0, (end - start).total_seconds() / 86400.0)
+
     return MooResult(
         pareto_params=res.X if res.X is not None else np.array([]),
         pareto_objectives=res.F if res.F is not None else np.array([]),
@@ -266,4 +282,6 @@ def run_moo(
         objective_names=moo_config.objectives,
         n_generations=res.algorithm.n_gen if res.algorithm else 0,
         n_evaluations=res.algorithm.evaluator.n_eval if res.algorithm else 0,
+        period_days=period_days,
+        buyhold_return=problem.buyhold_return,
     )

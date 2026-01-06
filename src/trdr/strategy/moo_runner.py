@@ -172,7 +172,7 @@ def run_moo_benchmark(
 
         wf_config = WalkForwardConfig(n_folds=n_folds, train_pct=0.7)
         wf_result = run_walk_forward_moo(
-            bars=bars[primary.key],
+            bars=bars,
             strategy_factory=create_strategy,
             exchange_config=exchange_config,
             moo_config=moo_config,

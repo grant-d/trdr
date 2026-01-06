@@ -110,13 +110,18 @@ def calculate_objectives(
     if cagr == float("inf"):
         cagr = 10.0  # Cap at 1000%
 
-    # Alpha: strategy return / buy-hold return
+    # Alpha: strategy return / buy-hold return (or excess return in down markets)
     alpha = None
-    if buyhold_return is not None and buyhold_return > 0:
+    if buyhold_return is not None:
         strategy_return = result.total_return
-        alpha = strategy_return / buyhold_return if strategy_return else 0.0
+        if buyhold_return > 0:
+            alpha = strategy_return / buyhold_return if strategy_return else 0.0
+        else:
+            alpha = strategy_return - buyhold_return
         if alpha == float("inf"):
             alpha = 10.0  # Cap
+        elif alpha == float("-inf"):
+            alpha = -10.0  # Cap
 
     return ObjectiveResult(
         sharpe=sharpe,

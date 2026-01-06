@@ -223,3 +223,89 @@ def score_result(
     details.append(f"Score: {weighted_score:.3f} × {penalty_str} = {composite:.3f}")
 
     return composite, details
+
+
+def score_from_objectives(
+    objectives: dict[str, float],
+    period_days: float | None = None,
+    buyhold_return: float | None = None,
+) -> tuple[float, list[str]]:
+    """Compute composite score from objective metrics.
+
+    Args:
+        objectives: Objective dict from MooResult.get_objectives_dict()
+        period_days: Total backtest span in days
+        buyhold_return: Buy-hold return for alpha penalty (optional)
+
+    Returns:
+        Tuple of (score 0-1, list of metric descriptions)
+    """
+    details = []
+
+    cagr = objectives.get("cagr") or 0.0
+    calmar = objectives.get("calmar") or 0.0
+    sortino = objectives.get("sortino") or 0.0
+    pf = objectives.get("profit_factor") or 0.0
+    wr = objectives.get("win_rate") or 0.0
+    dd = objectives.get("max_drawdown") or 0.0
+    total_trades = int(objectives.get("total_trades") or 0)
+    alpha = objectives.get("alpha")
+
+    if sortino == float("inf"):
+        sortino = 0.0
+    if pf == float("inf"):
+        pf = 10.0
+
+    wr = max(0, min(1, wr))
+    dd = max(0, min(1, dd))
+
+    years = (period_days or 0.0) / 365.0
+    trades_per_year = total_trades / years if years > 0 else 0.0
+
+    if period_days:
+        details.append(
+            f"Period: {int(period_days)} days, {total_trades} trades "
+            f"({trades_per_year:.0f}/yr)"
+        )
+
+    cagr_score = asymptotic(max(0, cagr), TARGET_CAGR)
+    calmar_score = asymptotic(calmar, TARGET_CALMAR)
+    sortino_score = asymptotic(sortino, TARGET_SORTINO)
+    pf_score = asymptotic(pf, TARGET_PF)
+    wr_score = asymptotic(wr, TARGET_WR)
+    trades_score = quadratic(trades_per_year, TARGET_TRADES_PER_YEAR, TARGET_TRADES_PER_YEAR)
+
+    weighted_score = (
+        WEIGHT_CAGR * cagr_score
+        + WEIGHT_CALMAR * calmar_score
+        + WEIGHT_SORTINO * sortino_score
+        + WEIGHT_PF * pf_score
+        + WEIGHT_WR * wr_score
+        + WEIGHT_TRADES * trades_score
+    )
+
+    dd_penalty = (
+        1.0
+        if dd <= DD_PENALTY_THRESHOLD
+        else math.exp(-DD_DECAY_RATE * (dd - DD_PENALTY_THRESHOLD))
+    )
+
+    alpha_penalty = 1.0
+    if buyhold_return is not None and buyhold_return != 0 and alpha is not None:
+        if buyhold_return > 0:
+            if alpha < 1.0:
+                floor = (
+                    ALPHA_FLOOR_MEGATREND
+                    if buyhold_return > ALPHA_MEGATREND_THRESHOLD
+                    else ALPHA_FLOOR_NORMAL
+                )
+                if alpha > 0:
+                    alpha_penalty = max(
+                        floor,
+                        math.sqrt(alpha) if buyhold_return > ALPHA_MEGATREND_THRESHOLD else alpha,
+                    )
+                else:
+                    alpha_penalty = floor
+
+    composite = weighted_score * dd_penalty * alpha_penalty
+    return composite, details

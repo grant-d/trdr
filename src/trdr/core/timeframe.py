@@ -29,6 +29,10 @@ class Timeframe:
             return self.amount * 30 * 86400
         return 0
 
+    def to_minutes(self) -> int:
+        """Duration in minutes."""
+        return self.seconds // 60
+
     @property
     def canonical(self) -> "Timeframe":
         """Return canonical form (60m→1h, 24h→1d, etc.)."""

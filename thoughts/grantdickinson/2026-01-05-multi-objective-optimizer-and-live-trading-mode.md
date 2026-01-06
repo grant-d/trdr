@@ -536,37 +536,62 @@ class LiveContextBuilder:
 
 ## Acceptance Criteria
 
-### Multi-Objective Optimizer
+### Multi-Objective Optimizer ✅ COMPLETE
 
-- [ ] Define 4+ objective functions: Sharpe, max drawdown, win rate, profit factor
-- [ ] Integrate pymoo NSGA-II for 2-3 objectives
-- [ ] Integrate pymoo NSGA-III for 4+ objectives
-- [ ] Run MOO on each walk-forward training fold
-- [ ] Validate Pareto solutions on test folds
-- [ ] CLI interface for Pareto frontier selection
-- [ ] Persist selected parameters to config file
-- [ ] Support constraint handling (e.g., min trades, max drawdown cap)
+- [x] Define 4+ objective functions: Sharpe, max drawdown, win rate, profit factor
+  - Implemented in `src/trdr/optimize/objectives.py`: sharpe, max_drawdown, win_rate, profit_factor, sortino, calmar, cagr, alpha, total_trades
+- [x] Integrate pymoo NSGA-II for 2-3 objectives
+  - Implemented in `src/trdr/optimize/multi_objective.py`
+- [x] Integrate pymoo NSGA-III for 4+ objectives
+  - Auto-selects based on n_obj in `run_moo()`
+- [x] Run MOO on each walk-forward training fold
+  - Implemented in `src/trdr/optimize/walk_forward_moo.py`
+- [x] Validate Pareto solutions on test folds
+  - `validate_oos` parameter in `run_walk_forward_moo()`
+- [x] CLI interface for Pareto frontier selection
+  - Implemented in `src/trdr/optimize/pareto.py`: `display_pareto_front()`, `select_from_pareto()`
+- [x] Persist selected parameters to config file
+  - `_dump_params_to_file()` writes to `pareto_params.txt`
+- [x] Support constraint handling (e.g., min trades, max drawdown cap)
+  - `min_trades` constraint in `MooConfig`, inequality constraint in `StrategyOptimizationProblem`
 
-### Live Trading Mode
+### Live Trading Mode ✅ COMPLETE
 
-- [ ] `ExchangeInterface` ABC matching `PaperExchange` capabilities
-- [ ] Alpaca exchange implementation with paper/live mode toggle
-- [ ] Environment-based credential management (PAPER/LIVE keys)
-- [ ] Poll-based execution harness with configurable interval
-- [ ] Order submission with retry and exponential backoff
-- [ ] Fill tracking via WebSocket stream
-- [ ] State reconciliation on startup
-- [ ] RuntimeContext builder from live exchange state
-- [ ] Circuit breaker with configurable risk limits
-- [ ] Graceful shutdown preserving open positions
-- [ ] Audit logging of all orders and fills
+- [x] `ExchangeInterface` ABC matching `PaperExchange` capabilities
+  - Implemented in `src/trdr/live/exchange/base.py` with Hydra-prefixed types
+- [x] Alpaca exchange implementation with paper/live mode toggle
+  - Implemented in `src/trdr/live/exchange/alpaca.py`
+- [x] Environment-based credential management (PAPER/LIVE keys)
+  - Implemented in `src/trdr/live/config.py` with `LiveConfig.from_env()`
+- [x] Poll-based execution harness with configurable interval
+  - Implemented in `src/trdr/live/harness.py` as `LiveHarness`
+- [x] Order submission with retry and exponential backoff
+  - Implemented in `src/trdr/live/orders/retry.py` with `RetryPolicy`
+  - OrderManager uses retry logic in `src/trdr/live/orders/manager.py`
+- [x] Fill tracking via WebSocket stream
+  - Implemented in `AlpacaExchange._handle_trade_update()` and fill callbacks
+- [x] State reconciliation on startup
+  - Implemented in `src/trdr/live/state/reconciler.py` as `StateReconciler`
+- [x] RuntimeContext builder from live exchange state
+  - Implemented in `src/trdr/live/state/context.py` as `LiveContextBuilder`
+- [x] Circuit breaker with configurable risk limits
+  - Implemented in `src/trdr/live/safety/circuit_breaker.py`
+  - Supports max drawdown, daily loss, consecutive losses, position size, rate limits
+- [x] Graceful shutdown preserving open positions
+  - Implemented in `LiveHarness.stop()` with proper cleanup
+- [x] Audit logging of all orders and fills
+  - Implemented in `OrderManager._audit_log()` with file and logger output
 
-### Integration
+### Integration ✅ COMPLETE
 
-- [ ] Same `BaseStrategy` interface works for backtest and live
-- [ ] Signal contract unchanged
-- [ ] OCO/bracket orders mapped correctly to Alpaca
-- [ ] Existing `PaperExchange` can be adapted to `ExchangeInterface`
+- [x] Same `BaseStrategy` interface works for backtest and live
+  - `LiveHarness` accepts any `BaseStrategy` implementation
+- [x] Signal contract unchanged
+  - Uses existing `Signal` type from strategy module
+- [x] OCO/bracket orders mapped correctly to Alpaca
+  - Implemented in `AlpacaExchange.submit_order()` with bracket order support
+- [x] Existing `PaperExchange` can be adapted to `ExchangeInterface`
+  - Types are compatible via `LiveRuntimeContext` adapter
 
 ## Dependencies & Prerequisites
 

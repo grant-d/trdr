@@ -5,6 +5,8 @@ Provides CLI tools for viewing and selecting from Pareto-optimal solutions.
 
 from typing import TYPE_CHECKING
 
+from trdr.strategy.targets import score_from_objectives
+
 if TYPE_CHECKING:
     from .multi_objective import MooResult
 
@@ -82,30 +84,11 @@ def _compute_scores(result: "MooResult") -> list[float]:
     scores = []
     for i in range(result.n_solutions):
         obj_dict = result.get_objectives_dict(i)
-        score = 0.0
-
-        # Weights for each objective (positive = maximize, negative = minimize)
-        weights = {
-            "cagr": 2.0,
-            "calmar": 1.5,
-            "sortino": 1.0,
-            "profit_factor": 1.0,
-            "win_rate": 0.5,
-            "total_trades": 0.1,
-            "max_drawdown": -2.0,
-            "alpha": 1.5,
-            "sharpe": 1.0,
-        }
-
-        for obj_name, val in obj_dict.items():
-            weight = weights.get(obj_name, 0.0)
-            # Normalize: percentages to decimals, cap extreme values
-            if obj_name in ("max_drawdown", "win_rate", "cagr"):
-                val = val  # Already decimal
-            elif obj_name == "total_trades":
-                val = val / 100.0  # Normalize
-            score += weight * val
-
+        score, _ = score_from_objectives(
+            obj_dict,
+            period_days=result.period_days,
+            buyhold_return=result.buyhold_return,
+        )
         scores.append(score)
 
     return scores

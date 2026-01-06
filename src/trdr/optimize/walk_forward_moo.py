@@ -138,7 +138,7 @@ class WalkForwardMooResult:
 
 
 def run_walk_forward_moo(
-    bars: list["Bar"],
+    bars: dict[str, list["Bar"]],
     strategy_factory: Callable[[dict], "BaseStrategy"],
     exchange_config: "PaperExchangeConfig",
     moo_config: MooConfig,
@@ -153,7 +153,7 @@ def run_walk_forward_moo(
     2. Optionally validate Pareto solutions on test data
 
     Args:
-        bars: Bar data (single list for primary feed)
+        bars: Bar data keyed by "symbol:timeframe" (aligned to primary feed)
         strategy_factory: Callable that creates strategy from param dict
         exchange_config: Paper exchange configuration
         moo_config: MOO configuration
@@ -169,9 +169,14 @@ def run_walk_forward_moo(
     if wf_config is None:
         wf_config = WalkForwardConfig()
 
+    primary_key = str(exchange_config.primary_feed)
+    primary_bars = bars.get(primary_key)
+    if primary_bars is None:
+        raise ValueError(f"Primary feed '{primary_key}' missing from bars")
+
     # Generate folds
     folds = generate_folds(
-        total_bars=len(bars),
+        total_bars=len(primary_bars),
         wf_config=wf_config,
         warmup_bars=exchange_config.warmup_bars,
     )
@@ -192,17 +197,11 @@ def run_walk_forward_moo(
             print(f"Train: {fold.train_size} bars, Test: {fold.test_size} bars")
             print("=" * 50)
 
-        # Extract training bars
-        train_bars = bars[fold.train_start : fold.train_end]
-
-        # Get primary feed key from strategy
-        temp_strategy = strategy_factory({p.name: p.lower for p in moo_config.param_bounds})
-        requirements = temp_strategy.get_data_requirements()
-        primary = next(r for r in requirements if r.role == "primary")
-        primary_key = primary.key
-
-        # Wrap in dict for run_moo
-        train_bars_dict = {primary_key: train_bars}
+        # Extract training bars for all feeds
+        train_bars_dict = {
+            key: feed_bars[fold.train_start : fold.train_end]
+            for key, feed_bars in bars.items()
+        }
 
         # Run MOO on training data
         moo_result = run_moo(
@@ -219,8 +218,10 @@ def run_walk_forward_moo(
         # Validate on test data
         test_results = []
         if validate_oos and moo_result.n_solutions > 0:
-            test_bars = bars[fold.test_start : fold.test_end]
-            test_bars_dict = {primary_key: test_bars}
+            test_bars_dict = {
+                key: feed_bars[fold.test_start : fold.test_end]
+                for key, feed_bars in bars.items()
+            }
 
             for i in range(moo_result.n_solutions):
                 params = moo_result.get_params_dict(i)
