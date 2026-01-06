@@ -1,0 +1,22 @@
+{
+  "benchmark_cmd": "python src/trdr/strategy/ensemble/sica_bench.py",
+  "max_iterations": 30,
+  "target_score": 0.95,
+  "benchmark_timeout": 300,
+  "completion_promise": "TESTS PASSING",
+  "prompt": "Optimize {symbol} strategy",
+  "refs": {
+    "files": [
+      "src/trdr/backtest/STRATEGY_API.md",
+      "src/trdr/indicators/INDICATORS.md"
+    ],
+    "urls": []
+  },
+  "params": {},
+  "archive": {
+    "files": [
+      "src/trdr/strategy/ensemble/strategy.py"
+    ]
+  },
+  "state": null
+}
