@@ -1,11 +1,12 @@
 """ML Adaptive SuperTrend using k-means volatility clustering."""
 
+from collections import deque
 from dataclasses import dataclass
 
 import numpy as np
 
 from ..data import Bar
-from .volatility_regime import _atr_series
+from .atr import AtrIndicator
 
 
 @dataclass(frozen=True)
@@ -37,7 +38,17 @@ class AdaptiveSupertrendIndicator:
         self.mid_vol_percentile = mid_vol_percentile
         self.low_vol_percentile = low_vol_percentile
         self.max_iterations = max_iterations
-        self._bars: list[Bar] = []
+
+        # Streaming state
+        self._atr_ind = AtrIndicator(atr_period)
+        self._atr_history: deque[float] = deque(maxlen=training_period)
+        self._st_upper = 0.0
+        self._st_lower = 0.0
+        self._trend = 1
+        self._prev_close: float | None = None
+        self._clusters: list[VolatilityCluster] = []
+        self._cluster_level = "medium"
+        self._value = 0.0
 
     @staticmethod
     def calculate(
@@ -54,7 +65,8 @@ class AdaptiveSupertrendIndicator:
         if len(bars) < min_bars:
             return (bars[-1].close if bars else 0.0, 1, "medium", [])
 
-        atr_series = _atr_series(bars, atr_period)
+        ind = AtrIndicator(atr_period)
+        atr_series = [ind.update(bar) for bar in bars]
         atr_values = [v for v in atr_series[-training_period:] if v > 0]
 
         if len(atr_values) < 10:
@@ -150,29 +162,90 @@ class AdaptiveSupertrendIndicator:
         return (float(st_value), trend, cluster_level, clusters)
 
     def update(self, bar: Bar) -> tuple[float, int, str, list[VolatilityCluster]]:
-        self._bars.append(bar)
-        return self.calculate(
-            self._bars,
-            atr_period=self.atr_period,
-            st_factor=self.st_factor,
-            training_period=self.training_period,
-            high_vol_percentile=self.high_vol_percentile,
-            mid_vol_percentile=self.mid_vol_percentile,
-            low_vol_percentile=self.low_vol_percentile,
-            max_iterations=self.max_iterations,
-        )
+        # Update ATR
+        atr_val = self._atr_ind.update(bar)
+        self._atr_history.append(atr_val)
+
+        # Recluster if we have enough data
+        if len(self._atr_history) >= 10:
+            atr_values = [v for v in self._atr_history if v > 0]
+            if len(atr_values) >= 10:
+                atr_array = np.array(atr_values)
+                atr_min = float(np.min(atr_array))
+                atr_max = float(np.max(atr_array))
+                atr_range = atr_max - atr_min
+
+                centroids = np.array(
+                    [
+                        atr_min + atr_range * self.high_vol_percentile,
+                        atr_min + atr_range * self.mid_vol_percentile,
+                        atr_min + atr_range * self.low_vol_percentile,
+                    ]
+                )
+
+                prev_centroids = np.zeros(3)
+                iterations = 0
+
+                while iterations < self.max_iterations and not np.allclose(
+                    centroids, prev_centroids, rtol=1e-6
+                ):
+                    prev_centroids = centroids.copy()
+                    distances = np.abs(atr_array[:, np.newaxis] - centroids)
+                    assignments = np.argmin(distances, axis=1)
+
+                    for k in range(3):
+                        cluster_points = atr_array[assignments == k]
+                        if len(cluster_points) > 0:
+                            centroids[k] = float(np.mean(cluster_points))
+
+                    iterations += 1
+
+                cluster_sizes = [int(np.sum(assignments == k)) for k in range(3)]
+                cluster_labels = ["high", "medium", "low"]
+
+                self._clusters = [
+                    VolatilityCluster(
+                        centroid=float(centroids[k]),
+                        size=cluster_sizes[k],
+                        level=cluster_labels[k],
+                    )
+                    for k in range(3)
+                ]
+
+                current_distances = np.abs(atr_val - centroids)
+                assigned_cluster = int(np.argmin(current_distances))
+                assigned_centroid = centroids[assigned_cluster]
+                self._cluster_level = cluster_labels[assigned_cluster]
+            else:
+                assigned_centroid = atr_val
+        else:
+            assigned_centroid = atr_val
+
+        # Update SuperTrend
+        src = (bar.high + bar.low) / 2.0
+        new_upper = src + self.st_factor * assigned_centroid
+        new_lower = src - self.st_factor * assigned_centroid
+
+        if self._prev_close is not None and self._prev_close > self._st_lower:
+            self._st_lower = max(new_lower, self._st_lower)
+        else:
+            self._st_lower = new_lower
+
+        if self._prev_close is not None and self._prev_close < self._st_upper:
+            self._st_upper = min(new_upper, self._st_upper)
+        else:
+            self._st_upper = new_upper
+
+        if self._trend == -1 and bar.close > self._st_upper:
+            self._trend = 1
+        elif self._trend == 1 and bar.close < self._st_lower:
+            self._trend = -1
+
+        self._value = self._st_lower if self._trend == 1 else self._st_upper
+        self._prev_close = bar.close
+
+        return (float(self._value), self._trend, self._cluster_level, self._clusters)
 
     @property
     def value(self) -> tuple[float, int, str, list[VolatilityCluster]]:
-        if not self._bars:
-            return (0.0, 1, "medium", [])
-        return self.calculate(
-            self._bars,
-            atr_period=self.atr_period,
-            st_factor=self.st_factor,
-            training_period=self.training_period,
-            high_vol_percentile=self.high_vol_percentile,
-            mid_vol_percentile=self.mid_vol_percentile,
-            low_vol_percentile=self.low_vol_percentile,
-            max_iterations=self.max_iterations,
-        )
+        return (float(self._value), self._trend, self._cluster_level, self._clusters)
