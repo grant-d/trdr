@@ -53,7 +53,7 @@ class EnsembleConfig(StrategyConfig):
     """
 
     lookback_bars: int = 2000  # More history for the initial model
-    retrain_every: int = 240   # Periodic retraining
+    retrain_every: int = 240  # Periodic retraining
     n_estimators: int = 100
     max_tree_depth: int = 10
     min_samples_split: int = 50
@@ -150,7 +150,7 @@ class EnsembleStrategy(BaseStrategy):
         ofi_val = self._ofi.update(bar)
         atr_val = self._atr.update(bar)
 
-        # WVF calculation (stateful inside the indicator now if implemented correctly, but let's use the instance)
+        # WVF calculation is stateful in the indicator; keep using the instance.
         # Note: WilliamsVixFixIndicator.update returns (value, alert_state)
 
         # Supertrend direction: 1 = bullish, -1 = bearish
@@ -169,20 +169,22 @@ class EnsembleStrategy(BaseStrategy):
         # ATR normalized by price
         atr_norm = atr_val / bar.close if bar.close > 0 else 0.0
 
-        features = np.array([
-            float(lorentzian_val),
-            float(smi_val),
-            float(rsi_val if rsi_val is not None else 50.0) / 100.0,
-            float(st_dir),
-            float(adx_val) / 100.0,
-            float(vol_numeric),
-            float(mss_val) / 100.0,
-            float(bb_dist),
-            float(wvf_result[0]) / 10.0,
-            float(ast_dir),
-            float(ofi_val),
-            float(atr_norm),
-        ])
+        features = np.array(
+            [
+                float(lorentzian_val),
+                float(smi_val),
+                float(rsi_val if rsi_val is not None else 50.0) / 100.0,
+                float(st_dir),
+                float(adx_val) / 100.0,
+                float(vol_numeric),
+                float(mss_val) / 100.0,
+                float(bb_dist),
+                float(wvf_result[0]) / 10.0,
+                float(ast_dir),
+                float(ofi_val),
+                float(atr_norm),
+            ]
+        )
         self._last_features = features
         return features
 
@@ -269,7 +271,12 @@ class EnsembleStrategy(BaseStrategy):
 
         if self._model is None or not hasattr(self._model, "estimators_"):
             self._train_model(primary_bars)
-            return Signal(action=SignalAction.HOLD, price=current_price, confidence=0.0, reason="Training")
+            return Signal(
+                action=SignalAction.HOLD,
+                price=current_price,
+                confidence=0.0,
+                reason="Training",
+            )
 
         self._bars_since_train += 1
         if self.config.retrain_every > 0 and self._bars_since_train >= self.config.retrain_every:
@@ -292,23 +299,43 @@ class EnsembleStrategy(BaseStrategy):
         features_row = features.reshape(1, -1)
         prediction = self._model.predict(features_row)[0]
         probabilities = self._model.predict_proba(features_row)[0]
-        confidence = float(probabilities[1]) # Always use long probability for signal
+        confidence = float(probabilities[1])  # Always use long probability for signal.
 
         if position and position.side == "long":
             # Emergency Confidence Exit or Trend Flip
             if confidence < 0.4 or st_dir == -1:
-                return Signal(action=SignalAction.CLOSE, price=current_price, confidence=1.0, reason="Confidence exit")
+                return Signal(
+                    action=SignalAction.CLOSE,
+                    price=current_price,
+                    confidence=1.0,
+                    reason="Confidence exit",
+                )
 
             self._trailing_stop = max(self._trailing_stop, current_price - 2.5 * atr_val)
             profit_target = self._entry_price + 4.5 * atr_val
 
             if current_price < self._trailing_stop:
-                return Signal(action=SignalAction.CLOSE, price=current_price, confidence=1.0, reason="Stop loss")
+                return Signal(
+                    action=SignalAction.CLOSE,
+                    price=current_price,
+                    confidence=1.0,
+                    reason="Stop loss",
+                )
 
             if current_price > profit_target:
-                return Signal(action=SignalAction.CLOSE, price=current_price, confidence=1.0, reason="Take profit")
+                return Signal(
+                    action=SignalAction.CLOSE,
+                    price=current_price,
+                    confidence=1.0,
+                    reason="Take profit",
+                )
 
-            return Signal(action=SignalAction.HOLD, price=current_price, confidence=0.5, reason="Holding")
+            return Signal(
+                action=SignalAction.HOLD,
+                price=current_price,
+                confidence=0.5,
+                reason="Holding",
+            )
 
         if not position:
             # Entry condition: Model bullish AND Supertrend bullish
@@ -322,4 +349,9 @@ class EnsembleStrategy(BaseStrategy):
                     reason=f"Entry signal (conf={confidence:.2f})",
                 )
 
-        return Signal(action=SignalAction.HOLD, price=current_price, confidence=0.0, reason="No signal")
+        return Signal(
+            action=SignalAction.HOLD,
+            price=current_price,
+            confidence=0.0,
+            reason="No signal",
+        )

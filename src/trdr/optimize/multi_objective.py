@@ -109,8 +109,14 @@ class MooResult:
         result = {}
         # Objectives that were negated for minimization (maximize objectives)
         negate_objectives = {
-            "sharpe", "win_rate", "profit_factor", "sortino", "calmar",
-            "cagr", "alpha", "total_trades"
+            "sharpe",
+            "win_rate",
+            "profit_factor",
+            "sortino",
+            "calmar",
+            "cagr",
+            "alpha",
+            "total_trades",
         }
         for i, name in enumerate(self.objective_names):
             if name in negate_objectives:

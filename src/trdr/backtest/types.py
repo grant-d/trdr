@@ -222,9 +222,9 @@ class PaperExchangeResult:
             print("No trades")
             return
 
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print(f"TRADE LOG ({len(self.trades)} trades)")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
 
         for i, t in enumerate(self.trades, 1):
             # Parse dates for cleaner display
@@ -247,11 +247,11 @@ class PaperExchangeResult:
             print(f"  Exit:   {t.exit_reason}")
             print(f"  Duration: {t.duration_hours:.1f}h  |  Qty: {t.quantity:.4f}")
 
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         winners = [t for t in self.trades if t.is_winner]
         losers = [t for t in self.trades if not t.is_winner]
         print(f"Summary: {len(winners)}W / {len(losers)}L  |  WR: {self.win_rate:.1%}")
-        print(f"{'='*80}\n")
+        print(f"{'=' * 80}\n")
 
 
 @dataclass(frozen=True)

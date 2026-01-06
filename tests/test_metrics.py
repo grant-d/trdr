@@ -366,7 +366,7 @@ class TestStrategyAccessesContext:
         strategy = ContextAwareStrategy(SimpleConfig(symbol=_TEST_SYMBOL))
 
         # Create 5 bars
-        bars = [make_bar(price=100 + i, ts=f"2024-01-01T{10+i}:00:00Z") for i in range(5)]
+        bars = [make_bar(price=100 + i, ts=f"2024-01-01T{10 + i}:00:00Z") for i in range(5)]
 
         engine = PaperExchange(config, strategy)
         engine.run(bars)
@@ -402,7 +402,7 @@ class TestStrategyName:
             name="TestStrategy",
         )
 
-        bars = [make_bar(price=100 + i, ts=f"2024-01-01T{10+i}:00:00Z") for i in range(5)]
+        bars = [make_bar(price=100 + i, ts=f"2024-01-01T{10 + i}:00:00Z") for i in range(5)]
         engine = PaperExchange(config, strategy)
         engine.run(bars)
 

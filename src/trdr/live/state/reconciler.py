@@ -103,7 +103,7 @@ class StateReconciler:
         try:
             result.account = await self._exchange.get_account()
             logger.info(
-                f"Account: equity=${result.account.equity:.2f}, " f"cash=${result.account.cash:.2f}"
+                f"Account: equity=${result.account.equity:.2f}, cash=${result.account.cash:.2f}"
             )
         except Exception as e:
             result.errors.append(f"Failed to get account: {e}")
@@ -217,8 +217,7 @@ class StateReconciler:
             )
             response = await self._exchange.submit_order(order)
             logger.info(
-                f"Close order submitted: {response.order_id} "
-                f"{side.value} {position.qty} {symbol}"
+                f"Close order submitted: {response.order_id} {side.value} {position.qty} {symbol}"
             )
             return True
         except Exception as e:

@@ -30,6 +30,7 @@ from .state.reconciler import StateReconciler
 if TYPE_CHECKING:
     from ..strategy import BaseStrategy
     from ..strategy.types import Signal
+    from .state.context import LivePosition
 
 logger = logging.getLogger(__name__)
 project_root = Path(__file__).parent.parent.parent.parent
@@ -141,14 +142,13 @@ class LiveHarness:
         self._bars_cache: dict[str, list[Bar | None]] = {}
         self._bars_raw: dict[str, list[Bar]] = {}
         self._informative_indices: dict[str, int] = {}
-        self._bars_cache_max: dict[str, int] = {
-            r.key: r.lookback_bars for r in self._requirements
-        }
+        self._bars_cache_max: dict[str, int] = {r.key: r.lookback_bars for r in self._requirements}
 
         # Position tracking for trade PnL calculation
         self._position_entries: dict[str, float] = {}  # symbol -> avg entry price
         self._position_stops: dict[str, float] = {}  # symbol -> stop loss price
         self._position_targets: dict[str, float | None] = {}  # symbol -> take profit
+        self._last_positions: dict[str, LivePosition] = {}
 
     @property
     def state(self) -> HarnessState:
@@ -213,6 +213,31 @@ class LiveHarness:
         """Stop the live trading loop gracefully."""
         logger.info("Stopping harness...")
         self._stop_event.set()
+
+    def run_with_ui(self) -> None:
+        """Run harness with TUI dashboard.
+
+        Starts dashboard which manages harness lifecycle.
+        """
+        from .ui import LiveDashboard
+
+        async def run_both():
+            app = LiveDashboard(harness=self)
+            app_task = asyncio.create_task(app.run_async())
+            await app.wait_until_ready()
+
+            harness_task = asyncio.create_task(self.start())
+            logger.info("Harness task started")
+            try:
+                await app_task
+            finally:
+                await self.stop()
+                try:
+                    await harness_task
+                except Exception:
+                    pass
+
+        asyncio.run(run_both())
 
     def pause(self) -> None:
         """Pause trading (still monitors but no new orders)."""
@@ -402,7 +427,9 @@ class LiveHarness:
             while idx + 1 < len(raw_bars) and raw_bars[idx + 1].timestamp <= bar.timestamp:
                 idx += 1
 
-            aligned_bar = raw_bars[idx] if idx >= 0 and raw_bars[idx].timestamp <= bar.timestamp else None
+            aligned_bar = None
+            if idx >= 0 and raw_bars[idx].timestamp <= bar.timestamp:
+                aligned_bar = raw_bars[idx]
             aligned_cache = self._bars_cache.get(key, [])
             aligned_cache.append(aligned_bar)
 
@@ -429,6 +456,7 @@ class LiveHarness:
 
         # Build context
         context = await self._context_builder.build(bar)
+        self._last_positions = context.positions
 
         # Set context on strategy
         self._strategy.context = context
@@ -622,8 +650,7 @@ class LiveHarness:
                 pnl = (entry_price - fill.price) * fill.qty
 
             logger.info(
-                f"Trade closed: entry=${entry_price:.2f}, exit=${fill.price:.2f}, "
-                f"PnL=${pnl:.2f}"
+                f"Trade closed: entry=${entry_price:.2f}, exit=${fill.price:.2f}, PnL=${pnl:.2f}"
             )
 
             # Record trade in context builder (which also updates circuit breaker)
@@ -697,4 +724,48 @@ class LiveHarness:
             "circuit_breaker": self._circuit_breaker.get_status(),
             "active_orders": len(self._order_manager.active_orders),
             "recent_errors": self._state.errors[-5:],
+        }
+
+    def get_position_for_symbol(self, symbol: str) -> "LivePosition | None":
+        """Get latest position for a symbol, normalizing key formats."""
+        if symbol in self._last_positions:
+            return self._last_positions[symbol]
+
+        try:
+            sym = Symbol.parse(symbol)
+            alpaca_symbol = sym.raw if sym.is_crypto else sym.raw.replace("/", "")
+            return self._last_positions.get(alpaca_symbol)
+        except Exception:
+            return None
+
+    def get_ui_snapshot(self) -> dict:
+        """Get UI-friendly snapshot without exposing internal fields."""
+        status = self.get_status()
+        orders = []
+        for order in self._order_manager.active_orders:
+            side = order.side.value if hasattr(order.side, "value") else str(order.side)
+            ot = order.order_type
+            otype = ot.value if hasattr(ot, "value") else str(ot)
+            orders.append(
+                {
+                    "side": side,
+                    "type": otype,
+                    "qty": order.qty,
+                    "price": order.limit_price or order.stop_price,
+                }
+            )
+
+        price = None
+        primary_key = self._primary_requirement.key
+        bars = self._bars_cache.get(primary_key, [])
+        if bars and bars[-1]:
+            price = bars[-1].close
+
+        position = self.get_position_for_symbol(self._config.symbol)
+
+        return {
+            "status": status,
+            "orders": orders,
+            "position": position,
+            "price": price,
         }

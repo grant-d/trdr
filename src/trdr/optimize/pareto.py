@@ -53,13 +53,13 @@ def display_pareto_front(
         for j, obj_name in enumerate(result.objective_names):
             val = obj_dict[obj_name]
             if obj_name in ("max_drawdown", "win_rate", "cagr"):
-                row += f"{val:>{col_widths[j+1]}.1%}  "
+                row += f"{val:>{col_widths[j + 1]}.1%}  "
             elif obj_name == "total_trades":
-                row += f"{int(val):>{col_widths[j+1]}}  "
+                row += f"{int(val):>{col_widths[j + 1]}}  "
             elif obj_name == "alpha":
-                row += f"{val:>{col_widths[j+1]}.2f}x  "
+                row += f"{val:>{col_widths[j + 1]}.2f}x  "
             else:
-                row += f"{val:>{col_widths[j+1]}.2f}  "
+                row += f"{val:>{col_widths[j + 1]}.2f}  "
 
         # Add score
         row += f"{scores[i]:>{col_widths[-1]}.3f}  "

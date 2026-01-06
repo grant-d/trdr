@@ -192,15 +192,14 @@ def run_walk_forward_moo(
     fold_results = []
     for fold in folds:
         if verbose:
-            print(f"\n{'='*50}")
+            print(f"\n{'=' * 50}")
             print(f"FOLD {fold.fold_num}/{len(folds)}")
             print(f"Train: {fold.train_size} bars, Test: {fold.test_size} bars")
             print("=" * 50)
 
         # Extract training bars for all feeds
         train_bars_dict = {
-            key: feed_bars[fold.train_start : fold.train_end]
-            for key, feed_bars in bars.items()
+            key: feed_bars[fold.train_start : fold.train_end] for key, feed_bars in bars.items()
         }
 
         # Run MOO on training data
@@ -219,8 +218,7 @@ def run_walk_forward_moo(
         test_results = []
         if validate_oos and moo_result.n_solutions > 0:
             test_bars_dict = {
-                key: feed_bars[fold.test_start : fold.test_end]
-                for key, feed_bars in bars.items()
+                key: feed_bars[fold.test_start : fold.test_end] for key, feed_bars in bars.items()
             }
 
             for i in range(moo_result.n_solutions):

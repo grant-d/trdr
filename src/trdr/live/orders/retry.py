@@ -110,7 +110,7 @@ async def retry_async(
         except retryable_exceptions as e:
             errors.append(e)
             logger.warning(
-                f"{operation_name} attempt {attempt + 1}/{policy.max_attempts} " f"failed: {e}"
+                f"{operation_name} attempt {attempt + 1}/{policy.max_attempts} failed: {e}"
             )
 
             if attempt + 1 < policy.max_attempts:
@@ -170,7 +170,7 @@ def retry_sync(
         except retryable_exceptions as e:
             errors.append(e)
             logger.warning(
-                f"{operation_name} attempt {attempt + 1}/{policy.max_attempts} " f"failed: {e}"
+                f"{operation_name} attempt {attempt + 1}/{policy.max_attempts} failed: {e}"
             )
 
             if attempt + 1 < policy.max_attempts:

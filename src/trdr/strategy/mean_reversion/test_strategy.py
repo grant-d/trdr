@@ -86,9 +86,9 @@ def backtest_result(bars, backtest_config, strategy) -> PaperExchangeResult:
     result = engine.run(bars)
 
     # Print summary for LLM visibility
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print("BACKTEST SUMMARY")
-    print(f"{'='*50}")
+    print(f"{'=' * 50}")
     print(f"Strategy: {strategy.name}")
     print(f"Symbol: {strategy.config.symbol}")
     print(f"Timeframe: {strategy.config.timeframe}")
@@ -105,7 +105,7 @@ def backtest_result(bars, backtest_config, strategy) -> PaperExchangeResult:
     # Use centralized scoring
     score, details = score_result(result)
     print(f"SICA_SCORE: {score:.3f}")
-    print(f"{'='*50}\n")
+    print(f"{'=' * 50}\n")
 
     return result
 
@@ -199,7 +199,7 @@ def print_results():
             print("\n=== Trades ===")
             for i, t in enumerate(result.trades[:10]):
                 print(
-                    f"{i+1}. {t.side} @ {t.entry_price:.2f} -> "
+                    f"{i + 1}. {t.side} @ {t.entry_price:.2f} -> "
                     f"{t.exit_price:.2f}, "
                     f"pnl=${t.net_pnl:.2f} ({t.exit_reason})"
                 )

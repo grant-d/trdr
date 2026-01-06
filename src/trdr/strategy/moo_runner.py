@@ -29,9 +29,10 @@ from trdr.core import Feed, load_config
 from trdr.data import AlpacaDataClient
 from trdr.optimize import MooConfig, ParamBounds, run_moo, select_from_pareto
 from trdr.optimize.pareto import display_pareto_front
-from trdr.optimize.walk_forward_moo import WalkForwardMooResult, run_walk_forward_moo
+from trdr.optimize.walk_forward_moo import run_walk_forward_moo
 
 from .sica_runner import get_primary_requirement
+from .types import DataRequirement
 
 if TYPE_CHECKING:
     from trdr.core import Duration, Symbol, Timeframe
@@ -39,7 +40,7 @@ if TYPE_CHECKING:
 project_root = Path(__file__).parent.parent.parent.parent
 
 
-async def _get_bars(strategy) -> tuple[dict[str, list], "DataRequirement"]:
+async def _get_bars(strategy) -> tuple[dict[str, list], DataRequirement]:
     """Fetch bars based on strategy requirements."""
     from trdr.backtest import align_feeds
 
@@ -180,7 +181,7 @@ def run_moo_benchmark(
             verbose=True,
         )
 
-        print(f"\nWalk-forward MOO complete!")
+        print("\nWalk-forward MOO complete!")
         print(f"  Folds: {wf_result.n_folds}")
         oos_summary = wf_result.get_oos_summary()
         if oos_summary:
@@ -211,7 +212,7 @@ def run_moo_benchmark(
             verbose=True,
         )
 
-        print(f"\nOptimization complete!")
+        print("\nOptimization complete!")
         print(f"  Pareto solutions: {result.n_solutions}")
         print(f"  Generations: {result.n_generations}")
         print(f"  Evaluations: {result.n_evaluations}")

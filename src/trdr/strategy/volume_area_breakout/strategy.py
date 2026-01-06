@@ -216,7 +216,7 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
                     action=SignalAction.BUY,
                     price=current_price,
                     confidence=0.75,
-                    reason=f"LVN breakout: vol={current_bar.volume/avg_volume:.1f}x, trend_up",
+                    reason=f"LVN breakout: vol={current_bar.volume / avg_volume:.1f}x, trend_up",
                     stop_loss=stop_loss,
                     take_profit=take_profit,
                 )
@@ -232,7 +232,7 @@ class VolumeAreaBreakoutStrategy(BaseStrategy):
                     action=SignalAction.BUY,
                     price=current_price,
                     confidence=0.72,
-                    reason=f"VAH breakout: vol={current_bar.volume/avg_volume:.1f}x",
+                    reason=f"VAH breakout: vol={current_bar.volume / avg_volume:.1f}x",
                     stop_loss=stop_loss,
                     take_profit=take_profit,
                 )

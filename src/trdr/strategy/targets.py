@@ -264,8 +264,7 @@ def score_from_objectives(
 
     if period_days:
         details.append(
-            f"Period: {int(period_days)} days, {total_trades} trades "
-            f"({trades_per_year:.0f}/yr)"
+            f"Period: {int(period_days)} days, {total_trades} trades ({trades_per_year:.0f}/yr)"
         )
 
     cagr_score = asymptotic(max(0, cagr), TARGET_CAGR)

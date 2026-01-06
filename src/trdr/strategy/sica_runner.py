@@ -65,11 +65,7 @@ async def _get_bars(strategy) -> tuple[dict[str, list], DataRequirement]:
         # Replace primary's timeframe
         timeframe = Timeframe.parse(timeframe_override)
         requirements = [
-            (
-                DataRequirement(r.symbol, timeframe, r.lookback, r.role)
-                if r.role == "primary"
-                else r
-            )
+            (DataRequirement(r.symbol, timeframe, r.lookback, r.role) if r.role == "primary" else r)
             for r in requirements
         ]
         primary = get_primary_requirement(requirements)

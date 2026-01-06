@@ -1,8 +1,8 @@
 """SuperTrend ATR-based trailing stop indicator."""
 
-from ..data import Bar
 from collections import deque
 
+from ..data import Bar
 from .atr import AtrIndicator
 from .sma import sma_series
 

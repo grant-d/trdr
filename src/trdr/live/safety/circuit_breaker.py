@@ -264,9 +264,7 @@ class CircuitBreaker:
         self._trip_history.append(trip)
         self._state = BreakerState.OPEN
 
-        logger.warning(
-            f"CIRCUIT BREAKER TRIPPED: {reason} " f"(value={value:.2f}, limit={limit:.2f})"
-        )
+        logger.warning(f"CIRCUIT BREAKER TRIPPED: {reason} (value={value:.2f}, limit={limit:.2f})")
 
         if self._on_trip:
             try:
@@ -317,8 +315,7 @@ class CircuitBreaker:
         position_pct = (position_value / eq) * 100
         if position_pct > self._limits.max_position_pct:
             return False, (
-                f"Position {position_pct:.1f}% exceeds limit "
-                f"{self._limits.max_position_pct:.1f}%"
+                f"Position {position_pct:.1f}% exceeds limit {self._limits.max_position_pct:.1f}%"
             )
 
         # Check absolute position value

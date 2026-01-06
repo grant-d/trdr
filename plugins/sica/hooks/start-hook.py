@@ -97,7 +97,7 @@ def main() -> None:
 
     parts.append(f"Config: {config_name}")
     parts.append(
-        f"Iter {state.iteration}/{effective_max} | " f"Score {score_str}/{config.target_score}"
+        f"Iter {state.iteration}/{effective_max} | Score {score_str}/{config.target_score}"
     )
     # if state.recent_scores:
     #     scores_str = "→".join(f"{s:.2f}" for s in state.recent_scores)
@@ -114,7 +114,7 @@ def main() -> None:
     parts.append("- NEVER run benchmark yourself. Hook does it.")
     parts.append("- NO test file changes. Only modify source code.")
     parts.append(
-        f"- MUST update {iterations_dir}/<current>/journal.md " "(BEFORE: plan, AFTER: results)"
+        f"- MUST update {iterations_dir}/<current>/journal.md (BEFORE: plan, AFTER: results)"
     )
     parts.append(f"- Done: <promise>{config.completion_promise}</promise>")
 

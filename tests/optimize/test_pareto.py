@@ -14,16 +14,20 @@ from trdr.optimize.pareto import (
 def mock_moo_result():
     """Create a mock MooResult with 3 solutions."""
     return MooResult(
-        pareto_params=np.array([
-            [10.0, 0.5],   # Solution 0
-            [15.0, 0.8],   # Solution 1
-            [20.0, 0.3],   # Solution 2
-        ]),
-        pareto_objectives=np.array([
-            [-2.0, 0.10, -0.60],   # sharpe=2.0, max_dd=0.10, win_rate=0.60
-            [-1.5, 0.08, -0.70],   # sharpe=1.5, max_dd=0.08, win_rate=0.70
-            [-2.5, 0.15, -0.55],   # sharpe=2.5, max_dd=0.15, win_rate=0.55
-        ]),
+        pareto_params=np.array(
+            [
+                [10.0, 0.5],  # Solution 0
+                [15.0, 0.8],  # Solution 1
+                [20.0, 0.3],  # Solution 2
+            ]
+        ),
+        pareto_objectives=np.array(
+            [
+                [-2.0, 0.10, -0.60],  # sharpe=2.0, max_dd=0.10, win_rate=0.60
+                [-1.5, 0.08, -0.70],  # sharpe=1.5, max_dd=0.08, win_rate=0.70
+                [-2.5, 0.15, -0.55],  # sharpe=2.5, max_dd=0.15, win_rate=0.55
+            ]
+        ),
         param_names=["lookback", "threshold"],
         param_dtypes=["int", "float"],
         objective_names=["sharpe", "max_drawdown", "win_rate"],

@@ -140,7 +140,14 @@ def calculate_objectives(
 OBJECTIVES_CORE = ["sharpe", "max_drawdown", "profit_factor"]
 OBJECTIVES_EXTENDED = ["sharpe", "max_drawdown", "win_rate", "profit_factor"]
 OBJECTIVES_FULL = [
-    "cagr", "calmar", "sortino", "profit_factor", "win_rate", "total_trades", "max_drawdown", "alpha"
+    "cagr",
+    "calmar",
+    "sortino",
+    "profit_factor",
+    "win_rate",
+    "total_trades",
+    "max_drawdown",
+    "alpha",
 ]
 
 # Objective descriptions for display

@@ -1,0 +1,51 @@
+/* Live Trading Dashboard Styles */
+
+Screen {
+    layout: vertical;
+}
+
+#header {
+    height: 3;
+    background: $surface;
+    padding: 1;
+}
+
+#main {
+    height: 100%;
+    padding: 0 1;
+}
+
+#top-row {
+    height: 7;
+}
+
+#mid-row {
+    height: 8;
+}
+
+.panel {
+    border: solid $primary;
+    padding: 0 1;
+    margin: 0 0 1 0;
+}
+
+#position {
+    width: 1fr;
+}
+
+#circuit {
+    width: 1fr;
+}
+
+#orders {
+    width: 1fr;
+}
+
+#signals {
+    width: 1fr;
+}
+
+#log {
+    height: 1fr;
+    min-height: 8;
+}
