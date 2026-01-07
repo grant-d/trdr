@@ -1,0 +1,29 @@
+TASK: Predict next move.
+Labels: UP/DOWN if barrier hit first; same if neither within horizon
+Give 3 independent guesses on separate lines.
+Format each line: PREDICTION|CONFIDENCE
+The 3 guesses should not be identical unless very confident.
+
+
+
+## TRAINING EXAMPLES
+
+#1 eddaa|M:▼|R:▮|!2|RSI:▁|4314|4283→DOWN
+#2 cedab|M:▼|R:▮|RSI:▄|3382|3375→UP
+#3 eecba|M:▼|R:▮|RSI:▄|1817|1793→UP
+#4 abbde|M:▲|R:▮|RSI:█|1765|1773→UP
+#5 cbbbe|M:▲|R:□|RSI:▄|1717|1719→UP
+#6 abcdd|M:▲|R:━|RSI:█|3260|3262→DOWN
+#7 aabee|M:▲|R:▮|!2|RSI:▄|3161|3140→UP
+#8 bacec|M:▲|R:▮|RSI:▄|3846|3818→DOWN
+#9 dddca|M:▼|R:□|RSI:▄|1946|1915→DOWN
+#10 eecaa|M:▼|R:▮|!2|RSI:▄|2630|2605→UP
+#11 aadce|M:▲|R:▮|RSI:▄|3738|3732→DOWN
+#12 dddaa|M:▼|R:□|!2|RSI:▄|1631|1625→UP
+#13 eddca|M:▼|R:▮|RSI:▄|1933|1925→DOWN
+#14 caecb|M:■|R:▮|RSI:▄|1843|1842→DOWN
+#15 acddc|M:▲|R:□|RSI:▄|3211|3202→DOWN
+#16 edcaa|M:▼|R:▮|!2|RSI:▄|4379|4333→UP
+
+## TEST
+edcaa|M:▼|R:▮|!2|RSI:▄|3275|3225

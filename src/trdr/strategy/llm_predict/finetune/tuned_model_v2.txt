@@ -1,0 +1,2 @@
+MODEL_NAME=projects/469859425101/locations/us-central1/models/5027520216540643328@1
+ENDPOINT_NAME=projects/469859425101/locations/us-central1/endpoints/2153792645720178688

@@ -1,0 +1,7 @@
+version=unknown,accuracy=0.5200,n=50,model=projects/469859425101/locations/us-central1/models/8005525470139383808@1
+version=v3,accuracy=0.0750,n=40,model=projects/469859425101/locations/us-central1/models/4685246644860485632@1
+version=v3,accuracy=0.0500,n=40,model=projects/469859425101/locations/us-central1/models/5432844183003987968@1
+version=v3,accuracy=0.0500,n=40,model=projects/469859425101/locations/us-central1/models/5842671749094703104@1
+version=v3,accuracy=0.1000,n=40,model=projects/469859425101/locations/us-central1/models/5027520216540643328@1
+version=v3,accuracy=0.0750,n=40,model=projects/469859425101/locations/us-central1/models/5027520216540643328@1
+version=v2,accuracy=0.5000,n=50,model=projects/469859425101/locations/us-central1/models/5027520216540643328@1
