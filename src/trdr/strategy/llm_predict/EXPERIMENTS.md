@@ -3,6 +3,8 @@
 This doc summarizes key milestones and exact configs that were run.
 Results live in `src/trdr/strategy/llm_predict/results.json`.
 
+See: <https://arxiv.org/html/2511.06344v1>
+
 Notes
 
 - Runs are not deterministic unless temperature is forced to 0.0.
@@ -32,6 +34,7 @@ Notes
 - DONE: Longer potential horizon for SAX buckets (48/72 bars).
 - DONE: Return-profile shape token (future return trajectory SAX in training, UNK at test).
 - DONE: Prospect/drawdown buckets (P/D magnitude + time-to-hit, UNK at test).
+- DONE: Explicit index channel appended to coordinate encoding (`IDX:`).
 - DONE: Similarity-to-top-k patterns (TOPHIT:1/0; UNK at test).
 
 - DONE: Training stride increase to reduce near-duplicate examples.
@@ -658,11 +661,139 @@ Milestones
 - `ensemble_base+stride5_40`
 - Result: ~60.0% directional (24/40), not better.
 
+100. Coordinate + explicit index channel (multi-vote, temp=0, 20 tests)
+
+- Algo: coordinate encoding with explicit index channel (`IDX:`).
+- `tb_015_k16_multivote_temp0_coord_idx_20|w=17|t=300|triple_barrier|multi_vote|idx=1,ret=16,h=6,bu=0.15,bd=0.15,temp=0.0`
+- Result: ~65.0% directional (13/20), not better than baseline.
+
+101. Coordinate + explicit index channel confirmation (multi-vote, temp=0, 40 tests)
+
+- Algo: confirm coordinate + index channel over 40 tests.
+- `tb_015_k16_multivote_temp0_coord_idx_40|w=17|t=300|triple_barrier|multi_vote|idx=1,ret=16,h=6,bu=0.15,bd=0.15,temp=0.0`
+- Result: ~55.0% directional (22/40), worse than baseline.
+- Metrics: UP precision 54.3% (recall 90.5%), DOWN precision 60.0% (recall 15.8%), avg return +0.027%.
+
+102. Baseline SAX rerun with metrics (multi-vote, temp=0, 40 tests)
+
+- Algo: baseline SAX (no symbols), rerun to capture metrics.
+- `tb_015_k16_multivote_temp0_sax_a5_40_rerun|w=17|t=300|triple_barrier|multi_vote|enc=sax,sax_p=5,sax_a=5,ret=16,h=6,bu=0.15,bd=0.15,temp=0.0`
+- Result: ~60.0% directional (24/40), lower than original confirm.
+- Metrics: UP precision 58.6% (recall 81.0%), DOWN precision 63.6% (recall 36.8%), avg return +0.061%.
+
+103. Horizon=4 SAX rerun with metrics (multi-vote, temp=0, 40 tests)
+
+- Algo: h=4 SAX variant rerun to capture metrics.
+- `tb_015_k16_multivote_temp0_sax_a5_h4_40_rerun|w=17|t=300|triple_barrier|multi_vote|enc=sax,sax_p=5,sax_a=5,ret=16,h=4,bu=0.15,bd=0.15,temp=0.0`
+- Result: ~62.2% directional (23/37), lower than original confirm.
+- Metrics: UP precision 57.1% (recall 80.0%), DOWN precision 58.3% (recall 41.2%), avg return +0.063%.
+
+104. All-symbols SAX rerun with metrics (multi-vote, temp=0, 40 tests)
+
+- Algo: symbols-all SAX rerun to capture metrics.
+- `tb_015_k16_multivote_temp0_sax_a5_symbols_all_40_rerun|w=17|t=300|triple_barrier|multi_vote|enc=sax,sax_p=5,sax_a=5,sax_rsi=14,sax_tri=1,sax_range_symbols=1,sax_rsi_symbols=1,ret=16,h=6,bu=0.15,bd=0.15,temp=0.0`
+- Result: ~67.5% directional (27/40), matches original confirm.
+- Metrics: UP precision 63.3% (recall 90.5%), DOWN precision 80.0% (recall 42.1%), avg return +0.092%.
+
+105. All-symbols SAX stride=5 rerun with metrics (multi-vote, temp=0, 40 tests)
+
+- Algo: stride=5 symbols-all SAX rerun to capture metrics.
+- `tb_015_k16_multivote_temp0_sax_a5_symbols_all_stride5_40_rerun|w=17|t=300|triple_barrier|multi_vote|enc=sax,sax_p=5,sax_a=5,sax_rsi=14,sax_tri=1,sax_range_symbols=1,sax_rsi_symbols=1,ret=16,h=6,bu=0.15,bd=0.15,stride=5,temp=0.0`
+- Result: ~65.0% directional (26/40), slightly below best.
+- Metrics: UP precision 60.6% (recall 95.2%), DOWN precision 85.7% (recall 31.6%), avg return +0.099%.
+
+106. Horizon=8 SAX rerun with metrics (multi-vote, temp=0, 40 tests)
+
+- Algo: h=8 SAX variant rerun to capture metrics.
+- `tb_015_k16_multivote_temp0_sax_a5_h8_40_rerun|w=17|t=300|triple_barrier|multi_vote|enc=sax,sax_p=5,sax_a=5,ret=16,h=8,bu=0.15,bd=0.15,temp=0.0`
+- Result: ~57.5% directional (23/40), lower than original.
+- Metrics: UP precision 56.7% (recall 81.0%), DOWN precision 60.0% (recall 31.6%), avg return +0.050%.
+
+107. Multi-vote5 SAX rerun with metrics (multi-vote5, temp=0, 40 tests)
+
+- Algo: 5-guess multi-vote rerun to capture metrics.
+- `tb_015_k16_multivote5_temp0_sax_a5_40_rerun|w=17|t=300|triple_barrier|multi_vote5|enc=sax,sax_p=5,sax_a=5,ret=16,h=6,bu=0.15,bd=0.15,temp=0.0`
+- Result: ~62.5% directional (25/40), lower than best.
+- Metrics: UP precision 59.4% (recall 90.5%), DOWN precision 75.0% (recall 31.6%), avg return +0.070%.
+
+108. Ensemble: symbols-all + stride=5 (multi-vote, temp=0, 20 tests)
+
+- Algo: ensemble of symbols-all baseline + stride=5; if disagree, return `same`.
+- `ensemble_sax_symbols_all+stride5_20`
+- Result: ~60.0% directional (12/20), below best.
+- Metrics: UP precision 85.7% (recall 85.7%), DOWN precision 0.0% (recall 0.0%), avg return +0.154%.
+
+109. Ensemble policy: primary_fallback (multi-vote, temp=0, 20 tests)
+
+- Algo: same ensemble with policy `primary_fallback` (current default; conflicts → `same`).
+- `ensemble_sax_symbols_all+stride5_20|policy=primary_fallback`
+- Result: ~60.0% directional (12/20).
+- Metrics: UP precision 85.7% (recall 85.7%), DOWN precision 0.0% (recall 0.0%), avg return +0.154%.
+
+110. Ensemble policy: primary_wins (multi-vote, temp=0, 20 tests)
+
+- Algo: same ensemble with policy `primary_wins` (primary always wins conflicts).
+- `ensemble_sax_symbols_all+stride5_20|policy=primary_wins`
+- Result: ~80.0% directional (16/20).
+- Metrics: UP precision 85.7% (recall 85.7%), DOWN precision 66.7% (recall 66.7%), avg return +0.184%.
+
+111. Ensemble policy: prefer_down (multi-vote, temp=0, 20 tests)
+
+- Algo: same ensemble with policy `prefer_down` (any DOWN wins conflicts).
+- `ensemble_sax_symbols_all+stride5_20|policy=prefer_down`
+- Result: ~80.0% directional (16/20).
+- Metrics: UP precision 85.7% (recall 85.7%), DOWN precision 66.7% (recall 66.7%), avg return +0.184%.
+
+112. Ensemble policy: confidence (multi-vote, temp=0, 20 tests)
+
+- Algo: same ensemble with policy `confidence` (higher conf wins conflicts).
+- `ensemble_sax_symbols_all+stride5_20|policy=confidence`
+- Result: ~75.0% directional (15/20).
+- Metrics: UP precision 76.5% (recall 92.9%), DOWN precision 66.7% (recall 33.3%), avg return +0.183%.
+
+113. Ensemble policy: primary_wins (multi-vote, temp=0, 40 tests)
+
+- Algo: same ensemble with policy `primary_wins` confirm run.
+- `ensemble_sax_symbols_all+stride5_40|policy=primary_wins`
+- Result: ~67.5% directional (27/40).
+- Metrics: UP precision 63.3% (recall 90.5%), DOWN precision 80.0% (recall 42.1%), avg return +0.092%.
+
+114. Ensemble policy: prefer_down (multi-vote, temp=0, 40 tests)
+
+- Algo: same ensemble with policy `prefer_down` confirm run.
+- `ensemble_sax_symbols_all+stride5_40|policy=prefer_down`
+- Result: ~77.5% directional (31/40).
+- Metrics: UP precision 75.0% (recall 85.7%), DOWN precision 81.2% (recall 68.4%), avg return +0.164%.
+
+115. Ensemble policy: prefer_down rerun with trade tail (multi-vote, temp=0, 40 tests)
+
+- Algo: same ensemble rerun to print the last 10 trades.
+- `ensemble_sax_symbols_all+stride5_40|policy=prefer_down` (rerun)
+- Result: ~77.5% directional (31/40).
+- Metrics: UP precision 75.0% (recall 85.7%), DOWN precision 81.2% (recall 68.4%), avg return +0.164%.
+
+116. Ensemble policy: prefer_down rerun with ladder sim (multi-vote, temp=0, 40 tests)
+
+- Algo: same ensemble rerun to print last 20 events plus long-only ladder simulation.
+- `ensemble_sax_symbols_all+stride5_40|policy=prefer_down` (rerun)
+- Result: ~77.5% directional (31/40).
+- Metrics: UP precision 75.0% (recall 85.7%), DOWN precision 81.2% (recall 68.4%), avg return +0.164%.
+
+117. Ladder sim (long-only) using horizon exit prices (last 20 events)
+
+- Algo: same ensemble rerun to compute long-only ladder P&L using horizon exit prices.
+- `ensemble_sax_symbols_all+stride5_40|policy=prefer_down` (rerun)
+- Result: ladder P&L -6136.40 on cost 35070.92 (-17.50%).
+
 ## Current best (ETH only)
 
-- Best confirmed: `tb_015_k16_multivote_temp0_sax_a5_40` at ~67.5% directional (27/40).
-- Runner-up confirmed: `tb_015_k16_multivote_temp0_sax_a5_h4_40` at ~67.6% directional (25/37) but reconfirm fell to ~62.2%.
-- Other confirmed: `tb_015_k16_multivote_temp0_sax_a5_symbols_all_stride5_40` at ~65.0% directional (26/40).
+- Best confirmed (metric-logged): `ensemble_sax_symbols_all+stride5_40|policy=prefer_down` at ~77.5% directional (31/40), overall 77.5%, avg return +0.164%. Confusion/metrics: UP precision 75.0% (recall 85.7%), DOWN precision 81.2% (recall 68.4%).
+- Trade sim note: the long-only ladder on the last 20 events (using horizon exit prices) was negative: -17.50% on cost 35070.92.
+- Runner-up confirmed: `tb_015_k16_multivote_temp0_sax_a5_symbols_all_40_rerun` at ~67.5% directional (27/40), overall 67.5%, avg return +0.092%. Confusion/metrics: UP precision 63.3% (recall 90.5%), DOWN precision 80.0% (recall 42.1%).
+- Next best confirmed: `ensemble_sax_symbols_all+stride5_40|policy=primary_wins` at ~67.5% directional (27/40), overall 67.5%, avg return +0.092%. Confusion/metrics: UP precision 63.3% (recall 90.5%), DOWN precision 80.0% (recall 42.1%).
+- Other confirmed (stride=5 symbols-all): ~65.0% directional (26/40), overall 65.0%, avg return +0.099%. Confusion/metrics: UP precision 60.6% (recall 95.2%), DOWN precision 85.7% (recall 31.6%).
+- Baseline SAX rerun: `tb_015_k16_multivote_temp0_sax_a5_40_rerun` at ~60.0% directional (24/40), overall 60.0%, avg return +0.061%.
+- Lower performers: coord+IDX ~55.0% directional (22/40), overall 55.0%, avg return +0.027%; h=8 ~57.5% directional (23/40), overall 57.5%, avg return +0.050%.
 - Best unconfirmed (20 tests): `tb_015_k16_multivote_temp0_sax_a5_tri_20` and `tb_015_k16_multivote_temp0_sax_a5_range_sym_20` at ~75.0% directional (15/20) but both fell to 57.5%/62.5% on 40-test confirms.
 
 ## Recommended path

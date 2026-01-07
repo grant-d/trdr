@@ -3,7 +3,7 @@
 import enum
 import time
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -47,12 +47,12 @@ class ExperimentConfig:
     sax_include_momentum: bool = True
     sax_include_range: bool = True
     sax_include_extremes: bool = True
-    sax_include_rsi: bool = False
+    sax_include_rsi: bool = True
     sax_rsi_period: int = 14
     sax_use_arrows: bool = False
-    sax_use_triangles: bool = False
-    sax_use_range_symbols: bool = False
-    sax_use_rsi_symbols: bool = False
+    sax_use_triangles: bool = True
+    sax_use_range_symbols: bool = True
+    sax_use_rsi_symbols: bool = True
     sax_potential_top_n: int | None = None
     sax_potential_horizon: int = 24
     sax_potential_bucket_count: int | None = None
@@ -77,6 +77,7 @@ class ExperimentConfig:
     require_summary: bool = False
     regime_min_atr_pct: float | None = None
     atr_lookback: int = 14
+    add_index_channel: bool = False
     use_chat: bool = False  # chat session vs single requests
     temperature: float | None = 0.0  # None = model default
     top_p: float | None = None  # nucleus sampling
@@ -87,6 +88,8 @@ class ExperimentConfig:
         extras = []
         if self.encoding_type != "coordinate":
             extras.append(f"enc={self.encoding_type}")
+        if self.encoding_type in {"coordinate", "signed_coordinate"} and self.add_index_channel:
+            extras.append("idx=1")
         if self.symbol != DEFAULT_SYMBOL:
             extras.append(f"sym={self.symbol}")
         if self.encoding_type == "sax":
@@ -478,6 +481,13 @@ def encode_coordinate(series: np.ndarray, precision: int = 1) -> tuple[str, floa
         pairs.append(f"({idx}:{abs(val_int)})")
 
     return "".join(pairs), scale
+
+
+def encode_coordinate_with_index(series: np.ndarray, precision: int = 1) -> tuple[str, float]:
+    """Encode series with value and explicit index channel."""
+    encoded, scale = encode_coordinate(series, precision=precision)
+    idx_pairs = [f"{idx}" for idx in range(len(series))]
+    return f"{encoded}|IDX:{','.join(idx_pairs)}", scale
 
 
 def _normalize(series: np.ndarray) -> np.ndarray:
@@ -1294,6 +1304,7 @@ def do_encode(
     sax_use_triangles: bool,
     sax_use_range_symbols: bool,
     sax_use_rsi_symbols: bool,
+    add_index_channel: bool = False,
 ) -> tuple[str, float]:
     """Encode based on type."""
     if encoding_type == "returns":
@@ -1357,7 +1368,10 @@ def do_encode(
             sax_use_rsi_symbols,
         )
     else:  # coordinate (default)
-        encoded, scale = encode_coordinate(prices)
+        if add_index_channel and encoding_type in {"coordinate", "signed_coordinate"}:
+            encoded, scale = encode_coordinate_with_index(prices)
+        else:
+            encoded, scale = encode_coordinate(prices)
 
     if add_patch_summary:
         encoded = f"{encoded}{encode_patch_summary(prices, patch_size)}"
@@ -1417,6 +1431,7 @@ def generate_examples(
             config.sax_use_triangles,
             config.sax_use_range_symbols,
             config.sax_use_rsi_symbols,
+            config.add_index_channel,
         )
         if htf_ts is not None and htf_rsi_vals is not None:
             htf_bucket = get_htf_rsi_bucket(
@@ -2004,6 +2019,9 @@ class FoldResult:
     directional_total: int
     directional_correct: int
     invalid_summary: int = 0
+    dir_confusion: dict[str, dict[str, int]] | None = None
+    dir_return_sum: float = 0.0
+    dir_return_count: int = 0
 
     @property
     def accuracy(self) -> float:
@@ -2080,6 +2098,7 @@ def run_fold(
             config.sax_use_triangles,
             config.sax_use_range_symbols,
             config.sax_use_rsi_symbols,
+            config.add_index_channel,
         )
         if htf_ts is not None and htf_rsi_vals is not None:
             htf_bucket = get_htf_rsi_bucket(
@@ -2253,7 +2272,509 @@ def run_fold(
         avg_return = sum(dir_returns) / len(dir_returns) if dir_returns else 0.0
         print(f"Avg return per prediction: {avg_return:+.3f}%")
 
-    return FoldResult(total, correct, dir_total, dir_correct, invalid_summary)
+    return FoldResult(
+        total,
+        correct,
+        dir_total,
+        dir_correct,
+        invalid_summary,
+        dir_confusion,
+        sum(dir_returns),
+        len(dir_returns),
+    )
+
+
+def _parse_confidence(conf: str) -> float:
+    """Parse predictor confidence into a 0-1 score."""
+    if not conf:
+        return 0.0
+    conf = conf.strip().upper()
+    if conf in {"LOW", "L"}:
+        return 0.1
+    if conf in {"MED", "MEDIUM", "M"}:
+        return 0.5
+    if conf in {"HIGH", "H"}:
+        return 0.9
+    if "/" in conf:
+        parts = conf.split("/", 1)
+        try:
+            return float(parts[0]) / float(parts[1])
+        except ValueError:
+            return 0.0
+    conf = conf.replace("%", "")
+    try:
+        val = float(conf)
+    except ValueError:
+        return 0.0
+    return val / 100 if val > 1 else val
+
+
+def _combine_predictions(
+    primary: str,
+    secondary: str,
+    primary_conf: float,
+    secondary_conf: float,
+    policy: str,
+) -> str:
+    """Combine primary/secondary predictions with configurable tie-breaks."""
+    if policy == "primary_wins":
+        return primary
+    if policy == "prefer_down":
+        if primary == "DOWN" or secondary == "DOWN":
+            return "DOWN"
+        if primary == "UP" or secondary == "UP":
+            return "UP"
+        return "same"
+    if policy == "confidence":
+        if primary == secondary:
+            return primary
+        if primary_conf > secondary_conf:
+            return primary
+        if secondary_conf > primary_conf:
+            return secondary
+        return primary
+
+    # primary_fallback (default)
+    if primary == "same":
+        return secondary
+    if secondary == "same":
+        return primary
+    if primary == secondary:
+        return primary
+    return "same"
+
+
+def _predict_for_config(
+    predictor: GeminiPredictor,
+    config: ExperimentConfig,
+    hist: pd.DataFrame,
+    hist_prices: np.ndarray,
+    hist_volumes: np.ndarray | None,
+    future_window: pd.DataFrame,
+    last_price: float,
+    training_examples: list[dict],
+    htf_ts: np.ndarray | None,
+    htf_rsi_vals: np.ndarray | None,
+    sax_gate: set[str] | None,
+    sax_potential_buckets: dict[str, tuple[int, int]] | None,
+) -> tuple[str, float, int]:
+    encoded, scale = do_encode(
+        hist_prices,
+        hist_volumes,
+        config.encoding_type,
+        config.add_patch_summary,
+        config.patch_size,
+        config.sax_paa_segments,
+        config.sax_alphabet_size,
+        config.sax_include_momentum,
+        config.sax_include_range,
+        config.sax_include_extremes,
+        config.sax_include_rsi,
+        config.sax_rsi_period,
+        config.sax_use_arrows,
+        config.sax_use_triangles,
+        config.sax_use_range_symbols,
+        config.sax_use_rsi_symbols,
+        config.add_index_channel,
+    )
+    if htf_ts is not None and htf_rsi_vals is not None:
+        htf_bucket = get_htf_rsi_bucket(
+            htf_ts,
+            htf_rsi_vals,
+            hist["timestamp"].iloc[-1],
+            config.sax_use_rsi_symbols,
+        )
+        encoded = f"{encoded}|HTF_RSI:{htf_bucket}"
+
+    if config.encoding_type == "sax" and sax_gate is not None:
+        base = sax_base_from_encoded(encoded)
+        if base not in sax_gate:
+            return "same", 0
+
+    if config.encoding_type == "sax" and sax_potential_buckets is not None:
+        base = sax_base_from_encoded(encoded)
+        buckets = sax_potential_buckets.get(base)
+        if buckets is None:
+            token = "U?" if config.sax_potential_up_only else "U?D?"
+        elif config.sax_potential_up_only:
+            token = f"U{buckets[0]}"
+        else:
+            token = f"U{buckets[0]}D{buckets[1]}"
+        encoded = f"{encoded}|POT:{token}"
+    if config.encoding_type == "sax" and config.sax_future_shape:
+        encoded = f"{encoded}|FUT:?"
+    if config.encoding_type == "sax" and config.sax_prospect_buckets:
+        encoded = f"{encoded}|PROS:U?D?"
+    if config.encoding_type == "sax" and config.sax_prospect_time:
+        encoded = f"{encoded}|PT:TU?TD?"
+    if config.encoding_type == "sax" and config.sax_potential_top_n is not None:
+        encoded = f"{encoded}|TOP:?"
+
+    context_override = None
+    if config.use_retrieval:
+        if not config.use_retrieval_examples:
+            neighbors = []
+        elif config.use_sax_retrieval and config.encoding_type.startswith("sax"):
+            neighbors = select_retrieval_examples_sax(
+                training_examples,
+                encoded,
+                config.retrieval_k,
+            )
+        else:
+            query_features = build_feature_vector(hist_prices, hist_volumes)
+            neighbors = select_retrieval_examples(
+                training_examples,
+                query_features,
+                config.retrieval_k,
+            )
+        context_override = format_training_context(neighbors, config)
+
+    pred, conf, summary = predictor.predict(
+        encoded,
+        scale,
+        last_price,
+        context_override=context_override,
+    )
+    invalid_summary = 0
+    if config.require_summary:
+        expected = compute_summary(hist_prices, scale, config.encoding_type)
+        if summary != expected:
+            invalid_summary = 1
+            pred = "same"
+    return pred, _parse_confidence(conf), invalid_summary
+
+
+def run_fold_ensemble(
+    primary_predictor: GeminiPredictor,
+    secondary_predictor: GeminiPredictor,
+    test_df: pd.DataFrame,
+    primary_config: ExperimentConfig,
+    secondary_config: ExperimentConfig,
+    fold_num: int,
+    primary_examples: list[dict],
+    secondary_examples: list[dict],
+    primary_htf_ts: np.ndarray | None = None,
+    primary_htf_rsi_vals: np.ndarray | None = None,
+    secondary_htf_ts: np.ndarray | None = None,
+    secondary_htf_rsi_vals: np.ndarray | None = None,
+    primary_sax_gate: set[str] | None = None,
+    secondary_sax_gate: set[str] | None = None,
+    primary_sax_potential_buckets: dict[str, tuple[int, int]] | None = None,
+    secondary_sax_potential_buckets: dict[str, tuple[int, int]] | None = None,
+    ensemble_policy: str = "primary_fallback",
+    show_last_trades: int = 0,
+) -> FoldResult:
+    print(f"\n--- Fold {fold_num + 1}/{primary_config.num_folds} ---")
+
+    correct = 0
+    total = 0
+    dir_correct = 0
+    dir_total = 0
+    invalid_summary = 0
+    dir_labels = ["UP", "DOWN", "same"]
+    dir_confusion = {a: {p: 0 for p in dir_labels} for a in dir_labels}
+    dir_returns: list[float] = []
+    trades: list[dict] = []
+
+    step = max(1, len(test_df) // primary_config.num_tests)
+
+    for i in range(primary_config.window_size, len(test_df) - 1, step):
+        if total >= primary_config.num_tests:
+            break
+        if i + 1 >= len(test_df):
+            continue
+
+        hist = test_df.iloc[i - primary_config.window_size : i]
+        if primary_config.regime_min_atr_pct is not None:
+            atr_pct = compute_atr_pct(hist.tail(primary_config.atr_lookback + 1))
+            if atr_pct < primary_config.regime_min_atr_pct:
+                continue
+        future = test_df.iloc[i]
+        horizon_end = min(len(test_df), i + primary_config.horizon)
+        future_window = test_df.iloc[i:horizon_end]
+
+        hist_prices = hist["close"].values
+        hist_volumes = hist["volume"].values if "volume" in hist.columns else None
+        future_price = future["close"]
+        last_price = hist_prices[-1]
+        change_pct = ((future_price - last_price) / last_price) * 100
+        exit_price = future_window["close"].values[-1] if len(future_window) else last_price
+        entry_time = hist["timestamp"].iloc[-1] if "timestamp" in hist.columns else None
+        exit_time = (
+            future_window["timestamp"].iloc[-1] if "timestamp" in future_window.columns else None
+        )
+
+        if primary_config.label_type == "triple_barrier":
+            actual, change_pct = get_triple_barrier_label(
+                hist_prices,
+                future_window["close"].values,
+                primary_config.barrier_up,
+                primary_config.barrier_down,
+            )
+        elif primary_config.label_type == "hold_bucket":
+            hold_label = get_hold_bucket_label(
+                hist_prices,
+                future_window["close"].values,
+                primary_config.hold_buckets,
+            )
+            if hold_label is None:
+                continue
+            actual, change_pct = hold_label
+        elif primary_config.label_type == "fixed_hold":
+            fixed_label = get_fixed_hold_label(
+                hist_prices,
+                future_window["close"].values,
+                primary_config.horizon,
+            )
+            if fixed_label is None:
+                continue
+            actual, change_pct = fixed_label
+        elif primary_config.label_type == "trailing_barrier":
+            actual, change_pct = get_trailing_barrier_label(
+                hist_prices,
+                future_window["close"].values,
+                primary_config.barrier_up,
+                primary_config.barrier_down,
+            )
+        else:
+            actual = get_label(change_pct, primary_config.label_type)
+
+        primary_pred, primary_conf, primary_invalid = _predict_for_config(
+            primary_predictor,
+            primary_config,
+            hist,
+            hist_prices,
+            hist_volumes,
+            future_window,
+            last_price,
+            primary_examples,
+            primary_htf_ts,
+            primary_htf_rsi_vals,
+            primary_sax_gate,
+            primary_sax_potential_buckets,
+        )
+        secondary_pred, secondary_conf, secondary_invalid = _predict_for_config(
+            secondary_predictor,
+            secondary_config,
+            hist,
+            hist_prices,
+            hist_volumes,
+            future_window,
+            last_price,
+            secondary_examples,
+            secondary_htf_ts,
+            secondary_htf_rsi_vals,
+            secondary_sax_gate,
+            secondary_sax_potential_buckets,
+        )
+        pred = _combine_predictions(
+            primary_pred,
+            secondary_pred,
+            primary_conf,
+            secondary_conf,
+            ensemble_policy,
+        )
+        invalid_summary += primary_invalid + secondary_invalid
+
+        is_right = is_correct(pred, actual, primary_config.label_type)
+        if is_right:
+            correct += 1
+        total += 1
+
+        if primary_config.label_type == "hold_bucket":
+            dir_total += 1
+            outcome = get_hold_bucket_outcome(
+                pred,
+                hist_prices,
+                future_window["close"].values,
+                primary_config.barrier_up,
+                primary_config.barrier_down,
+            )
+            if outcome == "UP":
+                dir_correct += 1
+        elif is_directional(actual, primary_config.label_type):
+            dir_total += 1
+            if is_right:
+                dir_correct += 1
+
+        actual_dir = to_direction_label(
+            actual,
+            primary_config.label_type,
+            hist_prices,
+            future_window["close"].values,
+            primary_config,
+        )
+        pred_dir = to_direction_label(
+            pred,
+            primary_config.label_type,
+            hist_prices,
+            future_window["close"].values,
+            primary_config,
+        )
+        if actual_dir is not None and pred_dir is not None:
+            dir_confusion[actual_dir][pred_dir] += 1
+            if pred_dir == "UP":
+                dir_returns.append(change_pct)
+            elif pred_dir == "DOWN":
+                dir_returns.append(-change_pct)
+            else:
+                dir_returns.append(0.0)
+
+        status = "+" if is_right else "x"
+        print(
+            f"[{total}] {status} P:{pred:5} A:{actual:5} "
+            f"Δ:{change_pct:+.2f}% (P1:{primary_pred}, P2:{secondary_pred})"
+        )
+        trades.append(
+            {
+                "entry_time": entry_time,
+                "exit_time": exit_time,
+                "entry_price": last_price,
+                "exit_price": exit_price,
+                "pred": pred,
+                "actual": actual,
+                "change_pct": change_pct,
+            }
+        )
+
+        time.sleep(0.5)
+
+    if any(sum(v.values()) for v in dir_confusion.values()):
+        for label in dir_labels:
+            pred_total = sum(dir_confusion[a][label] for a in dir_labels)
+            actual_total = sum(dir_confusion[label].values())
+            tp = dir_confusion[label][label]
+            precision = tp / pred_total if pred_total else 0.0
+            recall = tp / actual_total if actual_total else 0.0
+            print(f"{label} precision: {precision:.1%}, recall: {recall:.1%}")
+        avg_return = sum(dir_returns) / len(dir_returns) if dir_returns else 0.0
+        print(f"Avg return per prediction: {avg_return:+.3f}%")
+    if show_last_trades:
+        tail = trades[-show_last_trades:]
+        print(f"\nLast {len(tail)} events:")
+        for trade in tail:
+            print(
+                "  "
+                f"{trade['entry_time']} -> {trade['exit_time']} | "
+                f"{trade['entry_price']:.2f} -> {trade['exit_price']:.2f} | "
+                f"{trade['pred']} / {trade['actual']} | "
+                f"Δ:{trade['change_pct']:+.2f}%"
+            )
+        print("\nSimulated ladder (long-only, last events):")
+        position = 0
+        buys: list[float] = []
+        realized_pnl = 0.0
+        realized_cost = 0.0
+        for trade in tail:
+            if trade["pred"] == "UP":
+                position += 1
+                buys.append(float(trade["entry_price"]))
+                action = f"BUY x1 (pos={position})"
+            elif trade["pred"] == "DOWN":
+                if position > 0:
+                    sell_price = float(trade["exit_price"])
+                    batch_cost = sum(buys)
+                    batch_pnl = sum(sell_price - price for price in buys)
+                    realized_pnl += batch_pnl
+                    realized_cost += batch_cost
+                    position = 0
+                    buys = []
+                    pct = (batch_pnl / batch_cost) if batch_cost else 0.0
+                    action = f"SELL ALL @ {sell_price:.2f} (pnl={batch_pnl:+.2f}, {pct:+.2%})"
+                else:
+                    action = "SELL IGNORE"
+            else:
+                action = "HOLD"
+            print(
+                "  "
+                f"{trade['entry_time']} | "
+                f"{trade['pred']} -> {action}"
+            )
+        if realized_cost:
+            total_pct = realized_pnl / realized_cost
+        else:
+            total_pct = 0.0
+        print(
+            f"\nLadder realized P&L: {realized_pnl:+.2f} "
+            f"on cost {realized_cost:.2f} ({total_pct:+.2%})"
+        )
+
+    return FoldResult(
+        total,
+        correct,
+        dir_total,
+        dir_correct,
+        invalid_summary,
+        dir_confusion,
+        sum(dir_returns),
+        len(dir_returns),
+    )
+
+
+def _build_training_bundle(
+    train_df: pd.DataFrame,
+    config: ExperimentConfig,
+    htf_ts: np.ndarray | None,
+    htf_rsi_vals: np.ndarray | None,
+) -> tuple[list[dict], str, str, set[str] | None, dict[str, tuple[int, int]] | None]:
+    sax_counts = None
+    sax_top_set = None
+    sax_potential_buckets = None
+    if config.encoding_type == "sax":
+        sax_counts = {}
+        for _, row in train_df.iterrows():
+            if len(sax_counts) > 5000:
+                break
+            idx = row.name
+            if idx < config.window_size:
+                continue
+            window = train_df["close"].iloc[idx - config.window_size : idx].values
+            base = _to_sax(window, config.sax_paa_segments, config.sax_alphabet_size)
+            sax_counts[base] = sax_counts.get(base, 0) + 1
+        if config.sax_potential_top_n is not None:
+            sax_top_set = compute_sax_top_set(
+                train_df["close"].values,
+                config.window_size,
+                config.sax_potential_horizon,
+                config.sax_paa_segments,
+                config.sax_alphabet_size,
+                config.sax_potential_top_n,
+            )
+        if config.sax_potential_bucket_count is not None:
+            sax_potential_buckets = compute_sax_potential_buckets(
+                train_df["close"].values,
+                config.window_size,
+                config.sax_potential_horizon,
+                config.sax_paa_segments,
+                config.sax_alphabet_size,
+                config.sax_potential_bucket_count,
+            )
+    examples = generate_examples(
+        train_df,
+        config,
+        htf_ts,
+        htf_rsi_vals,
+        sax_counts,
+        sax_potential_buckets,
+    )
+    if config.sax_potential_top_n is not None and sax_top_set is not None:
+        for ex in examples:
+            base = sax_base_from_encoded(ex["encoded"])
+            flag = "1" if base in sax_top_set else "0"
+            ex["encoded"] = f"{ex['encoded']}|TOP:{flag}"
+    context = format_training_context(examples, config)
+    base_context = format_training_context([], config)
+
+    sax_gate = None
+    if config.encoding_type == "sax" and config.sax_gate_top_n is not None:
+        counts = {}
+        for ex in examples:
+            base = sax_base_from_encoded(ex["encoded"])
+            counts[base] = counts.get(base, 0) + 1
+        top = sorted(counts.items(), key=lambda x: x[1], reverse=True)[: config.sax_gate_top_n]
+        sax_gate = {item[0] for item in top}
+
+    return examples, context, base_context, sax_gate, sax_potential_buckets
 
 
 def run_experiment(config: ExperimentConfig) -> dict:
@@ -2289,63 +2810,19 @@ def run_experiment(config: ExperimentConfig) -> dict:
         print(f"\nFold {fold + 1}: Train={len(train_df)}, Test={len(test_df)}")
 
         # Generate training
-        sax_counts = None
-        sax_top_set = None
-        sax_potential_buckets = None
-        if config.encoding_type == "sax":
-            sax_counts = {}
-            for _, row in train_df.iterrows():
-                if len(sax_counts) > 5000:
-                    break
-                idx = row.name
-                if idx < config.window_size:
-                    continue
-                window = train_df["close"].iloc[idx - config.window_size : idx].values
-                base = _to_sax(window, config.sax_paa_segments, config.sax_alphabet_size)
-                sax_counts[base] = sax_counts.get(base, 0) + 1
-            if config.sax_potential_top_n is not None:
-                sax_top_set = compute_sax_top_set(
-                    train_df["close"].values,
-                    config.window_size,
-                    config.sax_potential_horizon,
-                    config.sax_paa_segments,
-                    config.sax_alphabet_size,
-                    config.sax_potential_top_n,
-                )
-            if config.sax_potential_bucket_count is not None:
-                sax_potential_buckets = compute_sax_potential_buckets(
-                    train_df["close"].values,
-                    config.window_size,
-                    config.sax_potential_horizon,
-                    config.sax_paa_segments,
-                    config.sax_alphabet_size,
-                    config.sax_potential_bucket_count,
-                )
-        examples = generate_examples(
+        (
+            examples,
+            context,
+            base_context,
+            sax_gate,
+            sax_potential_buckets,
+        ) = _build_training_bundle(
             train_df,
             config,
             htf_ts,
             htf_rsi_vals,
-            sax_counts,
-            sax_potential_buckets,
         )
-        if config.sax_potential_top_n is not None and sax_top_set is not None:
-            for ex in examples:
-                base = sax_base_from_encoded(ex["encoded"])
-                flag = "1" if base in sax_top_set else "0"
-                ex["encoded"] = f"{ex['encoded']}|TOP:{flag}"
-        context = format_training_context(examples, config)
-        base_context = format_training_context([], config)
         print(f"Training examples: {len(examples)}, Context: {len(context)} chars")
-
-        sax_gate = None
-        if config.encoding_type == "sax" and config.sax_gate_top_n is not None:
-            counts = {}
-            for ex in examples:
-                base = sax_base_from_encoded(ex["encoded"])
-                counts[base] = counts.get(base, 0) + 1
-            top = sorted(counts.items(), key=lambda x: x[1], reverse=True)[: config.sax_gate_top_n]
-            sax_gate = {item[0] for item in top}
 
         if not config.use_chat and not config.use_retrieval and not config.use_cached_content:
             # Cache the static prompt prefix to reduce token costs.
@@ -2382,6 +2859,18 @@ def run_experiment(config: ExperimentConfig) -> dict:
     total_tests = sum(r.total for r in results)
     total_dir_correct = sum(r.directional_correct for r in results)
     total_dir_tests = sum(r.directional_total for r in results)
+    dir_confusion = {"UP": {"UP": 0, "DOWN": 0, "same": 0},
+                     "DOWN": {"UP": 0, "DOWN": 0, "same": 0},
+                     "same": {"UP": 0, "DOWN": 0, "same": 0}}
+    dir_return_sum = 0.0
+    dir_return_count = 0
+    for r in results:
+        if r.dir_confusion:
+            for a in dir_confusion:
+                for p in dir_confusion[a]:
+                    dir_confusion[a][p] += r.dir_confusion.get(a, {}).get(p, 0)
+        dir_return_sum += r.dir_return_sum
+        dir_return_count += r.dir_return_count
 
     summary = {
         "config": str(config),
@@ -2392,6 +2881,19 @@ def run_experiment(config: ExperimentConfig) -> dict:
         "folds": config.num_folds,
         "summary_invalid": sum(r.invalid_summary for r in results),
     }
+    if dir_return_count:
+        summary["avg_return"] = dir_return_sum / dir_return_count
+    if any(sum(v.values()) for v in dir_confusion.values()):
+        summary["confusion"] = dir_confusion
+        metrics = {}
+        for label in ["UP", "DOWN", "same"]:
+            pred_total = sum(dir_confusion[a][label] for a in dir_confusion)
+            actual_total = sum(dir_confusion[label].values())
+            tp = dir_confusion[label][label]
+            precision = tp / pred_total if pred_total else 0.0
+            recall = tp / actual_total if actual_total else 0.0
+            metrics[label] = {"precision": precision, "recall": recall}
+        summary["metrics"] = metrics
 
     print("\n" + "=" * 60)
     print(f"FINAL: {summary['overall_accuracy']:.1%} overall ({total_correct}/{total_tests})")
@@ -2402,6 +2904,212 @@ def run_experiment(config: ExperimentConfig) -> dict:
     print("=" * 60)
 
     return summary
+
+
+def run_ensemble_experiment(
+    primary_config: ExperimentConfig,
+    secondary_config: ExperimentConfig,
+    name: str,
+    ensemble_policy: str = "primary_fallback",
+    show_last_trades: int = 0,
+) -> dict:
+    """Run ensemble experiment by combining two configs."""
+    if primary_config.label_type != secondary_config.label_type:
+        raise ValueError("Ensemble configs must share label_type.")
+    if primary_config.num_folds != secondary_config.num_folds:
+        raise ValueError("Ensemble configs must share num_folds.")
+    if primary_config.num_tests != secondary_config.num_tests:
+        raise ValueError("Ensemble configs must share num_tests.")
+    if primary_config.window_size != secondary_config.window_size:
+        raise ValueError("Ensemble configs must share window_size.")
+    if primary_config.horizon != secondary_config.horizon:
+        raise ValueError("Ensemble configs must share horizon.")
+    if primary_config.barrier_up != secondary_config.barrier_up:
+        raise ValueError("Ensemble configs must share barrier_up.")
+    if primary_config.barrier_down != secondary_config.barrier_down:
+        raise ValueError("Ensemble configs must share barrier_down.")
+    if primary_config.hold_buckets != secondary_config.hold_buckets:
+        raise ValueError("Ensemble configs must share hold_buckets.")
+
+    print("=" * 60)
+    print(f"ENSEMBLE EXPERIMENT: {name}")
+    print("=" * 60)
+    print(f"Primary:   {primary_config}")
+    print(f"Secondary: {secondary_config}")
+    print(f"Policy:    {ensemble_policy}")
+
+    df = load_data(primary_config.symbol)
+    htf_ts_primary = None
+    htf_rsi_primary = None
+    if primary_config.htf_symbol is not None:
+        htf_df = load_data(primary_config.htf_symbol)
+        htf_ts_primary, htf_rsi_primary = build_htf_rsi_lookup(
+            htf_df,
+            primary_config.htf_rsi_period,
+        )
+    htf_ts_secondary = None
+    htf_rsi_secondary = None
+    if secondary_config.htf_symbol is not None:
+        htf_df = load_data(secondary_config.htf_symbol)
+        htf_ts_secondary, htf_rsi_secondary = build_htf_rsi_lookup(
+            htf_df,
+            secondary_config.htf_rsi_period,
+        )
+    print(f"Loaded {len(df)} bars")
+
+    fold_size = len(df) // (primary_config.num_folds + 1)
+    results = []
+
+    for fold in range(primary_config.num_folds):
+        test_start = fold_size * (fold + 1)
+        test_end = test_start + fold_size
+
+        train_df = pd.concat([df.iloc[:test_start], df.iloc[test_end:]])
+        test_df = df.iloc[test_start:test_end]
+
+        print(f"\nFold {fold + 1}: Train={len(train_df)}, Test={len(test_df)}")
+
+        (
+            primary_examples,
+            primary_context,
+            primary_base_context,
+            primary_sax_gate,
+            primary_sax_potential_buckets,
+        ) = _build_training_bundle(
+            train_df,
+            primary_config,
+            htf_ts_primary,
+            htf_rsi_primary,
+        )
+        (
+            secondary_examples,
+            secondary_context,
+            secondary_base_context,
+            secondary_sax_gate,
+            secondary_sax_potential_buckets,
+        ) = _build_training_bundle(
+            train_df,
+            secondary_config,
+            htf_ts_secondary,
+            htf_rsi_secondary,
+        )
+        print(
+            f"Primary examples: {len(primary_examples)} "
+            f"(context {len(primary_context)} chars)"
+        )
+        print(
+            f"Secondary examples: {len(secondary_examples)} "
+            f"(context {len(secondary_context)} chars)"
+        )
+
+        if (
+            not primary_config.use_chat
+            and not primary_config.use_retrieval
+            and not primary_config.use_cached_content
+        ):
+            primary_config.use_cached_content = True
+        if (
+            not secondary_config.use_chat
+            and not secondary_config.use_retrieval
+            and not secondary_config.use_cached_content
+        ):
+            secondary_config.use_cached_content = True
+
+        primary_predictor = GeminiPredictor(
+            primary_context if not primary_config.use_retrieval else primary_base_context,
+            primary_config,
+        )
+        secondary_predictor = GeminiPredictor(
+            secondary_context if not secondary_config.use_retrieval else secondary_base_context,
+            secondary_config,
+        )
+        try:
+            primary_predictor.start()
+            secondary_predictor.start()
+            result = run_fold_ensemble(
+                primary_predictor,
+                secondary_predictor,
+                test_df,
+                primary_config,
+                secondary_config,
+                fold,
+                primary_examples,
+                secondary_examples,
+                htf_ts_primary,
+                htf_rsi_primary,
+                htf_ts_secondary,
+                htf_rsi_secondary,
+                primary_sax_gate,
+                secondary_sax_gate,
+                primary_sax_potential_buckets,
+                secondary_sax_potential_buckets,
+                ensemble_policy,
+                show_last_trades,
+            )
+            results.append(result)
+            print(
+                f"Fold {fold + 1}: {result.accuracy:.1%} overall, "
+                f"{result.directional_accuracy:.1%} directional, "
+                f"summary_miss={result.invalid_summary}"
+            )
+        finally:
+            primary_predictor.cleanup()
+            secondary_predictor.cleanup()
+
+        time.sleep(1)
+
+    total_correct = sum(r.correct for r in results)
+    total_tests = sum(r.total for r in results)
+    dir_correct = sum(r.directional_correct for r in results)
+    dir_total = sum(r.directional_total for r in results)
+    summary_invalid = sum(r.invalid_summary for r in results)
+
+    confusion = {label: {"UP": 0, "DOWN": 0, "same": 0} for label in ["UP", "DOWN", "same"]}
+    for r in results:
+        for actual in confusion:
+            for pred in confusion[actual]:
+                confusion[actual][pred] += r.dir_confusion[actual][pred]
+
+    metrics = {}
+    for label in confusion:
+        pred_total = sum(confusion[a][label] for a in confusion)
+        actual_total = sum(confusion[label].values())
+        tp = confusion[label][label]
+        metrics[label] = {
+            "precision": (tp / pred_total) if pred_total else 0.0,
+            "recall": (tp / actual_total) if actual_total else 0.0,
+        }
+
+    avg_return = 0.0
+    total_returns = sum(r.dir_return_sum for r in results)
+    total_return_count = sum(r.dir_return_count for r in results)
+    if total_return_count:
+        avg_return = total_returns / total_return_count
+
+    return {
+        "config": name,
+        "overall_accuracy": total_correct / total_tests if total_tests else 0.0,
+        "directional_accuracy": dir_correct / dir_total if dir_total else 0.0,
+        "total_tests": total_tests,
+        "directional_tests": dir_total,
+        "folds": primary_config.num_folds,
+        "summary_invalid": summary_invalid,
+        "avg_return": avg_return,
+        "confusion": confusion,
+        "metrics": metrics,
+    }
+
+
+def run_best_ensemble() -> dict:
+    """Run ensemble of the two top configs."""
+    primary = ExperimentConfig(name="sax_symbols_all")
+    secondary = replace(primary, name="sax_symbols_all_stride5", training_stride=5)
+    return run_ensemble_experiment(
+        primary,
+        secondary,
+        "ensemble_sax_symbols_all+stride5|policy=prefer_down",
+        ensemble_policy="prefer_down",
+    )
 
 
 # =============================================================================
